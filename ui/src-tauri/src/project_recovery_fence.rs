@@ -19,7 +19,7 @@ pub(crate) fn issued(epoch:[u8;16], command:&Value)->Result<(),String>{
     let mut store=pending().lock().map_err(|_|"恢复回执屏障锁不可用")?;
     let key=(epoch,id.to_owned());
     if let Some(prior)=store.get(&key) {if prior!=command{return Err("原请求尚未确认且身份冲突".into());}return Ok(());}
-    // Do not turn an unavailable head preview into an uncertain photo edit.
+    // Do not turn an unavailable head/portrait-cohort review into an uncertain edit.
     // Check a pending ID collision first: read-only status cannot release or
     // replace an already-issued mutation belonging to another receipt host.
     if crate::batch_api::read_only(command) || crate::torso_transfer_protocol::read_only_head_preflight(command) || crate::preset_api::read_only(command)

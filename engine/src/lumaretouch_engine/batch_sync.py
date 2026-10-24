@@ -16,8 +16,8 @@ from . import spill_transfer_review as SR
 from . import original_shadow_transfer_review as SHR
 from .body_scalar_transfer_review import select as body_family
 
-ACTIONS = ("preflight", "commit", "undo", "redo", "state", "people_targets", "collarbone_visual", "face_style_visual")
-KEYS = {"cmd", "action", "docs", "module_scope", "conflict_policy", "batch_id", "preflight_token", "request_id", "local_mask_transfer", "reference_color", "people_transfer", "spill_review_ack", "shadow_review_ack", "torso_review_ack", "waist_review_ack", "head_review_ack", "collarbone_review_ack", "face_style_review_ack", "document_id", "revision", "side", "sha256"}
+ACTIONS = ("preflight", "commit", "undo", "redo", "state", "people_targets", "collarbone_visual", "face_style_visual", "portrait_cohort_visual")
+KEYS = {"cmd", "action", "docs", "module_scope", "conflict_policy", "batch_id", "preflight_token", "request_id", "local_mask_transfer", "reference_color", "people_transfer", "spill_review_ack", "shadow_review_ack", "torso_review_ack", "waist_review_ack", "head_review_ack", "collarbone_review_ack", "face_style_review_ack", "portrait_cohort_ack", "document_id", "revision", "side", "sha256"}
 POLICIES = ("skip_and_report", "recheck")
 
 
@@ -222,6 +222,15 @@ class BatchSyncController:
             return
         if 'face_style_review_ack' in p and (action!='commit' or p.get('preflight_token') is None):
             self._reject(p,'Face-style visual acknowledgment is accepted only for a frozen commit',no_write=True)
+            return
+        if 'portrait_cohort_ack' in p and (action!='commit' or p.get('preflight_token') is None):
+            self._reject(p,'Portrait cohort acknowledgment is accepted only for a frozen commit',no_write=True)
+            return
+        if action == "portrait_cohort_visual":
+            try:
+                from .portrait_cohort_store import retrieve
+                self.preflight.emit_result(p,retrieve(self.preflight,p))
+            except Exception as error:self._reject(p,str(error),no_write=True)
             return
         if action == "face_style_visual":
             try:

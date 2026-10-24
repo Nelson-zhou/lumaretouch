@@ -47,7 +47,9 @@ def check_selection(value,selected):
 
 def required(plan):
     value=plan.params().get('_people_transfer')
-    return type(value) is dict and type(value.get('options')) is dict and 'face_style' in value['options']
+    return (type(value) is dict and type(value.get('options')) is dict
+            and value.get('mode')!='persistent_association'
+            and 'face_style' in value['options'])
 
 
 def _hash(value):

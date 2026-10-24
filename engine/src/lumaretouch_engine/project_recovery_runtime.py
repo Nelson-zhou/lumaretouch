@@ -40,10 +40,11 @@ def finish(engine, boundary, error=None):
     # preview cannot dirty/taint committed project state or advance autosave.
     if message.get('cmd') == 'background' and message.get('action') in ('id_spill_preview', 'id_spill_paint_source', 'id_original_shadow_paint_source','id_original_shadow_preview'):
         return
-    from .creative_transfer_host import inventory_read_only, head_preflight_read_only, face_style_image_read_only, face_style_preflight_read_only
+    from .creative_transfer_host import inventory_read_only, head_preflight_read_only, face_style_image_read_only, face_style_preflight_read_only, portrait_cohort_image_read_only, portrait_cohort_preflight_read_only
     if inventory_read_only(message) or head_preflight_read_only(message):return
     if face_style_image_read_only(message):return  # Cached display failure is not a failed graph mutation.
     if face_style_preflight_read_only(message):return  # Named review may sync committed row snapshots, never publish edits.
+    if portrait_cohort_image_read_only(message) or portrait_cohort_preflight_read_only(message):return
     from .people_host_commands import face_style_read_only
     if face_style_read_only(message):return  # Private read failures cannot taint committed project state.
     if not boundary['started'] or message.get('cmd') in ('project_recovery', 'canvas_guides'):

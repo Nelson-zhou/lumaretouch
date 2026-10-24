@@ -1,19 +1,20 @@
 import {sameFace} from './transferProof';
 import {endpointOf,isAvailableEntry,selectableFace,type PeopleInventoryResult,type FaceChoices} from './transferInventory';
 import {sameAssociationRequest,type AssociationRequest,type AssociationCapsule} from './associationProof';
+import type {FaceStyleRecipe} from '../faceStyle/model';
 import type {FaceRef} from './model';
 export function sourceAssociation(listing:PeopleInventoryResult|null,ref:FaceRef|undefined):AssociationCapsule|undefined{
   if(!listing||!ref)return undefined;
   return listing.source.associations?.find(c=>c.members.some(m=>m.document_id===listing.source.document.document_id&&m.ref.face_instance_id===ref.face_instance_id));
 }
 export function associationRequest(listing:PeopleInventoryResult|null,docs:string[],ref:FaceRef|undefined,selection:Record<string,string[]>,choices:FaceChoices,
-  operation:AssociationRequest['operation'],newId:string):AssociationRequest|undefined{
+  operation:AssociationRequest['operation'],newId:string,faceStyle?:FaceStyleRecipe):AssociationRequest|undefined{
   if(!listing||!Array.isArray(listing.source.associations)||!ref||!docs.length||docs.length>15||listing.rejected_docs.length||listing.targets.length!==docs.length
     ||!listing.source.faces.some(f=>sameFace(f.face_ref,ref)&&selectableFace(f)))return undefined;
   const existing=sourceAssociation(listing,ref);
   if(operation==='create'?!!existing:!existing)return undefined;
   const request:AssociationRequest={target_policy:'persistent_association',operation,association_id:existing?.association_id??newId,
-    source_ref:ref,selection:operation==='unlink'?{}:selection,source:endpointOf(listing.source),targets:[]};
+    source_ref:ref,selection:operation==='unlink'?{}:selection,...(operation!=='unlink'&&faceStyle?{face_style:faceStyle}:{}),source:endpointOf(listing.source),targets:[]};
   for(const id of docs){const entry=listing.targets.find(t=>t.document.document_id===id),refs=choices[id];
     if(!entry||!isAvailableEntry(entry)||!Array.isArray(entry.associations)||refs?.length!==1||!entry.faces.some(f=>sameFace(f.face_ref,refs[0])&&selectableFace(f)))return undefined;
     const linked=entry.associations?.find(c=>c.members.some(m=>m.document_id===id&&m.ref.face_instance_id===refs[0].face_instance_id));

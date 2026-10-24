@@ -1,3 +1,6 @@
+import type {PortraitCohortVisual} from '../portraitCohort/model';
+import {validFaceStyleRecipe,type FaceStyleRecipe} from '../faceStyle/model';
+import {sameFaceStyleRecipe,validFaceStyleSelection} from '../faceStyle/batchModel';
 import type {CollarboneVisual} from '../collarbone/transferModel';
 import type {CollarboneCoverage} from './transferProof';
 import type {FaceRef, ParameterValue} from './model';
@@ -6,10 +9,10 @@ export type AssociationMember={document_id:string;scope_id:string;original_sha25
 export type AssociationIntent={op:string;path:string;value:ParameterValue};
 export type AssociationCapsule={version:1;association_id:string;generation:string;local_document_id:string;members:AssociationMember[];intent:AssociationIntent[]};
 export type AssociationRequest={target_policy:'persistent_association';operation:'create'|'patch'|'unlink';association_id:string;source_ref:FaceRef;
-  selection:Record<string,string[]>;source:PeopleEndpointProof;targets:{target:PeopleEndpointProof;target_refs:FaceRef[]}[]};
+  selection:Record<string,string[]>;face_style?:FaceStyleRecipe;source:PeopleEndpointProof;targets:{target:PeopleEndpointProof;target_refs:FaceRef[]}[]};
 export type AssociationReview={version:1;operation:AssociationRequest['operation'];association_id:string;generation:string;members:AssociationMember[];intent:AssociationIntent[]};
 export type AssociationTarget={index:number|null;path:string;document_id:string;revision?:string;blocked?:string|null;
-  association?:{owner:PeopleEndpointProof;ref:FaceRef;candidate_sha256:string;person_id:string;collarbone_coverage?:CollarboneCoverage;collarbone_visual?:CollarboneVisual}};
+  association?:{owner:PeopleEndpointProof;ref:FaceRef;candidate_sha256:string;person_id:string;collarbone_coverage?:CollarboneCoverage;collarbone_visual?:CollarboneVisual;portrait_visual?:PortraitCohortVisual}};
 const object=(v:unknown):v is Record<string,unknown>=>!!v&&typeof v==='object'&&!Array.isArray(v);
 const token=(v:unknown):v is string=>typeof v==='string'&&/^[A-Za-z0-9_.:-]{1,128}$/.test(v);
 const keys=(v:Record<string,unknown>, names:string[])=>Object.keys(v).sort().join('|')===[...names].sort().join('|');
@@ -28,11 +31,14 @@ export function validAssociationContent(v:unknown):v is AssociationReview{
 export function validCapsule(v:unknown):v is AssociationCapsule{return object(v)&&keys(v,['version','association_id','generation','local_document_id','members','intent'])
   &&validAssociationContent(v)&&typeof v.local_document_id==='string'&&v.members.some(m=>m.document_id===v.local_document_id);}
 export function sameAssociationRequest(v:unknown,e:AssociationRequest):boolean{
-  if(!object(v)||!keys(v,['target_policy','operation','association_id','source_ref','selection','source','targets'])||v.target_policy!=='persistent_association'
+  const named=e.face_style!==undefined;
+  if(named?e.operation==='unlink'||!validFaceStyleRecipe(e.face_style)||!validFaceStyleSelection(e.selection):Object.hasOwn(e,'face_style'))return false;
+  if(!object(v)||!keys(v,['target_policy','operation','association_id','source_ref','selection','source','targets',...(named?['face_style']:[])])||v.target_policy!=='persistent_association'
     ||v.operation!==e.operation||!['create','patch','unlink'].includes(e.operation)||v.association_id!==e.association_id||!token(e.association_id)
     ||!validFaceRef(v.source_ref)||!sameFace(v.source_ref,e.source_ref)||!validEndpoint(v.source)||!sameEndpoint(v.source,e.source)
     ||v.source_ref.asset_sha256!==v.source.source_proof.asset_sha256||!object(v.selection)||!object(e.selection)
     ||!Array.isArray(v.targets)||v.targets.length<1||v.targets.length>15||v.targets.length!==e.targets.length)return false;
+  if(named&&(!sameFaceStyleRecipe(v.face_style,e.face_style!)||!validFaceStyleSelection(v.selection)))return false;
   const ops=Object.keys(e.selection).sort();if(JSON.stringify(Object.keys(v.selection).sort())!==JSON.stringify(ops)|| (e.operation==='unlink'?ops.length!==0:ops.length===0))return false;
   for(const op of ops){const paths=v.selection[op],expected=e.selection[op];if(!Array.isArray(paths)||!paths.length||new Set(paths).size!==paths.length
     ||!paths.every(p=>typeof p==='string'&&p.startsWith('/'))||JSON.stringify([...paths].sort())!==JSON.stringify([...expected].sort()))return false;}
@@ -55,7 +61,7 @@ export function validAssociationReview(v:unknown,request:AssociationRequest,sour
     const target=reviews.find(t=>t.document_id===proof.document.document_id),a=target?.association;
     if(!m||m.scope_id!==proof.people_scope||m.original_sha256!==proof.source_proof.original_sha256||!sameFace(m.ref,ref)||!target||target.blocked
       ||typeof target.path!=='string'||!Number.isInteger(target.index)||(target.index??-1)<0
-      ||target.revision!==String(proof.document.revision)||!a||!object(a)||!keys(a,['owner','ref','candidate_sha256','person_id',...((a.collarbone_coverage!==undefined||a.collarbone_visual!==undefined)?['collarbone_coverage','collarbone_visual']:[])])||!validEndpoint(a.owner)||!sameEndpoint(a.owner,proof)||!validFaceRef(a.ref)||!sameFace(a.ref,ref)
+      ||target.revision!==String(proof.document.revision)||!a||!object(a)||!keys(a,['owner','ref','candidate_sha256','person_id',...((a.collarbone_coverage!==undefined||a.collarbone_visual!==undefined)?['collarbone_coverage','collarbone_visual']:[]),...(a.portrait_visual!==undefined?['portrait_visual']:[])])||!validEndpoint(a.owner)||!sameEndpoint(a.owner,proof)||!validFaceRef(a.ref)||!sameFace(a.ref,ref)
       ||!digest(a.candidate_sha256)||!token(a.person_id))return false;}
   if(request.operation==='create'&&v.intent.length!==Object.values(request.selection).reduce((n,paths)=>n+paths.length,0))return false;
   if(request.operation!=='unlink')for(const [op,paths] of Object.entries(request.selection))for(const path of paths)if(!v.intent.some(leaf=>leaf.op===op&&leaf.path===path))return false;

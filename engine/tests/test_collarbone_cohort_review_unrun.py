@@ -2,6 +2,7 @@
 """AUTHORED / UNRUN: cohort ownership/trigger/review contracts, not photo quality."""
 from copy import deepcopy
 from pathlib import Path
+import ast
 import pytest
 from lumaretouch_engine import collarbone_cohort_review as C
 from lumaretouch_engine import people_cross_owner_workflow as W
@@ -113,6 +114,18 @@ def test_cohort_ack_and_final_recheck_precede_claim_source_wiring():
 
 def test_frozen_records_include_source_and_failed_attach_cleans_pending():
     source = (Path(__file__).parents[1]/'src/lumaretouch_engine/people_cross_owner_workflow.py').read_text()
-    assert "**CLAVICLE.evidence(item)})) for item in endpoints]" in source
+    tree = ast.parse(source)
+    preflight = next(node for node in tree.body if isinstance(node, ast.FunctionDef) and node.name == 'preflight')
+    frozen = next(node.value for node in preflight.body if isinstance(node, ast.Assign)
+                  and any(isinstance(target, ast.Name) and target.id == 'frozen' for target in node.targets))
+    assert isinstance(frozen, ast.ListComp) and ast.unparse(frozen.generators[0].iter) == 'endpoints'
+    assert any(isinstance(node, ast.Call) and ast.unparse(node.func) == 'CLAVICLE.evidence'
+               and len(node.args) == 1 and ast.unparse(node.args[0]) == 'item' for node in ast.walk(frozen))
     assert "'collarbone_visual_required': visual_required" in source
-    assert "controller.store.pending.pop(plan.token, None)" in source and 'prune(controller.store)' in source
+    handlers = [handler for node in ast.walk(preflight) if isinstance(node, ast.Try) for handler in node.handlers]
+    assert any(any(isinstance(node, ast.Call) and ast.unparse(node.func) == 'controller.store.pending.pop'
+                   and [ast.unparse(argument) for argument in node.args] == ['plan.token', 'None']
+                   for node in ast.walk(handler))
+               and any(isinstance(node, ast.Call) and ast.unparse(node.func) == 'prune'
+                       and [ast.unparse(argument) for argument in node.args] == ['controller.store']
+                       for node in ast.walk(handler)) for handler in handlers)

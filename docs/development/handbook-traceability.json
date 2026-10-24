@@ -3757,13 +3757,16 @@
         "ui/src/faceStyle",
         "docs/face-style/BATCH-REVIEW-CONTRACT.md",
         "engine/src/lumaretouch_engine/face_style_batch_plan.py",
-        "engine/src/lumaretouch_engine/face_style_batch_review.py"
+        "engine/src/lumaretouch_engine/face_style_batch_review.py",
+        "docs/face-style/COHORT-REVIEW-CONTRACT.md",
+        "engine/src/lumaretouch_engine/portrait_cohort_review.py",
+        "engine/src/lumaretouch_engine/people_cross_owner_workflow.py"
       ],
       "verification": [],
       "remaining": [
         "All runtime, numerical, photographic and release acceptance UNRUN.",
         "Original bounded compositions over existing measured solvers, not new algorithms or proprietary numeric equivalence.",
-        "Named-style explicit-map batch source authored with actual target images; all acceptance UNRUN. No automatic style/person classification or named persistent cohort. Unseen shared-source aliases refuse; single-photo alias limitation remains."
+        "Named one-shot and persistent authoring source authored with full member image review; all acceptance UNRUN. Capsule v1 persists canonical scalar intent, not inferred named badges. All-thirty-key associations require image review on later generic update/unlink. No automatic style/person classification; single-photo alias limitation remains."
       ]
     },
     {
@@ -4431,13 +4434,16 @@
         "ui/src/faceStyle",
         "docs/face-style/BATCH-REVIEW-CONTRACT.md",
         "engine/src/lumaretouch_engine/face_style_batch_plan.py",
-        "engine/src/lumaretouch_engine/face_style_batch_review.py"
+        "engine/src/lumaretouch_engine/face_style_batch_review.py",
+        "docs/face-style/COHORT-REVIEW-CONTRACT.md",
+        "engine/src/lumaretouch_engine/portrait_cohort_review.py",
+        "engine/src/lumaretouch_engine/people_cross_owner_workflow.py"
       ],
       "verification": [],
       "remaining": [
         "All runtime, numerical, photographic and release acceptance UNRUN.",
         "Original bounded compositions over existing measured solvers, not new algorithms or proprietary numeric equivalence.",
-        "Named-style explicit-map batch source authored with actual target images; all acceptance UNRUN. No automatic style/person classification or named persistent cohort. Unseen shared-source aliases refuse; single-photo alias limitation remains."
+        "Named one-shot and persistent authoring source authored with full member image review; all acceptance UNRUN. Capsule v1 persists canonical scalar intent, not inferred named badges. All-thirty-key associations require image review on later generic update/unlink. No automatic style/person classification; single-photo alias limitation remains."
       ]
     },
     {
@@ -4456,13 +4462,16 @@
         "ui/src/faceStyle",
         "docs/face-style/BATCH-REVIEW-CONTRACT.md",
         "engine/src/lumaretouch_engine/face_style_batch_plan.py",
-        "engine/src/lumaretouch_engine/face_style_batch_review.py"
+        "engine/src/lumaretouch_engine/face_style_batch_review.py",
+        "docs/face-style/COHORT-REVIEW-CONTRACT.md",
+        "engine/src/lumaretouch_engine/portrait_cohort_review.py",
+        "engine/src/lumaretouch_engine/people_cross_owner_workflow.py"
       ],
       "verification": [],
       "remaining": [
         "All runtime, numerical, photographic and release acceptance UNRUN.",
         "Original bounded compositions over existing measured solvers, not new algorithms or proprietary numeric equivalence.",
-        "Named-style explicit-map batch source authored with actual target images; all acceptance UNRUN. No automatic style/person classification or named persistent cohort. Unseen shared-source aliases refuse; single-photo alias limitation remains."
+        "Named one-shot and persistent authoring source authored with full member image review; all acceptance UNRUN. Capsule v1 persists canonical scalar intent, not inferred named badges. All-thirty-key associations require image review on later generic update/unlink. No automatic style/person classification; single-photo alias limitation remains."
       ]
     },
     {
@@ -4481,13 +4490,16 @@
         "ui/src/faceStyle",
         "docs/face-style/BATCH-REVIEW-CONTRACT.md",
         "engine/src/lumaretouch_engine/face_style_batch_plan.py",
-        "engine/src/lumaretouch_engine/face_style_batch_review.py"
+        "engine/src/lumaretouch_engine/face_style_batch_review.py",
+        "docs/face-style/COHORT-REVIEW-CONTRACT.md",
+        "engine/src/lumaretouch_engine/portrait_cohort_review.py",
+        "engine/src/lumaretouch_engine/people_cross_owner_workflow.py"
       ],
       "verification": [],
       "remaining": [
         "All runtime, numerical, photographic and release acceptance UNRUN.",
         "Original bounded compositions over existing measured solvers, not new algorithms or proprietary numeric equivalence.",
-        "Named-style explicit-map batch source authored with actual target images; all acceptance UNRUN. No automatic style/person classification or named persistent cohort. Unseen shared-source aliases refuse; single-photo alias limitation remains."
+        "Named one-shot and persistent authoring source authored with full member image review; all acceptance UNRUN. Capsule v1 persists canonical scalar intent, not inferred named badges. All-thirty-key associations require image review on later generic update/unlink. No automatic style/person classification; single-photo alias limitation remains."
       ]
     },
     {
@@ -4506,13 +4518,16 @@
         "ui/src/faceStyle",
         "docs/face-style/BATCH-REVIEW-CONTRACT.md",
         "engine/src/lumaretouch_engine/face_style_batch_plan.py",
-        "engine/src/lumaretouch_engine/face_style_batch_review.py"
+        "engine/src/lumaretouch_engine/face_style_batch_review.py",
+        "docs/face-style/COHORT-REVIEW-CONTRACT.md",
+        "engine/src/lumaretouch_engine/portrait_cohort_review.py",
+        "engine/src/lumaretouch_engine/people_cross_owner_workflow.py"
       ],
       "verification": [],
       "remaining": [
         "All runtime, numerical, photographic and release acceptance UNRUN.",
         "Original bounded compositions over existing measured solvers, not new algorithms or proprietary numeric equivalence.",
-        "Named-style explicit-map batch source authored with actual target images; all acceptance UNRUN. No automatic style/person classification or named persistent cohort. Unseen shared-source aliases refuse; single-photo alias limitation remains."
+        "Named one-shot and persistent authoring source authored with full member image review; all acceptance UNRUN. Capsule v1 persists canonical scalar intent, not inferred named badges. All-thirty-key associations require image review on later generic update/unlink. No automatic style/person classification; single-photo alias limitation remains."
       ]
     },
     {
@@ -4531,13 +4546,16 @@
         "ui/src/faceStyle",
         "docs/face-style/BATCH-REVIEW-CONTRACT.md",
         "engine/src/lumaretouch_engine/face_style_batch_plan.py",
-        "engine/src/lumaretouch_engine/face_style_batch_review.py"
+        "engine/src/lumaretouch_engine/face_style_batch_review.py",
+        "docs/face-style/COHORT-REVIEW-CONTRACT.md",
+        "engine/src/lumaretouch_engine/portrait_cohort_review.py",
+        "engine/src/lumaretouch_engine/people_cross_owner_workflow.py"
       ],
       "verification": [],
       "remaining": [
         "All runtime, numerical, photographic and release acceptance UNRUN.",
         "Original bounded compositions over existing measured solvers, not new algorithms or proprietary numeric equivalence.",
-        "Named-style explicit-map batch source authored with actual target images; all acceptance UNRUN. No automatic style/person classification or named persistent cohort. Unseen shared-source aliases refuse; single-photo alias limitation remains."
+        "Named one-shot and persistent authoring source authored with full member image review; all acceptance UNRUN. Capsule v1 persists canonical scalar intent, not inferred named badges. All-thirty-key associations require image review on later generic update/unlink. No automatic style/person classification; single-photo alias limitation remains."
       ]
     },
     {
@@ -4556,13 +4574,16 @@
         "ui/src/faceStyle",
         "docs/face-style/BATCH-REVIEW-CONTRACT.md",
         "engine/src/lumaretouch_engine/face_style_batch_plan.py",
-        "engine/src/lumaretouch_engine/face_style_batch_review.py"
+        "engine/src/lumaretouch_engine/face_style_batch_review.py",
+        "docs/face-style/COHORT-REVIEW-CONTRACT.md",
+        "engine/src/lumaretouch_engine/portrait_cohort_review.py",
+        "engine/src/lumaretouch_engine/people_cross_owner_workflow.py"
       ],
       "verification": [],
       "remaining": [
         "All runtime, numerical, photographic and release acceptance UNRUN.",
         "Original bounded compositions over existing measured solvers, not new algorithms or proprietary numeric equivalence.",
-        "Named-style explicit-map batch source authored with actual target images; all acceptance UNRUN. No automatic style/person classification or named persistent cohort. Unseen shared-source aliases refuse; single-photo alias limitation remains."
+        "Named one-shot and persistent authoring source authored with full member image review; all acceptance UNRUN. Capsule v1 persists canonical scalar intent, not inferred named badges. All-thirty-key associations require image review on later generic update/unlink. No automatic style/person classification; single-photo alias limitation remains."
       ]
     },
     {
@@ -4581,13 +4602,16 @@
         "ui/src/faceStyle",
         "docs/face-style/BATCH-REVIEW-CONTRACT.md",
         "engine/src/lumaretouch_engine/face_style_batch_plan.py",
-        "engine/src/lumaretouch_engine/face_style_batch_review.py"
+        "engine/src/lumaretouch_engine/face_style_batch_review.py",
+        "docs/face-style/COHORT-REVIEW-CONTRACT.md",
+        "engine/src/lumaretouch_engine/portrait_cohort_review.py",
+        "engine/src/lumaretouch_engine/people_cross_owner_workflow.py"
       ],
       "verification": [],
       "remaining": [
         "All runtime, numerical, photographic and release acceptance UNRUN.",
         "Original bounded compositions over existing measured solvers, not new algorithms or proprietary numeric equivalence.",
-        "Named-style explicit-map batch source authored with actual target images; all acceptance UNRUN. No automatic style/person classification or named persistent cohort. Unseen shared-source aliases refuse; single-photo alias limitation remains."
+        "Named one-shot and persistent authoring source authored with full member image review; all acceptance UNRUN. Capsule v1 persists canonical scalar intent, not inferred named badges. All-thirty-key associations require image review on later generic update/unlink. No automatic style/person classification; single-photo alias limitation remains."
       ]
     },
     {
@@ -4606,13 +4630,16 @@
         "ui/src/faceStyle",
         "docs/face-style/BATCH-REVIEW-CONTRACT.md",
         "engine/src/lumaretouch_engine/face_style_batch_plan.py",
-        "engine/src/lumaretouch_engine/face_style_batch_review.py"
+        "engine/src/lumaretouch_engine/face_style_batch_review.py",
+        "docs/face-style/COHORT-REVIEW-CONTRACT.md",
+        "engine/src/lumaretouch_engine/portrait_cohort_review.py",
+        "engine/src/lumaretouch_engine/people_cross_owner_workflow.py"
       ],
       "verification": [],
       "remaining": [
         "All runtime, numerical, photographic and release acceptance UNRUN.",
         "Original bounded compositions over existing measured solvers, not new algorithms or proprietary numeric equivalence.",
-        "Named-style explicit-map batch source authored with actual target images; all acceptance UNRUN. No automatic style/person classification or named persistent cohort. Unseen shared-source aliases refuse; single-photo alias limitation remains."
+        "Named one-shot and persistent authoring source authored with full member image review; all acceptance UNRUN. Capsule v1 persists canonical scalar intent, not inferred named badges. All-thirty-key associations require image review on later generic update/unlink. No automatic style/person classification; single-photo alias limitation remains."
       ]
     },
     {

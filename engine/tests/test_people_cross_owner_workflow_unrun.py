@@ -38,7 +38,9 @@ def prepare_fixture(endpoints, request):
     engine = SimpleNamespace(_batch_controller=lambda: SimpleNamespace(documents=SimpleNamespace(rows=lambda: rows)),
                              _document_versions=lambda: versions)
     by_id = {item['row']['document_id']: item for item in endpoints}
-    def endpoint(_engine, _rows, proof, ref):
+    def endpoint(_engine, _rows, proof, ref, *, reviewed_only=False):
+        # These legacy scalar fixtures must retain the ordinary endpoint path.
+        assert reviewed_only is False
         item = deepcopy(by_id[proof['document']['document_id']])
         if item['proof'] != proof or item['ref'] != ref: raise ValueError('stale fixture endpoint')
         return item

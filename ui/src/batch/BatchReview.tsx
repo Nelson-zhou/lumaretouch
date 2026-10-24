@@ -1,3 +1,5 @@
+import {portraitCohortTargets,portraitCohortReviewKey,portraitCohortImagesReady,portraitCohortAck,type PortraitCohortAck} from '../portraitCohort/model';
+import {PortraitCohortReview} from '../portraitCohort/PortraitCohortReview';
 import {collarbonePlanTargets} from '../collarbone/cohortModel';
 import {COLLARBONE_TRANSFER_OP,collarboneReviewKey,collarboneImagesReady,collarboneAck,type CollarboneAck} from '../collarbone/transferModel';
 import {CollarboneTransferReview} from '../collarbone/CollarboneTransferReview';
@@ -34,7 +36,7 @@ function reason(text:string|null|undefined){
     'target parameters changed outside the reviewed snapshot':'参数与预检快照不同，已保护',
   };return known[text]??text;
 }
-export function BatchReview({state,onCommit,onReview,onQuery,onAcknowledge,onClose,peoplePreview,commitBlockedReason}:{state:BatchUi;onCommit:(spillReviewAck?:SpillTransferAck[],shadowReviewAck?:ShadowTransferAck[],torsoReviewAck?:TorsoTransferAck[],waistReviewAck?:WaistTransferAck[],headReviewAck?:HeadTransferAck[],collarboneReviewAck?:CollarboneAck[],faceStyleReviewAck?:FaceStyleBatchAck[])=>unknown;
+export function BatchReview({state,onCommit,onReview,onQuery,onAcknowledge,onClose,peoplePreview,commitBlockedReason}:{state:BatchUi;onCommit:(spillReviewAck?:SpillTransferAck[],shadowReviewAck?:ShadowTransferAck[],torsoReviewAck?:TorsoTransferAck[],waistReviewAck?:WaistTransferAck[],headReviewAck?:HeadTransferAck[],collarboneReviewAck?:CollarboneAck[],faceStyleReviewAck?:FaceStyleBatchAck[],portraitCohortReviewAck?:PortraitCohortAck[])=>unknown;
   onReview:()=>unknown;onQuery:()=>unknown;onAcknowledge:()=>void;onClose:()=>void;peoplePreview?:ReactNode;commitBlockedReason?:string}){
   const [cropImages,setCropImages]=useState<Record<string,boolean>>({});
   const [spillImages,setSpillImages]=useState<Record<string,boolean>>({});
@@ -44,10 +46,11 @@ export function BatchReview({state,onCommit,onReview,onQuery,onAcknowledge,onClo
   const [collarboneImages,setCollarboneImages]=useState<Record<string,boolean>>({});
   const [headImages,setHeadImages]=useState<Record<string,boolean>>({});
   const [faceStyleImages,setFaceStyleImages]=useState<Record<string,boolean>>({});
+  const [portraitImages,setPortraitImages]=useState<Record<string,boolean>>({});
   const dialog=useRef<HTMLElement>(null),close=useRef(onClose);close.current=onClose;
   useEffect(()=>setCropImages({}),[state.plan?.preflight_token]);
   const open=state.phase!=='closed'&&!state.hidden,busy=state.phase==='committing';
-  useEffect(()=>{setSpillImages({});setShadowImages({});setTorsoImages({});setWaistImages({});setHeadImages({});setCollarboneImages({});setFaceStyleImages({});},[state.plan?.preflight_token,state.plan?.request_id,open]);
+  useEffect(()=>{setSpillImages({});setShadowImages({});setTorsoImages({});setWaistImages({});setHeadImages({});setCollarboneImages({});setFaceStyleImages({});setPortraitImages({});},[state.plan?.preflight_token,state.plan?.request_id,open]);
   useEffect(()=>{
     if(!open)return;
     const previous=document.activeElement as HTMLElement|null;dialog.current?.focus();
@@ -86,11 +89,15 @@ export function BatchReview({state,onCommit,onReview,onQuery,onAcknowledge,onClo
   const collarboneToken=`${plan?.preflight_token??''}:${plan?.request_id??''}`;
   const collarboneReady=collarboneImagesReady(collarboneToken,collarboneTargets.map(t=>t.visual),collarboneImages);
   const candidateFaceStyle=plan?.applies.face_style;
-  const faceStyleRecipe=validFaceStyleRecipe(candidateFaceStyle)?candidateFaceStyle:undefined;
+  const namedRecipe=validFaceStyleRecipe(candidateFaceStyle)?candidateFaceStyle:undefined;
+  const faceStyleRecipe=plan?.applies.target_policy==='explicit_face_map'?namedRecipe:undefined;
+  const portraitSelected=plan?.portrait_cohort===true,portraitTargets=plan?portraitCohortTargets(plan):[];
+  const portraitToken=`${plan?.preflight_token??''}:${plan?.request_id??''}`;
+  const portraitReady=!portraitSelected||portraitCohortImagesReady(portraitToken,portraitTargets.map(target=>target.visual),portraitImages);
   const faceStyleTargets=faceStyleRecipe?plan!.targets.filter(target=>!target.blocked):[];
   const faceStyleToken=`${plan?.preflight_token??''}:${plan?.request_id??''}`;
   const faceStyleReady=faceStyleBatchImagesReady(faceStyleToken,faceStyleTargets.map(target=>target.people_transfer?.face_style_visual),faceStyleImages);
-  const blockedReason=commitBlockedReason||(!cropReady?'请等待每张目标的实际裁剪预览通过显示校验，再确认同步。':!spillReady?'请逐张查看并勾选所有可同步目标的祛反光前后效果。':!shadowReady?'请逐张查看并勾选所有可同步目标的原图阴影前后效果。':!torsoReady?'请逐张查看并勾选所有可同步目标身体及本人面部的上身长度前后效果。':!waistReady?'请逐张查看并勾选所有可同步目标身体及本人面部的腰长前后效果。':!headReady?'请逐张查看并勾选所有可同步目标完整头发、头部及本人面部的小头前后效果。':!collarboneReady?'请逐张查看并勾选所有可同步目标的锁骨真实前后效果。':!faceStyleReady?'请逐张查看并勾选所有可应用目标的新版脸型真实前后效果，包括 0 程度。':undefined);
+  const blockedReason=commitBlockedReason||(!portraitReady?'请读取并逐张查看、勾选源成员及所有目标的真实前后效果。':!cropReady?'请等待每张目标的实际裁剪预览通过显示校验，再确认同步。':!spillReady?'请逐张查看并勾选所有可同步目标的祛反光前后效果。':!shadowReady?'请逐张查看并勾选所有可同步目标的原图阴影前后效果。':!torsoReady?'请逐张查看并勾选所有可同步目标身体及本人面部的上身长度前后效果。':!waistReady?'请逐张查看并勾选所有可同步目标身体及本人面部的腰长前后效果。':!headReady?'请逐张查看并勾选所有可同步目标完整头发、头部及本人面部的小头前后效果。':!collarboneReady?'请逐张查看并勾选所有可同步目标的锁骨真实前后效果。':!faceStyleReady?'请逐张查看并勾选所有可应用目标的新版脸型真实前后效果，包括 0 程度。':undefined);
   const title=state.operation==='redo'?'重做批量同步':state.operation==='undo'?'撤销批量同步':'批量同步预检';
   return <div className="batchReviewBackdrop">
     <section ref={dialog} tabIndex={-1} className="batchReview" role="dialog" aria-modal="true" aria-labelledby="batchReviewTitle">
@@ -106,6 +113,7 @@ export function BatchReview({state,onCommit,onReview,onQuery,onAcknowledge,onClo
       {plan&&<>
         <p title={plan.source_snapshot.path}>{faceStyleRecipe?'上下文照片（不提供配方数值）':'源图'}：{file(plan.source_snapshot.path)} · 预检版本 {plan.source_snapshot.revision}</p>
         <p>{state.scopeLabel} · {plan.module_scope.length} 个模块</p>
+        {portraitSelected&&namedRecipe&&<p>本次选择 {FACE_STYLE_LABELS[namedRecipe.style]} · v{namedRecipe.version} · 共同程度 {Number((namedRecipe.amount*100).toFixed(6))}。配方由本地引擎生成，源成员不捐赠数值；共同层替换完整 30 项，人脸显式参数仍优先。关联只保存规范参数意图，不保存风格名称；相同共同意图会在写入前明确拒绝，而不是添加空历史。</p>}
         {faceStyleRecipe&&<p>明确选择的新版脸型：{FACE_STYLE_LABELS[faceStyleRecipe.style]} · v{faceStyleRecipe.version} · 所有目标统一程度 {Number((faceStyleRecipe.amount*100).toFixed(6))}。只使用本地固定配方，不比较或复制上下文人脸的外貌与参数；不建立人物关联。每次替换全部 30 个管理参数，0 也是中性替换，不恢复以前的调整。</p>}
         {plan.module_scope.includes(TORSO_TRANSFER_OP)&&<p>仅传递上身长度标量。每张图必须有唯一启用身体和独立审核的支持及本人面部归属；多个启用身体、归属模糊或缺少审核会拒绝，不复制支持范围，也不自动关联人物。</p>}
         {plan.module_scope.includes(WAIST_TRANSFER_OP)&&<p>仅传递腰长标量。每张图必须有唯一启用身体、当前四个腰部标记和独立审核的腰长支持及本人面部归属。缺少或过期则拒绝，不从源图或上身长度复制审核。</p>}
@@ -125,6 +133,15 @@ export function BatchReview({state,onCommit,onReview,onQuery,onAcknowledge,onClo
           <CollarboneTransferReview preflightToken={plan.preflight_token} value={target.visual} coverage={target.coverage}
             reviewKey={collarboneReviewKey(collarboneToken,target.visual)} disabled={busy||state.phase!=='review'}
             onReady={(key,ready)=>setCollarboneImages(old=>old[key]===ready?old:{...old,[key]:ready})}/>
+        </div>)}
+      </section>}
+      {plan&&portraitSelected&&<section aria-label="持久人物关联全部成员真实图像审核">
+        <p>源成员与所有目标共同提交。更高优先级的人脸显式参数可能使图像保持不变，仍必须逐张读取并勾选。此审核也适用于后续普通参数更新和整体解除，不会根据数值推断或保存命名风格标签。</p>
+        {portraitTargets.map((target,index)=><div key={target.document_id}>
+          <h3>{target.source?'源成员':'目标成员'} {index+1} / {portraitTargets.length}：{file(target.path)}</h3>
+          <PortraitCohortReview preflightToken={plan.preflight_token} value={target.visual} recipe={namedRecipe}
+            reviewKey={portraitCohortReviewKey(portraitToken,target.visual)} disabled={busy||state.phase!=='review'}
+            onReady={(key,ready)=>setPortraitImages(old=>old[key]===ready?old:{...old,[key]:ready})}/>
         </div>)}
       </section>}
       {plan&&faceStyleRecipe&&<section aria-label="逐目标新版脸型真实图像审核">
@@ -152,9 +169,9 @@ export function BatchReview({state,onCommit,onReview,onQuery,onAcknowledge,onClo
       {!!result?.conflicts?.length&&<ul>{result.conflicts.map((r,i)=><li key={i}>{file(r.path)}：{r.reason}</li>)}</ul>}
       <footer>
         {state.phase==='review'&&blockedReason&&<p role="status">{blockedReason}</p>}
-        {state.phase==='review'&&<button className="tb primary" disabled={!!blockedReason||!plan?.ok||(plan.policy==='recheck'&&plan.blocked>0)} onClick={()=>{if(!blockedReason)onCommit(plan?.module_scope.includes(SPILL_TRANSFER_OP)?spillTransferAck(spillTargets.map(t=>t.spill_transfer!)):undefined,plan?.module_scope.includes(SHADOW_TRANSFER_OP)?shadowTransferAck(shadowTargets.map(t=>t.shadow_transfer!)):undefined,plan?.module_scope.includes(TORSO_TRANSFER_OP)?torsoTransferAck(torsoTargets.map(t=>t.torso_transfer!)):undefined,plan?.module_scope.includes(WAIST_TRANSFER_OP)?waistTransferAck(waistTargets.map(t=>t.waist_transfer!)):undefined,plan?.module_scope.includes(HEAD_TRANSFER_OP)?headTransferAck(headTargets.map(t=>t.head_transfer!)):undefined,collarboneSelected?collarboneAck(collarboneTargets.map(t=>t.visual)):undefined,faceStyleRecipe?faceStyleBatchAck(faceStyleTargets.map(t=>t.people_transfer!.face_style_visual!)):undefined);}}>{faceStyleRecipe?'确认所选新版脸型并仅应用到指定目标':plan?.persistent_association?'确认全部成员与持久关联操作':plan?.applies.target_policy==='explicit_face_map'?'仅确认本次人脸配对与参数并同步':'确认本次配方并同步'}</button>}
+        {state.phase==='review'&&<button className="tb primary" disabled={!!blockedReason||!plan?.ok||(plan.policy==='recheck'&&plan.blocked>0)} onClick={()=>{if(!blockedReason)onCommit(plan?.module_scope.includes(SPILL_TRANSFER_OP)?spillTransferAck(spillTargets.map(t=>t.spill_transfer!)):undefined,plan?.module_scope.includes(SHADOW_TRANSFER_OP)?shadowTransferAck(shadowTargets.map(t=>t.shadow_transfer!)):undefined,plan?.module_scope.includes(TORSO_TRANSFER_OP)?torsoTransferAck(torsoTargets.map(t=>t.torso_transfer!)):undefined,plan?.module_scope.includes(WAIST_TRANSFER_OP)?waistTransferAck(waistTargets.map(t=>t.waist_transfer!)):undefined,plan?.module_scope.includes(HEAD_TRANSFER_OP)?headTransferAck(headTargets.map(t=>t.head_transfer!)):undefined,collarboneSelected?collarboneAck(collarboneTargets.map(t=>t.visual)):undefined,faceStyleRecipe?faceStyleBatchAck(faceStyleTargets.map(t=>t.people_transfer!.face_style_visual!)):undefined,portraitSelected?portraitCohortAck(portraitTargets.map(t=>t.visual)):undefined);}}>{faceStyleRecipe?'确认所选新版脸型并仅应用到指定目标':plan?.persistent_association?'确认全部成员与持久关联操作':plan?.applies.target_policy==='explicit_face_map'?'仅确认本次人脸配对与参数并同步':'确认本次配方并同步'}</button>}
         {['review','error','done'].includes(state.phase)&&!['undo','redo'].includes(state.operation)&&<button className="tb" onClick={onReview}>重新预检</button>}
-        {state.phase==='uncertain'&&<>{!state.queryOnly&&!faceStyleRecipe&&!collarboneSelected&&!plan?.module_scope.includes(WAIST_TRANSFER_OP)&&!plan?.module_scope.includes(HEAD_TRANSFER_OP)&&<button className="tb" onClick={onAcknowledge}>我已检查照片，结束本次跟踪</button>}<button className="tb primary" onClick={onQuery}>再次查询这次任务</button></>}
+        {state.phase==='uncertain'&&<>{!state.queryOnly&&!faceStyleRecipe&&!portraitSelected&&!collarboneSelected&&!plan?.module_scope.includes(WAIST_TRANSFER_OP)&&!plan?.module_scope.includes(HEAD_TRANSFER_OP)&&<button className="tb" onClick={onAcknowledge}>我已检查照片，结束本次跟踪</button>}<button className="tb primary" onClick={onQuery}>再次查询这次任务</button></>}
       </footer>
     </section>
   </div>;

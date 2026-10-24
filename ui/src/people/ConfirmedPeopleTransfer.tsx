@@ -31,7 +31,7 @@ export function ConfirmedPeopleTransfer({owner, targets, currentPath, enabled, o
   const [targetPolicy, setTargetPolicy] = useState<'confirmed_person_only' | 'explicit_face_map' | 'persistent_association'>('confirmed_person_only');
   const [associationOperation,setAssociationOperation]=useState<AssociationRequest['operation']>('create');
   const [associationId,setAssociationId]=useState(()=>crypto.randomUUID().replace(/-/g,''));
-  const persistent=!named&&targetPolicy==='persistent_association';
+  const persistent=targetPolicy==='persistent_association';
   const manual=named||targetPolicy!=='confirmed_person_only';
   const targetLimit=persistent?15:PEOPLE_TRANSFER_LIMITS.targets;
   const [policy, setPolicy] = useState<'recheck' | 'skip_and_report'>('recheck');
@@ -56,7 +56,7 @@ export function ConfirmedPeopleTransfer({owner, targets, currentPath, enabled, o
   const selected = [...new Set(targets)].filter(identity => identity !== view?.binding.document_id);
   const sourceReady = enabled && owner.enabled && !owner.state.pending && !owner.state.uncertain
     && (named ? faceStyleBatchSourceReady(view) : !!source?.enabled && source.analysis_status === 'verified' && matches);
-  const inventoryKey = JSON.stringify([key, selected, currentPath, named ? 'face_style' : targetPolicy]);
+  const inventoryKey = JSON.stringify([key, selected, currentPath, named ? ['face_style',targetPolicy] : targetPolicy]);
   const inventory = useTransferInventory({key: inventoryKey, enabled: sourceReady && manual, docs: selected,
     source: view && source ? {binding: view.binding, state_revision: view.revision,
       association_revision: view.association_revision, face_ref: source.face_ref} : undefined});
@@ -67,7 +67,8 @@ export function ConfirmedPeopleTransfer({owner, targets, currentPath, enabled, o
   const explicitBase = explicitRequest(listing, selected, source?.face_ref, selection, choices);
   const explicit: ExplicitPeopleRequest | undefined = explicitBase && (!named || namedRecipe)
     ? {...explicitBase, ...(namedRecipe ? {face_style: namedRecipe} : {})} : undefined;
-  const association=associationRequest(listing,selected,source?.face_ref,selection,choices,associationOperation,associationId);
+  const association=(!named||associationOperation==='unlink'||namedRecipe)
+    ?associationRequest(listing,selected,source?.face_ref,selection,choices,associationOperation,associationId,namedRecipe):undefined;
   const existingAssociation=sourceAssociation(listing,source?.face_ref);
   const request: PeopleTransferRequest | undefined = persistent ? association : named || targetPolicy === 'explicit_face_map' ? explicit
     : source && Object.keys(selection).length ? {source_ref: source.face_ref, selection, target_policy: 'confirmed_person_only'} : undefined;
@@ -77,7 +78,7 @@ export function ConfirmedPeopleTransfer({owner, targets, currentPath, enabled, o
   const ready = sourceReady && !!proof && !!request && (!manual || allImagesReady);
   const flow = useBatchWorkflow({docs: selected, moduleScope: persistent&&associationOperation==='unlink'?[]:Object.keys(selection), conflictPolicy: persistent?'recheck':policy,
     sourceDocumentId: view?.binding.document_id ?? '', referencePath: currentPath, enabled: ready,
-    label: named?'新版七种脸型：明确配方与统一程度，仅本次手动指定的目标人脸':persistent?'持久人物关联：所有成员共同审核，逐人脸显式参数仍优先':targetPolicy === 'explicit_face_map' ? '仅本次手动指定的人脸配对，不建立持久人物关联' : '仅向用户已确认的同一人物同步明确勾选的参数',
+    label: named&&persistent?'新版七种脸型持久关联：明确本地配方与程度，源成员和全部目标共同审核':named?'新版七种脸型：明确配方与统一程度，仅本次手动指定的目标人脸':persistent?'持久人物关联：所有成员共同审核，逐人脸显式参数仍优先':targetPolicy === 'explicit_face_map' ? '仅本次手动指定的人脸配对，不建立持久人物关联' : '仅向用户已确认的同一人物同步明确勾选的参数',
     peopleTransfer: request, peopleProof: proof}, onComplete);
   const busy = ['preflighting', 'committing', 'uncertain'].includes(flow.ui.phase);
   const disabled = !enabled || !owner.enabled || owner.state.pending || owner.state.uncertain || busy;
@@ -124,27 +125,30 @@ export function ConfirmedPeopleTransfer({owner, targets, currentPath, enabled, o
         <label><input type="radio" name="peopleTransferMode" checked={!named} onChange={() => setMode('parameters')}/>同步来源人脸的所选参数（保留原有流程）</label>
         <label><input type="radio" name="peopleTransferMode" checked={named} onChange={() => setMode('face_style')}/>新版七种脸型配方：逐张明确指定目标</label>
       </fieldset>
-      {named ? <fieldset disabled={disabled} aria-label="批量新版脸型配方" data-face-style-version="1">
+      {named ? <fieldset disabled={disabled||persistent&&associationOperation==='unlink'} aria-label="批量新版脸型配方" data-face-style-version="1">
         <legend>七种固定本地配方与统一程度</legend>
-        <p>当前人脸只作为文档、来源与版本的上下文锚点，不提供配方数值，也不是外貌模板。每张目标至少手动指定一张已验证人脸，不使用已确认人物关联代替本次选择。</p>
+        <p>当前人脸不提供配方数值，也不是外貌模板。仅本次配对时它只是上下文锚点；选择持久关联时它也是需要真实效果审核的成员。所有目标仍需手动明确指定，不按外貌或已有确认自动补齐。</p>
         <label>新版脸型<select value={style} onChange={event => setNamedChoice({key, style: isFaceStyle(event.target.value) ? event.target.value : '', amountText})}>
           <option value="">请选择新版配方</option>{FACE_STYLES.map(value => <option key={value} value={value}>{FACE_STYLE_LABELS[value]}</option>)}
         </select></label>
         <label>所有目标的统一程度（0–100）<input type="number" min={0} max={100} step="any" value={amountText}
           onChange={event => setNamedChoice({key, style, amountText: event.target.value})}/></label>
         <p>名称只是风格提示，不自动判断年龄、性别或脸型。每次替换 10 个现有操作中的 30 个配方参数，不叠加；0 将这些参数设为中性，不是恢复原值或取消，不影响未管理参数及旧版效果。</p>
-        <p>逐目标使用自身关键点与当前有效来源渲染真实前后图，不复制几何、蒙版或人物关联。必须逐张查看并勾选；不是新 AI 算法，也不代表照片质量验收。</p>
-      </fieldset> : <fieldset disabled={disabled}><legend>选择目标方式</legend>
-        <label><input type="radio" name="peopleTransferPolicy" checked={targetPolicy === 'confirmed_person_only'}
-          onChange={() => setTargetPolicy('confirmed_person_only')}/>仅已有的已确认人物关联</label>
-        <label><input type="radio" name="peopleTransferPolicy" checked={targetPolicy === 'explicit_face_map'}
+        <p>每个成员使用自身关键点与当前有效来源渲染真实前后图，不复制几何或蒙版。必须逐张查看并勾选；不是新 AI 算法，也不代表照片质量验收。</p>
+      </fieldset> : null}
+      <fieldset disabled={disabled}><legend>选择目标方式</legend>
+        {!named&&<label><input type="radio" name="peopleTransferPolicy" checked={targetPolicy === 'confirmed_person_only'}
+          onChange={() => setTargetPolicy('confirmed_person_only')}/>仅已有的已确认人物关联</label>}
+        <label><input type="radio" name="peopleTransferPolicy" checked={targetPolicy === 'explicit_face_map'||named&&!persistent}
           onChange={() => setTargetPolicy('explicit_face_map')}/>逐张手动指定，仅本次配对</label>
         <label><input type="radio" name="peopleTransferPolicy" checked={persistent} onChange={()=>setTargetPolicy('persistent_association')}/>明确建立或维护持久人物关联</label>
-      </fieldset>}
+      </fieldset>
       {persistent&&<fieldset disabled={disabled}><legend>持久关联操作</legend>
         <select value={associationOperation} onChange={event=>setAssociationOperation(event.currentTarget.value as AssociationRequest['operation'])}>
           <option value="create">新建已审核的匿名人物关联</option><option value="patch">更新共同继承的所选参数</option><option value="unlink">解除整个关联，保留每张显式编辑与历史</option>
         </select>
+        {associationOperation==='unlink'&&<p>解除关联不携带命名配方，也不应用当前配方选择；只按已存共同意图进行完整成员审核。</p>}
+        <p>共同意图包含完整 30 项脸型管理参数时，后续普通参数更新和整体解除也必须审核源成员及所有目标，不能绕过。命名配方仅用于本次明确选择；持久关联只保存参数意图，不保存名称或推断风格。</p>
         <p>关联涉及锁骨增强（包括已有继承、启用效果或解除关联）时，必须另行逐张读取并确认源成员与所有目标的真实前后图像；不复制任何锁骨曲线、类别确认或支持范围。</p>
         <p>每张照片只选择一张人脸，最多 16 个独立文档成员（含源图）。所有成员同时提交；人脸显式参数优先于共享人物参数。不会自动识别或扩充成员。</p>
         <p>成员源图或可用状态改变后暂停共享编辑；保留上次已接受的本地投影。关联期间不允许直接重新分析成员，需先完整解除关联。当前仅支持成员齐全时更新或整体解除。</p>
@@ -167,7 +171,7 @@ export function ConfirmedPeopleTransfer({owner, targets, currentPath, enabled, o
         {listing && <>
           <div className="transferFaceGrid">
             <TransferFacePreview key={`${listing.request_id}:source`} entry={listing.source} selected={source ? [source.face_ref] : []}
-              label={`${named ? '上下文定位，不用于效果比较' : '源人脸'} · ${currentPath.split('/').pop() || '当前照片'}`} readOnly
+              label={`${named&&!persistent ? '上下文定位，不用于效果比较' : '源人脸'} · ${currentPath.split('/').pop() || '当前照片'}`} readOnly
               onPreviewStatus={(id, value) => previewStatus(listing.request_id, id, value)}/>
             {listing.targets.map((entry, index) => isAvailableEntry(entry) ? <TransferFacePreview key={`${listing.request_id}:${entry.document.document_id}`}
               entry={entry} selected={choices[entry.document.document_id] ?? []} label={`目标照片 ${index + 1}`} disabled={disabled}
@@ -195,19 +199,19 @@ export function ConfirmedPeopleTransfer({owner, targets, currentPath, enabled, o
           <option value="recheck">任一目标受阻则不提交整组</option><option value="skip_and_report">跳过受阻目标并逐张报告</option>
         </select></label>
       </fieldset>
-      <button type="button" disabled={!ready || !selected.length || busy} onClick={start}>{named?'生成逐目标新版脸型审核':'预检人物参数'} · {selected.length} 张照片</button>
+      <button type="button" disabled={!ready || !selected.length || busy} onClick={start}>{persistent?'生成源成员与全部目标的关联审核':named?'生成逐目标新版脸型审核':'预检人物参数'} · {selected.length} 张照片</button>
       <button type="button" disabled={!last || busy || !enabled || !owner.enabled || owner.state.pending || owner.state.uncertain || last.epoch !== view?.binding.document_epoch}
         onClick={() => last && (undone ? flow.redo(last.id) : flow.undo(last.id))}>{undone ? '重做上一笔有改动的人物同步' : '撤销上一笔有改动的人物同步'}</button>
       <p>源图、人脸分析、独立人物状态、目标或关联改变后必须重新预检。没有逐张明确指定或已有确认关联的目标不会被猜测补齐。</p>
     </details>
-    <BatchReview state={flow.ui} onClose={flow.close} onCommit={(spill,shadow,torso,waist,head,collarbone,faceStyle) => (!needsFrozen || frozenReady) && flow.commit(spill,shadow,torso,waist,head,collarbone,faceStyle)} onReview={start}
+    <BatchReview state={flow.ui} onClose={flow.close} onCommit={(spill,shadow,torso,waist,head,collarbone,faceStyle,portrait) => (!needsFrozen || frozenReady) && flow.commit(spill,shadow,torso,waist,head,collarbone,faceStyle,portrait)} onReview={start}
       onQuery={flow.query} onAcknowledge={flow.acknowledgeInspection}
       commitBlockedReason={needsFrozen && !frozenReady ? '冻结配对的实际源图尚未全部验证显示，不能提交；若预览失败，请关闭并重新读取。' : undefined}
       peoplePreview={visibleFrozen ? <div>
         <p>请逐张核对下面冻结的人脸框。{visibleFrozen.request.target_policy==='explicit_face_map'&&visibleFrozen.request.face_style?'上下文图只核对来源与版本，不捐赠参数，不用于前后比较；最终只向列出的目标人脸应用明确配方，不修改上下文人脸。':visibleFrozen.request.target_policy==='persistent_association'?'最终确认授权列出的持久成员及共享参数，源成员也会改变。':'最终确认只授权本次配对与列出的参数，不建立持久人物关联。'}</p>
         <div className="transferFaceGrid">
           <TransferFacePreview key={`frozen:${visibleFrozen.id}:source`} entry={visibleFrozen.inventory.source}
-            selected={[visibleFrozen.request.source_ref]} label={visibleFrozen.request.target_policy==='explicit_face_map'&&visibleFrozen.request.face_style?'冻结上下文定位（不是效果模板）':'冻结源人脸'} readOnly
+            selected={[visibleFrozen.request.source_ref]} label={visibleFrozen.request.target_policy==='explicit_face_map'&&visibleFrozen.request.face_style?'冻结上下文定位（不是效果模板）':visibleFrozen.request.target_policy==='persistent_association'?'冻结源成员（同样参与效果审核）':'冻结源人脸'} readOnly
             onPreviewStatus={(id, value) => frozenStatus(visibleFrozen.id, id, value)}/>
           {visibleFrozen.request.targets.map((row, index) => {
             const entry = visibleFrozen.inventory.targets.find(item => item.document.document_id === row.target.document.document_id);

@@ -79,7 +79,7 @@ test('target visual rejects coverage aliases and wrong recipe/target proof; zero
 });
 test('reachable UI forwards named ack and gates on verified pixels plus explicit per-target review', () => {
   const panel = readFileSync(new URL('../people/ConfirmedPeopleTransfer.tsx', import.meta.url), 'utf8');
-  for (const text of ['faceStyleBatchSourceReady(view)', "mode === 'face_style'", 'faceStyleSelection()', 'flow.commit(spill,shadow,torso,waist,head,collarbone,faceStyle)'])
+  for (const text of ['faceStyleBatchSourceReady(view)', "mode === 'face_style'", 'faceStyleSelection()', 'flow.commit(spill,shadow,torso,waist,head,collarbone,faceStyle,portrait)'])
     assert.ok(panel.includes(text));
   const images = readFileSync(new URL('./FaceStyleBatchReview.tsx', import.meta.url), 'utf8');
   for (const text of ['verifyFaceStyleBatchRecipe(value, recipe)', 'element.naturalWidth === value[side].width', 'loaded.before && loaded.after',

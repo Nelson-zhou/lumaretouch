@@ -6724,13 +6724,15 @@ class Engine(FringeRepairHostMixin, PresetOrganisationHostMixin, HairColourHostM
                     with relocation.lock: fn(msg)
                 else: fn(msg)
                 return  # View-only: do not fence or revoke any edit/capture owner.
-            from .creative_transfer_host import inventory_read_only, face_style_image_read_only, face_style_preflight_read_only
+            from .creative_transfer_host import inventory_read_only, face_style_image_read_only, face_style_preflight_read_only, portrait_cohort_image_read_only, portrait_cohort_preflight_read_only
             if inventory_read_only(msg):
                 fn(msg); return  # No edit fence, history or capture invalidation.
             if face_style_image_read_only(msg):
                 fn(msg); return  # Frozen batch image reads retain all pending guards and capture owners.
             if face_style_preflight_read_only(msg):
                 fn(msg); return  # Exact owned review only; controller retains its real edit/source guards.
+            if portrait_cohort_image_read_only(msg) or portrait_cohort_preflight_read_only(msg):
+                fn(msg); return  # Persistent named review keeps every earlier guard and never publishes edits.
             from .people_host_commands import face_style_read_only
             if face_style_read_only(msg):
                 fn(msg); return  # Exact private face-style reads retain all earlier pending/recovery guards.

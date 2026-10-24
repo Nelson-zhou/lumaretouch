@@ -1,3 +1,4 @@
+import type {PortraitCohortAck} from '../portraitCohort/model';
 import type {CollarboneAck} from '../collarbone/transferModel';
 import type {FaceStyleBatchAck} from '../faceStyle/batchModel';
 import type {ShadowTransferAck} from '../originalShadow/transferModel';
@@ -24,6 +25,6 @@ export function useBatchWorkflow(context:BatchContext,onComplete:()=>void){
   const contextKey=JSON.stringify(context);
   useEffect(()=>{ref.current?.updateContext(context);},[contextKey]);
   const current=()=>{ref.current?.updateContext(latest.current.context);return ref.current;};
-  return {ui,start:()=>current()?.start(),commit:(ack?:SpillTransferAck[],shadowAck?:ShadowTransferAck[],torsoAck?:TorsoTransferAck[],waistAck?:WaistTransferAck[],headAck?:HeadTransferAck[],collarboneAck?:CollarboneAck[],faceStyleAck?:FaceStyleBatchAck[])=>current()?.commit(ack,shadowAck,torsoAck,waistAck,headAck,collarboneAck,faceStyleAck),undo:(id:string)=>current()?.undo(id),redo:(id:string)=>current()?.redo(id),
+  return {ui,start:()=>current()?.start(),commit:(ack?:SpillTransferAck[],shadowAck?:ShadowTransferAck[],torsoAck?:TorsoTransferAck[],waistAck?:WaistTransferAck[],headAck?:HeadTransferAck[],collarboneAck?:CollarboneAck[],faceStyleAck?:FaceStyleBatchAck[],portraitAck?:PortraitCohortAck[])=>current()?.commit(ack,shadowAck,torsoAck,waistAck,headAck,collarboneAck,faceStyleAck,portraitAck),undo:(id:string)=>current()?.undo(id),redo:(id:string)=>current()?.redo(id),
     query:()=>current()?.query(),acknowledgeInspection:()=>ref.current?.acknowledgeInspection(),close:()=>ref.current?.close()};
 }

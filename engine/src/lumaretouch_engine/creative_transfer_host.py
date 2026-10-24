@@ -62,6 +62,51 @@ def face_style_image_read_only(request):
             and re.fullmatch('[a-f0-9]{64}',digest) is not None)
 
 
+def portrait_cohort_preflight_read_only(request):
+    """Only an explicit named persistent review is metadata-provably read-only.
+
+    A generic patch/unlink cannot prove its prior saved full-portrait intent
+    from this envelope, so it deliberately keeps the existing guarded route.
+    """
+    fields={'cmd','action','request_id','docs','module_scope','people_transfer'}
+    if (type(request) is not dict or not fields<=set(request)
+            or set(request)-(fields|{'conflict_policy'}) or request.get('cmd')!='batch'
+            or request.get('action')!='preflight' or request.get('conflict_policy','recheck')!='recheck'):
+        return False
+    identity=request['request_id'];docs=request['docs'];value=request['people_transfer']
+    if (type(identity) is not str or not identity.strip() or len(identity)>128
+            or any(ord(char)<32 or 0x7f<=ord(char)<=0x9f for char in identity)
+            or type(docs) is not list or not 1<=len(docs)<=15
+            or any(type(doc) is not str or re.fullmatch('[0-9a-f]{32}',doc) is None for doc in docs)
+            or len(set(docs))!=len(docs) or type(value) is not dict
+            or value.get('target_policy')!='persistent_association'
+            or value.get('operation') not in ('create','patch') or 'face_style' not in value):
+        return False
+    try:
+        from .face_style_batch_review import selection
+        from .people_cross_owner_workflow import options
+        if request['module_scope']!=list(selection(value['face_style'])):return False
+        checked=options(value,request['module_scope']);targets=checked['targets']
+        if set(docs)!={item['target']['document']['document_id'] for item in targets}:return False
+        proofs=[checked['source']]+[item['target'] for item in targets]
+        refs=[checked['source_ref']]+[item['target_refs'][0] for item in targets]
+        if len({proof['people_scope'] for proof in proofs})!=len(proofs):return False
+        for proof,ref in zip(proofs,refs):
+            if (re.fullmatch('[0-9a-f]{32}',proof['document']['document_id']) is None
+                    or any(proof[key]>2**53-1 for key in ('state_revision','association_revision'))
+                    or proof['document']['revision']>2**53-1 or ref['analysis_revision']>2**53-1
+                    or ref['asset_sha256']!=proof['source_proof']['asset_sha256']):return False
+        return len(identity.encode('utf-8'))<=128
+    except (ValueError,TypeError,KeyError,UnicodeError):
+        return False
+
+
+def portrait_cohort_image_read_only(request):
+    """Same exact cached-image coordinates, in a separate full-cohort family."""
+    return (type(request) is dict and request.get('action')=='portrait_cohort_visual'
+            and face_style_image_read_only({**request,'action':'face_style_visual'}))
+
+
 def inventory_read_only(request):
     if (type(request) is not dict or set(request)!={'cmd','action','request_id','docs'}
             or request.get('cmd')!='batch' or request.get('action')!='people_targets'):
@@ -107,6 +152,9 @@ def require_route(name,request):
         raise ValueError('Invalid reviewed transfer request')
     action=request.get('action')
     if name=='batch':
+        if action=='portrait_cohort_visual':
+            if not portrait_cohort_image_read_only(request):raise ValueError('Portrait cohort image read requires its exact bounded identity')
+            return  # Actual frozen cohort validates every source and target member.
         if action=='face_style_visual':
             if not face_style_image_read_only(request):raise ValueError('Face-style image read requires its exact bounded identity')
             return  # Frozen image owner verifies its token; no original graph is interpreted.
@@ -123,7 +171,9 @@ def require_route(name,request):
             raise ValueError('Derived transfer requires its correlated receipt identity')
         if action=='commit':
             required={'cmd','action','request_id','preflight_token'}
-            if set(request) not in (required,required|{'head_review_ack'},required|{'face_style_review_ack'}):
+            portrait=required|{'module_scope','portrait_cohort_ack'}
+            if set(request) not in (required,required|{'head_review_ack'},required|{'face_style_review_ack'},
+                                    portrait,portrait|{'collarbone_review_ack'}):
                 raise ValueError('Derived transfer accepts only its frozen token; no unreviewed commit')
         elif action in ('undo','redo'):
             if set(request)!={'cmd','action','request_id','batch_id'}:

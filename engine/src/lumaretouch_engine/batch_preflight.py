@@ -56,6 +56,85 @@ def face_style_records(plan):
     return records
 
 
+def portrait_cohort_records(plan):
+    """Bind full-portrait consent to the actual atomic source-first cohort.
+
+    Selected modules can be empty for unlink or narrower for a later scalar
+    patch. Only the frozen complete intent determines this review requirement.
+    """
+    from . import portrait_cohort_review as review
+    value=plan.params().get('_people_transfer')
+    if type(value) is not dict:return None
+    if value.get('mode')!='persistent_association':
+        if 'portrait_cohort_required' in value:
+            raise ValueError('Portrait cohort marker requires a persistent association')
+        return None
+    intent=value.get('review')
+    if type(intent) is not dict or type(value.get('portrait_cohort_required')) is not bool:
+        raise ValueError('Persistent association requires its actual frozen portrait review marker')
+    required=review.content_required(intent.get('intent'))
+    if value['portrait_cohort_required'] is not required:
+        raise ValueError('Portrait cohort marker differs from actual complete shared intent')
+    if not required:
+        if type(value.get('options')) is dict and 'face_style' in value['options']:
+            raise ValueError('Named persistent recipe cannot omit complete portrait cohort intent')
+        return None
+    from .people_cross_owner_workflow import options
+    from .people_transfer_inventory import check_proof
+    from .people_cross_owner import check_descriptor
+    from .people_state import digest as check_digest
+    selected=options(value.get('options'),list(plan.modules))
+    if (set(intent)!={'version','operation','association_id','generation','members','intent'}
+            or intent['operation']!=selected['operation']
+            or intent['association_id']!=selected['association_id']):
+        raise ValueError('Portrait cohort review differs from its frozen association operation')
+    capsule=check_descriptor({key:item for key,item in intent.items() if key!='operation'}
+                             | {'local_document_id':plan.source_id})
+    if 'face_style' in selected:
+        from .face_style_batch_review import parameters
+        leaves={(leaf['op'],leaf['path']):leaf['value'] for leaf in capsule['intent']}
+        if any(canonical(leaves.get((leaf['operation_id'],leaf['parameter_path'])))!=canonical(leaf['value'])
+               for leaf in parameters(selected['face_style'])):
+            raise ValueError('Named cohort intent differs from its exact locally generated typed recipe')
+    proofs=[selected['source']]+[item['target'] for item in selected['targets']]
+    refs=[selected['source_ref']]+[item['target_refs'][0] for item in selected['targets']]
+    if (plan.policy!='recheck' or plan.rejected() or not 2<=len(plan.targets)<=16
+            or len(plan.targets)!=len(proofs) or plan.targets[0].document_id!=plan.source_id
+            or plan.targets[0].revision!=plan.source_revision or plan.targets[0].path!=plan.source_path
+            or any(target.blocked is not None for target in plan.targets)):
+        raise ValueError('Portrait cohort requires source first and every two to sixteen atomic members')
+    members={member['document_id']:member for member in capsule['members']}
+    expected_digest=review.digest(selected,intent);records=[];seen=set()
+    for target,expected,ref in zip(plan.targets,proofs,refs):
+        proof=check_proof(json.loads(target.before_json))
+        member=members.get(target.document_id)
+        if (type(target.revision) is not int or proof!=expected or proof['document']['document_id']!=target.document_id
+                or proof['document']['revision']!=target.revision or proof['document']['epoch']!=plan.workspace
+                or target.document_id in seen or member!={'document_id':target.document_id,
+                    'scope_id':proof['people_scope'],'original_sha256':proof['source_proof']['original_sha256'],'ref':ref}
+                or ref['asset_sha256']!=proof['source_proof']['asset_sha256']
+                or target.people_json is None):
+            raise ValueError('Portrait cohort member differs from its exact frozen endpoint proof')
+        payload=json.loads(target.people_json)
+        if type(payload) is not dict:raise ValueError('Portrait cohort requires its frozen member payload')
+        snapshots=payload.get('portrait_snapshots')
+        if type(snapshots) is not dict or set(snapshots)!={'before','after'}:
+            raise ValueError('Portrait cohort requires both private full-render snapshot proofs')
+        for snapshot in snapshots.values():
+            if type(snapshot) is not dict or set(snapshot)!={'render_sha256','context_sha256','graph_sha256'}:
+                raise ValueError('Portrait cohort snapshot proof requires exact render, context and graph digests')
+            for digest in snapshot.values():check_digest(digest)
+        record=review.checked(payload.get('portrait_visual'))
+        if (payload.get('ref')!=ref or record['document_id']!=target.document_id
+                or record['revision']!=str(target.revision) or record['source_proof']!=proof['source_proof']
+                or record['cohort_sha256']!=expected_digest
+                or (target.source_proof_json is not None and json.loads(target.source_proof_json)!=proof['source_proof'])):
+            raise ValueError('Portrait visual differs from its source, document, revision or complete cohort intent')
+        seen.add(target.document_id);records.append(record)
+    if seen!=set(members):raise ValueError('Portrait cohort cannot omit or invent an association member')
+    return records
+
+
 def canonical(value,limit=MAX_BYTES):
     text=json.dumps(value,sort_keys=True,separators=(',',':'),allow_nan=False)
     if len(text.encode('utf-8'))>limit:raise ValueError('batch preflight exceeds metadata budget')
@@ -180,6 +259,7 @@ class PreflightStore:
         plan=FrozenPlan(uuid.uuid4().hex,workspace,source_id,source_revision,source_path,tuple(modules),canonical(params),policy,
             tuple(targets),canonical(rejected),now,now+TTL_NS,None if source_proof is None else canonical(source_proof))
         face_style_records(plan)
+        portrait_cohort_records(plan)
         self.pending[plan.token]=plan
         while len(self.pending)>MAX_PENDING:self.pending.popitem(last=False)
         return plan
@@ -204,7 +284,7 @@ class PreflightStore:
         if generation!=workspace:raise ValueError('batch result belongs to another workspace')
         return json.loads(payload)
 
-    def claim(self,plan,*,spill_review_ack=None,shadow_review_ack=None,torso_review_ack=None,waist_review_ack=None,head_review_ack=None,collarbone_review_ack=None,face_style_review_ack=None,request_id=None):
+    def claim(self,plan,*,spill_review_ack=None,shadow_review_ack=None,torso_review_ack=None,waist_review_ack=None,head_review_ack=None,collarbone_review_ack=None,face_style_review_ack=None,portrait_cohort_ack=None,request_id=None):
         # Consume before the first write: even failure to encode the final receipt
         # must never leave a successfully applied token available for reexecution.
         if request_id is not None and (type(request_id) is not str or not 1<=len(request_id)<=128):
@@ -222,16 +302,25 @@ class PreflightStore:
             acknowledgments(collarbone_review_ack,records)
         elif collarbone_review_ack is not None:
             raise ValueError('Collarbone claim requires its frozen people-transfer scope')
+        portrait_records=portrait_cohort_records(plan)
+        if portrait_records is not None:
+            from .portrait_cohort_review import acknowledgments
+            if any(value is not None for value in (spill_review_ack,shadow_review_ack,torso_review_ack,waist_review_ack,head_review_ack,face_style_review_ack)):
+                raise ValueError('Portrait cohort claim cannot retain another family acknowledgment')
+            acknowledgments(portrait_cohort_ack,portrait_records)
+        elif portrait_cohort_ack is not None:
+            raise ValueError('Portrait cohort claim requires its actual complete persistent intent')
         face_records=face_style_records(plan)
         if face_records is not None:
             from .face_style_batch_review import acknowledgments
-            if any(value is not None for value in (spill_review_ack,shadow_review_ack,torso_review_ack,waist_review_ack,head_review_ack,collarbone_review_ack)):
+            if any(value is not None for value in (spill_review_ack,shadow_review_ack,torso_review_ack,waist_review_ack,head_review_ack,collarbone_review_ack,portrait_cohort_ack)):
                 raise ValueError('Face-style claim cannot retain another family acknowledgment')
             acknowledgments(face_style_review_ack,face_records)
         elif face_style_review_ack is not None:
             raise ValueError('Face-style claim requires its actual frozen named people-transfer scope')
         self.finish(plan,{'success':False,'outcome_unknown':True,'preflight_token':plan.token,'request_id':request_id,
-            **({'module_scope':list(plan.modules)} if face_style_review_ack is not None or collarbone_review_ack is not None or any(value is not None for value in scalar_acks.values()) else {}),
+            **({'module_scope':list(plan.modules)} if face_style_review_ack is not None or portrait_cohort_ack is not None or collarbone_review_ack is not None or any(value is not None for value in scalar_acks.values()) else {}),
+            **({'portrait_cohort_ack':portrait_cohort_ack,'portrait_cohort':True} if portrait_cohort_ack is not None else {}),
             **({'face_style_review_ack':face_style_review_ack} if face_style_review_ack is not None else {}),
             **({'collarbone_review_ack':collarbone_review_ack} if collarbone_review_ack is not None else {}),
             **({'collarbone_cohort':True} if collarbone_cohort(plan) else {}),
@@ -253,10 +342,35 @@ class PreflightStore:
         request_id=result.get('request_id')
         if request_id is not None and (type(request_id) is not str or not 1<=len(request_id)<=128):
             raise ValueError('Invalid retained batch request identity')
+        portrait_records=portrait_cohort_records(plan);portrait_ack=None
+        if portrait_records is not None:
+            from .portrait_cohort_review import acknowledgments
+            if any(key in result for key in ('spill_review_ack','shadow_review_ack','torso_review_ack','waist_review_ack','head_review_ack','face_style_review_ack')):
+                raise ValueError('Portrait cohort result cannot contain another family acknowledgment')
+            portrait_ack=acknowledgments(result.get('portrait_cohort_ack',retained.get('portrait_cohort_ack')),portrait_records)
+            if ('portrait_cohort_ack' in retained and canonical(portrait_ack)!=canonical(retained['portrait_cohort_ack'])):
+                raise ValueError('Portrait cohort result cannot change the claimed acknowledgment')
+            if ('module_scope' in result and result['module_scope']!=list(plan.modules)
+                    or 'portrait_cohort' in result and result['portrait_cohort'] is not True):
+                raise ValueError('Portrait cohort result cannot change its frozen scope or review kind')
+            result.update(portrait_cohort_ack=portrait_ack,portrait_cohort=True,module_scope=list(plan.modules))
+            if collarbone_required(plan):
+                from .collarbone_transfer_review import acknowledgments as collarbone_acknowledgments
+                records=[json.loads(target.people_json)['collarbone_visual'] for target in plan.targets]
+                collarbone_ack=collarbone_acknowledgments(result.get('collarbone_review_ack',retained.get('collarbone_review_ack')),records)
+                if ('collarbone_review_ack' in retained and canonical(collarbone_ack)!=canonical(retained['collarbone_review_ack'])):
+                    raise ValueError('Portrait cohort result cannot change its claimed collarbone acknowledgment')
+                if 'collarbone_cohort' in result and result['collarbone_cohort'] is not True:
+                    raise ValueError('Portrait cohort result cannot change its collarbone review kind')
+                result.update(collarbone_review_ack=collarbone_ack,collarbone_cohort=True)
+            elif 'collarbone_review_ack' in result or 'collarbone_cohort' in result:
+                raise ValueError('Portrait cohort result cannot invent collarbone review')
+        elif 'portrait_cohort_ack' in result or 'portrait_cohort' in result:
+            raise ValueError('Portrait cohort receipt cannot accompany another frozen scope')
         face_records=face_style_records(plan);face_ack=None
         if face_records is not None:
             from .face_style_batch_review import acknowledgments
-            if any(key in result for key in ('spill_review_ack','shadow_review_ack','torso_review_ack','waist_review_ack','head_review_ack','collarbone_review_ack')):
+            if any(key in result for key in ('spill_review_ack','shadow_review_ack','torso_review_ack','waist_review_ack','head_review_ack','collarbone_review_ack','portrait_cohort_ack')):
                 raise ValueError('Face-style result cannot contain another family acknowledgment')
             face_ack=acknowledgments(result.get('face_style_review_ack',retained.get('face_style_review_ack')),face_records)
             if ('face_style_review_ack' in retained and canonical(face_ack)!=canonical(retained['face_style_review_ack'])):
@@ -298,6 +412,8 @@ class PreflightStore:
             if face_ack is not None:
                 ack['face_style_review_ack']=face_ack
                 ack['module_scope']=list(plan.modules)
+            if portrait_ack is not None:
+                ack.update(portrait_cohort_ack=portrait_ack,portrait_cohort=True,module_scope=list(plan.modules))
             payload=canonical({'success':False,'outcome_unknown':True,'preflight_token':plan.token,'request_id':request_id,
                 'error':'batch result could not be retained; inspect document state before a new batch',**ack})
         self.terminal[plan.token]=(plan.workspace,payload)
@@ -306,6 +422,8 @@ class PreflightStore:
         prune(self)
         from .face_style_batch_store import prune as prune_face_style
         prune_face_style(self)
+        from .portrait_cohort_store import prune as prune_portrait_cohort
+        prune_portrait_cohort(self)
         while (len(self.terminal)>MAX_TERMINAL or
                sum(len(value[1].encode('utf-8')) for value in self.terminal.values())>MAX_TERMINAL_BYTES):
             self.terminal.popitem(last=False)

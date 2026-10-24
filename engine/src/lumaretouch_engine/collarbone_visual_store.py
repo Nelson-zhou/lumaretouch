@@ -134,9 +134,9 @@ def attach(store, plan, display_map):
     store._prune(store.clock()); prune(store)
     if store.pending.get(plan.token) is not plan:
         raise ValueError('Collarbone visual attachment requires its actual live frozen plan')
-    cache = getattr(store, '_collarbone_visual_images', None)
-    if cache is None:
-        cache = _Images(); store._collarbone_visual_images = cache
+    from .cohort_image_cache import cache as shared_cache
+    _records(plan)  # This wrapper retains collarbone proof authority.
+    cache = shared_cache(store)
     cache.attach(plan, display_map)
 
 
@@ -168,6 +168,7 @@ def retrieve(controller, request):
         prune(controller.store)
     cache = getattr(controller.store, '_collarbone_visual_images', None)
     if cache is None: raise ValueError('Collarbone review images are no longer retained')
+    _records(plan)  # Shared pixels never authorize a different proof family.
     image = cache.read(plan, request['document_id'], request['revision'], request['side'], request['sha256'])
     return {'event': 'batch_result', 'action': 'collarbone_visual', 'success': True,
             **{key: request[key] for key in ('request_id', 'preflight_token', 'document_id', 'revision', 'side', 'sha256')},

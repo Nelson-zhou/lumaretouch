@@ -12,7 +12,7 @@ pub(crate) const MAX_TARGETS: usize = 16;
 pub(crate) const OPS: &[&str] = &["lnx.brow_shape.v1", "lnx.chin_length.v1", "lnx.chin_shape.v1",
     "lnx.eye_shape.v1", "lnx.face_contour.v1", "lnx.face_size.v1", "lnx.lower_face.v1",
     "lnx.mid_face.v1", "lnx.mouth_shape.v1", "lnx.nose_shape.v1"];
-const LEAVES: &[(&str, &[&str])] = &[
+pub(crate) const LEAVES: &[(&str, &[&str])] = &[
     ("lnx.brow_shape.v1", &["/position/linked", "/position/left", "/position/right"]),
     ("lnx.chin_length.v1", &["/amount"]),
     ("lnx.chin_shape.v1", &["/linked", "/left", "/right"]),
@@ -29,7 +29,7 @@ fn text(v: &Value) -> bool {
     v.as_str().is_some_and(|s| !s.trim().is_empty() && s.len() <= 128 && !s.chars().any(char::is_control))
 }
 fn safe_revision(v: &Value) -> bool { v.as_u64().is_some_and(|n| n <= 9_007_199_254_740_991) }
-fn recipe(v: &Value) -> bool {
+pub(crate) fn recipe(v: &Value) -> bool {
     fields(v, &["version", "style", "amount"]) && v["version"].as_u64() == Some(1)
         && matches!(v["style"].as_str(), Some("classic" | "youthful" | "bold" | "youth" | "round" | "long" | "square"))
         && v["amount"].as_f64().is_some_and(|n| n.is_finite() && (0.0..=1.0).contains(&n))
@@ -43,11 +43,11 @@ fn recipe_digest(v: &Value) -> Option<String> {
     hash.update((if amount == 0.0 { 0.0_f64 } else { amount }).to_be_bytes());
     Some(format!("{:x}", hash.finalize()))
 }
-fn selection(v: &Value) -> bool {
+pub(crate) fn selection(v: &Value) -> bool {
     fields(v, OPS) && LEAVES.iter().all(|(op, paths)| v[*op].as_array().is_some_and(|selected|
         selected.len() == paths.len() && paths.iter().all(|path| selected.iter().filter(|p| p.as_str() == Some(*path)).count() == 1)))
 }
-fn endpoint(v: &Value) -> bool {
+pub(crate) fn endpoint(v: &Value) -> bool {
     let d = &v["document"];
     fields(v, &["document", "people_scope", "state_revision", "association_revision", "graph_sha256", "source_proof"])
         && fields(d, &["document_id", "epoch", "revision"]) && hex(&d["document_id"], 32)
@@ -56,7 +56,7 @@ fn endpoint(v: &Value) -> bool {
         && safe_revision(&v["state_revision"]) && safe_revision(&v["association_revision"])
         && hex(&v["graph_sha256"], 64) && source_proof(&v["source_proof"])
 }
-fn face(v: &Value, asset: &Value) -> bool {
+pub(crate) fn face(v: &Value, asset: &Value) -> bool {
     fields(v, &["asset_sha256", "face_instance_id", "analysis_revision"])
         && hex(&v["asset_sha256"], 64) && &v["asset_sha256"] == asset
         && text(&v["face_instance_id"]) && safe_revision(&v["analysis_revision"])
@@ -109,6 +109,9 @@ fn image_request(v: &Value) -> bool {
         && matches!(v["side"].as_str(), Some("before" | "after")) && hex(&v["sha256"], 64)
 }
 pub(crate) fn command(v: &Value) -> Result<(), String> {
+    if v["people_transfer"]["target_policy"] == "persistent_association" {
+        return crate::batch_api::portrait_cohort::command(v);
+    }
     if v["action"] == "face_style_visual" {
         return if image_request(v) { Ok(()) } else { Err("Face-style image read needs exact bounded frozen coordinates".into()) };
     }
@@ -180,7 +183,7 @@ fn coefficient(style: &str, op: &str, path: &str) -> f64 {
         _ => 0.0,
     }
 }
-fn parameters(v: &Value, r: &Value) -> bool {
+pub(crate) fn parameters(v: &Value, r: &Value) -> bool {
     if !recipe(r) { return false; }
     let Some(rows) = v.as_array() else { return false; };
     if rows.len() != 30 { return false; }
@@ -313,6 +316,9 @@ fn commit(v: &Value) -> bool {
 }
 pub(crate) fn receipt(v: &Value) -> bool {
     if v["action"] == "face_style_visual" { return image_receipt(v); }
+    if v["applies"]["target_policy"] == "persistent_association" {
+        return crate::batch_api::portrait_cohort::receipt(v);
+    }
     let target_evidence = v["targets"].as_array().is_some_and(|rows| rows.iter().any(|row|
         row["people_transfer"].get("face_style").is_some() || row["people_transfer"].get("face_style_visual").is_some()));
     let named = v["applies"].get("face_style").is_some() || target_evidence;
@@ -324,7 +330,7 @@ pub(crate) fn receipt(v: &Value) -> bool {
             v["outcome_unknown"] == false
         } else { v["success"] == false && v["outcome_unknown"].is_boolean()
             && v["error"].as_str().is_some_and(|error| !error.trim().is_empty()) })
-        && !["torso_review_ack", "waist_review_ack", "head_review_ack", "spill_review_ack", "shadow_review_ack", "collarbone_review_ack", "collarbone_cohort"]
+        && !["torso_review_ack", "waist_review_ack", "head_review_ack", "spill_review_ack", "shadow_review_ack", "collarbone_review_ack", "collarbone_cohort", "portrait_cohort_ack", "portrait_cohort"]
             .iter().any(|k| v.get(*k).is_some()) && commit(v)
 }
 

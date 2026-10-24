@@ -16,7 +16,12 @@ pub(crate) fn selected(value: &Value) -> bool {
 fn cohort(value: &Value) -> bool { value["collarbone_cohort"] == true }
 fn persistent_request(value: &Value) -> bool {
     let request=&value["people_transfer"];
-    if !fields(request,&["target_policy","operation","association_id","source_ref","selection","source","targets"])
+    let mut names=vec!["target_policy","operation","association_id","source_ref","selection","source","targets"];
+    if request.get("face_style").is_some(){
+        names.push("face_style");
+        if !crate::batch_api::portrait_cohort::request(request){return false;}
+    }
+    if !fields(request,&names)
         || request["target_policy"]!="persistent_association"
         || !matches!(request["operation"].as_str(),Some("create"|"patch"|"unlink"))
         || !text(&request["association_id"]) || !request["source_ref"].is_object()
@@ -45,6 +50,10 @@ pub(crate) fn command(value: &Value) -> Result<(), String> {
     // batch coordinates merely because the caller supplied an action label.
     if value["action"] == "face_style_visual" {
         return crate::batch_api::face_style::command(value);
+    }
+    if value["action"] == "portrait_cohort_visual" || value.get(crate::batch_api::portrait_cohort::ACK).is_some()
+        || (value["people_transfer"]["target_policy"] == "persistent_association" && value["people_transfer"].get("face_style").is_some()) {
+        return crate::batch_api::portrait_cohort::command(value);
     }
     if value["action"] == "collarbone_visual" {
         return if image_request(value) {Ok(())} else {Err("Invalid bounded collarbone image retrieval".into())};
@@ -88,6 +97,12 @@ pub(crate) fn binding(value: &Value) -> Result<Option<Value>, String> {
 }
 pub(crate) fn receipt(value: &Value) -> bool {
     if value.get("collarbone_cohort").is_some() && !cohort(value) {return false;}
+    if value.get(crate::batch_api::portrait_cohort::ACK).is_some() {
+        // A dual family exists only on an engine-proven persistent cohort.
+        // The portrait validator retains both ordered bindings independently.
+        return crate::batch_api::portrait_cohort::receipt(value)
+            && (value.get(ACK).is_some() == cohort(value));
+    }
     let Some(ack) = value.get(ACK) else {
         return !(value["action"] == "commit" && (selected(value) || cohort(value))
             && (value["success"] == true || value["outcome_unknown"] == true));

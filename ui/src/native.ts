@@ -26,7 +26,7 @@ const inspectionMutations=new Set(['photo_grain_request','photo_detail_request',
 function invoke<T>(command:string,args?:Parameters<typeof tauriInvoke>[1],options?:Parameters<typeof tauriInvoke>[2]):Promise<T>{
   const mutation=inspectionMutations.has(command)&&!(command==='session'&&(args as Record<string,unknown>|undefined)?.action==='query')
     &&!(['batch','preset'].includes(command)&&(args as Record<string,unknown>|undefined)?.action==='collarbone_visual')
-    &&!(command==='batch'&&(args as Record<string,unknown>|undefined)?.action==='face_style_visual');
+    &&!(command==='batch'&&['face_style_visual','portrait_cohort_visual'].includes(String((args as Record<string,unknown>|undefined)?.action)));
   const send=()=>{if(mutation)notifyInspectionEditIntent();return tauriInvoke<T>(command,args,options);};
   if(isCurveEditBusy()&&curveBarrierRequired(command,(args as Record<string,unknown>|undefined)?.action,mutation)){
     return settleCurveEdit().then(send);
@@ -1800,10 +1800,10 @@ export const readPresetResult=(requestId:string)=>invoke<{phase:string;request_i
 export const runBatch = (
   action: "preflight" | "commit" | "undo" | "redo" | "state",
   opts: { docs?: string[]; moduleScope?: string[]; conflictPolicy?: string;
-          batchId?: string; preflightToken?:string;requestId?:string;localMaskTransfer?:MaskTransferOptions;referenceColor?:{strength:number};peopleTransfer?:PeopleTransferRequest;spillReviewAck?:import('./spillRemoval/transferModel').SpillTransferAck[];shadowReviewAck?:import('./originalShadow/transferModel').ShadowTransferAck[];torsoReviewAck?:import('./torsoLength/transferModel').TorsoTransferAck[];waistReviewAck?:import('./waistLength/transferModel').WaistTransferAck[];headReviewAck?:import('./headSize/transferModel').HeadTransferAck[];collarboneReviewAck?:import('./collarbone/transferModel').CollarboneAck[];faceStyleReviewAck?:import('./faceStyle/batchModel').FaceStyleBatchAck[] } = {},
+          batchId?: string; preflightToken?:string;requestId?:string;localMaskTransfer?:MaskTransferOptions;referenceColor?:{strength:number};peopleTransfer?:PeopleTransferRequest;spillReviewAck?:import('./spillRemoval/transferModel').SpillTransferAck[];shadowReviewAck?:import('./originalShadow/transferModel').ShadowTransferAck[];torsoReviewAck?:import('./torsoLength/transferModel').TorsoTransferAck[];waistReviewAck?:import('./waistLength/transferModel').WaistTransferAck[];headReviewAck?:import('./headSize/transferModel').HeadTransferAck[];collarboneReviewAck?:import('./collarbone/transferModel').CollarboneAck[];faceStyleReviewAck?:import('./faceStyle/batchModel').FaceStyleBatchAck[];portraitCohortAck?:import('./portraitCohort/model').PortraitCohortAck[] } = {},
 ) => invoke<{ requested: boolean }>("batch", {
   action, docs: opts.docs, moduleScope: opts.moduleScope,
-  conflictPolicy: opts.conflictPolicy, batchId: opts.batchId,preflightToken:opts.preflightToken,requestId:opts.requestId,localMaskTransfer:opts.localMaskTransfer,referenceColor:opts.referenceColor,peopleTransfer:opts.peopleTransfer,spillReviewAck:opts.spillReviewAck,shadowReviewAck:opts.shadowReviewAck,torsoReviewAck:opts.torsoReviewAck,waistReviewAck:opts.waistReviewAck,headReviewAck:opts.headReviewAck,collarboneReviewAck:opts.collarboneReviewAck,faceStyleReviewAck:opts.faceStyleReviewAck,
+  conflictPolicy: opts.conflictPolicy, batchId: opts.batchId,preflightToken:opts.preflightToken,requestId:opts.requestId,localMaskTransfer:opts.localMaskTransfer,referenceColor:opts.referenceColor,peopleTransfer:opts.peopleTransfer,spillReviewAck:opts.spillReviewAck,shadowReviewAck:opts.shadowReviewAck,torsoReviewAck:opts.torsoReviewAck,waistReviewAck:opts.waistReviewAck,headReviewAck:opts.headReviewAck,collarboneReviewAck:opts.collarboneReviewAck,faceStyleReviewAck:opts.faceStyleReviewAck,portraitCohortAck:opts.portraitCohortAck,
 });
 /** Read-only frozen collarbone image side; separate from all mutation commands. */
 export const requestCollarboneImage=(value:import('./collarbone/visualTransport').CollarboneImageRequest)=>invoke<{requested:boolean}>('batch',{action:'collarbone_visual',...value});
@@ -1811,6 +1811,9 @@ export const readCollarboneImage=(requestId:string)=>invoke<{phase:string;reques
 /** Read only: each named-style image page retains its frozen token, target and digest. */
 export const requestFaceStyleBatchImage=(value:import('./faceStyle/batchTransport').FaceStyleBatchImageRequest)=>invoke<{requested:boolean}>('batch',{action:'face_style_visual',...value});
 export const readFaceStyleBatchImage=(requestId:string)=>invoke<{phase:string;request_id:string;result?:import('./faceStyle/batchTransport').FaceStyleBatchImageReply;error?:string}>('batch_result',{requestId});
+/** Whole-member portrait reads are paged, frozen and never mutation notifications. */
+export const requestPortraitCohortImage=(value:import('./portraitCohort/visualTransport').PortraitCohortImageRequest)=>invoke<{requested:boolean}>('batch',{action:'portrait_cohort_visual',...value});
+export const readPortraitCohortImage=(requestId:string)=>invoke<{phase:string;request_id:string;result?:import('./portraitCohort/visualTransport').PortraitCohortImageReply;error?:string}>('batch_result',{requestId});
 export const readBatchResult=(requestId:string)=>invoke<{phase:string;request_id:string;result?:BatchReply;error?:string}>("batch_result",{requestId});
 
 /** 曝光/白平衡（P0）：量程由引擎随事件报 exposure_limits，这里不抄一份。 */

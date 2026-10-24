@@ -11,6 +11,7 @@ from . import virtual_copy_people as V, creative_derived_source as SOURCE
 from .batch_preflight import FrozenTarget, canonical
 from .people_resolver import resolve
 from . import collarbone_cohort_review as CLAVICLE
+from . import portrait_cohort_review as PORTRAIT
 
 MARKER = '_people_transfer'
 POLICY = 'persistent_association'
@@ -18,10 +19,16 @@ POLICY = 'persistent_association'
 
 def options(value, modules):
     fields = {'target_policy', 'operation', 'association_id', 'source_ref', 'selection', 'source', 'targets'}
+    if type(value) is dict and 'face_style' in value:fields.add('face_style')
     if type(value) is not dict or set(value) != fields or value['target_policy'] != POLICY:
         raise ValueError('Persistent association requires an explicit reviewed request')
     if value['operation'] not in ('create', 'patch', 'unlink'):
         raise ValueError('Only create, scalar patch and complete unlink are supported')
+    if 'face_style' in value:
+        from .face_style_batch_review import recipe,check_selection,selection as named_selection
+        if value['operation'] not in ('create','patch'):raise ValueError('Unlink accepts no named recipe application')
+        recipe(value['face_style']);check_selection(value['face_style'],value.get('selection'))
+        if modules!=list(named_selection(value['face_style'])):raise ValueError('Named cohort needs its exact lexical ten-operation scope')
     S.token(value['association_id']); S.check_ref(value['source_ref'])
     source = I.check_proof(value['source'])
     targets = value['targets']
@@ -61,12 +68,14 @@ def _capsule(graph, association_id):
     return matches[0] if matches else (None, None)
 
 
-def _endpoint(engine, rows, proof, ref):
+def _endpoint(engine, rows, proof, ref, *, reviewed_only=False):
     proof = I.check_proof(proof); ref = S.check_ref(ref)
     found = engine._document_versions().find(rows, proof['document']['document_id'])
     if found is None: raise ValueError('Association member is unavailable; restore and review every member')
     index, row = found
     if row.get('trashed'): raise ValueError('Association member is in project trash')
+    if reviewed_only and (row.get('_people_new_import') or V.peek_graph(engine,row) is None):
+        raise ValueError('Named cohort requires an already reviewed member owner; open and inspect each member first')
     graph = V.row_snapshot(engine, row)
     I.verify(engine, row, graph, proof); SOURCE.verify_row(row, proof['source_proof'])
     scope = V.scope(row)
@@ -101,8 +110,9 @@ def _selected(graph, ref, selection):
 def prepare(engine, selected, *, validate=True):
     """Rebuild the entire atomic cohort from exact current reviewed endpoints."""
     rows = engine._batch_controller().documents.rows()
-    endpoints = [_endpoint(engine, rows, selected['source'], selected['source_ref'])]
-    endpoints.extend(_endpoint(engine, rows, item['target'], item['target_refs'][0]) for item in selected['targets'])
+    named='face_style' in selected
+    endpoints = [_endpoint(engine, rows, selected['source'], selected['source_ref'],reviewed_only=named)]
+    endpoints.extend(_endpoint(engine, rows, item['target'], item['target_refs'][0],reviewed_only=named) for item in selected['targets'])
     members = sorted((item['member'] for item in endpoints), key=lambda item: item['document_id'])
     if len({item['scope_id'] for item in members}) != len(members):
         raise ValueError('Persistent association requires independently owned portrait graphs')
@@ -129,15 +139,22 @@ def prepare(engine, selected, *, validate=True):
     intent = [] if prior is None else deepcopy(prior['intent'])
     if operation != 'unlink':
         merged = {(leaf['op'], leaf['path']): leaf for leaf in intent}
-        merged.update({(leaf['op'], leaf['path']): leaf for leaf in _selected(endpoints[0]['before'], selected['source_ref'], selected['selection'])})
+        if named:
+            from .face_style_batch_review import parameters
+            leaves=[{'op':leaf['operation_id'],'path':leaf['parameter_path'],'value':leaf['value']} for leaf in parameters(selected['face_style'])]
+        else:leaves=_selected(endpoints[0]['before'],selected['source_ref'],selected['selection'])
+        merged.update({(leaf['op'],leaf['path']):leaf for leaf in leaves})
         intent = [merged[key] for key in sorted(merged)]
     if operation == 'patch' and canonical(intent) == canonical(prior['intent']):
-        raise ValueError('Selected source values do not change shared person intent')
+        raise ValueError('Selected named recipe does not change shared person intent' if named else 'Selected source values do not change shared person intent')
     for item in endpoints:
         capsule = C.descriptor(association_id, item['member']['document_id'], members, intent)
         if operation == 'create': candidate = C.create(item['before'], item['person_id'], capsule)
         elif operation == 'patch': candidate = C.update(item['before'], item['person_id'], capsule)
         else: candidate = C.unlink(item['before'], item['person_id'])
+        if named:
+            from .face_style_recipes import validate_compatibility
+            validate_compatibility(A.recipes(resolve(candidate,item['ref']['face_instance_id'],A.defaults())))
         item['candidate'] = candidate
         item['candidate_sha256'] = I.graph_digest(candidate)
         if validate:
@@ -157,7 +174,7 @@ def _public(item, *, live=False):
     return {'index': item['index'], 'path': item['row']['path'], 'live': live,
             'document_id': document['document_id'], 'revision': str(document['revision']),
             'blocked': None, 'before': {}, 'association': {'owner': item['proof'], 'ref': item['ref'],
-            'candidate_sha256': item['candidate_sha256'], 'person_id': item['person_id'], **CLAVICLE.evidence(item)}}
+            'candidate_sha256': item['candidate_sha256'], 'person_id': item['person_id'], **CLAVICLE.evidence(item), **PORTRAIT.evidence(item)}}
 
 
 def preflight(engine, controller, p):
@@ -169,13 +186,20 @@ def preflight(engine, controller, p):
     docs = p.get('docs')
     if type(docs) is not list or len(docs) != len(set(docs)) or set(docs) != {item['target']['document']['document_id'] for item in selected['targets']}:
         raise ValueError('Requested documents must exactly match reviewed association targets')
-    engine._people_bind(); batch = engine._batch_controller(); batch.documents.remember_current()
+    if 'face_style' in selected:
+        from .people_preset_plan import require_active_owner
+        require_active_owner(engine)
+        if V.current_row(engine).get('_people_new_import'):raise ValueError('Open and review the named cohort source owner first')
+    else:engine._people_bind()
+    batch = engine._batch_controller(); batch.documents.remember_current()
     current = V.current_row(engine)
     if current is None or batch.versions.version(current).document_id != selected['source']['document']['document_id']:
         raise ValueError('Association source must be the current reviewed document')
     endpoints, review = prepare(engine, selected)
     visual_required = CLAVICLE.required(endpoints, selected, review)
     displays = CLAVICLE.prepare(engine, endpoints) if visual_required else None
+    portrait_required=PORTRAIT.required(endpoints,selected,review)
+    portrait_displays=PORTRAIT.prepare(engine,endpoints,selected,review,existing_displays=displays) if portrait_required else None
     for item in endpoints:
         I.verify(engine, item['row'], V.row_snapshot(engine, item['row']), item['proof'])
         SOURCE.verify_row(item['row'], item['proof']['source_proof'])
@@ -183,9 +207,9 @@ def preflight(engine, controller, p):
     frozen = [FrozenTarget(item['proof']['document']['document_id'], item['proof']['document']['revision'],
               item['index'], item['row']['path'], None, canonical(item['proof']),
               people_json=canonical({'ref': item['ref'], 'person_id': item['person_id'],
-                                     'candidate_sha256': item['candidate_sha256'], **CLAVICLE.evidence(item)})) for item in endpoints]
+                                     'candidate_sha256': item['candidate_sha256'], **CLAVICLE.evidence(item), **PORTRAIT.evidence(item,private=True)})) for item in endpoints]
     params = {MARKER: {'mode': POLICY, 'options': selected, 'review': review,
-                       'collarbone_visual_required': visual_required}}
+                       'collarbone_visual_required': visual_required,'portrait_cohort_required':portrait_required}}
     plan = controller.store.create(batch.versions.workspace, document['document_id'], document['revision'],
         source['row']['path'], p['module_scope'], params, 'recheck', frozen, [])
     body = {'event': 'batch_preflight', 'success': True, 'module_scope': list(plan.modules), 'source': 'current',
@@ -194,25 +218,39 @@ def preflight(engine, controller, p):
             'persistent_association': review, 'people_transfer': True, 'rejected_docs': [],
             'ok': len(endpoints) - 1, 'blocked': 0, 'preflight_token': plan.token,
             'workspace_generation': plan.workspace, 'expires_ns': str(plan.expires_ns)}
-    if visual_required:
-        body['collarbone_cohort'] = True
-        from .collarbone_visual_store import attach, prune
+    if visual_required:body['collarbone_cohort']=True
+    if portrait_required:body['portrait_cohort']=True
+    if visual_required or portrait_required:
         try:
-            canonical(body, 7 * 1024 * 1024)
-            attach(controller.store, plan, displays)
+            canonical(body,7*1024*1024)
+            if visual_required:
+                from .collarbone_visual_store import attach
+                attach(controller.store,plan,displays)
+            if portrait_required:
+                from .portrait_cohort_store import attach
+                attach(controller.store,plan,portrait_displays)
         except Exception:
-            controller.store.pending.pop(plan.token, None)
+            controller.store.pending.pop(plan.token,None)
+            from .collarbone_visual_store import prune
+            prune(controller.store)
+            from .portrait_cohort_store import prune
             prune(controller.store)
             raise
     controller.emit(body); controller.emit_result(p, body)
 
 
 def commit(engine, controller, p, plan):
-    if set(p) - {'cmd', 'action', 'request_id', 'preflight_token', 'collarbone_review_ack'}:
+    if set(p) - {'cmd','action','request_id','preflight_token','collarbone_review_ack','portrait_cohort_ack','module_scope'}:
         raise ValueError('Association commit accepts only its immutable reviewed token')
     import json
     params = plan.params()[MARKER]; selected = options(params['options'], list(plan.modules))
     visual_required = params.get('collarbone_visual_required') is True
+    portrait_required=params.get('portrait_cohort_required') is True
+    portrait_ack=None
+    if portrait_required:
+        if p.get('module_scope')!=list(plan.modules):raise ValueError('Cohort confirmation must retain exact frozen operation scope')
+        portrait_ack=PORTRAIT.acknowledgments(p.get('portrait_cohort_ack'),[json.loads(t.people_json)['portrait_visual'] for t in plan.targets])
+    elif 'portrait_cohort_ack' in p or 'module_scope' in p:raise ValueError('Portrait-cohort confirmation cannot authorize another operation')
     visual_ack = None
     if visual_required:
         visual_ack = CLAVICLE.R.acknowledgments(p.get('collarbone_review_ack'),
@@ -222,7 +260,8 @@ def commit(engine, controller, p, plan):
     batch = engine._batch_controller(); batch.documents.remember_current()
     endpoints, review = prepare(engine, selected, validate=False)
     if (review != params['review'] or len(endpoints) != len(plan.targets)
-            or CLAVICLE.required(endpoints, selected, review) != visual_required):
+            or CLAVICLE.required(endpoints, selected, review) != visual_required
+            or PORTRAIT.required(endpoints,selected,review)!=portrait_required):
         raise ValueError('Reviewed association content changed')
     plans = {}
     for item, frozen in zip(endpoints, plan.targets):
@@ -231,6 +270,9 @@ def commit(engine, controller, p, plan):
         if visual_required:
             expected_payload.update(CLAVICLE.evidence(frozen_payload))
             CLAVICLE.verify(engine, item, frozen_payload)
+        if portrait_required:
+            expected_payload.update(PORTRAIT.evidence(frozen_payload,private=True))
+            PORTRAIT.verify(engine,item,frozen_payload,PORTRAIT.digest(selected,review))
         if (item['proof'] != json.loads(frozen.before_json) or item['row']['path'] != frozen.path
                 or item['proof']['document']['document_id'] != frozen.document_id
                 or expected_payload != frozen_payload):
@@ -259,7 +301,11 @@ def commit(engine, controller, p, plan):
             CLAVICLE.verify(engine, item, json.loads(frozen.people_json))
         from .collarbone_visual_store import verify_available
         verify_available(controller.store, plan)
-    controller.store.claim(plan, collarbone_review_ack=visual_ack, request_id=p.get('request_id'))
+    if portrait_required:
+        for item,frozen in zip(endpoints,plan.targets):PORTRAIT.verify(engine,item,json.loads(frozen.people_json),PORTRAIT.digest(selected,review))
+        from .portrait_cohort_store import verify_available
+        verify_available(controller.store,plan)
+    controller.store.claim(plan,collarbone_review_ack=visual_ack,portrait_cohort_ack=portrait_ack,request_id=p.get('request_id'))
     try:
         result = commit_scoped(batch, engine, plans, request_id=p.get('request_id'), prepare=False, prepared_targets=targets)
         bid, frame = (None, None) if result is None else result
@@ -274,6 +320,7 @@ def commit(engine, controller, p, plan):
                 'source_missing': False, 'preflight_token': plan.token, 'workspace_generation': plan.workspace}
         if visual_required:
             body.update(collarbone_cohort=True, collarbone_review_ack=deepcopy(visual_ack))
+        if portrait_required:body.update(portrait_cohort=True,portrait_cohort_ack=deepcopy(portrait_ack),outcome_unknown=False)
         controller.emit(body)
         if frame is not None: controller.emit(frame)
     except Exception as error:
@@ -281,4 +328,5 @@ def commit(engine, controller, p, plan):
                 'preflight_token': plan.token, 'workspace_generation': plan.workspace, 'requires_preflight': True}
     if visual_required:
         body.update(collarbone_cohort=True, collarbone_review_ack=deepcopy(visual_ack), module_scope=list(plan.modules))
+    if portrait_required:body.update(portrait_cohort=True,portrait_cohort_ack=deepcopy(portrait_ack),module_scope=list(plan.modules))
     controller.emit_result(p, controller.store.finish(plan, body))

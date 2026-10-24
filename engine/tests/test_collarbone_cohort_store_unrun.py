@@ -2,14 +2,24 @@
 """AUTHORED / UNRUN: persistent source+target immutable image ownership."""
 import pytest
 from lumaretouch_engine import collarbone_visual_store as C
+from lumaretouch_engine import people_cross_owner as ASSOCIATION
 from test_collarbone_visual_store_unrun import fixture
 
 
 def cohort(count=2):
     values = fixture(count)
     plan = values[1]; plan.source_id = 'document-0'; plan.modules = []
+    members = [{'document_id': 'document-'+str(index), 'scope_id': 'document-'+str(index),
+                'original_sha256': 'a'*64, 'ref': {'asset_sha256': 'a'*64,
+                'face_instance_id': 'fixture-face-'+str(index), 'analysis_revision': 0}}
+               for index in range(count)]
+    capsule = ASSOCIATION.descriptor('fixture-collarbone', plan.source_id, members,
+                                     [{'op': 'lnx.collarbone.v1', 'path': '/amount', 'value': .4}])
+    review = {key: value for key, value in capsule.items() if key != 'local_document_id'}
+    review['operation'] = 'unlink'
     plan.params = lambda: {'_people_transfer': {'mode': 'persistent_association',
-                                             'collarbone_visual_required': True}}
+                                             'collarbone_visual_required': True,
+                                             'portrait_cohort_required': False, 'review': review}}
     return values
 
 
