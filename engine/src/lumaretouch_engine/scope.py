@@ -49,6 +49,7 @@ from . import skin_texture_scope as SKIN_TEXTURE
 from . import face_contour_scope as FACE_CONTOUR
 from . import slim_face_scope as SLIM_FACE
 from . import face_size_scope as FACE_SIZE
+from . import lower_face_scope as LOWER_FACE
 from . import brow_shape_scope as BROW, nose_shape_scope as NOSE, eye_shape_scope as EYE, mouth_shape_scope as MOUTH
 from . import sky_replacement_scope as SKY
 from . import semantic_colour_scope as SEMANTIC
@@ -195,6 +196,10 @@ MODULES: dict[str, dict] = {
                   "transferable": True, "cmd": "people", "label": "脸部大小（整体等比缩放，独立参数）",
                   "read": FACE_SIZE.params_of, "write": FACE_SIZE.install,
                   "why_not": "仅整体等比大小标量，正值缩小、负值放大；目标以自己的有效来源、真实面部皮肤与 478 点重算，须有专用 Rust 内核，不复制人物、分析或控制点，不转换或清零瘦脸意图"},
+    LOWER_FACE.OP: {"params": ("recipe",), "state_fields": LOWER_FACE.FIELDS, "single_face": True,
+                   "transferable": True, "cmd": "people", "label": "下庭长度（独立二维长度参数）",
+                   "read": LOWER_FACE.params_of, "write": LOWER_FACE.install,
+                   "why_not": "仅长度标量，正值拉长、负值缩短鼻部至下巴的二维代理区间，嘴部参与；本操作保留宽度与上脸，颈部/背景羽化区随动；目标以自己的有效来源、真实面部皮肤与 478 点重算，不复制分析、蒙版或控制点，不转换旧版小下巴，非临床测量、AI 或语义分割"},
     EYE_LIGHT.OP: {"params": ("recipe",), "state_fields": EYE_LIGHT.FIELDS, "single_face": True,
                    "transferable": True, "cmd": "people", "read": EYE_LIGHT.params_of, "write": EYE_LIGHT.install,
                    "why_not": "仅眼神光素材参数；目标人物须自行审核可见眼球，绝不复制归属、蒙版或恢复笔迹"},
@@ -470,6 +475,9 @@ def check_params(op: str, params: dict) -> dict:
         except ValueError as error: raise ScopeError(str(error)) from error
     if op == FACE_SIZE.OP:
         try: return FACE_SIZE.check_params(params)
+        except ValueError as error: raise ScopeError(str(error)) from error
+    if op == LOWER_FACE.OP:
+        try: return LOWER_FACE.check_params(params)
         except ValueError as error: raise ScopeError(str(error)) from error
     if op == EYE_LIGHT.OP:
         try: return EYE_LIGHT.check_params(params)

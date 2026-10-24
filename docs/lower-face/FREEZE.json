@@ -1,0 +1,228 @@
+{
+  "baseline": "811a31eb35dad6949cfc0ead4788f236179f846f",
+  "status": "FROZEN_SOURCE_ONLY_UNRUN",
+  "scope": "Independent lower-third length: original Rust monotone forward map with bounded checked inverse, real source-owned nose/chin proxy and lip/interior evidence, canonical original/derived preview/export/history, native UI and scalar-only target-recomputed presets. No numerical or photographic acceptance.",
+  "requirement_ids": [
+    "LNX-REF-PC-32466-C-1ae8316994"
+  ],
+  "files": [
+    {
+      "path": "core/lower_face/Cargo.toml",
+      "sha256": "916495b02ce40a259c7601de5b73d814b350608a1d387adab554c9ac8ffa3265",
+      "bytes": 169
+    },
+    {
+      "path": "core/lower_face/README.md",
+      "sha256": "e70f3e0d7a8a0aebf300bc0a5f7f9062020f056c18ea90deda5fd2647dd93e20",
+      "bytes": 9562
+    },
+    {
+      "path": "core/lower_face/lib.rs",
+      "sha256": "078ec2aa41b6403058208d5d3a7fd5a9b2f2519257524242b203b4cb28b20931",
+      "bytes": 10085
+    },
+    {
+      "path": "core/lower_face/lower_face.h",
+      "sha256": "f4d16aa55ad1176163894bd608896d4a10dd8b1a90f9483933ae256b64b780af",
+      "bytes": 1989
+    },
+    {
+      "path": "core/lower_face/tests.rs",
+      "sha256": "57da7c6a6a83d1719b83df9b01fab2a3b2cf1d4230d6137c7ce23ce0ccf54490",
+      "bytes": 11268
+    },
+    {
+      "path": "docs/development/ui-route-inventory.json",
+      "sha256": "a31a931e0cdc1b474bf535b45d602a2f9f97ae83a63f4385b5d41bb7793ef24b",
+      "bytes": 13416
+    },
+    {
+      "path": "docs/lower-face/IMPLEMENTATION.md",
+      "sha256": "b80d64575f6651ffe26ce7526f6120436a15fe068283702b75daa5d7d86ffe2e",
+      "bytes": 8059
+    },
+    {
+      "path": "docs/p0/registry-extensions.json",
+      "sha256": "1699a791e3bf87853f6dafe38343c121911a2c65ce4d50c458052adb29653118",
+      "bytes": 32158
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/creative_derived_effects.py",
+      "sha256": "226bf72a724688a4ef0d8f15b1a999c39012b8fc2c8c0d97385c7c803cb8c786",
+      "bytes": 14404
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/lower_face_native.py",
+      "sha256": "3d18fc954b26ca81d11b29114492fd2a50dc4552881c9f209987dab986a5b944",
+      "bytes": 8226
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/lower_face_people.py",
+      "sha256": "f726bca711f89d02801b7814f31854e69834deabd1bba025469bb7142ece22b0",
+      "bytes": 5705
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/lower_face_runtime.py",
+      "sha256": "6b5427db09a2c423ddf2bf8948f10a4714ac4fedbeb6858bf2f01984695619c3",
+      "bytes": 17861
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/lower_face_scope.py",
+      "sha256": "bd235daa1e54c9df9bf8bd54f458b80eb4acc6bcd9f4d1a892c47626b9742f18",
+      "bytes": 6717
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/lower_face_state.py",
+      "sha256": "96d3328b25b5d8f0edcb4b6fb80adc13634b7a54a0bf38ed29d88a18a2a3f33c",
+      "bytes": 1750
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_algorithms.py",
+      "sha256": "f5f5144dc522db470e03c5352caad97ddc0a0119daeaca843843a134d0c553aa",
+      "bytes": 4575
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_render_runtime.py",
+      "sha256": "1e3e09e689346c42c159312381fed16d26c3ed0ad41a7b6affa19b0f58d69628",
+      "bytes": 20643
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_scope.py",
+      "sha256": "1281c8aa4a56801982b73b072b5a1ad9f8a989c550d0cac30ace1b4af782797b",
+      "bytes": 16941
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/scope.py",
+      "sha256": "30439e667a0709afecc41d0fbbc139b42d6dfb596709aaff26ae7c94507d97ee",
+      "bytes": 51758
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/server.py",
+      "sha256": "7a229832ba5425b872c23e94bcc5266a0c5bc04c610de36b88a88de4d5e7cd87",
+      "bytes": 465182
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/workflow_ports.py",
+      "sha256": "d5a7e1e554cad3a7e9a149e9e2ab5f503a4944d79ac0a7b3011fd4c89304b3ac",
+      "bytes": 8247
+    },
+    {
+      "path": "engine/tests/test_lower_face_geometry_unrun.py",
+      "sha256": "cd846c8b3048dfa8f5968a107b73917dc94ab700cc11db666c1cb7e5f5698fd2",
+      "bytes": 20465
+    },
+    {
+      "path": "engine/tests/test_lower_face_integration_unrun.py",
+      "sha256": "472d082b7dba1bd04f7ea4026dfcd16283e72a66fd5627d0343ae49007b55ffe",
+      "bytes": 37989
+    },
+    {
+      "path": "engine/tests/test_lower_face_native_unrun.py",
+      "sha256": "397069915a6320a88c3428c49a1f1f77e2b3a3a1b0bbd263f847112b1bda1922",
+      "bytes": 15415
+    },
+    {
+      "path": "engine/tests/test_lower_face_scope_unrun.py",
+      "sha256": "c030498e305f5c65e86876f2cc4803029a6ad14e101737a02eaf4a0ac63bc642",
+      "bytes": 38305
+    },
+    {
+      "path": "packaging/build-lower-face.sh",
+      "sha256": "3a6480f9db1291c053c372a89763c57da020699dbcd8b9e9817449d03c2a160f",
+      "bytes": 657
+    },
+    {
+      "path": "packaging/stage-engine.sh",
+      "sha256": "6d048eea09cc98c8368da5dee454513cf6f2caf4064757efede91876fc34ec1c",
+      "bytes": 23909
+    },
+    {
+      "path": "ui/src/components/RetouchPanel.tsx",
+      "sha256": "3274fe23857b0992d0f68cd1051a419c5aec2efca5234d0093d0db659c615f29",
+      "bytes": 71788
+    },
+    {
+      "path": "ui/src/lowerFace/ACCEPTANCE_UNRUN.md",
+      "sha256": "4899aa44b6f3d51268281438fbee96b7cfb511da6d22ffbb174e7ef874f329fe",
+      "bytes": 5493
+    },
+    {
+      "path": "ui/src/lowerFace/LowerFaceControl.tsx",
+      "sha256": "d1e4edb0a4d0aa935896a4924bc9e62798b15b1e4e11ff928b2eb935acfe7780",
+      "bytes": 9047
+    },
+    {
+      "path": "ui/src/lowerFace/model.ts",
+      "sha256": "8b4f1478bdd098976c75c175c7b4b6517034e691001d31878c2ca58406d1737e",
+      "bytes": 9335
+    },
+    {
+      "path": "ui/src/lowerFace/model.unrun.test.ts",
+      "sha256": "5cfbb710f68538f3889be3bb906714fa8e22303c707669074286875f69b75962",
+      "bytes": 14415
+    },
+    {
+      "path": "ui/src/lowerFace/wiring.unrun.test.ts",
+      "sha256": "72e9a1917acfbe42a8831634d353969df550ed0b19d88d47694cda8158b61673",
+      "bytes": 8855
+    },
+    {
+      "path": "ui/src/native.ts",
+      "sha256": "fa3d3ba3e3aecbbda9f26f87ab8c8dc98fac2824811c74b52805c594f7660754",
+      "bytes": 100966
+    },
+    {
+      "path": "ui/src/people/model.ts",
+      "sha256": "5f8f024a634b3b5461a3eccfaec35b06f0462127a7f0321abff1dce06c653a6c",
+      "bytes": 8168
+    },
+    {
+      "path": "ui/src/presets/presetModel.ts",
+      "sha256": "2ee410c554b47d417f3ae8f3b8229255a320de0d23a20b3e5be94fad189a9b49",
+      "bytes": 4971
+    }
+  ],
+  "static_validation": {
+    "python_ast_files": 1109,
+    "changed_json_and_toml": "parsed",
+    "payload_trailing_whitespace": 0,
+    "app_main_server_lines": [
+      2122,
+      2042,
+      6981
+    ],
+    "unchanged_baseline_geometry_hashes": 17,
+    "legacy_archive_migration_export_recipe": "byte-identical",
+    "authored_unrun_new_fixture_functions": {
+      "python": 97,
+      "ui": 18,
+      "rust": 12
+    },
+    "numerical_source_review": "read-only source reasoning; not numerical execution or validation"
+  },
+  "unrun": [
+    "product imports/execution",
+    "tests and test collection",
+    "Rust compilation/build",
+    "typecheck",
+    "inference",
+    "numerical/photographic/performance acceptance",
+    "real UI/history/preview/export/batch acceptance"
+  ],
+  "limitations": [
+    "Measured point2/152 proxies, not clinical anatomy, complete visibility/occlusion proof or person-instance segmentation.",
+    "Frontal/mild-yaw source-supported lower-face interior including lips; no hidden-pixel invention or AI/3D claim.",
+    "Original nonuniform vertical policy with endpoint gain .08 and tail .5; no proprietary calibration or uniform whole-region scaling equivalence.",
+    "Upper-plane and transverse invariance concern only this map; prior edited points may enter its feather.",
+    "Complete source window and retained foreign-face checks may refuse; adjacent neck/background feather moves.",
+    "Bounded approximate f64 inverse with explicit residual; tiny delta can round away in source coordinates or existing float32 map.",
+    "Legacy small_chin, contour, slim, whole-face size, archives and common bilinear sampler remain unchanged.",
+    "Generic derived preset path remains refused; confirmed people transfer reconstructs target-owned evidence.",
+    "Broader alpha/HDR, other package29 controls and complete facial-feature-family acceptance remain unfinished."
+  ],
+  "excluded_unrelated_untracked": [
+    "docs/colour-grading/FREEZE.json",
+    "docs/eye-light/FREEZE.json",
+    "docs/iris-makeup/isolated-manifest.json"
+  ]
+}

@@ -986,6 +986,8 @@ export interface EngineStatus {
     face_contour_reason?: string | null;
     face_size_available?: boolean;
     face_size_reason?: string | null;
+    lower_face_available?: boolean;
+    lower_face_reason?: string | null;
     creative_document_protocol?: number;
     canvas_guides_protocol?: number;
     export_destination_protocol?: number;
