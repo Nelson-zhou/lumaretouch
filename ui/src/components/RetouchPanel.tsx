@@ -41,6 +41,7 @@ import {SkinColourControl} from '../skinColour/SkinColourControl';
 import {SkinFinishControl} from '../skinFinish/SkinFinishControl';
 import {SkinGlossControl} from '../skinGloss/SkinGlossControl';
 import {SkinTextureControl} from '../skinTexture/SkinTextureControl';
+import {LipTextureControl} from '../lipTexture/LipTextureControl';
 import {FaceContourControl} from '../faceContour/FaceContourControl';
 import {SlimFaceControl} from '../slimFace/SlimFaceControl';
 import {FaceSizeControl} from '../faceSize/FaceSizeControl';
@@ -338,6 +339,7 @@ const WIRED: Record<string, string> = {
   "PC-32471|唇妆增强/饱和度": "lip.saturation",
   "PC-32471|唇妆增强/明度": "lip.brightness",
   "PC-32471|唇妆增强/立体度": "lip.dimensionality",
+  "PC-32464|面部祛瑕疵/唇纹修整": "lip_texture.amount",
   "PC-32464|面部祛纹": "wrinkle.family",
   "PC-32464|面部祛纹/祛抬头纹": "wrinkle.forehead",
   "PC-32464|面部祛纹/祛川字纹": "wrinkle.glabellar",
@@ -734,6 +736,12 @@ export default function RetouchPanel(props: RetouchProps) {
       );
     }
     switch (kind) {
+      case "lip_texture.amount":
+        return <LipTextureControl key={leaf.path}
+          people={props.people} capability={status?.ready_caps}
+          blocked={dim || props.hairBusy || !!props.whiteBalanceBusy || portraitRequestsBusy()
+            || !!status?.edit_queue?.in_flight || !!status?.edit_queue?.pending || !!status?.edit_queue?.closed}
+          faceOk={props.faceOk} faceWhy={props.faceWhy} note={props.note} Slider={Slider}/>;
       case "histogram.control": return null;
       case "levels.control": return null;
       case "color.picker": return null; // real targeted control lives with its tool group

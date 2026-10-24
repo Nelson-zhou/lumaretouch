@@ -1,0 +1,313 @@
+{
+  "baseline": "e3114fef50997f29aa85306630bc1836e137044f",
+  "status": "FROZEN_SOURCE_ONLY_UNRUN_PARTIAL_REQUIREMENT",
+  "scope": "Original measured lip dark-furrow attenuation, not full official lip-texture/dry-flake/crack repair. Original Rust paired-flank continuity and common linear-RGB gain, independently owned lip surface/source evidence, canonical original/derived preview/export/history, scalar-only target recalculation.",
+  "requirement_ids": [
+    "LNX-REF-PC-32464-C-b6315c40ca"
+  ],
+  "requirement_status": "partial; no full feature or photographic acceptance",
+  "files": [
+    {
+      "path": "core/lip_texture/Cargo.toml",
+      "sha256": "591ba13e3f2cdd7cce23653f3fdecbd01be4e3b12526e2b8f2c81f3fa9838ba0",
+      "bytes": 302
+    },
+    {
+      "path": "core/lip_texture/README.md",
+      "sha256": "45dd81de12fe4b65b86b99ff46a5ce3e6ab2f6b009442373ea0780ce5eb63b7b",
+      "bytes": 4943
+    },
+    {
+      "path": "core/lip_texture/lib.rs",
+      "sha256": "115fdab8ab2448fd40648d2582e928a20b14fd2c31fdc1dd701304b1412f64d8",
+      "bytes": 14098
+    },
+    {
+      "path": "core/lip_texture/lip_texture.h",
+      "sha256": "938a6b790844440c7c36f0e9f5f56a4ecb187bacdc364f9cee8ceef621038317",
+      "bytes": 1341
+    },
+    {
+      "path": "core/lip_texture/tests.rs",
+      "sha256": "04df94bbfbfa852e145de595d182a5a4841148d0280b816497020749390d035d",
+      "bytes": 11901
+    },
+    {
+      "path": "docs/development/ui-route-inventory.json",
+      "sha256": "7f39e1876fda69ee133ad81d8cfa77e68639b0f2bd36665c468915695df1ad23",
+      "bytes": 14607
+    },
+    {
+      "path": "docs/lip-texture/IMPLEMENTATION.md",
+      "sha256": "3c53b6113df50356e47a457d674d618c071f9844fb925e4e8d14e4beb01cca70",
+      "bytes": 6629
+    },
+    {
+      "path": "docs/lip-texture/NUMERICAL-CONTRACT.md",
+      "sha256": "8163c07ded2f6fc7162253c336dd4b7b204083a544d20e86eceef26bfdb71152",
+      "bytes": 16240
+    },
+    {
+      "path": "docs/p0/registry-extensions.json",
+      "sha256": "91d84294f35e973e167a470740342e4d47a70e10bc906550b83b9ada1e5b0be7",
+      "bytes": 41787
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/brow_enhance_composition.py",
+      "sha256": "305f98c9df429f39c562c7857a0fb03ba3f9f196ca2b79288927675aff145d8a",
+      "bytes": 324
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/creative_derived_effects.py",
+      "sha256": "f7cf3e9a027d8453992ef0813eb97718354a8ccb983e2686ffac335f69a3f801",
+      "bytes": 15242
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/lip_texture_composition.py",
+      "sha256": "f9497d8e4dc69ccd8a580c7fdba29f5cba02d0e25c3e48bc341fe25dd4a75a27",
+      "bytes": 335
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/lip_texture_layer.py",
+      "sha256": "80f9abf6c903b250c24fb48d8e0bb1f2b7108aa2ffac5f7e8675d55334200452",
+      "bytes": 16620
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/lip_texture_native.py",
+      "sha256": "b4063e60490a1b5ca3bcd7d3c2c7b133ea66dfa17d3a5d0a455c0ea98cb286d5",
+      "bytes": 11146
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/lip_texture_project.py",
+      "sha256": "5e444d3e9dfd1f313cd2d757135c6c9bb727f9e3076cc472096b6077d6f9ed60",
+      "bytes": 934
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/lip_texture_scope.py",
+      "sha256": "0a3fba605af2f42f6a0391eb1df3785b77d6be1487ab4248e5f363ab0ea8bdaa",
+      "bytes": 6703
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/lip_texture_state.py",
+      "sha256": "c7e9fc962c8f9934436455e0a180e6453817fdc6b64f172efcf6b47861c7a9da",
+      "bytes": 1410
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_algorithms.py",
+      "sha256": "729c110208b54cfd5878792c43ef34b252e5737de006b46d5906caad96da5586",
+      "bytes": 5748
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_effects.py",
+      "sha256": "029c282de6333ff0cec18f7006466b545b31c03a518caa5772b69e429a2c5418",
+      "bytes": 8197
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_export.py",
+      "sha256": "15337eaa1324d9bdda7d47f38876c9e17eacb7d7df6704d27de7b53dfdefcc45",
+      "bytes": 6762
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_pipeline.py",
+      "sha256": "0ac4c266150915966d0f454fb8cccce596e226b17263fae12e11c0e0fd9cf510",
+      "bytes": 5681
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_project.py",
+      "sha256": "30aea78d09ae3028d6e2d48012fd8490e430a45649664938912fbc80565c0af9",
+      "bytes": 4458
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_render_runtime.py",
+      "sha256": "ce72a09a3b926efaf69dba7a304d619f3ebe673e30ea89954bb2cb8a2665627c",
+      "bytes": 24347
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_scope.py",
+      "sha256": "c06ca2a2ea182fc80f8ddfaa8fd830560d038bd7aca94644af6e9b80933e06d5",
+      "bytes": 29874
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_source_vector.py",
+      "sha256": "4c170b9b00ca633b33830643d4f38c6851025f108ce376d8308d2de77ff47dd5",
+      "bytes": 3649
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/scope.py",
+      "sha256": "e4911d58e20eb85744ed1875ad5783b9ca6d705acacb3dd82a440ebf1b23868f",
+      "bytes": 58070
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/server.py",
+      "sha256": "efb32e294d4fc26ee3cdf087ed221fa34355801dd4db0c77b6756e1c1d588dfd",
+      "bytes": 465895
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/vram.py",
+      "sha256": "df3d3120eb6cbd1a69e1096a5d9436a0d2a42a49a518af65a01cafcd31a9d937",
+      "bytes": 135862
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/workflow_ports.py",
+      "sha256": "4984ebd5ccbd1c7f8ffdc2941ec262a0ffb3910207db22f248b5eabd72d141eb",
+      "bytes": 8926
+    },
+    {
+      "path": "engine/tests/test_lip_texture_integration_unrun.py",
+      "sha256": "2eb432992b81f57abacb66bbeede5b33b80bbd9c46feec370f8befb5ae445078",
+      "bytes": 53129
+    },
+    {
+      "path": "engine/tests/test_lip_texture_native_unrun.py",
+      "sha256": "ac5890af73030647713082d22064afeb6ad1afae2d31421128bab108e4dba448",
+      "bytes": 11256
+    },
+    {
+      "path": "engine/tests/test_lip_texture_scope_unrun.py",
+      "sha256": "1ac2c2c4fd0ed7aa9fdb7224ae344562469c9f244a0ee66a8dc2a872c606cba4",
+      "bytes": 46666
+    },
+    {
+      "path": "engine/tests/test_lip_texture_support_unrun.py",
+      "sha256": "751c9ba93ac3fb3a783d43d01ffbb73b5a41996118674cff01997657b9e676c3",
+      "bytes": 13200
+    },
+    {
+      "path": "packaging/build-lip-texture.sh",
+      "sha256": "3fd4a949f0164900e4c23ecdbc2a76ebbc287c1a72c7cec38f35803b1085752a",
+      "bytes": 679
+    },
+    {
+      "path": "packaging/stage-engine.sh",
+      "sha256": "13c82340b836560a768986cf0b97d0040205ea68af9711ee970ac08099655629",
+      "bytes": 25439
+    },
+    {
+      "path": "ui/src/components/RetouchPanel.tsx",
+      "sha256": "3bc09efe4f7af8b63b722684dcc19ab6e81c0e5f55fa20532eeb4181af59d7a7",
+      "bytes": 80799
+    },
+    {
+      "path": "ui/src/lipTexture/ACCEPTANCE_UNRUN.md",
+      "sha256": "d8f503eb9d6ebf7c6cfc9cedf6e3c10ef0bb0f21f5ed6f4c78f60fd39d33ce83",
+      "bytes": 7304
+    },
+    {
+      "path": "ui/src/lipTexture/LipTextureControl.tsx",
+      "sha256": "11fb8578f20146b62edeb1f7b8cb05a4143462aad0272e0db1629ce43fa0d29f",
+      "bytes": 8767
+    },
+    {
+      "path": "ui/src/lipTexture/model.ts",
+      "sha256": "7086c84603a5e6c21f5734240f68ee20622d585867b270546c4357f41c6f4759",
+      "bytes": 9887
+    },
+    {
+      "path": "ui/src/lipTexture/model.unrun.test.ts",
+      "sha256": "8b389776c3e7041b92974e789c69797843bd7c619bcc0dfacd74ab390190df93",
+      "bytes": 16525
+    },
+    {
+      "path": "ui/src/lipTexture/wiring.unrun.test.ts",
+      "sha256": "98d5783009a50bd446b95ed006b1a395b91b5f1be677fbd8e4978f49dc5e4b78",
+      "bytes": 7924
+    },
+    {
+      "path": "ui/src/native.ts",
+      "sha256": "d758e82088306fbc48a52513bc377197bdadf6ddc384882661fec7cf6125c5f6",
+      "bytes": 101780
+    },
+    {
+      "path": "ui/src/people/model.ts",
+      "sha256": "44e6b59bceb0ec429544cd686b6f718c5173485159d375b6b324f9af264a490d",
+      "bytes": 8697
+    },
+    {
+      "path": "ui/src/presets/presetModel.ts",
+      "sha256": "4257f74ca37bbdd90b51e48a4f4a5b856bbd9528b61e863efccafdf37a1cdcc3",
+      "bytes": 5987
+    }
+  ],
+  "payload_file_count": 44,
+  "static_checks": {
+    "python_ast_files": 1176,
+    "json_toml_parse": "passed without product imports",
+    "git_diff_check": "passed read-only; new source files inspected for trailing whitespace and EOF; pre-existing workflow_ports.py triple newline retained unchanged",
+    "preexisting_core_ops_joint_paths_byte_identical": 195,
+    "source_vector_extraction": "Both computational function-body ASTs compared equal to frozen brow baseline, excluding only ValueError message-label expressions; stable Brow wrappers. Static source comparison, not runtime equivalence acceptance.",
+    "line_counts": {
+      "ui/src/App.tsx": 2122,
+      "ui/src-tauri/src/main.rs": 2042,
+      "engine/src/lumaretouch_engine/server.py": 6988
+    },
+    "python_test_functions_authored_unrun": {
+      "engine/tests/test_lip_texture_integration_unrun.py": 29,
+      "engine/tests/test_lip_texture_native_unrun.py": 11,
+      "engine/tests/test_lip_texture_scope_unrun.py": 30,
+      "engine/tests/test_lip_texture_support_unrun.py": 14
+    },
+    "rust_test_functions_authored_unrun": 14,
+    "ui_test_declarations_authored_unrun": {
+      "ui/src/lipTexture/model.unrun.test.ts": 12,
+      "ui/src/lipTexture/wiring.unrun.test.ts": 7
+    }
+  },
+  "integration_map": {
+    "state_restore": [
+      "lip_texture_state",
+      "lip_texture_project",
+      "people_algorithms",
+      "people_project",
+      "people_render_runtime empty-photo validation",
+      "people_export fastpath guard"
+    ],
+    "render": [
+      "lip_texture_layer",
+      "lip_texture_native",
+      "lip_texture_composition",
+      "people_source_vector",
+      "people_render_runtime",
+      "people_effects",
+      "people_pipeline",
+      "vram"
+    ],
+    "transport": [
+      "creative_derived_effects",
+      "lip_texture_scope",
+      "people_scope",
+      "scope",
+      "workflow_ports"
+    ],
+    "ui": [
+      "ui/src/lipTexture",
+      "RetouchPanel",
+      "people/model",
+      "native ready_caps",
+      "presets/presetModel"
+    ],
+    "packaging": [
+      "core/lip_texture",
+      "build-lip-texture.sh",
+      "stage-engine.sh"
+    ],
+    "old_behavior_extraction": [
+      "brow_enhance_composition delegates unchanged arithmetic to people_source_vector"
+    ]
+  },
+  "limitations": [
+    "Official requirement remains partial: no bright dry/dead-skin flakes, missing surface, deep fissures or reconstruction.",
+    "Original bounded paired-flank heuristic, not Steger implementation, learned semantic defect identification, generic blur/heal or validated cosmetic algorithm.",
+    "Only sufficiently resolved frontal/mild-yaw opaque SDR measured lip interiors with complete protected sample footprints; thin/occluded/dark/clipped/extreme-scale or invalid surfaces can refuse.",
+    "Excluded-plane provenance is existing canonical analysis-owner/model binding, not invented independent per-plane proof; unknown skin-coloured occluders/pigment/fine hairs remain ambiguous.",
+    "No persistent manual-painted visibility consent or new review receipt; explicit strength and canonical before/after review only.",
+    "Native isolated source chromaticity does not establish final ratios after upstream/downstream composition.",
+    "Generic unsupported derived/shared transfer, broader alpha/HDR retouch and complete official lip repair remain fenced or unfinished.",
+    "All numerical, ABI/loading, tests/builds, UI, photographic, preview/export parity, performance and memory-peak acceptance remain UNRUN."
+  ],
+  "excluded_unrelated_untracked": [
+    "docs/colour-grading/FREEZE.json",
+    "docs/eye-light/FREEZE.json",
+    "docs/iris-makeup/isolated-manifest.json"
+  ],
+  "prohibited_actions_performed": []
+}

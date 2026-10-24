@@ -24,6 +24,11 @@ def fastpath_blocker(snapshot):
                 and row['operation_id']==A.BROW_ENHANCE.OP):
             try:validate_brow_leaf(row['parameter_path'],row['value'])
             except ValueError:return True  # Equality alone confuses bool and numeric leaves.
+        if (row['scope']=='all_people' and row['target_id']==asset
+                and row['operation_id']==A.LIP_TEXTURE.OP):
+            from .lip_texture_project import validate_leaf as validate_lip_leaf
+            try:validate_lip_leaf(row['parameter_path'],row['value'])
+            except ValueError:return True
     defaults=A.defaults();specs=A.specifications()
     faces=[face for face in state['faces'].values() if face['asset_sha256']==asset and face['enabled']]
     if not faces and any(row['scope']=='all_people' and row['target_id']==asset and row['value']!=defaults.get(row['operation_id'],{}).get(row['parameter_path']) for row in state['overrides']):return True

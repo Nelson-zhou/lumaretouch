@@ -35,6 +35,8 @@ def validate_records(value):
                 validate_brow_makeup_graph(value[key])
                 from .brow_enhance_project import validate_graph as validate_brow_enhance_graph
                 validate_brow_enhance_graph(value[key])
+                from .lip_texture_project import validate_graph as validate_lip_texture_graph
+                validate_lip_texture_graph(value[key])
                 from .iris_makeup_state import validate_graph as validate_iris_graph
                 validate_iris_graph(value[key])
         if 'people_support_assets' in value:

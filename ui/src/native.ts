@@ -986,6 +986,8 @@ export interface EngineStatus {
     skin_gloss_reason?: string | null;
     skin_texture_available?: boolean;
     skin_texture_reason?: string | null;
+    lip_texture_available?: boolean;
+    lip_texture_reason?: string | null;
     face_contour_available?: boolean;
     face_contour_reason?: string | null;
     face_size_available?: boolean;

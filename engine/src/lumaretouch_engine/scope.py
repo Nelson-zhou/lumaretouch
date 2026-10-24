@@ -56,6 +56,7 @@ from . import chin_length_scope as CHIN_LENGTH
 from . import philtrum_scope as PHILTRUM
 from . import eye_symmetry_scope as EYE_SYMMETRY
 from . import brow_enhance_scope as BROW_ENHANCE
+from . import lip_texture_scope as LIP_TEXTURE
 from . import brow_shape_scope as BROW, nose_shape_scope as NOSE, eye_shape_scope as EYE, mouth_shape_scope as MOUTH
 from . import sky_replacement_scope as SKY
 from . import semantic_colour_scope as SEMANTIC
@@ -230,6 +231,10 @@ MODULES: dict[str, dict] = {
                      "transferable": True, "cmd": "people", "label": "眉毛增强（原有眉毛对比度，左右独立正负强度）",
                      "read": BROW_ENHANCE.params_of, "write": BROW_ENHANCE.install,
                      "why_not": "仅左右联动与两项 -1..1 强度，联动时两侧须相等；负值减弱原有眉毛对比度、正值增强，不添加眉妆；目标以自己的有效来源、真实面部皮肤观察、遮挡和 478 点独立测量实际眉毛与邻接额头，完整重算须有专用 Rust 内核，不复制几何、蒙版、参考样本或实测对比度，不清零其他意图"},
+    LIP_TEXTURE.OP: {"params": ("recipe",), "state_fields": LIP_TEXTURE.FIELDS, "single_face": True,
+                    "transferable": True, "cmd": "people", "label": "唇部暗细纹减淡（独立强度，部分唇纹修整）",
+                    "read": LIP_TEXTURE.params_of, "write": LIP_TEXTURE.install,
+                    "why_not": "仅 0..1 强度；目标以自己的有效来源、真实遮挡、语义模型与 478 点独立测量可见唇环及窄暗细纹，完整重算须有专用 Rust 内核；不复制分析、蒙版、像素、实测纹理或口红审核，不清零其他意图；不添加唇妆、不大范围模糊，非 AI 祛瑕、干皮或裂口重建"},
     EYE_LIGHT.OP: {"params": ("recipe",), "state_fields": EYE_LIGHT.FIELDS, "single_face": True,
                    "transferable": True, "cmd": "people", "read": EYE_LIGHT.params_of, "write": EYE_LIGHT.install,
                    "why_not": "仅眼神光素材参数；目标人物须自行审核可见眼球，绝不复制归属、蒙版或恢复笔迹"},
@@ -526,6 +531,9 @@ def check_params(op: str, params: dict) -> dict:
         except ValueError as error: raise ScopeError(str(error)) from error
     if op == BROW_ENHANCE.OP:
         try: return BROW_ENHANCE.check_params(params)
+        except ValueError as error: raise ScopeError(str(error)) from error
+    if op == LIP_TEXTURE.OP:
+        try: return LIP_TEXTURE.check_params(params)
         except ValueError as error: raise ScopeError(str(error)) from error
     if op == EYE_LIGHT.OP:
         try: return EYE_LIGHT.check_params(params)

@@ -1,0 +1,16 @@
+[package]
+name = "lrt_lip_texture"
+version = "0.1.0"
+edition = "2021"
+license = "GPL-3.0-or-later"
+description = "Original conservative source-measured dark lip furrow attenuation"
+
+[lib]
+path = "lib.rs"
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+
+[profile.release]
+opt-level = 3
+panic = "unwind"

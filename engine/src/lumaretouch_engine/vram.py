@@ -607,6 +607,7 @@ class PreviewPipeline:
         if PEOPLE_PIPE.active(self):
             out=PEOPLE_PIPE.source_effect(self,'skin_colour',out)
             out=PEOPLE_PIPE.source_effect(self,'facial_wrinkles',out)
+            out=PEOPLE_PIPE.source_effect(self,'lip_texture',out)
             out=PEOPLE_PIPE.source_effect(self,'lip_makeup',out)
             out=PEOPLE_PIPE.source_effect(self,'blush_makeup',out)
             out=PEOPLE_PIPE.source_effect(self,'lipstick',out)

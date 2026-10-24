@@ -110,6 +110,10 @@ def prepare(state, asset_sha256, source, analyses, *, byte_budget, document_id=N
             if (row['scope']=='all_people' and row['target_id']==asset_sha256
                     and row['operation_id']==A.BROW_ENHANCE.OP):
                 validate_brow_leaf(row['parameter_path'], row['value'])
+            if (row['scope']=='all_people' and row['target_id']==asset_sha256
+                    and row['operation_id']==A.LIP_TEXTURE.OP):
+                from .lip_texture_project import validate_leaf as validate_lip_leaf
+                validate_lip_leaf(row['parameter_path'], row['value'])
     if not any(face['asset_sha256']==asset_sha256 for face in state['faces'].values()) and any(
             row['scope']=='all_people' and row['target_id']==asset_sha256
             and row['value']!=A.defaults().get(row['operation_id'],{}).get(row['parameter_path'])
@@ -256,6 +260,13 @@ def prepare(state, asset_sha256, source, analyses, *, byte_budget, document_id=N
             if A.EYELASH.active(values[A.EYELASH.OP]):
                 from .eyelash_people import prepare as prepare_eyelash
                 local.extend(prepare_eyelash(state,eyelash_assets or {},entry['face_ref'],analysis,effect_source,values[A.EYELASH.OP],source_revision=state['revision']))
+            if A.LIP_TEXTURE.active(values[A.LIP_TEXTURE.OP]):
+                from .lip_texture_layer import prepare as prepare_lip_texture
+                lip_neighbors = tuple(tuple(other['box']) for other_key, other in state['faces'].items()
+                    if other_key != key and other['asset_sha256'] == asset_sha256)
+                local.extend(prepare_lip_texture(entry['face_ref'], analysis, effect_source,
+                    values[A.LIP_TEXTURE.OP], byte_budget=byte_budget,
+                    protected_boxes=lip_neighbors))
             if A.BROW_ENHANCE.active(values[A.BROW_ENHANCE.OP]):
                 from .brow_enhance_layer import prepare as prepare_brow_enhance
                 brow_neighbors = tuple(tuple(other['box']) for other_key, other in state['faces'].items()

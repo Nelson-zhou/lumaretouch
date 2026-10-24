@@ -10,7 +10,7 @@ from .facial_wrinkle_layer import FacialWrinkleLayer, bounds as wrinkle_bounds
 from .under_eye_layer import UnderEyeLayer, bounds as eye_bounds, KEYS as EYE_KEYS
 from .ops import enhance as H
 
-STAGES = ('skin_colour', 'facial_wrinkles', 'eye_detail', 'lip_makeup', 'enhance', 'hair_colour', 'eye_light', 'blush_makeup', 'lipstick','eyeliner','eyelash','brow_enhance','brow_makeup','iris_makeup')
+STAGES = ('skin_colour', 'facial_wrinkles', 'eye_detail', 'lip_texture', 'lip_makeup', 'enhance', 'hair_colour', 'eye_light', 'blush_makeup', 'lipstick','eyeliner','eyelash','brow_enhance','brow_makeup','iris_makeup')
 
 
 @dataclass(frozen=True)
@@ -118,6 +118,11 @@ def apply(stage, current, records, *, recovery=None):
         active = np.any(delta != 0, axis=2); used = occupied[y:y+rh,x:x+rw]
         overlap += int(np.count_nonzero(active & used)); take = active & ~used
         total[y:y+rh,x:x+rw][take] = delta[take]; used[take] = True
+    if stage == 'lip_texture':
+        from .lip_texture_composition import apply_np
+        out = apply_np(current, total)
+        return out, {'stage':stage, 'overlap_pixels':overlap,
+                     'changed_pixels':int(np.count_nonzero(np.any(out != current, axis=2)))}
     if stage == 'brow_enhance':
         from .brow_enhance_composition import apply_np
         out = apply_np(current, total)
