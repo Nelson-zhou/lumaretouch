@@ -44,7 +44,9 @@ class PreparedPeople:
 
 
 def verify_analysis(face, analysis, shape):
-    if type(analysis) is not dict or set(analysis) != {'face_ref', 'evidence', 'landmarks', 'excluded', 'skin'}:
+    from .skin_colour_support import FIELDS, check_analysis_fields
+    required = {'face_ref', 'evidence', 'landmarks', 'excluded', 'skin'}
+    if type(analysis) is not dict or not required.issubset(analysis) or set(analysis) - required - FIELDS:
         raise ValueError('Frozen per-face analysis fields are incomplete')
     if analysis['face_ref'] != S.face_ref(face) or analysis['evidence'] != face['evidence']:
         raise ValueError('Frozen analysis owner/evidence does not match durable instance')
@@ -61,6 +63,7 @@ def verify_analysis(face, analysis, shape):
             raise ValueError('Frozen face semantic support differs from source frame')
         if mask is not None and evidence['semantic_model_sha256'] is None:
             raise ValueError('Semantic support lacks actual loaded-model evidence')
+    check_analysis_fields(analysis, shape)
     return lm
 
 
@@ -168,6 +171,32 @@ def prepare(state, asset_sha256, source, analyses, *, byte_budget, document_id=N
             blush_review=blush_raster(state,blush_makeup_assets or {},entry['face_ref'],(h,w)) if A.BLUSH.active(values[A.BLUSH.OP]) else None
             local = E.prepare(entry['face_ref'], lm, values, effect_source, excluded=analysis['excluded'], skin=analysis['skin'],
                               backend=face['evidence']['backend'], semantic_sha=face['evidence']['semantic_model_sha256'],blush_review=blush_review,lipstick_review=lipstick_review,source_only=source_only)
+            if A.SKIN_COLOUR.active(values[A.SKIN_COLOUR.OP]):
+                from .skin_colour_people import prepare as prepare_skin_colour
+                others = []; protected_boxes = []
+                for other_key, other_face in state['faces'].items():
+                    if other_key == key or other_face['asset_sha256'] != asset_sha256:
+                        continue
+                    other = analyses.get(other_key)
+                    try:
+                        verify_analysis(other_face, other, (h,w))
+                    except ValueError:
+                        protected_boxes.append(other_face['box'])
+                    else:
+                        others.append(other)
+                # Reserve already-owned records and the retained analysis bank
+                # before another face can allocate private support/native work.
+                seen_arrays = set(); analysis_bytes = 0
+                for row in analyses.values():
+                    for array in row.values():
+                        if isinstance(array,np.ndarray) and id(array) not in seen_arrays:
+                            seen_arrays.add(id(array)); analysis_bytes += array.nbytes
+                prior_bytes = sum(f.resident_bytes() for f in fields) + field.resident_bytes()
+                prior_bytes += sum(a.nbytes for record in (*effects,*local)
+                                   for a in (record.delta,record.weights) if a is not None)
+                local.extend(prepare_skin_colour(entry['face_ref'], analysis, others, effect_source,
+                    values[A.SKIN_COLOUR.OP], byte_budget=byte_budget-analysis_bytes-prior_bytes,
+                    protected_boxes=protected_boxes))
             from .eye_light_people import prepare as prepare_eye_light
             from .eye_light_state import OPERATION as EYE_LIGHT
             local.extend(prepare_eye_light(state,eye_light_assets or {},entry['face_ref'],analysis,effect_source,values[EYE_LIGHT],source_revision=state['revision']))
@@ -206,7 +235,7 @@ def prepare(state, asset_sha256, source, analyses, *, byte_budget, document_id=N
             eye_facts=[record.facts for record in local if record.stage=='eye_light']
             if eye_facts:facts[key]['eye_light']={'eyes':eye_facts,'stage':'source-working-srgb','physical_light_recovery':False}
             facts[key].update({name:part.facts for name,part in zip(('brow_shape','nose_shape','eye_shape','mouth_shape'),field.fields) if part is not None})
-        except (ValueError, RuntimeError, OSError) as error:
+        except (ValueError, RuntimeError, OSError, MemoryError) as error:
             failures.append({'face_instance_id':key,'reason':str(error)})
     if failures: raise PeoplePreparationRefused(failures)
     geometry = combine(fields, (h,w), byte_budget=byte_budget)

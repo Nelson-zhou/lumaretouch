@@ -4,6 +4,17 @@
   "scope_note": "RGB/master point recipes v1 remain compatible. Recipe v2 adds explicit linear-sRGB Y-ratio luminance, not Lab L*. Recipe v3 adds an independent Rust-owned four-region parametric stage before point curves, with split-aligned floating LUTs. Basic integrated CI/Qoder checks are recorded in docs/development/parametric-curves-verification.md; native UI acceptance remains pending. Eyedroppers and live/full-source histograms remain separate unfinished features. Original frozen registry is unchanged. Levels is a separate display-sRGB operator with explicit active-channel input clipping and reversible output endpoints; histogram and eyedroppers remain separate.",
   "entries": [
     {
+      "operation_id": "lnx.skin_colour.v1",
+      "parameter_key": "recipe",
+      "type": "object",
+      "neutral": {"version": 1, "temperature": 0, "tint": 0},
+      "range": {"version": [1, 1], "temperature": [-1, 1], "tint": [-1, 1]},
+      "transferable": true,
+      "source_requirement": "LNX-REF-PC-32465-C-f0ba809461",
+      "source_requirements": ["LNX-REF-PC-32465-C-f0ba809461", "LNX-REF-PC-32465-C-0146f740bd"],
+      "reason": "Dedicated signed face-skin temperature/tint: negative cool/green, positive warm/magenta. Original D65-referenced Lab colour adjustment with source-owned face-skin confidence, measured anatomy and other-face exclusions. No whole-body coverage, AI whitening, skin unification, semantic instance identity or complete occlusion claim. Range and neutral are local choices, not published official values. Scalar-only presets and confirmed-face target review retain independent target evidence; generic unmanaged/derived legacy transfer remains refused. Full-source export rebuilds geometry and colour on source float pixels; semantic confidence may be resampled, never claimed fresh full-resolution segmentation. Runtime, numerical and photo quality UNRUN; requirement coverage remains partial."
+    },
+    {
       "operation_id": "lnx.enhance.v1",
       "parameter_key": "recipe",
       "type": "object",

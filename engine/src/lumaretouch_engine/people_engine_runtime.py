@@ -95,7 +95,14 @@ def prepare_export(snapshot,source,repaired,*,byte_budget,document_id=None,recov
     else:
         if source.dtype not in (np.uint8,np.uint16):raise ValueError('People export needs original RGB8/16')
         divisor=255 if source.dtype==np.uint8 else 65535
-    state,asset,analyses=at_dimensions(snapshot,tuple(source.shape[:2]))
+    # Admit all target-grid semantic copies before at_dimensions allocates them.
+    # Reserve source/repair storage plus the existing RGB conversion/copy peak;
+    # no proxy effect or RGB is substituted when the supplied budget is short.
+    if type(byte_budget) is not int or byte_budget < 0:
+        raise ValueError('People export needs an explicit nonnegative byte budget')
+    pixels=int(source.shape[0])*int(source.shape[1])
+    reserved=source.nbytes+(0 if repaired is None else repaired.nbytes)+pixels*36
+    state,asset,analyses=at_dimensions(snapshot,tuple(source.shape[:2]),byte_budget=byte_budget-reserved)
     rgb=np.array(source.astype(np.float32)/divisor,dtype=np.float32,copy=True)
     rgb.setflags(write=False)
     if creative is None:

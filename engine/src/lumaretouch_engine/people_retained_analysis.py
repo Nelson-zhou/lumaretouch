@@ -28,6 +28,7 @@ def retain(store,analyses):
 def restore_missing(state,store,asset_sha256,pc,analyses):
     from .nose_shape_runtime import exclusion
     from .facial_wrinkle_runtime import skin_support
+    from .skin_colour_support import analysis_fields as skin_colour_fields
     result=dict(analyses)
     if pc is None:return result
     for face in state['faces'].values():
@@ -42,7 +43,8 @@ def restore_missing(state,store,asset_sha256,pc,analyses):
         for name,value in (('excluded',exclusion(pc)),('skin',skin_support(pc))):
             masks[name]=None if value is None else np.array(value,copy=True)
             if masks[name] is not None:masks[name].setflags(write=False)
-        result[ref['face_instance_id']]={'face_ref':ref,'evidence':ev,'landmarks':points,**masks}
+        colour = skin_colour_fields(pc, asset_sha256, (ev['source_width'], ev['source_height']))
+        result[ref['face_instance_id']]={'face_ref':ref,'evidence':ev,'landmarks':points,**masks,**colour}
     return result
 
 

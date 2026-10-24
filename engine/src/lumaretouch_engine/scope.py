@@ -42,6 +42,7 @@ from . import reference_color_scope as REFERENCE
 from . import facial_wrinkle_scope as WRINKLES
 from . import enhance_scope as ENHANCE
 from . import lip_makeup_scope as LIP, eye_light_scope as EYE_LIGHT, blush_makeup_scope as BLUSH, lipstick_scope as LIPSTICK, eyeliner_scope as EYELINER, eyelash_scope as EYELASH, brow_makeup_scope as BROW_MAKEUP, iris_makeup_scope as IRIS
+from . import skin_colour_scope as SKIN_COLOUR
 from . import brow_shape_scope as BROW, nose_shape_scope as NOSE, eye_shape_scope as EYE, mouth_shape_scope as MOUTH
 from . import sky_replacement_scope as SKY
 from . import semantic_colour_scope as SEMANTIC
@@ -160,6 +161,10 @@ MODULES: dict[str, dict] = {
     CUSTOM_LUT.OP: {"params": ("asset", "amount"), "state_fields": CUSTOM_LUT.FIELDS, "single_face": False,
                     "transferable": True, "cmd": "lut", "read": CUSTOM_LUT.params_of, "write": CUSTOM_LUT.install,
                     "why_not": "本地 CUBE 原始字节随预设携带，应用于 sRGB 编码；域外输入夹边，浮点输出不截断"},
+    SKIN_COLOUR.OP: {"params": ("recipe",), "state_fields": SKIN_COLOUR.FIELDS, "single_face": True,
+                     "transferable": True, "cmd": "people", "label": "面部肤色色温/色调（仅参数）",
+                     "read": SKIN_COLOUR.params_of, "write": SKIN_COLOUR.install,
+                     "why_not": "仅面部肤色色温与色调；目标须有自己的真实面部皮肤与遮挡分析，不复制人物或蒙版，不承诺全身肤色"},
     EYE_LIGHT.OP: {"params": ("recipe",), "state_fields": EYE_LIGHT.FIELDS, "single_face": True,
                    "transferable": True, "cmd": "people", "read": EYE_LIGHT.params_of, "write": EYE_LIGHT.install,
                    "why_not": "仅眼神光素材参数；目标人物须自行审核可见眼球，绝不复制归属、蒙版或恢复笔迹"},
@@ -414,6 +419,9 @@ def check_params(op: str, params: dict) -> dict:
         except ValueError as exc: raise ScopeError(str(exc)) from exc
     if op == CUSTOM_LUT.OP:
         try: return CUSTOM_LUT.check_params(params)
+        except ValueError as error: raise ScopeError(str(error)) from error
+    if op == SKIN_COLOUR.OP:
+        try: return SKIN_COLOUR.check_params(params)
         except ValueError as error: raise ScopeError(str(error)) from error
     if op == EYE_LIGHT.OP:
         try: return EYE_LIGHT.check_params(params)

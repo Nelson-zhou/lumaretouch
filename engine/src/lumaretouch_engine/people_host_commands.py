@@ -46,6 +46,7 @@ def analyse(engine,state,face_ref):
     from . import face as F,people_binding as B,people_associations as G,people_retained_analysis as RA
     from .nose_shape_runtime import exclusion
     from .facial_wrinkle_runtime import skin_support
+    from .skin_colour_support import analysis_fields as skin_colour_fields
     import numpy as np
     face=state['faces'][face_ref['face_instance_id']];source=engine._people_source()
     from .creative_derived_source import analysis_rgb, stamp_precompute, verify_precompute
@@ -67,7 +68,8 @@ def analyse(engine,state,face_ref):
             raise ValueError('Region analysis lacks matching full-source semantic evidence')
     out=G.reanalyse(state,source['sha256'],{face_ref['face_instance_id']:evidence},expected_revision=state['revision'],user_confirmed=True)
     ref=S.face_ref(out['faces'][face_ref['face_instance_id']]);points=np.array(points,dtype='<f4',copy=True);points.setflags(write=False)
-    row={'face_ref':ref,'evidence':evidence,'landmarks':points,'excluded':exclusion(original),'skin':skin_support(original)}
+    row={'face_ref':ref,'evidence':evidence,'landmarks':points,'excluded':exclusion(original),'skin':skin_support(original),
+         **skin_colour_fields(original, source['sha256'], (source['width'], source['height']))}
     engine._people_landmarks=RA.retain(engine._people_landmarks,{ref['face_instance_id']:row})
     engine._people_analyses.setdefault(source['sha256'],{})[ref['face_instance_id']]=row
     return out,ref

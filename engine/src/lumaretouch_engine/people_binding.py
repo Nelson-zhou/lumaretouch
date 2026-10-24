@@ -9,6 +9,7 @@ import numpy as np
 from . import people_state as S, people_associations as G
 from .nose_shape_runtime import exclusion
 from .facial_wrinkle_runtime import skin_support
+from .skin_colour_support import analysis_fields as skin_colour_fields
 
 
 def landmark_digest(points):
@@ -47,6 +48,7 @@ def bind(state, asset_sha256, pc, *, source_dimensions, initialize=False):
         existing = fresh
     analysis = {}; unresolved = []
     veto = exclusion(pc); skin = skin_support(pc)
+    skin_colour = skin_colour_fields(pc, asset_sha256, source_dimensions)
     if veto is not None: veto=np.array(veto,copy=True); veto.setflags(write=False)
     if skin is not None: skin=np.array(skin,copy=True); skin.setflags(write=False)
     for face in existing:
@@ -57,5 +59,7 @@ def bind(state, asset_sha256, pc, *, source_dimensions, initialize=False):
             unresolved.append({'face_instance_id':face['face_instance_id'],'reason':'Retained analysis unavailable or ambiguous; keep old edits and explicitly review reanalysis'})
             continue
         lm,ev=matches[0]; points=np.array(lm,dtype='<f4',copy=True); points.setflags(write=False)
-        analysis[face['face_instance_id']]={'face_ref':S.face_ref(face),'evidence':ev,'landmarks':points,'excluded':veto,'skin':skin}
+        analysis[face['face_instance_id']]={'face_ref':S.face_ref(face),'evidence':ev,'landmarks':points,'excluded':veto,'skin':skin,
+            'face_skin':skin_colour['face_skin'],
+            'face_skin_observation':None if skin_colour['face_skin_observation'] is None else dict(skin_colour['face_skin_observation'])}
     return out,analysis,unresolved

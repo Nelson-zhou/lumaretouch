@@ -103,7 +103,7 @@ class PeopleHostMixin:
                 R.synchronize(self._vram,state,asset,analyses,byte_budget=available_estimate(),recovery_assets=recovery,**owned_inputs)
                 self._vram.people_key=key
             self._people_mirror()
-        except (ValueError,RuntimeError,OSError) as error:
+        except (ValueError,RuntimeError,OSError,MemoryError) as error:
             if self._people_managed():R.suspend(self._vram,str(error))
             if strict:raise
 

@@ -36,6 +36,7 @@ import { EyeHighlightsControl } from "./EyeHighlightsControl";
 import {teethColourReadiness, TEETH_CONTROL_IDS} from '../teethColour/model';
 import {redEyeReadiness, RED_EYE_CONTROL_ID} from '../redEye/model';
 import {ScleraPurifyControl} from '../scleraPurify/ScleraPurifyControl';
+import {SkinColourControl} from '../skinColour/SkinColourControl';
 import {ColorActionLaunch,type ColorActionControlsProps} from '../colorActions/ColorActionControls';
 import {FabricPanel} from "../fabric/FabricPanel";
 import {HistogramPanel} from "./HistogramPanel";
@@ -361,6 +362,8 @@ const WIRED: Record<string, string> = {
   "PC-32465|质感磨皮": "skin.detail",
   "PC-32465|AI肤色统一（脸部）": "skin.broad",
   "PC-32465|水润磨皮-脸部/身体": "skin.radius",
+  "PC-32465|肤色色温": "skin_colour.temperature",
+  "PC-32465|肤色色调": "skin_colour.tint",
   // 面部重塑 / 表情
   "PC-32466|脸型/瘦脸": "deform.slim_face",
 
@@ -708,6 +711,14 @@ export default function RetouchPanel(props: RetouchProps) {
             disabled={dim || !!skinWhy} title={skinWhy || undefined} onChange={(v) => commitSkin({ radius: v })}
             onReset={() => commitSkin({ radius: 12 })} />
         );
+      case "skin_colour.temperature":
+      case "skin_colour.tint":
+        return <SkinColourControl key={leaf.path}
+          control={kind === 'skin_colour.temperature' ? 'temperature' : 'tint'}
+          people={props.people} capability={status?.ready_caps}
+          blocked={dim || props.hairBusy || !!props.whiteBalanceBusy || portraitRequestsBusy()
+            || !!status?.edit_queue?.in_flight || !!status?.edit_queue?.pending || !!status?.edit_queue?.closed}
+          faceOk={props.faceOk} faceWhy={props.faceWhy} note={props.note} Slider={Slider}/>;
       case "deform.slim_face":
       case "deform.big_eye":
       case "deform.small_chin":
