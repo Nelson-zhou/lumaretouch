@@ -5,7 +5,7 @@ export * from './transferProof';
 
 export function PeopleTransferEvidence({value}: {value: PeopleTransferReview}) {
   const explicit = value.target_policy === 'explicit_face_map';
-  return <details open={explicit || !!value.skin_colour_coverage || !!value.skin_finish_coverage || !!value.body_skin_evenness_coverage || !!value.body_face_match_coverage || !!value.collarbone_coverage}><summary>{value.face_style ? '本次明确指定的新版脸型' : explicit ? '仅本次指定配对' : '已确认关联'}：{value.target_refs.length} 张人脸 · {value.parameters.length} 项参数</summary>
+  return <details open={explicit || !!value.skin_colour_coverage || !!value.skin_finish_coverage || !!value.body_skin_evenness_coverage || !!value.body_face_match_coverage || !!value.collarbone_coverage || !!value.eye_bag_coverage}><summary>{value.face_style ? '本次明确指定的新版脸型' : explicit ? '仅本次指定配对' : '已确认关联'}：{value.target_refs.length} 张人脸 · {value.parameters.length} 项参数</summary>
     {value.face_style ? <>
       <p>{FACE_STYLE_LABELS[value.face_style.style]} · 配方 v{value.face_style.version} · 统一程度 {Number((value.face_style.amount * 100).toFixed(6))}。下面是引擎按该固定配方生成的实际参数，不是上下文人脸的参数或外貌比较。</p>
       <p>每次替换配方管理的全部 30 项，不叠加。0 也是中性替换，不恢复以前的自定义值；未管理的参数与旧版效果保留。每个目标使用自身关键点，不复制几何、蒙版、局部素材或人物关联。</p>
@@ -61,6 +61,14 @@ export function PeopleTransferEvidence({value}: {value: PeopleTransferReview}) {
       </li>)}</ul>
       <p>这份披露是目标审核元数据；上方真实前后对比须逐图查看并确认，不代表照片质量验收。不能从一个目标的审核推及其他人物；不自动分类、检测锁骨、补全另一侧或进行 AI 3D 重建。</p>
       <p>预检拒绝须逐目标处理，不能通过复制源图曲线或借用其他人物审核绕过。</p>
+    </section>}
+    {value.eye_bag_coverage && <section aria-label="目标自己已审核的卧蚕保护范围">
+      <p>只传递所选新版祛眼袋标量。每个启用目标使用自己的手绘并审核的卧蚕保护，不复制来源保护笔画、支持缓存、恢复数据或人物关联，不自动识别或补全卧蚕。</p>
+      <p>{value.eye_bag?.replace_legacy ? '已明确允许本目标仅在新版候选启用时替换旧版眼袋效果。' : '不允许替换本目标旧版眼袋；冲突时拒绝而不是静默忽略参数。'}新版归零不清除旧版或已有保护；另行明确选择的旧版参数仍按选项应用。</p>
+      <ul>{value.eye_bag_coverage.targets.map(row => <li key={row.face_ref.face_instance_id}>人脸 {row.face_ref.face_instance_id}：{row.scope === 'neutral-no-effect'
+        ? '候选新版程度为零，不据此声明保护有效。'
+        : `使用目标自身已有有效审核，人物眼侧：${row.sides.map(side => side === 'left' ? '左眼' : '右眼').join('、')}。`}</li>)}</ul>
+      <p>这只是范围披露，必须另行逐张读取完整编辑链的真实前后图并确认全部所选参数；缩略图不替代全分辨率验收。</p>
     </section>}
     <ul>{value.parameters.map(leaf => <li key={`${leaf.operation_id}:${leaf.parameter_path}`}>
       {operationLabel(leaf.operation_id)} · {leaf.parameter_path}：{String(leaf.value)}</li>)}</ul>

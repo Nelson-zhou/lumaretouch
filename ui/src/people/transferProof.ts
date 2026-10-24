@@ -1,3 +1,4 @@
+import {EYE_BAG_BATCH_OP, sameEyeBagBatchPolicy, validEyeBagBatchReview, type EyeBagBatchPolicy, type EyeBagTargetPolicy, type EyeBagBatchCoverage, type EyeBagBatchVisual} from '../eyeBagPreserve/batchModel';
 import {validCollarboneVisual,type CollarboneVisual} from '../collarbone/transferModel';
 import {sameAssociationRequest, type AssociationRequest} from './associationProof';
 import type {FaceRef, ParameterValue} from './model';
@@ -25,6 +26,7 @@ export type ExplicitPeopleRequest = SelectedParameters & {
   target_policy: 'explicit_face_map'; source: PeopleEndpointProof;
   targets: {target: PeopleEndpointProof; target_refs: FaceRef[]}[];
   face_style?: FaceStyleRecipe;
+  eye_bag?: EyeBagBatchPolicy;
 };
 export type PeopleTransferRequest = SelectedParameters & {target_policy: 'confirmed_person_only'} | ExplicitPeopleRequest | AssociationRequest;
 export type SkinColourCoverage = {
@@ -65,6 +67,9 @@ type ReviewBase = {
   collarbone_visual?: CollarboneVisual;
   face_style?: FaceStyleRecipe;
   face_style_visual?: FaceStyleBatchVisual;
+  eye_bag?: EyeBagTargetPolicy;
+  eye_bag_coverage?: EyeBagBatchCoverage;
+  eye_bag_visual?: EyeBagBatchVisual;
 };
 export type PeopleTransferReview = ReviewBase & ({
   confirmed_person_id: string; target_policy: 'confirmed_person_only'; confirmation_revisions: [string, number][];
@@ -198,9 +203,14 @@ export function samePeopleRequest(value: unknown, expected: PeopleTransferReques
     || !ops.every(op => JSON.stringify([...selection[op]].sort()) === JSON.stringify([...expected.selection[op]].sort()))) return false;
   if (expected.target_policy === 'confirmed_person_only') return keys(value, ['source_ref', 'selection', 'target_policy']);
   const recipe = expected.face_style, named = recipe !== undefined;
+  const eyeBag = expected.eye_bag;
+  if (eyeBag !== undefined && (!Array.isArray(expected.targets) || expected.targets.some(row => !object(row) || !validEndpoint(row.target)))) return false;
+  if (eyeBag !== undefined ? named || !Object.hasOwn(expected.selection, EYE_BAG_BATCH_OP)
+    || !sameEyeBagBatchPolicy(value.eye_bag, eyeBag, expected.targets.map(row => row.target.document.document_id))
+    : Object.hasOwn(value, 'eye_bag')) return false;
   if (named ? !validFaceStyleRecipe(recipe) || !sameFaceStyleRecipe(value.face_style, recipe)
     || !validFaceStyleSelection(expected.selection) || !validFaceStyleSelection(selection) : Object.hasOwn(value, 'face_style')) return false;
-  if (!keys(value, ['source_ref', 'selection', 'target_policy', 'source', 'targets', ...(named ? ['face_style'] : [])])
+  if (!keys(value, ['source_ref', 'selection', 'target_policy', 'source', 'targets', ...(named ? ['face_style'] : []), ...(eyeBag !== undefined ? ['eye_bag'] : [])])
     || !validEndpoint(value.source) || !validEndpoint(expected.source) || !sameEndpoint(value.source, expected.source)
     || value.source.source_proof.asset_sha256 !== value.source_ref.asset_sha256
     || !Array.isArray(value.targets) || !value.targets.length || value.targets.length > 16 || value.targets.length !== expected.targets.length) return false;
@@ -317,6 +327,17 @@ export function validPeopleReview(value: unknown, request: PeopleTransferRequest
       || !Number.isFinite(scalars[0].value) || scalars[0].value < 0 || scalars[0].value > 1) return false;
     const neutral = scalars[0].value === 0;
     if (v.collarbone_coverage!.targets.some(row => (row.scope === 'neutral-no-effect') !== neutral)) return false;
+  }
+  const eyeBag = request.target_policy === 'explicit_face_map' ? request.eye_bag : undefined;
+  if (eyeBag !== undefined) {
+    const policy = eyeBag.targets.find(row => row.document_id === target.document_id);
+    if (!policy || !validEyeBagBatchReview(v, policy.replace_legacy)) return false;
+  } else {
+    if (['eye_bag', 'eye_bag_coverage', 'eye_bag_visual'].some(field => Object.hasOwn(value, field))) return false;
+    // Legacy no-envelope compatibility proves only an explicitly selected neutral reset.
+    // Preserve-only activity cannot be inferred without the new target coverage contract.
+    if (Object.hasOwn(request.selection, EYE_BAG_BATCH_OP)
+      && !v.parameters.some(leaf => leaf.operation_id === EYE_BAG_BATCH_OP && leaf.parameter_path === '/amount' && leaf.value === 0)) return false;
   }
   return wanted.size === 0 && JSON.stringify([...v.excluded].sort()) === JSON.stringify(['identity_links', 'landmarks', 'local_assets', 'masks']);
 }

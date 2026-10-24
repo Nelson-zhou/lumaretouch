@@ -46,6 +46,13 @@ pub(crate) fn acknowledgments(value: &Value) -> bool {
         && hex(&item["coverage_sha256"], 64) && seen.insert(item["document_id"].as_str().unwrap()))
 }
 pub(crate) fn command(value: &Value) -> Result<(), String> {
+    if value["cmd"] == "batch" && (value["action"] == "eye_bag_visual"
+        || value["people_transfer"].get("eye_bag").is_some()
+        || value.get(crate::batch_api::eye_bag::ACK).is_some()) {
+        // Exact eye-only or eye-plus-collarbone forms are owned by that
+        // validator. An action label never exempts generic image coordinates.
+        return crate::batch_api::eye_bag::command(value);
+    }
     // A separate exact validator owns this image family. Never exempt generic
     // batch coordinates merely because the caller supplied an action label.
     if value["action"] == "face_style_visual" {
@@ -97,6 +104,11 @@ pub(crate) fn binding(value: &Value) -> Result<Option<Value>, String> {
 }
 pub(crate) fn receipt(value: &Value) -> bool {
     if value.get("collarbone_cohort").is_some() && !cohort(value) {return false;}
+    if value.get(crate::batch_api::eye_bag::ACK).is_some() {
+        // A mixed ordinary transfer retains both independent coverage ACKs.
+        // This cannot admit cohort/alias evidence or a substituted image pair.
+        return crate::batch_api::eye_bag::receipt(value);
+    }
     if value.get(crate::batch_api::portrait_cohort::ACK).is_some() {
         // A dual family exists only on an engine-proven persistent cohort.
         // The portrait validator retains both ordered bindings independently.

@@ -259,6 +259,8 @@ class PreflightStore:
         plan=FrozenPlan(uuid.uuid4().hex,workspace,source_id,source_revision,source_path,tuple(modules),canonical(params),policy,
             tuple(targets),canonical(rejected),now,now+TTL_NS,None if source_proof is None else canonical(source_proof))
         face_style_records(plan)
+        from .eye_bag_batch_review import records as eye_bag_records
+        eye_bag_records(plan)
         portrait_cohort_records(plan)
         self.pending[plan.token]=plan
         while len(self.pending)>MAX_PENDING:self.pending.popitem(last=False)
@@ -284,7 +286,7 @@ class PreflightStore:
         if generation!=workspace:raise ValueError('batch result belongs to another workspace')
         return json.loads(payload)
 
-    def claim(self,plan,*,spill_review_ack=None,shadow_review_ack=None,torso_review_ack=None,waist_review_ack=None,head_review_ack=None,collarbone_review_ack=None,face_style_review_ack=None,portrait_cohort_ack=None,request_id=None):
+    def claim(self,plan,*,spill_review_ack=None,shadow_review_ack=None,torso_review_ack=None,waist_review_ack=None,head_review_ack=None,collarbone_review_ack=None,face_style_review_ack=None,portrait_cohort_ack=None,eye_bag_review_ack=None,request_id=None):
         # Consume before the first write: even failure to encode the final receipt
         # must never leave a successfully applied token available for reexecution.
         if request_id is not None and (type(request_id) is not str or not 1<=len(request_id)<=128):
@@ -305,7 +307,7 @@ class PreflightStore:
         portrait_records=portrait_cohort_records(plan)
         if portrait_records is not None:
             from .portrait_cohort_review import acknowledgments
-            if any(value is not None for value in (spill_review_ack,shadow_review_ack,torso_review_ack,waist_review_ack,head_review_ack,face_style_review_ack)):
+            if any(value is not None for value in (spill_review_ack,shadow_review_ack,torso_review_ack,waist_review_ack,head_review_ack,face_style_review_ack,eye_bag_review_ack)):
                 raise ValueError('Portrait cohort claim cannot retain another family acknowledgment')
             acknowledgments(portrait_cohort_ack,portrait_records)
         elif portrait_cohort_ack is not None:
@@ -313,14 +315,23 @@ class PreflightStore:
         face_records=face_style_records(plan)
         if face_records is not None:
             from .face_style_batch_review import acknowledgments
-            if any(value is not None for value in (spill_review_ack,shadow_review_ack,torso_review_ack,waist_review_ack,head_review_ack,collarbone_review_ack,portrait_cohort_ack)):
+            if any(value is not None for value in (spill_review_ack,shadow_review_ack,torso_review_ack,waist_review_ack,head_review_ack,collarbone_review_ack,portrait_cohort_ack,eye_bag_review_ack)):
                 raise ValueError('Face-style claim cannot retain another family acknowledgment')
             acknowledgments(face_style_review_ack,face_records)
         elif face_style_review_ack is not None:
             raise ValueError('Face-style claim requires its actual frozen named people-transfer scope')
+        from .eye_bag_batch_review import records as eye_bag_records, acknowledgments as eye_acknowledgments
+        eye_records=eye_bag_records(plan)
+        if eye_records is not None:
+            if any(value is not None for value in (spill_review_ack,shadow_review_ack,torso_review_ack,waist_review_ack,head_review_ack,face_style_review_ack,portrait_cohort_ack)):
+                raise ValueError('Eye-bag claim cannot retain unrelated acknowledgment families')
+            eye_acknowledgments(eye_bag_review_ack,eye_records)
+        elif eye_bag_review_ack is not None:
+            raise ValueError('Eye-bag claim requires actual frozen ordinary explicit intent')
         self.finish(plan,{'success':False,'outcome_unknown':True,'preflight_token':plan.token,'request_id':request_id,
-            **({'module_scope':list(plan.modules)} if face_style_review_ack is not None or portrait_cohort_ack is not None or collarbone_review_ack is not None or any(value is not None for value in scalar_acks.values()) else {}),
+            **({'module_scope':list(plan.modules)} if eye_bag_review_ack is not None or face_style_review_ack is not None or portrait_cohort_ack is not None or collarbone_review_ack is not None or any(value is not None for value in scalar_acks.values()) else {}),
             **({'portrait_cohort_ack':portrait_cohort_ack,'portrait_cohort':True} if portrait_cohort_ack is not None else {}),
+            **({'eye_bag_review_ack':eye_bag_review_ack} if eye_bag_review_ack is not None else {}),
             **({'face_style_review_ack':face_style_review_ack} if face_style_review_ack is not None else {}),
             **({'collarbone_review_ack':collarbone_review_ack} if collarbone_review_ack is not None else {}),
             **({'collarbone_cohort':True} if collarbone_cohort(plan) else {}),
@@ -345,7 +356,7 @@ class PreflightStore:
         portrait_records=portrait_cohort_records(plan);portrait_ack=None
         if portrait_records is not None:
             from .portrait_cohort_review import acknowledgments
-            if any(key in result for key in ('spill_review_ack','shadow_review_ack','torso_review_ack','waist_review_ack','head_review_ack','face_style_review_ack')):
+            if any(key in result for key in ('spill_review_ack','shadow_review_ack','torso_review_ack','waist_review_ack','head_review_ack','face_style_review_ack','eye_bag_review_ack')):
                 raise ValueError('Portrait cohort result cannot contain another family acknowledgment')
             portrait_ack=acknowledgments(result.get('portrait_cohort_ack',retained.get('portrait_cohort_ack')),portrait_records)
             if ('portrait_cohort_ack' in retained and canonical(portrait_ack)!=canonical(retained['portrait_cohort_ack'])):
@@ -370,7 +381,7 @@ class PreflightStore:
         face_records=face_style_records(plan);face_ack=None
         if face_records is not None:
             from .face_style_batch_review import acknowledgments
-            if any(key in result for key in ('spill_review_ack','shadow_review_ack','torso_review_ack','waist_review_ack','head_review_ack','collarbone_review_ack','portrait_cohort_ack')):
+            if any(key in result for key in ('spill_review_ack','shadow_review_ack','torso_review_ack','waist_review_ack','head_review_ack','collarbone_review_ack','portrait_cohort_ack','eye_bag_review_ack')):
                 raise ValueError('Face-style result cannot contain another family acknowledgment')
             face_ack=acknowledgments(result.get('face_style_review_ack',retained.get('face_style_review_ack')),face_records)
             if ('face_style_review_ack' in retained and canonical(face_ack)!=canonical(retained['face_style_review_ack'])):
@@ -380,6 +391,28 @@ class PreflightStore:
             result.update(face_style_review_ack=face_ack,module_scope=list(plan.modules))
         elif 'face_style_review_ack' in result:
             raise ValueError('Face-style receipt cannot accompany another frozen scope')
+        from .eye_bag_batch_review import records as eye_bag_records, acknowledgments as eye_acknowledgments
+        eye_records=eye_bag_records(plan);eye_ack=None
+        if eye_records is not None:
+            if any(key in result for key in ('spill_review_ack','shadow_review_ack','torso_review_ack','waist_review_ack','head_review_ack','face_style_review_ack','portrait_cohort_ack')):
+                raise ValueError('Eye-bag result cannot contain unrelated acknowledgment families')
+            eye_ack=eye_acknowledgments(result.get('eye_bag_review_ack',retained.get('eye_bag_review_ack')),eye_records)
+            if 'eye_bag_review_ack' in retained and canonical(eye_ack)!=canonical(retained['eye_bag_review_ack']):
+                raise ValueError('Eye-bag result cannot change the exact claimed visual acknowledgment')
+            if 'module_scope' in result and result['module_scope']!=list(plan.modules):
+                raise ValueError('Eye-bag result cannot change the frozen mixed scope')
+            result.update(eye_bag_review_ack=eye_ack,module_scope=list(plan.modules))
+            if collarbone_required(plan):
+                from .collarbone_transfer_review import acknowledgments as collarbone_acknowledgments
+                records=[json.loads(target.people_json)['collarbone_visual'] for target in plan.targets if not target.blocked]
+                collarbone_ack=collarbone_acknowledgments(result.get('collarbone_review_ack',retained.get('collarbone_review_ack')),records)
+                if 'collarbone_review_ack' in retained and canonical(collarbone_ack)!=canonical(retained['collarbone_review_ack']):
+                    raise ValueError('Mixed eye-bag result cannot change its collarbone acknowledgment')
+                result['collarbone_review_ack']=collarbone_ack
+            elif 'collarbone_review_ack' in result:
+                raise ValueError('Eye-bag result cannot invent another review family')
+        elif 'eye_bag_review_ack' in result:
+            raise ValueError('Eye-bag receipt cannot accompany another frozen scope')
         try:payload=canonical(result,MAX_RESULT_BYTES)
         except (ValueError,TypeError):
             # A compact spill acknowledgment is also the terminal retry fence.
@@ -409,6 +442,8 @@ class PreflightStore:
                     'coverage_sha256':r['coverage_sha256']} for r in records]
                 ack['module_scope']=list(plan.modules)
                 if collarbone_cohort(plan):ack['collarbone_cohort']=True
+            if eye_ack is not None:
+                ack.update(eye_bag_review_ack=eye_ack,module_scope=list(plan.modules))
             if face_ack is not None:
                 ack['face_style_review_ack']=face_ack
                 ack['module_scope']=list(plan.modules)
@@ -422,6 +457,8 @@ class PreflightStore:
         prune(self)
         from .face_style_batch_store import prune as prune_face_style
         prune_face_style(self)
+        from .eye_bag_batch_store import prune as prune_eye_bag
+        prune_eye_bag(self)
         from .portrait_cohort_store import prune as prune_portrait_cohort
         prune_portrait_cohort(self)
         while (len(self.terminal)>MAX_TERMINAL or

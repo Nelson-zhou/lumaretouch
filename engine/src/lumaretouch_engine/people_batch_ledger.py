@@ -127,7 +127,7 @@ def _publish(owner,engine,plans,targets):
     finally:engine._people_staged=None
 
 
-def commit_scoped(owner,engine,plans,*,request_id,prepare=True,prepared_targets=None,alias_history=None):
+def commit_scoped(owner,engine,plans,*,request_id,prepare=True,prepared_targets=None,alias_history=None,eye_bag_history=None):
     plans={identity:plan for identity,plan in plans.items() if between(plan['before'],plan['candidate'])}
     if not plans:return None
     owner.documents.remember_current()
@@ -149,6 +149,10 @@ def commit_scoped(owner,engine,plans,*,request_id,prepare=True,prepared_targets=
         from .face_style_alias_history import KEY as ALIAS_KEY, check as check_alias_history
         entry[ALIAS_KEY]=deepcopy(alias_history)
         check_alias_history(entry)
+    if eye_bag_history is not None:
+        from .eye_bag_batch_history import KEY as EYE_KEY, check as check_eye_history
+        entry[EYE_KEY]=deepcopy(eye_bag_history)
+        check_eye_history(entry)
     result={'kind':'commit','batch_id':bid,'applied':[int(k) for k in targets],'skipped':[]}
     frame=_publish(owner,engine,plans,targets)
     owner.ledger[bid]=entry;owner.last_result=result
@@ -168,7 +172,14 @@ def restore_scoped(engine,batch,redo):
     from .source_relocation_history import matches as source_path_matches
     from .face_style_alias_history import check as check_alias_history, verify_restore as verify_alias_restore
     alias_history=check_alias_history(batch)
+    from .eye_bag_batch_history import check as check_eye_history, verify_restore as verify_eye_restore
+    eye_history=check_eye_history(batch)
     owner=engine._batch_controller();plans={};reviewed={}
+    if eye_history is not None:
+        # The scoped restore route bypasses the legacy undo() wrapper. Capture
+        # the current document so unsaved repair/crop edits cannot hide behind
+        # a parked row's older dependency digest.
+        owner.documents.remember_current()
     for record in batch['targets'].values():
         found=owner.versions.find(engine._docs,record['document_id'])
         if (found is None or not source_path_matches(found[1],record['path'])
@@ -190,6 +201,7 @@ def restore_scoped(engine,batch,redo):
                 for ref in reviewed[record['scope']]}.values())
     targets=_targets(owner,engine,plans)
     if alias_history is not None:verify_alias_restore(engine,batch,plans,targets)
+    if eye_history is not None:verify_eye_restore(engine,batch,plans,targets)
     # Recompute runtime paths/fences only after exact historical document/source
     # verification; a duplicate path never grants a replacement identity.
     prepare_scoped(engine,plans,targets)
@@ -197,6 +209,7 @@ def restore_scoped(engine,batch,redo):
         # Preparation must not expand an explicitly reviewed alias cohort.
         # Legacy scoped batches retain their established restoration behavior.
         verify_alias_restore(engine,batch,plans,_targets(owner,engine,plans))
+    if eye_history is not None:verify_eye_restore(engine,batch,plans,_targets(owner,engine,plans))
     return _publish(owner,engine,plans,targets)
 
 

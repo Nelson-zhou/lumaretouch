@@ -30,6 +30,9 @@ def options(value,modules,source_asset):
         if policy!='explicit_face_map':raise ValueError('Named face styles require an explicit target-owned face map')
         recipe(value['face_style']);check_selection(value['face_style'],value.get('selection'))
         fields.add('face_style')
+    if 'eye_bag' in value:
+        from .eye_bag_batch_review import options as eye_options
+        eye_options(value['eye_bag'],value);fields.add('eye_bag')
     if set(value)!=fields:
         raise ValueError('People transfer requires an explicit source, parameter selection and target policy')
     if policy not in ('confirmed_person_only','explicit_face_map'):
@@ -92,9 +95,8 @@ def _collarbone_visuals(engine, rows, targets, public):
         if staged is not None and staged['before'] != graph:
             raise ValueError('Collarbone target owner changed during aggregate preparation')
         candidate = S.check(graph if staged is None else staged['candidate'])
-        for ref in payload['target_refs']:
-            for leaf in payload['parameters']:
-                candidate = S.set_override(candidate, 'face', ref['face_instance_id'], leaf['operation_id'], leaf['parameter_path'], leaf['value'])
+        from .eye_bag_batch_plan import ADMISSION
+        candidate = T.stage(payload, candidate, eye_bag_review=ADMISSION if 'eye_bag' in payload else None)
         plans[identity] = {'before': graph, 'candidate': candidate}
     from .people_graph_owner import affected_assets
     reviewed = {target.document_id for target in targets if not target.blocked}
@@ -138,7 +140,8 @@ def preflight(engine,controller,p):
     policy=p.get('conflict_policy','skip_and_report')
     if policy not in ('skip_and_report','recheck'):raise ValueError('Unknown conflict policy')
     named=type(p.get('people_transfer')) is dict and 'face_style' in p['people_transfer']
-    if named:
+    eye=type(p.get('people_transfer')) is dict and 'eye_bag' in p['people_transfer']
+    if named or eye:
         from .people_preset_plan import require_active_owner
         owner=require_active_owner(engine)
         if V.current_row(engine).get('_people_new_import'):
@@ -159,7 +162,7 @@ def preflight(engine,controller,p):
                 or set(requested)!={item['target']['document']['document_id'] for item in selected['targets']}):
             raise ValueError('Selected target documents must exactly match the reviewed explicit face map')
     indices,rejected=batch.target_indices(p.get('docs'));targets=[];public=[];seen_documents=set()
-    if explicit and policy=='recheck' and rejected:
+    if explicit and (policy=='recheck' or eye) and rejected:
         raise ValueError('An explicit target document is no longer available; review the complete face map again')
     for index in indices:
         row=rows[index];target_document=document(engine,row)
@@ -170,22 +173,27 @@ def preflight(engine,controller,p):
             if target_document['document_id'] in seen_documents:raise ValueError('The same document was already selected as a target')
             seen_documents.add(target_document['document_id'])
             target_proof=SOURCE.row_proof(row);asset=target_proof['asset_sha256']
-            if named and (row.get('_people_new_import') or V.peek_graph(engine,row) is None):
+            if (named or eye) and (row.get('_people_new_import') or V.peek_graph(engine,row) is None):
                 raise ValueError('Named style requires an already reviewed target portrait owner; open and inspect it first')
             target_graph=V.row_snapshot(engine,row)
             target_owner=I.proof(engine,row,target_graph)
             if explicit:
                 mapping=next(item for item in selected['targets'] if item['target']['document']['document_id']==target_document['document_id'])
                 I.verify(engine,row,target_graph,mapping['target'])
+                from .eye_bag_batch_plan import ADMISSION
+                from .eye_bag_batch_review import for_document
                 payload=T.prepare(before,target_graph,selected['source_ref'],mapping['target_refs'],selected['selection'],A.defaults(),
                     source_document=source_document,target_document=target_document,source_owner=source_owner,target_owner=target_owner,
-                    face_style=selected.get('face_style'))
+                    face_style=selected.get('face_style'),
+                    eye_bag=for_document(selected,target_document['document_id']) if eye else None,
+                    eye_bag_review=ADMISSION if eye else None)
                 payload['target_policy']='explicit_face_map'
             else:
                 payload=prepare_confirmed(before,target_graph,selected['source_ref'],asset,selected['selection'],A.defaults(),
                     source_document=source_document,target_document=target_document,source_owner=source_owner,target_owner=target_owner)
             staged=T.candidate(payload,before,target_graph,source_document=source_document,target_document=target_document,
-                               source_owner=source_owner,target_owner=target_owner)
+                               source_owner=source_owner,target_owner=target_owner,
+                               eye_bag_review=ADMISSION if eye else None)
             if 'face_style' in payload:
                 from .face_style_batch_plan import validate as validate_style
                 validate_style(staged,payload['target_refs'])
@@ -202,6 +210,9 @@ def preflight(engine,controller,p):
             if body_evenness_coverage is not None:payload['body_skin_evenness_coverage']=body_evenness_coverage
             body_face_match_coverage=skin_coverage(engine,row,staged,payload,family='body_face_match')
             if body_face_match_coverage is not None:payload['body_face_match_coverage']=body_face_match_coverage
+            if eye:
+                from .eye_bag_batch_plan import coverage as eye_coverage
+                payload['eye_bag_coverage']=eye_coverage(engine,row,staged,payload)
             SOURCE.verify_row(row,target_proof)
             if owner.fence!=fence or V.row_snapshot(engine,row)!=target_graph or document(engine,row)!=target_document:
                 raise ValueError('Target or graph changed during preparation')
@@ -217,6 +228,10 @@ def preflight(engine,controller,p):
         targets,displays=visuals(engine,rows,targets,public)
     elif COLLARBONE in selected['selection']:
         targets,displays=_collarbone_visuals(engine,rows,targets,public)
+    eye_displays=None
+    if eye:
+        from .eye_bag_batch_plan import visuals
+        targets,eye_displays=visuals(engine,rows,targets,public)
     SOURCE.verify_row(source_row,source_proof)
     if owner.fence!=fence or document(engine,source_row)!=source_document:
         raise ValueError('Source or associations changed during preparation; review again')
@@ -230,7 +245,7 @@ def preflight(engine,controller,p):
         # Conservative envelope placeholders checked BEFORE retaining a token.
         'preflight_token':'x'*256,'workspace_generation':batch.versions.workspace,'expires_ns':'9'*128,
         'people_transfer':True}
-    if ('face_style' in selected or COLLARBONE in selected['selection']) and len(json.dumps(body,ensure_ascii=True,allow_nan=False).encode('utf-8'))>7*1024*1024:
+    if (eye or 'face_style' in selected or COLLARBONE in selected['selection']) and len(json.dumps(body,ensure_ascii=True,allow_nan=False).encode('utf-8'))>7*1024*1024:
         raise ValueError('Collarbone visual response exceeds transport budget; select fewer targets and review again')
     plan=controller.store.create(batch.versions.workspace,source_document['document_id'],source_document['revision'],
         source_row['path'],p['module_scope'],frozen,policy,targets,rejected)
@@ -245,16 +260,30 @@ def preflight(engine,controller,p):
             controller.store.pending.pop(plan.token,None)
             prune(controller.store)
             raise
+    if eye_displays is not None:
+        from .eye_bag_batch_store import attach,prune
+        try:attach(controller.store,plan,eye_displays)
+        except Exception:
+            controller.store.pending.pop(plan.token,None)
+            prune(controller.store)
+            from .collarbone_visual_store import prune as prune_collarbone
+            prune_collarbone(controller.store)
+            raise
     body.update(module_scope=list(plan.modules),source_snapshot=controller._source(plan),
                 preflight_token=plan.token,workspace_generation=plan.workspace,expires_ns=str(plan.expires_ns))
     controller.emit(body);controller.emit_result(p,body)
 
 
 def commit(engine,controller,p,plan):
-    if set(p)-{'cmd','action','request_id','preflight_token','collarbone_review_ack','face_style_review_ack'}:raise ValueError('Commit accepts only the frozen token and its collarbone image acknowledgments')
+    if set(p)-{'cmd','action','request_id','preflight_token','collarbone_review_ack','face_style_review_ack','eye_bag_review_ack'}:raise ValueError('Commit accepts only the frozen token and its collarbone image acknowledgments')
     from .collarbone_state import OP as COLLARBONE
     from . import collarbone_transfer_review as visual_review
     visual_selected=COLLARBONE in plan.modules
+    from . import eye_bag_batch_review as eye_review
+    from .eye_bag_batch_plan import ADMISSION
+    eye_records=eye_review.records(plan);eye_selected=eye_records is not None;eye_ack=None
+    if eye_selected:eye_ack=eye_review.acknowledgments(p.get('eye_bag_review_ack'),eye_records)
+    elif 'eye_bag_review_ack' in p:raise ValueError('Eye-bag ACK cannot authorize another operation')
     from . import face_style_batch_review as style_review
     style_selected=style_review.required(plan);style_ack=None
     if style_selected:
@@ -290,7 +319,7 @@ def commit(engine,controller,p,plan):
             target_graph=V.row_snapshot(engine,row)
             target_owner=I.proof(engine,row,target_graph)
             T.verify(payload,graph,target_graph,source_document=source_document,target_document=document(engine,row),
-                     source_owner=source_owner,target_owner=target_owner)
+                     source_owner=source_owner,target_owner=target_owner,eye_bag_review=ADMISSION if eye_selected else None)
             if payload['target_policy']=='confirmed_person_only' and source_owner['people_scope']!=target_owner['people_scope']:
                 raise ValueError('Confirmed person IDs do not authorize transfer between independent owners')
             if any(ref['asset_sha256']!=target_proof['asset_sha256'] for ref in payload['target_refs']):
@@ -302,9 +331,11 @@ def commit(engine,controller,p,plan):
             # Every payload verifies its own logical document and owner. Same
             # source bytes are valid across independent copies, never merged
             # just because the digest or inherited face reference matches.
-            for ref in payload['target_refs']:
-                for leaf in payload['parameters']:
-                    candidate=S.set_override(candidate,'face',ref['face_instance_id'],leaf['operation_id'],leaf['parameter_path'],leaf['value'])
+            candidate=T.stage(payload,candidate,eye_bag_review=ADMISSION if eye_selected else None)
+            if eye_selected:
+                from .eye_bag_batch_plan import coverage as eye_coverage
+                if eye_coverage(engine,row,candidate,payload)!=payload.get('eye_bag_coverage'):
+                    raise ValueError('Eye-bag target support changed after review')
             if style_selected:
                 from .face_style_batch_plan import validate as validate_style
                 validate_style(candidate,payload['target_refs'])
@@ -340,7 +371,16 @@ def commit(engine,controller,p,plan):
     if not eligible:raise ValueError('No confirmed target remains eligible')
     from .people_batch_ledger import prepare_scoped,_targets,_verify
     targets=_targets(batch,engine,plans)
-    if visual_selected or style_selected:
+    if eye_selected:
+        # A no-op first row cannot represent the changed scope in protected
+        # history. Select a retained actually affected document before claim.
+        for identity,scoped in plans.items():
+            member=next((target for target in targets.values() if target['people_scope']==identity),None)
+            if member is not None:
+                found=batch.versions.find(batch.documents.rows(),member['document_id'])
+                if found is None:raise ValueError('Eye-bag history representative disappeared')
+                scoped['row']=found[1]
+    if visual_selected or style_selected or eye_selected:
         reviewed={item['document_id'] for item in resolved if not item['blocked']}
         if any(target['document_id'] not in reviewed for target in targets.values()):
             raise ValueError('Collarbone publication would modify an unreviewed shared-source document; review the complete affected set')
@@ -388,6 +428,18 @@ def commit(engine,controller,p,plan):
             if found is None:raise ValueError('Named-style target disappeared')
             row=found[1];frozen=next(t for t in plan.targets if t.document_id==result['document_id'])
             verify_style(engine,row,plans[V.scope(row)],frozen,json.loads(frozen.people_json))
+    eye_history=None
+    if eye_selected:
+        from .eye_bag_batch_plan import verify as verify_eye,closure
+        closure(engine,batch.documents.rows(),plans,{item['document_id'] for item in resolved if not item['blocked']})
+        for result in resolved:
+            if result['blocked']:continue
+            found=batch.versions.find(batch.documents.rows(),result['document_id'])
+            if found is None:raise ValueError('Eye-bag target disappeared during full preparation')
+            row=found[1];frozen=next(t for t in plan.targets if t.document_id==result['document_id'])
+            verify_eye(engine,row,plans[V.scope(row)],frozen,json.loads(frozen.people_json))
+        from .eye_bag_batch_history import prepare as prepare_history
+        eye_history=prepare_history(engine,plans,targets,eye_ack) if targets else None
     _verify(batch,engine,plans,targets)
     # Expensive effective-source preparation cannot authorize a newer graph.
     if V.row_snapshot(engine,source[1])!=graph:raise ValueError('People graph changed during final preparation')
@@ -410,10 +462,13 @@ def commit(engine,controller,p,plan):
     if style_selected:
         from .face_style_batch_store import verify_available
         verify_available(controller.store,plan)
-    controller.store.claim(plan,collarbone_review_ack=visual_ack,face_style_review_ack=style_ack,request_id=p.get('request_id'))
+    if eye_selected:
+        from .eye_bag_batch_store import verify_available
+        verify_available(controller.store,plan)
+    controller.store.claim(plan,collarbone_review_ack=visual_ack,face_style_review_ack=style_ack,eye_bag_review_ack=eye_ack,request_id=p.get('request_id'))
     try:
         from .people_batch_ledger import commit_scoped as publish
-        result=publish(batch,engine,plans,request_id=p.get('request_id'),prepare=False,prepared_targets=targets)
+        result=publish(batch,engine,plans,request_id=p.get('request_id'),prepare=False,prepared_targets=targets,eye_bag_history=eye_history)
         bid,frame=(None,None) if result is None else result
         body={'event':'batch_committed','success':True,'batch_id':bid,'module_scope':list(plan.modules),
             'applied':[x['index'] for x in resolved if not x['blocked']],
@@ -422,6 +477,12 @@ def commit(engine,controller,p,plan):
                 'outcome':'skipped' if x['blocked'] else 'applied'} for x in resolved],
             'preflight_token':plan.token,'workspace_generation':plan.workspace,'people_transfer':True,
             'source_changed_since_preflight':False,'source_missing':False}
+        if eye_selected:
+            changed={target['document_id'] for target in targets.values()}
+            body['applied']=[x['index'] for x in resolved if not x['blocked'] and x['document_id'] in changed]
+            for item in body['target_outcomes']:
+                if not item['blocked'] and item['document_id'] not in changed:item['outcome']='noop'
+            body.update(eye_bag_review_ack=deepcopy(eye_ack),outcome_unknown=False)
         if visual_ack is not None:body['collarbone_review_ack']=deepcopy(visual_ack)
         if style_ack is not None:
             body['face_style_review_ack']=deepcopy(style_ack)
@@ -436,6 +497,9 @@ def commit(engine,controller,p,plan):
         body['module_scope']=list(plan.modules)
     if style_ack is not None:
         body['face_style_review_ack']=deepcopy(style_ack)
+        body['module_scope']=list(plan.modules)
+    if eye_ack is not None:
+        body['eye_bag_review_ack']=deepcopy(eye_ack)
         body['module_scope']=list(plan.modules)
     controller.emit_result(p,controller.store.finish(plan,body))
 

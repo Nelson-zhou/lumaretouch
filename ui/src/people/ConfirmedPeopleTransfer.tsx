@@ -1,3 +1,4 @@
+import {eyeBagBatchPolicy} from '../eyeBagPreserve/batchModel';
 import {OPERATION_ID as EYE_BAGS} from '../eyeBagPreserve/model';
 import {associationRequest,sourceAssociation} from './associationRequest';
 import type {AssociationRequest} from './associationProof';
@@ -40,6 +41,8 @@ export function ConfirmedPeopleTransfer({owner, targets, currentPath, enabled, o
   const [undone, setUndone] = useState(false);
   const [faceChoices, setFaceChoices] = useState<{requestId: string; choices: FaceChoices}>({requestId: '', choices: {}});
   const [images, setImages] = useState<{requestId: string; ready: Record<string, boolean>}>({requestId: '', ready: {}});
+  const [eyeRoute, setEyeRoute] = useState<{key: string; mode: 'reviewed' | 'neutral_reset'}>({key: '', mode: 'reviewed'});
+  const [eyePolicies, setEyePolicies] = useState<{key: string; choices: Record<string, boolean | undefined>; revision: number}>({key: '', choices: {}, revision: 0});
   const [frozen, setFrozen] = useState<FrozenVisual | null>(null);
   const [frozenImages, setFrozenImages] = useState<{requestId: string; ready: Record<string, boolean>}>({requestId: '', ready: {}});
   const chosen = choice.key === key ? choice.leaves : [];
@@ -49,11 +52,16 @@ export function ConfirmedPeopleTransfer({owner, targets, currentPath, enabled, o
     && resolved.state_revision === view?.revision && resolved.association_revision === view?.association_revision;
   const operations = matches && resolved ? Object.entries(resolved.operations) : [];
   const selection: Record<string, string[]> = named ? faceStyleSelection() : {};
-  const available = operations.filter(([operation]) => operation !== EYE_BAGS).flatMap(([operation, values]) => Object.entries(values).map(([path, record]) => ({
+  const available = operations.flatMap(([operation, values]) => Object.entries(values).map(([path, record]) => ({
     operation, path, value: record.value, key: JSON.stringify([operation, path]),
     conflict: resolved!.conflicts.some(item => item.operation_id === operation && item.parameter_path === path),
   })));
-  for (const leaf of available) if (!named && !leaf.conflict && chosen.includes(leaf.key)) (selection[leaf.operation] ??= []).push(leaf.path);
+  for (const leaf of available) if (!named && chosen.includes(leaf.key)) (selection[leaf.operation] ??= []).push(leaf.path);
+  const eyeSelected = !named && Object.hasOwn(selection, EYE_BAGS);
+  const eyeNeutralReset = eyeSelected && eyeRoute.key === key && eyeRoute.mode === 'neutral_reset';
+  const eyeNeutralEligible = eyeSelected && selection[EYE_BAGS].includes('/amount')
+    && available.some(leaf => leaf.operation === EYE_BAGS && leaf.path === '/amount' && leaf.value === 0 && !leaf.conflict);
+  const selectedConflict = available.some(leaf => leaf.conflict && chosen.includes(leaf.key));
   const selected = [...new Set(targets)].filter(identity => identity !== view?.binding.document_id);
   const sourceReady = enabled && owner.enabled && !owner.state.pending && !owner.state.uncertain
     && (named ? faceStyleBatchSourceReady(view) : !!source?.enabled && source.analysis_status === 'verified' && matches);
@@ -65,13 +73,17 @@ export function ConfirmedPeopleTransfer({owner, targets, currentPath, enabled, o
   const choices = listing && faceChoices.requestId === listing.request_id ? faceChoices.choices : {};
   const allImagesReady = !!listing && images.requestId === listing.request_id
     && [listing.source, ...listing.targets.filter(isAvailableEntry)].every(entry => images.ready[entry.document.document_id] === true);
+  const eyePolicyKey = JSON.stringify([inventoryKey, listing?.request_id, choices, selection]);
+  const eyePolicyChoices = eyePolicies.key === eyePolicyKey ? eyePolicies.choices : {};
+  const eyePolicy = eyeSelected && !eyeNeutralReset ? eyeBagBatchPolicy(selected, eyePolicyChoices) : undefined;
+  const eyeRouteReady = !eyeSelected || (eyeNeutralReset ? !persistent && eyeNeutralEligible : targetPolicy === 'explicit_face_map' && !!eyePolicy);
   const explicitBase = explicitRequest(listing, selected, source?.face_ref, selection, choices);
-  const explicit: ExplicitPeopleRequest | undefined = explicitBase && (!named || namedRecipe)
-    ? {...explicitBase, ...(namedRecipe ? {face_style: namedRecipe} : {})} : undefined;
+  const explicit: ExplicitPeopleRequest | undefined = explicitBase && (!named || namedRecipe) && eyeRouteReady
+    ? {...explicitBase, ...(namedRecipe ? {face_style: namedRecipe} : {}), ...(eyePolicy ? {eye_bag: eyePolicy} : {})} : undefined;
   const association=(!named||associationOperation==='unlink'||namedRecipe)
     ?associationRequest(listing,selected,source?.face_ref,selection,choices,associationOperation,associationId,namedRecipe):undefined;
   const existingAssociation=sourceAssociation(listing,source?.face_ref);
-  const request: PeopleTransferRequest | undefined = persistent ? association : named || targetPolicy === 'explicit_face_map' ? explicit
+  const request: PeopleTransferRequest | undefined = !eyeRouteReady || selectedConflict ? undefined : persistent ? association : named || targetPolicy === 'explicit_face_map' ? explicit
     : source && Object.keys(selection).length ? {source_ref: source.face_ref, selection, target_policy: 'confirmed_person_only'} : undefined;
   const proof: PeopleTransferProof | undefined = manual ? (persistent?association?.source:explicit?.source)
     : view && links.length === 1 ? {...view.binding, state_revision: view.revision,
@@ -80,7 +92,7 @@ export function ConfirmedPeopleTransfer({owner, targets, currentPath, enabled, o
   const flow = useBatchWorkflow({docs: selected, moduleScope: persistent&&associationOperation==='unlink'?[]:Object.keys(selection), conflictPolicy: persistent?'recheck':policy,
     sourceDocumentId: view?.binding.document_id ?? '', referencePath: currentPath, enabled: ready,
     label: named&&persistent?'新版七种脸型持久关联：明确本地配方与程度，源成员和全部目标共同审核':named?'新版七种脸型：明确配方与统一程度，仅本次手动指定的目标人脸':persistent?'持久人物关联：所有成员共同审核，逐人脸显式参数仍优先':targetPolicy === 'explicit_face_map' ? '仅本次手动指定的人脸配对，不建立持久人物关联' : '仅向用户已确认的同一人物同步明确勾选的参数',
-    peopleTransfer: request, peopleProof: proof}, onComplete);
+    peopleTransfer: request, peopleProof: proof, reviewEpoch: eyePolicies.revision}, onComplete);
   const busy = ['preflighting', 'committing', 'uncertain'].includes(flow.ui.phase);
   const disabled = !enabled || !owner.enabled || owner.state.pending || owner.state.uncertain || busy;
   const inventoryBusy = inventory.ui.contextKey === inventoryKey && ['loading', 'uncertain'].includes(inventory.ui.phase);
@@ -185,15 +197,13 @@ export function ConfirmedPeopleTransfer({owner, targets, currentPath, enabled, o
       </>}
       <fieldset disabled={disabled}><legend>{named?'目标冲突处理（配方固定替换全部 30 项）':'逐模块选择参数'}</legend>
         {!named && operations.map(([operation]) => {
-          if (operation === EYE_BAGS) return <details key={operation}><summary>{operationLabel(operation)} · 不支持直接同步</summary>
-            <p>来源卧蚕范围不能复制到目标。当前未提供逐目标真实保护及整张前后图审核，因此本模块不加入参数同步、分组或持久关联。请分别在每张照片的「祛眼袋」专用面板重画审核；需要停用时在各自人物面板归零新版程度。</p>
-          </details>;
           const leaves = available.filter(leaf => leaf.operation === operation);
           return <details key={operation}><summary>{operationLabel(operation)}</summary>
+            {operation === EYE_BAGS && <p>仅支持逐张手动指定、本次配对。只传递程度和卧蚕保留数值；每个启用目标必须已有自己的手绘卧蚕保护并完成审核。目标缺少或保护过期则拒绝，不能复制源图保护、恢复数据，也不自动识别卧蚕。共享分组、持久关联与共享来源副本仍受保护。</p>}
             <button type="button" onClick={() => setLeaves([...chosen, ...leaves.filter(leaf => !leaf.conflict).map(leaf => leaf.key)])}>勾选本模块可迁移参数</button>
             <button type="button" onClick={() => setLeaves(chosen.filter(id => !leaves.some(leaf => leaf.key === id)))}>取消本模块</button>
             {leaves.map(leaf => <label key={leaf.key} style={{display: 'block'}}>
-              <input type="checkbox" checked={chosen.includes(leaf.key)} disabled={leaf.conflict}
+              <input type="checkbox" checked={chosen.includes(leaf.key)} disabled={leaf.conflict && !chosen.includes(leaf.key)}
                 onChange={event => setLeaves(event.currentTarget.checked ? [...chosen, leaf.key] : chosen.filter(id => id !== leaf.key))}/>
               {leaf.path}：{String(leaf.value)}{leaf.conflict ? '（来源有分组冲突）' : ''}
             </label>)}
@@ -203,12 +213,40 @@ export function ConfirmedPeopleTransfer({owner, targets, currentPath, enabled, o
           <option value="recheck">任一目标受阻则不提交整组</option><option value="skip_and_report">跳过受阻目标并逐张报告</option>
         </select></label>
       </fieldset>
+      {selectedConflict && <p role="alert">所选参数含来源冲突，必须取消该项或解决冲突；不会静默丢弃已勾选的参数。</p>}
+      {eyeSelected && <fieldset disabled={disabled} aria-label="祛眼袋同步审核或中性停用">
+        <legend>明确选择新版祛眼袋同步方式</legend>
+        <label><input type="radio" name="eyeBagBatchRoute" checked={!eyeNeutralReset}
+          onChange={() => {setEyeRoute({key, mode: 'reviewed'}); setEyePolicies(old => ({...old, revision: old.revision + 1}));}}/>逐目标卧蚕保护与完整前后图审核</label>
+        <label><input type="radio" name="eyeBagBatchRoute" checked={eyeNeutralReset} disabled={!eyeNeutralEligible || persistent}
+          onChange={() => {if (eyeNeutralEligible && !persistent) {setEyeRoute({key, mode: 'neutral_reset'}); setEyePolicies(old => ({...old, revision: old.revision + 1}));}}}/>
+          仅中性停用：已勾选且已解析的来源新版程度必须精确为 0，不要求读取祛眼袋前后图</label>
+        {!eyeNeutralEligible && <p>中性停用仅在来源 /amount 已明确勾选、数值精确为 0 且无冲突时可用；只选择保留程度不能推断目标已停用。</p>}
+        {eyeNeutralReset && <p>本次不发送卧蚕保护、旧版替换策略或祛眼袋图像确认。引擎仍逐目标验证最终新版程度为零，否则拒绝。已有保护与旧版不因本项归零而清除；其他已选参数继续应用，并保留其各自必要审核。此方式不声明任何卧蚕保护或照片质量已验收，不用于持久共享关联。</p>}
+      </fieldset>}
+      {eyeSelected && !eyeNeutralReset && <fieldset disabled={disabled} aria-label="逐目标明确旧版眼袋处理策略">
+        <legend>祛眼袋卧蚕保护：预检前逐张选择旧版处理策略</legend>
+        <p>每张目标都必须明确选择，不设默认值。仅当新版候选实际启用时才可能清除该目标旧版眼袋；本项归零不清除旧版或现有保护；若另行明确选择旧版参数，仍保留该选择。最终会审核本次所有所选参数的完整真实前后效果。</p>
+        {targetPolicy !== 'explicit_face_map' && <p role="alert">请选择“逐张手动指定，仅本次配对”。当前不支持把新版卧蚕保护接入已确认关联或持久共享，不会忽略本项继续同步其他参数。</p>}
+        {listing ? listing.targets.map((entry, index) => <label key={entry.document.document_id} style={{display: 'block'}}>
+          目标 {index + 1} · {entry.document.document_id}
+          <select value={eyePolicyChoices[entry.document.document_id] === undefined ? '' : String(eyePolicyChoices[entry.document.document_id])}
+            onChange={event => {const raw = event.currentTarget.value; const id = entry.document.document_id;
+              setEyePolicies(old => ({key: eyePolicyKey, revision: old.revision + 1,
+                choices: {...(old.key === eyePolicyKey ? old.choices : {}), [id]: raw === '' ? undefined : raw === 'true'}}));}}>
+            <option value="">请明确选择</option>
+            <option value="false">保留旧版；若与启用新版冲突则拒绝</option>
+            <option value="true">仅在新版启用时允许替换旧版</option>
+          </select>
+        </label>) : <p>请先读取所选目标并逐张指定人脸，再选择每张目标的旧版处理策略。</p>}
+        <p>若同时选中非零旧版眼袋和启用新版，即使允许替换也会拒绝，不会悄悄忽略旧版选择。改变人脸、参数、目标或策略后原审核立即失效；即使改回原值，也须重新预检。</p>
+      </fieldset>}
       <button type="button" disabled={!ready || !selected.length || busy} onClick={start}>{persistent?'生成源成员与全部目标的关联审核':named?'生成逐目标新版脸型审核':'预检人物参数'} · {selected.length} 张照片</button>
       <button type="button" disabled={!last || busy || !enabled || !owner.enabled || owner.state.pending || owner.state.uncertain || last.epoch !== view?.binding.document_epoch}
         onClick={() => last && (undone ? flow.redo(last.id) : flow.undo(last.id))}>{undone ? '重做上一笔有改动的人物同步' : '撤销上一笔有改动的人物同步'}</button>
       <p>源图、人脸分析、独立人物状态、目标或关联改变后必须重新预检。没有逐张明确指定或已有确认关联的目标不会被猜测补齐。</p>
     </details>
-    <BatchReview state={flow.ui} onClose={flow.close} onCommit={(spill,shadow,torso,waist,head,collarbone,faceStyle,portrait) => (!needsFrozen || frozenReady) && flow.commit(spill,shadow,torso,waist,head,collarbone,faceStyle,portrait)} onReview={start}
+    <BatchReview state={flow.ui} onClose={flow.close} onCommit={(spill,shadow,torso,waist,head,collarbone,faceStyle,portrait,eyeBag) => (!needsFrozen || frozenReady) && flow.commit(spill,shadow,torso,waist,head,collarbone,faceStyle,portrait,eyeBag)} onReview={start}
       onQuery={flow.query} onAcknowledge={flow.acknowledgeInspection}
       commitBlockedReason={needsFrozen && !frozenReady ? '冻结配对的实际源图尚未全部验证显示，不能提交；若预览失败，请关闭并重新读取。' : undefined}
       peoplePreview={visibleFrozen ? <div>

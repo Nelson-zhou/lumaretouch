@@ -6742,6 +6742,9 @@ class Engine(FringeRepairHostMixin, PresetOrganisationHostMixin, HairColourHostM
             from .people_host_commands import face_style_read_only
             if face_style_read_only(msg):
                 fn(msg); return  # Exact private face-style reads retain all earlier pending/recovery guards.
+            from .eye_bag_batch_store import read_only as eye_bag_batch_read_only
+            if eye_bag_batch_read_only(msg):
+                fn(msg); return  # Frozen target review is read-only; retain earlier ownership and receipt guards.
             from .eye_bag_preset_store import read_only as eye_bag_preset_read_only
             if eye_bag_preset_read_only(msg):
                 fn(msg); return  # Exact preset reads retain capture/receipt fences; controller verifies source and plan.
@@ -6864,6 +6867,9 @@ class Engine(FringeRepairHostMixin, PresetOrganisationHostMixin, HairColourHostM
             emit({"event": "error", "error": f"{type(e).__name__}: {e}"})
         finally:
             try:
+                if dispatch_error and name == 'batch':
+                    from .batch_dispatch_receipt import rejected as batch_rejected
+                    batch_rejected(msg, dispatch_error, recovery_boundary, emit)
                 if dispatch_error and name in ('fringe_repair','fringe_repair_preview'):
                     from .fringe_repair_host import dispatch_rejected as fringe_rejected
                     fringe_rejected(msg,dispatch_error,bool(recovery_boundary and recovery_boundary['started']),emit)

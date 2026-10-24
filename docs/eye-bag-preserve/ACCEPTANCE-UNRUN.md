@@ -97,3 +97,43 @@ broader automatic AI blemish correction remain outside this bounded path.
   save/reopen/package and exact unchanged target recovery assets.
 - Generic batch/cohort/shared-alias guards remain; no one-photo token or donor
   image acknowledgment can authorize another target.
+
+## Ordinary target-owned scalar batch transfer (AUTHORED / UNRUN)
+
+- Prepare an explicit original/derived target map with two independently reviewed
+  faces and distinct per-eye ridge assets. Transfer selected v2 scalar leaves.
+  Verify that each target retains its own FaceRefs, vectors, support-bank records
+  and effect-recovery masks, including one reviewed eye with the other untreated.
+- For mixed portrait selections, compare each displayed after image with the
+  complete canonical candidate, not the isolated eye correction. Verify the
+  final aggregate shared-owner graph is the exact graph used for every image.
+- Require an explicit legacy replacement choice for every dedicated-review
+  target. Positive replacement clears only old eye-bag strength. Refuse selected
+  nonzero legacy strength conflicting with active v2. Zero amount must not clear
+  legacy, require new active support, or change the old numerical recipe.
+- Load immutable before/after pages, verify exact hash, dimensions, document,
+  revision, token and support coverage, then acknowledge each eligible target.
+  Missing/stale/reordered/duplicated acknowledgments cannot authorize a commit.
+- Change target mapping, selection or replacement policy after review, including
+  false-to-true-to-false. Old images and ACK authority must not revive. Switch
+  document/owner, change source/repair/support or reopen the project before
+  commit; the frozen candidate must be refused rather than rebound.
+- Exercise skip-and-report and recheck with blocked targets. No supported target
+  is silently omitted; no blocked target is falsely reported applied. An exact
+  no-op still requires the dedicated ACK but creates no spurious undo record.
+- Force preparation and publication failures, including a late render failure.
+  Verify existing ledger rollback, exact retained terminal receipt and query-only
+  handling of unknown writes. Closing the dialog must not permit a blind retry.
+- Undo/redo after adding a same-source sibling, changing a target support asset,
+  restoring a dormant source history or removing a reviewed member. Exact
+  membership and local evidence must remain protected, including after project
+  save/reopen and portable package recovery.
+- Attempt active generic transfer with forged eye metadata but without dedicated
+  private preparation authority. Attempt persistent-cohort application through
+  ordinary batch fields. Both must refuse; existing neutral compatibility must
+  remain available without synthesizing a dedicated visual receipt.
+- Exercise sixteen normal photo targets using lazy paged evidence retrieval.
+  Source/render/session limits must fail explicitly without reducing image
+  detail, clipping source precision or silently truncating the target set.
+
+These cases are a verification plan, not test results or photographic acceptance.

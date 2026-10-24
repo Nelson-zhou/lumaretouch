@@ -11,7 +11,7 @@ from .people_resolver import resolve
 
 
 
-def _require_reviewed_eye_bag_transfer(payload, target):
+def _require_reviewed_eye_bag_transfer(payload, target, eye_bag_review=None):
     """Generic target maps carry no dedicated eye-bag visual-review proof.
 
     Build the complete target recipe before checking so amount=0 resets and
@@ -21,6 +21,10 @@ def _require_reviewed_eye_bag_transfer(payload, target):
     from . import people_algorithms as A
     operation = A.EYE_BAG_PRESERVE.OP
     selected = [row for row in payload['parameters'] if row['operation_id'] == operation]
+    if 'eye_bag' in payload:
+        from .eye_bag_batch_plan import stage
+        stage(payload, target, eye_bag_review)
+        return
     if not selected: return
     from .eye_bag_preserve_scope import REVIEW_REQUIRED
     for ref in payload['target_refs']:
@@ -34,7 +38,8 @@ def _require_reviewed_eye_bag_transfer(payload, target):
 
 
 def prepare(source_state, target_state, source_ref, target_refs, selection, defaults,
-            *, source_document, target_document, source_owner=None, target_owner=None, face_style=None):
+            *, source_document, target_document, source_owner=None, target_owner=None, face_style=None,
+            eye_bag=None, eye_bag_review=None):
     """selection maps operation IDs to explicit parameter pointers, never assets."""
     source = S.check(source_state); target = S.check(target_state)
     source_ref = S.check_ref(source_ref)
@@ -80,18 +85,24 @@ def prepare(source_state, target_state, source_ref, target_refs, selection, defa
         if source_owner is None or target_owner is None:raise ValueError('Named styles require both reviewed owner proofs')
         payload['face_style']=deepcopy(face_style)
         payload['target_policy']='explicit_face_map'
+    if eye_bag is not None:
+        from .eye_bag_batch_review import choice
+        if face_style is not None or source_owner is None or target_owner is None:
+            raise ValueError('Eye-bag batch needs ordinary explicit source and target owner proofs')
+        payload['eye_bag'] = choice(eye_bag)
+        payload['target_policy'] = 'explicit_face_map'
     if source_owner is not None or target_owner is not None:
         from .people_transfer_inventory import check_proof
         payload['source_owner'] = check_proof(source_owner)
         payload['target_owner'] = check_proof(target_owner)
         verify(payload, source, target, source_document=source_document, target_document=target_document,
-               source_owner=source_owner, target_owner=target_owner)
-    _require_reviewed_eye_bag_transfer(payload, target)
+               source_owner=source_owner, target_owner=target_owner, eye_bag_review=eye_bag_review)
+    _require_reviewed_eye_bag_transfer(payload, target, eye_bag_review)
     return payload
 
 
 def verify(payload, source_state, target_state, *, source_document, target_document,
-           source_owner=None, target_owner=None):
+           source_owner=None, target_owner=None, eye_bag_review=None):
     """Call immediately before existing batch commit, not only when previewing."""
     source = S.check(source_state); target = S.check(target_state)
     if payload['source_document'] != source_document or payload['target_document'] != target_document:
@@ -130,14 +141,23 @@ def verify(payload, source_state, target_state, *, source_document, target_docum
         if face is None or S.face_ref(face) != ref or not face['enabled']: raise ValueError('Reviewed face is no longer available')
         if payload.get('target_policy') == 'explicit_face_map' and face['evidence']['status'] != 'verified':
             raise ValueError('Explicit transfer requires each selected face to have verified source-owned analysis')
-    _require_reviewed_eye_bag_transfer(payload, target)
+    _require_reviewed_eye_bag_transfer(payload, target, eye_bag_review)
 
 
 def candidate(payload, source_state, target_state, *, source_document, target_document,
-              source_owner=None, target_owner=None):
+              source_owner=None, target_owner=None, eye_bag_review=None):
     """Return staged data only; existing atomic transaction owns publication."""
     verify(payload, source_state, target_state, source_document=source_document, target_document=target_document,
-           source_owner=source_owner, target_owner=target_owner)
+           source_owner=source_owner, target_owner=target_owner, eye_bag_review=eye_bag_review)
+    return stage(payload, target_state, eye_bag_review=eye_bag_review)
+
+
+def stage(payload, target_state, *, eye_bag_review=None):
+    """Scalar-only aggregate staging; never a graph publication boundary."""
+    if 'eye_bag' in payload:
+        from .eye_bag_batch_plan import stage as eye_bag_stage
+        return eye_bag_stage(payload, target_state, eye_bag_review)
+    _require_reviewed_eye_bag_transfer(payload, target_state)
     out = S.check(target_state)
     for ref in payload['target_refs']:
         for parameter in payload['parameters']:

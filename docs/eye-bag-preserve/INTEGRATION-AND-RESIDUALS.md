@@ -58,8 +58,11 @@ to publish an unverified graph. No corrupt-project recovery acceptance is claime
 - Active current-photo preset application now has a dedicated exact mixed-preset
   image review using the target's own previously reviewed per-eye support. No
   donor support or recovery vectors transfer; legacy replacement is explicit.
-  Generic batch and persistent-cohort application remain refused. See
-  `PRESET-TRANSFER.md`; missing local support still requires target painting.
+  Dedicated explicit-map ordinary batch transfer adds per-target policy, complete
+  aggregate image review and target-local support without copying donor vectors.
+  Generic active batch and persistent-cohort application remain refused. See
+  `PRESET-TRANSFER.md` and `BATCH-TRANSFER.md`; missing local support still
+  requires target painting.
 - Current single-photo positive review refuses shared-source aliases and dormant
   affected siblings. Complete affected-set review is not implemented for v2.
 - Dedicated effect-recovery painting now attenuates only the independently
