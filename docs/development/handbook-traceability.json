@@ -5633,9 +5633,20 @@
       "source_url": "https://www.pixcakeai.com/guide/32471",
       "source_child_index": 24,
       "title": "局部妆容/脸部装饰",
-      "status": "pending_independent_verification",
-      "implementation": [],
-      "verification": []
+      "status": "source_connected_manual_review_acceptance_unrun",
+      "implementation": [
+        "core/face_decoration/lib.rs",
+        "engine/src/lumaretouch_engine/face_decoration_patterns.json",
+        "engine/src/lumaretouch_engine/face_decoration_layer.py",
+        "engine/src/lumaretouch_engine/face_decoration_support.py",
+        "engine/src/lumaretouch_engine/face_decoration_host.py",
+        "ui/src/faceDecoration/FaceDecorationPanel.tsx",
+        "ui/src-tauri/src/face_decoration_protocol.rs"
+      ],
+      "verification": [
+        "docs/face-decoration/ACCEPTANCE-UNRUN.md"
+      ],
+      "scope_note": "LNX-REF-PC-32471-C-dd14134407: original versioned 5 freckle + 3 mole-style analytic materials and strength, one operation, not eight algorithms. Decoration-specific current-person visible-skin paint and genuine measured source evidence; no proprietary artwork copied, automatic instance/occlusion segmentation or original-mark removal claim. Original/derived canonical integration and target-local scalar transfer are source contracts only; real UI, numerical, packaging and photographic acceptance remain UNRUN. See docs/face-decoration/IMPLEMENTATION.md for actual route limits."
     },
     {
       "id": "control:PC-32471:26",

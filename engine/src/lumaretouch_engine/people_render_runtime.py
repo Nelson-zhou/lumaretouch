@@ -70,8 +70,9 @@ def verify_analysis(face, analysis, shape):
 
 
 def prepare(state, asset_sha256, source, analyses, *, byte_budget, document_id=None, max_faces=32, recovery_assets=None, repaired=None,
-            creative_source=None, creative_repair_evidence=None, hair_assets=None, hair_evidence=None, hair_source_path=None, force_hair_prompted=False, eye_light_assets=None, blush_makeup_assets=None, lipstick_assets=None,eyeliner_assets=None,eyelash_assets=None,brow_makeup_assets=None,iris_makeup_assets=None,skin_colour_body_assets=None,skin_finish_body_assets=None,body_skin_evenness_assets=None,body_face_match_assets=None,collarbone_assets=None,eye_bag_preserve_assets=None,body_bank=None):
+            creative_source=None, creative_repair_evidence=None, hair_assets=None, hair_evidence=None, hair_source_path=None, force_hair_prompted=False, eye_light_assets=None, blush_makeup_assets=None, face_decoration_assets=None, lipstick_assets=None,eyeliner_assets=None,eyelash_assets=None,brow_makeup_assets=None,iris_makeup_assets=None,skin_colour_body_assets=None,skin_finish_body_assets=None,body_skin_evenness_assets=None,body_face_match_assets=None,collarbone_assets=None,eye_bag_preserve_assets=None,body_bank=None):
     state = S.check(state)
+    A.FACE_DECORATION.validate_graph(state)
     from .people_cross_owner import validate_owner
     validate_owner(state,asset_sha256,document_id)
     source_only = creative_source is not None
@@ -91,7 +92,7 @@ def prepare(state, asset_sha256, source, analyses, *, byte_budget, document_id=N
         # Each port carries the same canonical bank, but validate against its
         # actual supplied bank below rather than trusting that caller convention.
         banks = {'eye_light_visibility':eye_light_assets,'lipstick_visibility':lipstick_assets,
-            'blush_makeup_visibility':blush_makeup_assets,'eyeliner_visibility':eyeliner_assets,
+            'blush_makeup_visibility':blush_makeup_assets,'face_decoration_visibility':face_decoration_assets,'eyeliner_visibility':eyeliner_assets,
             'eyelash_visibility':eyelash_assets,'brow_makeup_visibility':brow_makeup_assets,
             'iris_makeup_visibility':iris_makeup_assets}
         for kind,bank in banks.items():
@@ -134,9 +135,11 @@ def prepare(state, asset_sha256, source, analyses, *, byte_budget, document_id=N
                     and row['operation_id']==A.COLLARBONE.OP):
                 from .collarbone_project import validate_leaf as validate_collarbone_leaf
                 validate_collarbone_leaf(row['parameter_path'], row['value'])
+    from .face_decoration_project import photograph_dormant as photograph_decoration_dormant
     if not any(face['asset_sha256']==asset_sha256 for face in state['faces'].values()) and any(
             row['scope']=='all_people' and row['target_id']==asset_sha256
             and row['value']!=A.defaults().get(row['operation_id'],{}).get(row['parameter_path'])
+            and not (row['operation_id']==A.FACE_DECORATION.OP and photograph_decoration_dormant(state,asset_sha256))
             and not (row['operation_id']==A.EYE_BAG_PRESERVE.OP and row['parameter_path']=='/preserve'
                      and type(row['value']) in (int,float) and 0 <= row['value'] <= 1)
             and not (row['operation_id']==A.EYE_SYMMETRY.OP and row['parameter_path']=='/reference'
@@ -167,10 +170,12 @@ def prepare(state, asset_sha256, source, analyses, *, byte_budget, document_id=N
             face = state['faces'][key]; analysis = analyses[key]
             for asset in face['local_assets'].values():
                 stage = asset['kind']
-                if stage in ('skin_colour_body_visibility','skin_finish_body_visibility','body_skin_evenness_visibility','body_face_match_visibility','collarbone_visibility','eye_bag_ridge_visibility'):
+                if stage in ('skin_colour_body_visibility','skin_finish_body_visibility','body_skin_evenness_visibility','body_face_match_visibility','collarbone_visibility','eye_bag_ridge_visibility','face_decoration_visibility'):
                     # Separate operation-owned support, never generic recovery.
                     # Resolve each only when its own recipe is active below;
                     # dormant review cannot prevent disabling its own recipe.
+                    continue
+                if stage == 'face_decoration' and not A.FACE_DECORATION.active(values[A.FACE_DECORATION.OP]):
                     continue
                 if stage=='iris_makeup_visibility':
                     from .iris_makeup_support import resolve as resolve_iris_support
@@ -234,13 +239,32 @@ def prepare(state, asset_sha256, source, analyses, *, byte_budget, document_id=N
             field, philtrum_facts = append_philtrum(field, state, entry['face_ref'], analysis, source, values[A.PHILTRUM.OP])
             from .eye_symmetry_people import append as append_eye_symmetry
             field, eye_symmetry_facts = append_eye_symmetry(field, state, entry['face_ref'], analysis, source, values[A.EYE_SYMMETRY.OP])
+            face_decoration_review = face_decoration_skin = face_decoration_excluded = None
+            if A.FACE_DECORATION.active(values[A.FACE_DECORATION.OP]):
+                from .skin_colour_support import check_analysis_fields
+                if check_analysis_fields(analysis,(h,w)) is None or analysis.get('face_skin') is None or analysis['excluded'] is None:
+                    raise ValueError('Face decoration needs authentic target-owned face-skin observations and exclusions')
+                face_decoration_skin = analysis['face_skin']
+                face_decoration_excluded = np.array(analysis['excluded'],dtype=np.float32,copy=True)
+                # All retained foreign faces, including unresolved/disabled ones,
+                # are protected; merged skin and human paint alone are not identity.
+                for other_key, other in state['faces'].items():
+                    if other_key == key or other['asset_sha256'] != asset_sha256: continue
+                    x0,y0,x1,y1 = other['box']
+                    left=max(0,int(np.floor(x0*w))); top=max(0,int(np.floor(y0*h)))
+                    right=min(w,int(np.ceil(x1*w))); bottom=min(h,int(np.ceil(y1*h)))
+                    face_decoration_excluded[top:bottom,left:right] = 1
+                face_decoration_excluded.setflags(write=False)
+                from .face_decoration_support import raster as decoration_raster
+                face_decoration_review = decoration_raster(state,face_decoration_assets or {},entry['face_ref'],(h,w))
             blush_review=lipstick_review=None
             from .lipstick_support import raster as lipstick_raster
             lipstick_review=lipstick_raster(state,lipstick_assets or {},entry['face_ref'],(h,w)) if A.LIPSTICK.active(values[A.LIPSTICK.OP]) else None
             from .blush_makeup_support import raster as blush_raster
             blush_review=blush_raster(state,blush_makeup_assets or {},entry['face_ref'],(h,w)) if A.BLUSH.active(values[A.BLUSH.OP]) else None
             local = E.prepare(entry['face_ref'], lm, values, effect_source, excluded=analysis['excluded'], skin=analysis['skin'],
-                              backend=face['evidence']['backend'], semantic_sha=face['evidence']['semantic_model_sha256'],blush_review=blush_review,lipstick_review=lipstick_review,source_only=source_only)
+                              backend=face['evidence']['backend'], semantic_sha=face['evidence']['semantic_model_sha256'],blush_review=blush_review,lipstick_review=lipstick_review,face_decoration_review=face_decoration_review,face_decoration_skin=face_decoration_skin,
+                              face_decoration_excluded=face_decoration_excluded,source_only=source_only)
             if (A.SKIN_COLOUR.active(values[A.SKIN_COLOUR.OP])
                     or A.SKIN_FINISH.active(values[A.SKIN_FINISH.OP])
                     or A.SKIN_GLOSS.active(values[A.SKIN_GLOSS.OP])

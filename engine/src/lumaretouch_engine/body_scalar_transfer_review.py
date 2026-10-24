@@ -131,7 +131,7 @@ class BodyScalarReview:
                     and not state.get('_deform_overrides') and any(abs(float(v)) > 0 for v in amounts.values())):
                 raise ValueError(self.message('人物形变镜像仍会触发旧默认值迁移，尚不能冻结可靠上半身长短重放；未显示候选或修改照片'))
         fields = ('_brow_shape', '_nose_shape', '_eye_shape', '_mouth_shape', '_lip_makeup',
-                  '_eye_light_preset', '_blush_makeup_preset', '_lipstick_preset',
+                  '_eye_light_preset', '_face_decoration_preset', '_blush_makeup_preset', '_lipstick_preset',
                   '_eyeliner_preset', '_eyelash_preset', '_brow_makeup_preset', '_iris_makeup_preset')
         changed = any(fingerprint(before.get(key)) != fingerprint(candidate.get(key)) for key in fields)
         left = wrinkles.check((before.get('_enhance') or {}).get('amounts', {}))

@@ -52,6 +52,7 @@ export function PresetPanel({workflow:w}:{workflow:PresetWorkflowBinding}){
     {w.selected&&<div className="presetDetail"><strong>{w.selected.name}</strong><small>ID：{w.selected.id}</small>
       <p>仅作用于：{selectedOps.map(moduleLabel).join('、')}</p>{w.selected.note&&<p>{w.selected.note}</p>}
       {w.selected.xmp_import!==undefined&&(validXmpSummary(w.selected.xmp_import,selectedOps)?<XmpSummaryView value={w.selected.xmp_import}/>:<p role="alert">XMP 来源摘要不完整，禁止应用。</p>)}
+      {selectedOps.includes('lnx.face_decoration.v1')&&<p>脸部装饰仅应用图案与程度。目标须有自己的可见皮肤范围、真实分析与装饰专用归属审核；不复制供图的皮肤笔迹、审核或像素，不能用腮红审核代替。</p>}
       {xmpUnsupported&&<p role="alert">当前引擎未声明 XMP 逐图审核协议，该预设不能应用。</p>}
       {faceBlocked&&<p>{w.face.why||'部分模块应用时需要可用单脸'}</p>}
       {unavailableScope(selectedOps,modules).length>0&&<p>包含当前不可用模块，不能应用。</p>}
@@ -98,6 +99,7 @@ export function PresetPanel({workflow:w}:{workflow:PresetWorkflowBinding}){
       {chosen.includes(TORSO_TRANSFER_OP)&&<p role={chosen.length===1?'status':'alert'}>上身长度须单独保存与审核。{chosen.length>1?'请取消其他模块。':'不保存身体归属、关键点、支持范围或审核。'}</p>}
       {chosen.includes(WAIST_TRANSFER_OP)&&<p role={chosen.length===1?'status':'alert'}>腰长须单独保存与审核。{chosen.length>1?'请取消其他模块。':'仅保存版本与长度标量，不保存身体、腰部标记、本人面部归属、支持或审核。'}</p>}
       {chosen.includes(HEAD_TRANSFER_OP)&&<p role={chosen.length===1?'status':'alert'}>小头须单独保存与审核。{chosen.length>1?'请取消其他模块。':'仅保存版本与缩小标量，不保存身体、头部几何、本人面部归属、支持或审核。'}</p>}
+      {chosen.includes('lnx.face_decoration.v1')&&<p>保存脸部装饰只保留图案和程度；人物、来源参考、皮肤范围和归属确认不写入预设。</p>}
       {!chosen.length&&<p>请明确选择要保存的模块，不会自动保存全部调整。</p>}
       {!w.context.editable&&<p>保存和应用需要可编辑照片；导入、删除和浏览不需要打开照片。</p>}
       <button disabled={!w.context.enabled||!w.context.editable||w.busy||!w.form.name.trim()||nameLength>80||!chosen.length||!!unavailable.length||(chosen.some(op=>[TORSO_TRANSFER_OP,WAIST_TRANSFER_OP,HEAD_TRANSFER_OP].includes(op))&&chosen.length!==1)} onClick={()=>void w.save()}>保存为新预设</button>

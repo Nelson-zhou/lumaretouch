@@ -21,9 +21,10 @@ def _assets_require_analysis(face, resolved):
     assets = face['local_assets']
     if not assets: return False
     from . import body_skin_evenness_state as EVENNESS, body_face_match_state as MATCH, collarbone_state as COLLARBONE
-    from . import eye_bag_preserve_state as EYE_BAGS
+    from . import eye_bag_preserve_state as EYE_BAGS, face_decoration_state as DECORATION
     families = {'body_skin_evenness_visibility': EVENNESS, 'body_face_match_visibility': MATCH,
-                'collarbone_visibility': COLLARBONE, 'eye_bag_ridge_visibility': EYE_BAGS}
+                'collarbone_visibility': COLLARBONE, 'eye_bag_ridge_visibility': EYE_BAGS,
+                'face_decoration_visibility': DECORATION, 'face_decoration': DECORATION}
     if set(assets) - set(families): return True
     from .people_resolver import materialize
     for kind, asset in assets.items():
@@ -35,6 +36,13 @@ def _assets_require_analysis(face, resolved):
             return True
         if state.active(recipe): return True
     return False
+
+
+def _decoration_dormant(resolved):
+    from . import face_decoration_state as D
+    from .people_resolver import materialize
+    try: return not D.active(materialize(resolved,D.OP,D.neutral(),D.check))
+    except (ValueError,TypeError,KeyError): return False
 
 
 def build(state, asset_sha256, defaults, *, max_faces, per_face_cost, total_budget,
@@ -60,7 +68,8 @@ def build(state, asset_sha256, defaults, *, max_faces, per_face_cost, total_budg
             # unknown/malformed leaves, other operations and owned assets keep
             # their existing evidence requirements. Canonical recipe validation
             # still runs even for an otherwise neutral render entry.
-            if not ((operation in ('lnx.slim_face.v2', 'lnx.brow_enhance.v1') and path == '/linked'
+            if not ((operation == 'lnx.face_decoration.v1' and _decoration_dormant(resolved))
+                    or (operation in ('lnx.slim_face.v2', 'lnx.brow_enhance.v1') and path == '/linked'
                      and type(record['value']) is bool)
                     # A valid reference-side policy alone does not move pixels.
                     # Nonzero strengths and every malformed/unknown leaf still

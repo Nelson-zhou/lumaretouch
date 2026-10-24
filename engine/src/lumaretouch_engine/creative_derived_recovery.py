@@ -196,6 +196,10 @@ def validate_supports(state,assets,source):
         if face['asset_sha256']!=source['sha256']:continue
         for kind in face['local_assets']:
             if kind not in TARGETS:continue
+            if kind == 'face_decoration':
+                from . import face_decoration_state as D, people_algorithms as ALG, people_resolver as R
+                resolved=R.resolve(state,face['face_instance_id'],ALG.defaults())
+                if not D.active(R.materialize(resolved,D.OP,D.neutral(),D.check)): continue
             value=A.resolve(state,assets,S.face_ref(face),kind)
             if value is None or value['source']!=source:
                 raise ValueError('Recovery vectors belong to another effective source')
@@ -209,6 +213,9 @@ def validate_fields(state,source,fields,shape):
     for key,face in state['faces'].items():
         if face['asset_sha256']!=source['sha256'] or not face['enabled']:continue
         for kind,descriptor in face['local_assets'].items():
+            if kind == 'face_decoration':
+                from . import face_decoration_state as D, people_algorithms as A, people_resolver as R
+                if not D.active(A.recipes(R.resolve(state,key,A.defaults()))[D.OP]): continue
             if kind in TARGETS:
                 ref=S.face_ref(face)
                 if descriptor.get('owner')!=ref or descriptor.get('kind')!=kind:

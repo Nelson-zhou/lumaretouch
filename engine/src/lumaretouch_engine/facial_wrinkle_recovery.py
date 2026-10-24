@@ -9,7 +9,7 @@ import re
 from .facial_wrinkle_runtime import landmarks_identity
 from . import local_mask_state as M
 TARGET = 'facial_wrinkles'
-FACE_TARGETS = frozenset(('facial_wrinkles', 'lip_makeup', 'eye_light', 'blush_makeup','lipstick','eyeliner','eyelash','brow_makeup','iris_makeup','eye_bag_preserve'))
+FACE_TARGETS = frozenset(('facial_wrinkles', 'lip_makeup', 'eye_light', 'blush_makeup','face_decoration','lipstick','eyeliner','eyelash','brow_makeup','iris_makeup','eye_bag_preserve'))
 
 
 def check_owner(value):

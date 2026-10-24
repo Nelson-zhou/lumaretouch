@@ -57,6 +57,7 @@ class PeopleHostMixin:
         self._collarbone_reference=None;self._collarbone_preview=None
         self._body_face_match_reference=None;self._body_face_match_preview=None
         self._eye_bag_reference=None
+        self._face_decoration_reference=None
         initialize=not any(f['asset_sha256']==asset for f in state['faces'].values()) and asset not in state['analysis_runs']
         candidate,analyses,refusals=B.bind(state,asset,pc,source_dimensions=(source['width'],source['height']),initialize=initialize)
         analyses=RA.restore_missing(candidate,self._people_landmarks,asset,pc,analyses)
@@ -181,6 +182,8 @@ class PeopleHostMixin:
             result['lipstick']=lipstick_report(self,state,source,self._people_cursors.get(asset))
             from .blush_makeup_host import report as blush_report
             result['blush_makeup']=blush_report(self,state,source,self._people_cursors.get(asset))
+            from .face_decoration_host import report as decoration_report
+            result['face_decoration']=decoration_report(self,state,source,self._people_cursors.get(asset))
             result.update(binding=self._people_binding(),editing_target=deepcopy(target),editing_overrides=overrides,legacy_unresolved=legacy_report(state,asset))
             return result
         except (ValueError,OSError):return None
@@ -316,6 +319,8 @@ class PeopleHostMixin:
         from .cpu_memory_budget import available_estimate
         from .people_candidate_render import validate
         before=self._people_owner().snapshot();source=self._people_source();current=source['sha256']
+        from .face_decoration_project import require_transition as require_decoration_transition
+        require_decoration_transition(self,before,candidate)
         def signature(state,asset):
             return [(k,f['enabled'],f['local_assets'],resolve(state,k,A.defaults())['operations'],resolve(state,k,A.defaults())['conflicts'])
                     for k,f in sorted(state['faces'].items()) if f['asset_sha256']==asset]

@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
+import {echoMatches as decorationEchoMatches, referenceReceiptValid as decorationReferenceReceiptValid, reviewReceiptValid as decorationReviewReceiptValid, releasedReferenceReceiptValid as decorationReleasedReferenceValid} from '../faceDecoration/model';
 import {bindingKey, type ParameterPatch, type PeopleAction, type PeopleMailbox, type PeopleView} from './model';
 import {faceStyleAck, faceStyleEchoMatches, faceStyleReceiptCurrent, object, sameFaceStyleAck,
   validFaceStyleConfirmation, validFaceStyleRecipe, validFaceStyleReview,
@@ -10,7 +11,7 @@ import {validDraft, type EyeBagDraft} from '../eyeBagPreserve/draft';
 import {eyeBagBinding} from '../eyeBagPreserve/model';
 import {canonical as eyeBagCanonical} from '../eyeBagPreserve/support';
 
-type View = {eyeBagCancel: 'none' | 'requested' | 'stopped' | 'completed' | 'released'; pending: boolean; pendingAction: PeopleAction['action'] | null; uncertain: boolean; message: string;
+type View = {faceDecorationReleasedRequestId: string | null; eyeBagCancel: 'none' | 'requested' | 'stopped' | 'completed' | 'released'; pending: boolean; pendingAction: PeopleAction['action'] | null; uncertain: boolean; message: string;
   lastEyeBagResult: EyeBagReceipt | null; lastEyeBagAliasCommit: EyeBagAliasCommit | null; lastBodyResult: SkinBodyResult | null; lastFaceStyleResult: FaceStyleReceipt | null; lastAliasCommit: FaceStyleAliasCommit | null};
 type Ports = {
   send: (command: PeopleAction) => Promise<unknown>;
@@ -34,7 +35,7 @@ export function createPeopleWorkflow(ports: Ports) {
   const eyeRead = (command: PeopleAction) => isEyeBagAction(command.action) && command.action !== 'eye_bag_confirm';
   let queued: {key: string; patches: Map<string, ParameterPatch>} | null = null;
   let waitFor: {key: string; revision: number; documentRevision: number} | null = null;
-  let view: View = {eyeBagCancel: 'none', pending: false, pendingAction: null, uncertain: false, message: '', lastEyeBagResult: null, lastEyeBagAliasCommit: null, lastBodyResult: null, lastFaceStyleResult: null, lastAliasCommit: null};
+  let view: View = {faceDecorationReleasedRequestId: null, eyeBagCancel: 'none', pending: false, pendingAction: null, uncertain: false, message: '', lastEyeBagResult: null, lastEyeBagAliasCommit: null, lastBodyResult: null, lastFaceStyleResult: null, lastAliasCommit: null};
   const listeners = new Set<() => void>();
   const publish = (patch: Partial<View>) => {view = {...view, ...patch}; listeners.forEach(listener => listener());};
   const targetKey = (value: PeopleView) => `${bindingKey(value.binding)}:${value.association_revision}:${JSON.stringify(value.editing_target)}`;
@@ -66,6 +67,16 @@ export function createPeopleWorkflow(ports: Ports) {
             || result.document_id !== command.document_id || result.outcome_unknown) {
             throw Error(result?.error ?? '人物修改结果未确认；未自动重发。');
           }
+          const decoration = command.action === 'face_decoration_reference' || command.action === 'face_decoration_review';
+          if (decoration && (!decorationEchoMatches(command, result) || result.batch_id != null))
+            throw Error('脸部装饰回执与原请求不匹配，请查询原请求，不要重发。');
+          const decorationReleased = decorationReleasedReferenceValid(command, result);
+          if (decoration && result.payload_released !== undefined && result.payload_released !== false && !decorationReleased)
+            throw Error('只有已确认结束的脸部装饰只读参考可释放图像；原请求仍需查询。');
+          if (command.action === 'face_decoration_reference' && result.success && !decorationReleased && !decorationReferenceReceiptValid(command, result))
+            throw Error('脸部装饰参考图缺少匹配的来源、人物或图像证明，请查询原请求。');
+          if (command.action === 'face_decoration_review' && result.success && !decorationReviewReceiptValid(command, result))
+            throw Error('脸部装饰审核缺少匹配的来源证明或已提交范围，请查询原请求。');
           const faceStyle = command.action.startsWith('face_style_');
           const eyeBag = isEyeBagAction(command.action);
           if (eyeBag && !eyeBagEchoMatches(command, result)) throw Error('卧蚕保护回执与原请求不匹配，请查询原请求，未重发。');
@@ -121,7 +132,7 @@ export function createPeopleWorkflow(ports: Ports) {
               throw Error('未请求的共享来源确认回执，只能查询原请求。');
           }
           const faceStyleRead = faceStyle && command.action !== 'face_style_confirm' || eyeBag && command.action !== 'eye_bag_confirm';
-          if (result.success && faceStyleRead) {
+          if (result.success && (faceStyleRead || decorationReleased)) {
             // Read-only face-style receipts must not manufacture or publish a document mutation.
             // A stale response is harmless and discarded below, never applied to the current face.
             if (eyeBag && (result.doc_state !== undefined || result.batch_id != null)) throw Error('卧蚕只读审核不能发布修改后的文档状态或批次。');
@@ -140,7 +151,7 @@ export function createPeopleWorkflow(ports: Ports) {
           } else {queued = null; waitFor = null;}
           // Receipt proves the operation; only the next engine status replaces UI facts.
           let refreshError = '';
-          try {await bounded(ports.refresh(), 10000);} catch {refreshError = '修改结果已确认，但照片状态刷新失败。请刷新查看，勿重复提交。';}
+          try {await bounded(ports.refresh(), 10000);} catch {refreshError = decorationReleased ? '原只读参考请求已结束，但照片状态刷新失败。请刷新后重新读取原图。' : '修改结果已确认，但照片状态刷新失败。请刷新查看，勿重复提交。';}
           if (pending !== command) return;
           discardedRead = discardedRead || eyeRead(command) && cancelIntent === command;
           if (discardedRead) eyeBagReview = null;
@@ -153,14 +164,14 @@ export function createPeopleWorkflow(ports: Ports) {
           if (aliasCommit) aliasReview = null;
           const bodyFamily = skinBodyActionFamily(command.action);
           const bodyPayloadInvalid = !!bodyFamily && !result.payload_released && !skinBodyFamilyMatches(result.payload, bodyFamily);
-          publish({eyeBagCancel: discardedRead ? (cancelled ? 'stopped' : 'completed') : 'none', pending: !!queued, pendingAction: queued ? 'patch' : null, uncertain: false,
+          publish({faceDecorationReleasedRequestId: decorationReleased ? command.request_id : null, eyeBagCancel: discardedRead ? (cancelled ? 'stopped' : 'completed') : 'none', pending: !!queued, pendingAction: queued ? 'patch' : null, uncertain: false,
             lastEyeBagResult: !discardedRead && eyeBagReceiptCurrent(command, result, current) ? {command, result} : null,
             lastFaceStyleResult: faceStyleReceiptCurrent(command, result, current) ? {command, result} : null,
             ...(aliasCommit ? {lastAliasCommit: aliasCommit} : {}),
             ...(eyeBagAliasCommit ? {lastEyeBagAliasCommit: eyeBagAliasCommit} : {}),
             lastBodyResult: skinBodyReceiptCurrent(command, result, current)
               ? {command, result} : null,
-            message: discardedRead ? (cancelled ? '引擎已确认只读审核停止；草稿保留，未应用任何候选。' : '原只读请求已结束；迟到结果已丢弃，不表示解码曾被中断。草稿保留。') : !result.success ? (result.error ?? '人物修改被拒绝，未重试。')
+            message: decorationReleased ? refreshError || (owns(command) ? '原只读参考图缓存已释放，请重新读取当前人物原图；未提交装饰修改。' : '原照片的只读参考请求已结束，过期图像已释放；未套用到当前照片。') : discardedRead ? (cancelled ? '引擎已确认只读审核停止；草稿保留，未应用任何候选。' : '原只读请求已结束；迟到结果已丢弃，不表示解码曾被中断。草稿保留。') : !result.success ? (result.error ?? '人物修改被拒绝，未重试。')
               : bodyPayloadInvalid ? '请求结果已收到，但身体皮肤审核回执的功能身份不匹配。请重新读取来源参考；已发送的修改不会重发。'
               : refreshError || (owns(command) ? (command.action === 'eye_bag_confirm' ? eyeBagAliasCommit ? '引擎已确认全部共享来源成员；通过受保护批次历史撤销或重做。' : '引擎已确认应用卧蚕保护候选；通过现有照片历史撤销或重做。' : '') : '原照片请求已确认，未将编辑范围或参数套用到当前照片。')});
           if (!result.success && !discardedRead) throw new ConfirmedFailure(result.error ?? '人物修改被拒绝。');
@@ -212,7 +223,7 @@ export function createPeopleWorkflow(ports: Ports) {
     if (command.action === 'face_style_preview') aliasReview = null;
     pending = command;
     cancelIntent = null;
-    publish({eyeBagCancel: 'none', pending: true, pendingAction: command.action, uncertain: false, lastEyeBagResult: null, lastBodyResult: null, lastFaceStyleResult: null, message: '正在提交人物修改，等待引擎确认。'});
+    publish({faceDecorationReleasedRequestId: null, eyeBagCancel: 'none', pending: true, pendingAction: command.action, uncertain: false, lastEyeBagResult: null, lastBodyResult: null, lastFaceStyleResult: null, message: '正在提交人物修改，等待引擎确认。'});
     try {await bounded(ports.send(command), 10000);}
     catch (error) {if (pending === command) publish({uncertain: true, message: `${String(error)}。正在查询原请求，不重发修改。`});}
     if (pending === command) await check();

@@ -112,7 +112,10 @@ def raster(state,assets,asset_sha256,shape):
     for face in state['faces'].values():
         if face['asset_sha256']!=asset_sha256 or not face['enabled']:continue
         for target,descriptor in face['local_assets'].items():
-            if target in ('skin_colour_body_visibility','skin_finish_body_visibility','body_skin_evenness_visibility','body_face_match_visibility','collarbone_visibility','hair_colour','eye_light_visibility','blush_makeup_visibility','lipstick_visibility','eyeliner_visibility','eyelash_visibility','brow_makeup_visibility','iris_makeup_visibility','eye_bag_ridge_visibility'):continue # Dedicated support consumers, never facial recovery.
+            if target in ('skin_colour_body_visibility','skin_finish_body_visibility','body_skin_evenness_visibility','body_face_match_visibility','collarbone_visibility','hair_colour','eye_light_visibility','blush_makeup_visibility','face_decoration_visibility','lipstick_visibility','eyeliner_visibility','eyelash_visibility','brow_makeup_visibility','iris_makeup_visibility','eye_bag_ridge_visibility'):continue # Dedicated support consumers, never facial recovery.
+            if target == 'face_decoration':
+                from . import face_decoration_state as D, people_algorithms as A, people_resolver as RESOLVER
+                if not D.active(A.recipes(RESOLVER.resolve(state,face['face_instance_id'],A.defaults()))[D.OP]): continue
             checked=resolve(state,assets,S.face_ref(face),target);row=checked['targets'][0]
             work+=M.validate_budget(row['recipe'],shape)['work'] if row['enabled'] else 0
             rows.append((face,row,descriptor['content_sha256']))
@@ -178,6 +181,10 @@ def check_store(assets):
             continue
         if record.get('row',{}).get('target')=='lipstick_visibility':
             from .lipstick_support import check_record
+            check_record(record)
+            continue
+        if record.get('row',{}).get('target')=='face_decoration_visibility':
+            from .face_decoration_support import check_record
             check_record(record)
             continue
         if record.get('row',{}).get('target')=='blush_makeup_visibility':

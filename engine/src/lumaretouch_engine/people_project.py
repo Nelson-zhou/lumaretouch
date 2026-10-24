@@ -23,6 +23,8 @@ def validate_records(value):
         for key in ('people_graph','_people_state'):
             if key in value:
                 if value[key] is None: raise ValueError('Saved people state cannot be null')
+                from .face_decoration_state import validate_graph as validate_decoration_graph
+                validate_decoration_graph(value[key])
                 from .blush_makeup_state import validate_graph
                 validate_graph(value[key])
                 from .lipstick_state import validate_graph as validate_lipstick_graph
@@ -56,6 +58,8 @@ def validate_records(value):
             validate_eye_bag_support(value)
             from .eye_light_support import validate_project
             validate_project(value)
+            from .face_decoration_support import validate_project as validate_decoration_support
+            validate_decoration_support(value)
             from .blush_makeup_support import validate_project as validate_blush_support
             validate_blush_support(value)
             from .lipstick_support import validate_project as validate_lipstick_support

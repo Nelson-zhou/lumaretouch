@@ -5,9 +5,9 @@ Each admitted family still uses its existing state and support validators and
 Rust-backed consumer. No inferred visibility or cross-face support inheritance.
 """
 OPERATIONS = frozenset('lnx.' + name + '.v1' for name in (
-    'eye_light','lipstick','blush_makeup','eyeliner','eyelash','brow_makeup','iris_makeup'))
+    'eye_light','lipstick','blush_makeup','face_decoration','eyeliner','eyelash','brow_makeup','iris_makeup'))
 SUPPORT_KINDS = frozenset(name + '_visibility' for name in (
-    'eye_light','lipstick','blush_makeup','eyeliner','eyelash','brow_makeup','iris_makeup'))
+    'eye_light','lipstick','blush_makeup','face_decoration','eyeliner','eyelash','brow_makeup','iris_makeup'))
 REVIEWS = {
     'eye_light':('eyes',frozenset(('left','right')),False),
     'lipstick':('regions',frozenset(('upper','lower')),True),
@@ -18,10 +18,14 @@ REVIEWS = {
     'iris':('eyes',frozenset(('left','right')),True),
 }
 PALETTES = frozenset(('lipstick','blush','eyeliner','eyelash','brow_makeup'))
-ACTIONS = frozenset(prefix + suffix for prefix in REVIEWS for suffix in ('_reference','_review')) | frozenset(prefix+'_palette' for prefix in PALETTES)
+ACTIONS = frozenset(('face_decoration_reference','face_decoration_review')) | frozenset(prefix + suffix for prefix in REVIEWS for suffix in ('_reference','_review')) | frozenset(prefix+'_palette' for prefix in PALETTES)
 
 
 def check_action(action,payload,target):
+    if action in ('face_decoration_reference','face_decoration_review'):
+        from .face_decoration_host import check_action as decoration_action
+        decoration_action(action,payload,target)
+        return
     if action not in ACTIONS or target['scope'] != 'face' or type(payload) is not dict:
         raise ValueError('Reviewed makeup requires an exact local face and known action')
     prefix,kind = action.rsplit('_',1)
@@ -56,20 +60,24 @@ def check_leaf(operation,path,value,neutral,validator):
 
 def validate_supports(state,assets,asset_sha256,*,only_kind=None):
     from .creative_derived_recovery import TARGETS
-    from . import eye_light_support,lipstick_support,blush_makeup_support
+    from . import eye_light_support,lipstick_support,blush_makeup_support,face_decoration_support
     from . import eyeliner_support,eyelash_support,brow_makeup_support,iris_makeup_support
     from .people_state import face_ref
     modules = {module.KIND:module for module in (eye_light_support,lipstick_support,
-        blush_makeup_support,eyeliner_support,eyelash_support,brow_makeup_support,iris_makeup_support)}
+        blush_makeup_support,face_decoration_support,eyeliner_support,eyelash_support,brow_makeup_support,iris_makeup_support)}
     for face in state['faces'].values():
         if face['asset_sha256'] != asset_sha256: continue
         for kind in face['local_assets']:
             if kind in ('hair_colour','skin_colour_body_visibility','skin_finish_body_visibility','body_skin_evenness_visibility','body_face_match_visibility','collarbone_visibility','eye_bag_ridge_visibility') or kind in TARGETS:continue # Independent support owners.
             if kind not in modules: raise ValueError('Unadapted derived source support')
             if only_kind is not None and kind != only_kind: continue
+            if kind == 'face_decoration_visibility':
+                from . import face_decoration_state as D, people_algorithms as A, people_resolver as R
+                recipe = A.recipes(R.resolve(state,face['face_instance_id'],A.defaults()))[D.OP]
+                if not D.active(recipe): continue
             modules[kind].resolve(state,assets,face_ref(face))
 
 
 def input_banks(assets):
     return {name+'_assets':assets for name in (
-        'eye_light','lipstick','blush_makeup','eyeliner','eyelash','brow_makeup','iris_makeup')}
+        'eye_light','lipstick','blush_makeup','face_decoration','eyeliner','eyelash','brow_makeup','iris_makeup')}

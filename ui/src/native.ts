@@ -1044,6 +1044,9 @@ export interface EngineStatus {
     lip_makeup_protocol?: number;
     eye_light_protocol?: number;
     blush_makeup_protocol?: number;
+    face_decoration_protocol?: number;
+    face_decoration_available?: boolean;
+    face_decoration_reason?: string | null;
     lipstick_protocol?: number;
     eyeliner_protocol?: number;
     eyelash_protocol?: number;

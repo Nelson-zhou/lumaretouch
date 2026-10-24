@@ -8,8 +8,10 @@ use crate::receipt_host::{ReceiptHost, ReceiptKind};
 pub(crate) mod face_style;
 #[path = "eye_bag_preserve.rs"]
 pub(crate) mod eye_bag;
+#[path = "face_decoration_protocol.rs"]
+pub(crate) mod face_decoration;
 
-const PEOPLE_ACTIONS: &[&str] = &["eye_bag_source_image", "eye_bag_reference", "eye_bag_preview", "eye_bag_image", "eye_bag_confirm", "face_style_catalog", "face_style_preview", "face_style_image", "face_style_confirm", "patch", "link", "group", "face_status", "manual_add", "create_person", "select", "target", "analyse_face", "resolve_legacy", "eye_light_reference", "eye_light_review", "blush_palette", "blush_reference", "blush_review", "lipstick_palette", "lipstick_reference", "lipstick_review", "eyeliner_palette", "eyeliner_reference", "eyeliner_review", "iris_reference", "iris_review", "eyelash_palette", "eyelash_reference", "eyelash_review", "brow_makeup_palette", "brow_makeup_reference", "brow_makeup_review", "skin_body_reference", "skin_body_preview", "skin_body_confirm", "skin_body_detach", "skin_finish_body_reference", "skin_finish_body_preview", "skin_finish_body_confirm", "skin_finish_body_detach", "body_skin_evenness_reference", "body_skin_evenness_preview", "body_skin_evenness_confirm", "body_skin_evenness_detach", "body_face_match_reference", "body_face_match_preview", "body_face_match_confirm", "body_face_match_detach", "collarbone_reference", "collarbone_preview", "collarbone_confirm", "collarbone_detach"];
+const PEOPLE_ACTIONS: &[&str] = &["face_decoration_reference", "face_decoration_review", "eye_bag_source_image", "eye_bag_reference", "eye_bag_preview", "eye_bag_image", "eye_bag_confirm", "face_style_catalog", "face_style_preview", "face_style_image", "face_style_confirm", "patch", "link", "group", "face_status", "manual_add", "create_person", "select", "target", "analyse_face", "resolve_legacy", "eye_light_reference", "eye_light_review", "blush_palette", "blush_reference", "blush_review", "lipstick_palette", "lipstick_reference", "lipstick_review", "eyeliner_palette", "eyeliner_reference", "eyeliner_review", "iris_reference", "iris_review", "eyelash_palette", "eyelash_reference", "eyelash_review", "brow_makeup_palette", "brow_makeup_reference", "brow_makeup_review", "skin_body_reference", "skin_body_preview", "skin_body_confirm", "skin_body_detach", "skin_finish_body_reference", "skin_finish_body_preview", "skin_finish_body_confirm", "skin_finish_body_detach", "body_skin_evenness_reference", "body_skin_evenness_preview", "body_skin_evenness_confirm", "body_skin_evenness_detach", "body_face_match_reference", "body_face_match_preview", "body_face_match_confirm", "body_face_match_detach", "collarbone_reference", "collarbone_preview", "collarbone_confirm", "collarbone_detach"];
 fn text(value: &Value) -> bool { value.as_str().is_some_and(|s| !s.is_empty() && s.len() <= 128) }
 fn revision(value: &Value) -> bool { value.as_u64().is_some_and(|n| n <= 9_007_199_254_740_991) }
 fn digest(value: &Value) -> bool {
@@ -50,8 +52,9 @@ impl ReceiptKind for PeopleKind {
     fn valid(value: &Value, document: Option<&str>) -> bool {
         if value["protocol"] != 1 || value["document_id"].as_str() != document
             || !value["success"].is_boolean() || !value["outcome_unknown"].is_boolean() { return false; }
-        if !face_style::receipt(value) || !eye_bag::receipt(value) { return false; }
+        if !face_style::receipt(value) || !eye_bag::receipt(value) || !face_decoration::receipt(value) { return false; }
         if value["success"] != true { return value["error"].is_string(); }
+        if face_decoration::released_reference(value) { return true; }
         if (face_style::action(value) && value["action"] != "face_style_confirm") || (eye_bag::action(value) && value["action"] != "eye_bag_confirm") {
             return value["outcome_unknown"] == false && value.get("doc_state").is_none();
         }
@@ -115,7 +118,7 @@ pub(crate) fn receive(epoch: [u8; 16], value: &Value) -> bool {
     if let Ok(mut mailbox) = mailbox().lock() {
         let guarded = value["request_id"].as_str().is_some_and(|id| mailbox.host.guards_review(mailbox.epoch, id));
         mailbox.host.receive(epoch, value);
-        return (!face_style::action(value) && !eye_bag::action(value) && !guarded) || (mailbox.epoch == epoch
+        return (!face_style::action(value) && !eye_bag::action(value) && !face_decoration::action(value) && !guarded) || (mailbox.epoch == epoch
             && value["request_id"].as_str().is_some_and(|id|
                 mailbox.host.status(id)["result"] == *value && value["success"] == true));
     }
@@ -193,6 +196,7 @@ pub(crate) fn people(state: tauri::State<'_, std::sync::Arc<crate::AppState>>, r
     if !valid_context(&context) { return Err("人物命令缺少精确文档、分析和范围版本".into()); }
     face_style::command(&request)?;
     eye_bag::command(&request)?;
+    face_decoration::command(&request)?;
     let mut command = request.clone();
     command["cmd"] = json!("people");
     let epoch = {
@@ -204,10 +208,19 @@ pub(crate) fn people(state: tauri::State<'_, std::sync::Arc<crate::AppState>>, r
     if state.ready_caps.lock().map_err(|_| "能力锁失败")?["people_protocol"] != 1 {
         return Err("引擎未提供确认式人物协议".into());
     }
+    if face_decoration::action(&command) && state.ready_caps.lock().map_err(|_| "能力锁失败")?["face_decoration_protocol"] != 1 {
+        return Err("引擎未提供绑定原图与关键点的面饰审核协议".into());
+    }
     {
         let mut mailbox = mailbox().lock().map_err(|_| "人物结果锁失败")?;
         if mailbox.epoch != epoch { mailbox.epoch = epoch; mailbox.host.reset(epoch); mailbox.host.ready(epoch, true); }
-        if face_style::action(&command) || eye_bag::action(&command) { mailbox.host.begin_command(epoch, &command)?; }
+        if command["action"] == "face_decoration_review" {
+            let reference_id = command["payload"]["reference_proof"]["reference_request_id"].as_str().unwrap();
+            if !face_decoration::reference_matches(&command, &mailbox.host.status(reference_id)) {
+                return Err("面饰原图审核凭据已过期或未完成，请重新读取当前人物原图".into());
+            }
+        }
+        if face_style::action(&command) || eye_bag::action(&command) || face_decoration::action(&command) { mailbox.host.begin_command(epoch, &command)?; }
         else { mailbox.host.begin_bound(epoch, id, request["action"].as_str().unwrap(), request["document_id"].as_str())?; }
     }
     command["host_epoch"] = json!(crate::frame_identity::hex(epoch));

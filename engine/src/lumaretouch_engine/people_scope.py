@@ -54,6 +54,7 @@ def plan_preset(engine,state,*,require_active=True,reviewed_collarbone=False,rev
     from . import chin_length_scope as CHIN_LENGTH
     from . import philtrum_scope as PHILTRUM
     from . import eye_symmetry_scope as EYE_SYMMETRY
+    from . import face_decoration_scope as FACE_DECORATION
     from . import brow_enhance_scope as BROW_ENHANCE
     from . import lip_texture_scope as LIP_TEXTURE
     from . import eye_bag_preserve_scope as EYE_BAG_PRESERVE
@@ -62,6 +63,9 @@ def plan_preset(engine,state,*,require_active=True,reviewed_collarbone=False,rev
     amounts=ENHANCE.amounts_of(state)
     if TEETH.active(amounts) or RED_EYE.active(amounts):kwargs['strict_local']=True
     if SCLERA_PURIFY.active(amounts):kwargs['strict_local']=True
+    decoration_recipe=FACE_DECORATION.S.check(state.get(FACE_DECORATION.FIELD))
+    decoration_requested=state.get(FACE_DECORATION.REQUESTED) is True
+    if FACE_DECORATION.S.active(decoration_recipe):kwargs['strict_local']=True
     skin_recipe=SKIN_COLOUR.S.check(state.get(SKIN_COLOUR.FIELD))
     skin_requested=state.get(SKIN_COLOUR.REQUESTED) is True
     if SKIN_COLOUR.S.active(skin_recipe):kwargs['strict_local']=True
@@ -123,6 +127,8 @@ def plan_preset(engine,state,*,require_active=True,reviewed_collarbone=False,rev
     eye_bag_requested=state.get(EYE_BAG_PRESERVE.REQUESTED) is True
     if EYE_BAG_PRESERVE.S.active(eye_bag_recipe):kwargs['strict_local']=True
     if not managed:
+        if decoration_requested or decoration_recipe!=FACE_DECORATION.S.neutral():
+            raise ValueError('面部装饰预设需要当前明确规范人物，不能静默丢弃或转换为腮红')
         if skin_requested or SKIN_COLOUR.S.active(skin_recipe):
             raise ValueError('面部肤色预设需要当前明确的规范人物，不能静默丢弃为旧版全图配方')
         if finish_requested or SKIN_FINISH.S.active(finish_recipe):
@@ -180,6 +186,7 @@ def plan_preset(engine,state,*,require_active=True,reviewed_collarbone=False,rev
     from .iris_makeup_scope import capture as iris_capture, OP as IRIS
     current=eyelash_capture(engine,brow_makeup_capture(engine,eyeliner_capture(engine,lipstick_capture(engine,blush_capture(engine,preset_capture(engine))))));candidate=S.check(before);patches=[]
     current=iris_capture(engine,current)
+    current=FACE_DECORATION.capture(engine,current)
     current=SKIN_COLOUR.capture(engine,current)
     current=SKIN_FINISH.capture(engine,current)
     current=SKIN_GLOSS.capture(engine,current)
@@ -399,10 +406,18 @@ def plan_preset(engine,state,*,require_active=True,reviewed_collarbone=False,rev
         if (state.get(EYE_BAG_PRESERVE.TARGET)!=current[EYE_BAG_PRESERVE.TARGET]
                 or EYE_BAG_PRESERVE.owner_identity(state)!=EYE_BAG_PRESERVE.owner_identity(current)):
             raise ValueError('眼袋保留预设的文档、人物归属或有效来源已变化，请重新选择')
+    decoration_involved=(FACE_DECORATION.FIELD in state and
+        (decoration_requested or decoration_recipe!=current[FACE_DECORATION.FIELD]))
+    if decoration_involved:
+        FACE_DECORATION.install(dict(current),{'recipe':decoration_recipe})
+        if (state.get(FACE_DECORATION.TARGET)!=current[FACE_DECORATION.TARGET]
+                or FACE_DECORATION.owner_identity(state)!=FACE_DECORATION.owner_identity(current)):
+            raise ValueError('面部装饰预设的文档、有效来源或人物归属已改变')
     fields=dict(zip(A.GEOMETRY,('_brow_shape','_nose_shape','_eye_shape','_mouth_shape')))
     fields[A.LIP]='_lip_makeup'
     # Ephemeral preset transport is consumed here; never a parallel render owner.
     if '_eye_light_preset' in state:fields[EYE_LIGHT]='_eye_light_preset'
+    if FACE_DECORATION.FIELD in state:fields[FACE_DECORATION.OP]=FACE_DECORATION.FIELD
     if '_blush_makeup_preset' in state:fields[BLUSH]='_blush_makeup_preset'
     if '_lipstick_preset' in state:fields[LIPSTICK]='_lipstick_preset'
     if '_eyeliner_preset' in state:fields[EYELINER]='_eyeliner_preset'
@@ -450,6 +465,8 @@ def plan_preset(engine,state,*,require_active=True,reviewed_collarbone=False,rev
                         target_ref=S.face_ref(faces[0]) if len(faces)==1 else None)
     if len(faces)!=1:raise ValueError('A legacy portrait preset requires one explicit unambiguous enabled face; use people parameter review for multiple faces')
     key=faces[0]['face_instance_id']
+    if decoration_involved and current[FACE_DECORATION.TARGET]!=S.face_ref(faces[0]):
+        raise ValueError('面部装饰预设的当前人物与唯一应用目标不一致')
     if skin_involved and current[SKIN_COLOUR.TARGET]!=S.face_ref(faces[0]):
         raise ValueError('面部肤色预设的当前人物与唯一可应用目标不一致')
     if finish_involved and current[SKIN_FINISH.TARGET]!=S.face_ref(faces[0]):
@@ -491,6 +508,9 @@ def plan_preset(engine,state,*,require_active=True,reviewed_collarbone=False,rev
     if eye_bag_involved and current[EYE_BAG_PRESERVE.TARGET]!=S.face_ref(faces[0]):
         raise ValueError('眼袋保留预设的当前人物与唯一可应用目标不一致')
     for op,path,value in patches:candidate=S.set_override(candidate,'face',key,op,path,value)
+    if decoration_involved:
+        from .face_decoration_project import require_transition
+        require_transition(engine,before,candidate)
     if eye_bag_involved:
         from .eye_bag_preset_plan import check_graph
         check_graph(candidate, current[EYE_BAG_PRESERVE.TARGET], eye_bag_recipe)
@@ -520,7 +540,7 @@ def plan_preset(engine,state,*,require_active=True,reviewed_collarbone=False,rev
         SLIM_FACE.S.check_coexistence(values[SLIM_FACE.OP],values[A.DEFORM]['slim_face'],values[FACE_CONTOUR.OP])
     # Shared by preview and application: strict rendering requirements cannot
     # depend on whether graph publication has already happened.
-    if any(op in (A.ENHANCE,EYE_LIGHT,BLUSH,LIPSTICK,EYELINER,EYELASH,BROW_MAKEUP,IRIS,SKIN_COLOUR.OP,SKIN_FINISH.OP,SKIN_GLOSS.OP,SKIN_TEXTURE.OP,SKIN_EVENNESS.OP,BODY_SKIN_EVENNESS.OP,COLLARBONE.OP,BODY_FACE_MATCH.OP,FACE_CONTOUR.OP,SLIM_FACE.OP,FACE_SIZE.OP,LOWER_FACE.OP,MID_FACE.OP,CHIN_SHAPE.OP,CHIN_LENGTH.OP,PHILTRUM.OP,EYE_SYMMETRY.OP,BROW_ENHANCE.OP,LIP_TEXTURE.OP,EYE_BAG_PRESERVE.OP) for op,_,_ in patches):kwargs['strict_local']=True
+    if any(op in (A.ENHANCE,EYE_LIGHT,FACE_DECORATION.OP,BLUSH,LIPSTICK,EYELINER,EYELASH,BROW_MAKEUP,IRIS,SKIN_COLOUR.OP,SKIN_FINISH.OP,SKIN_GLOSS.OP,SKIN_TEXTURE.OP,SKIN_EVENNESS.OP,BODY_SKIN_EVENNESS.OP,COLLARBONE.OP,BODY_FACE_MATCH.OP,FACE_CONTOUR.OP,SLIM_FACE.OP,FACE_SIZE.OP,LOWER_FACE.OP,MID_FACE.OP,CHIN_SHAPE.OP,CHIN_LENGTH.OP,PHILTRUM.OP,EYE_SYMMETRY.OP,BROW_ENHANCE.OP,LIP_TEXTURE.OP,EYE_BAG_PRESERVE.OP) for op,_,_ in patches):kwargs['strict_local']=True
     return snapshot(state,kwargs,owner=owner,owner_fence=owner_fence,before=before,candidate=candidate,
                     patches=patches,target_ref=S.face_ref(faces[0]))
 

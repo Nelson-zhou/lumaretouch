@@ -41,6 +41,7 @@ from . import optics_scope as OPTICS, optics_auto_scope as OPTICS_AUTO
 from . import reference_color_scope as REFERENCE
 from . import facial_wrinkle_scope as WRINKLES
 from . import enhance_scope as ENHANCE
+from . import face_decoration_scope as FACE_DECORATION
 from . import lip_makeup_scope as LIP, eye_light_scope as EYE_LIGHT, blush_makeup_scope as BLUSH, lipstick_scope as LIPSTICK, eyeliner_scope as EYELINER, eyelash_scope as EYELASH, brow_makeup_scope as BROW_MAKEUP, iris_makeup_scope as IRIS
 from . import skin_colour_scope as SKIN_COLOUR
 from . import skin_finish_scope as SKIN_FINISH
@@ -174,6 +175,10 @@ MODULES: dict[str, dict] = {
     OPTICS_AUTO.OP: {"params": ("request",), "state_fields": OPTICS_AUTO.FIELDS, "single_face": False,
                 "transferable": True, "cmd": "optics", "read": OPTICS_AUTO.params_of, "write": OPTICS_AUTO.install,
                 "why_not": "逐图重匹配配置与重新解算，含手动数值；必须冻结预检，不复制源图矩阵、配置或引导线"},
+    FACE_DECORATION.OP: {"params": ("recipe",), "state_fields": FACE_DECORATION.FIELDS, "single_face": True,
+               "transferable": True, "cmd": "people", "label": "面部装饰（五种雀斑、三种痣）",
+               "read": FACE_DECORATION.params_of, "write": FACE_DECORATION.install,
+               "why_not": "仅图案与程度；目标独立审核并重算真实面部皮肤，不复制人物、蒙版、像素或恢复笔迹"},
     BLUSH.OP: {"params": ("recipe",), "state_fields": BLUSH.FIELDS, "single_face": True,
                "transferable": True, "cmd": "people", "read": BLUSH.params_of, "write": BLUSH.install,
                "why_not": "仅腮红图案、程度和颜色；目标重算真实皮肤支持，不复制人物、蒙版、收藏或恢复笔迹"},
@@ -478,6 +483,9 @@ def check_params(op: str, params: dict) -> dict:
         except ValueError as error: raise ScopeError(str(error)) from error
     if op == MOUTH.OP:
         try: return MOUTH.check_params(params)
+        except ValueError as error: raise ScopeError(str(error)) from error
+    if op == FACE_DECORATION.OP:
+        try: return FACE_DECORATION.check_params(params)
         except ValueError as error: raise ScopeError(str(error)) from error
     if op == BLUSH.OP:
         try: return BLUSH.check_params(params)

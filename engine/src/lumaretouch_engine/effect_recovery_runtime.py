@@ -26,6 +26,7 @@ def availability(engine):
         'iris_makeup': {'active':False,'reason':'美瞳恢复需要当前人物已应用的美瞳图层'},
         'brow_makeup': {'active':False,'reason':'眉妆恢复需要当前人物的已应用眉妆图层'},
         'lipstick': {'active':False,'reason':'口红恢复需要当前人物的已应用口红图层'},
+        'face_decoration': {'active':False,'reason':'面部装饰恢复只移除当前人物已应用的雀斑或痣贡献'},
         'blush_makeup': {'active':False,'reason':'腮红恢复需要当前人物的已应用腮红图层'},
         'eye_light': {'active':False,'reason':'眼神光恢复需要当前人物的已应用素材图层'},
         'facial_wrinkles': FACE.availability(pipe),

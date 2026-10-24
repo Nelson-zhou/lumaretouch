@@ -13,6 +13,8 @@ FACE_STYLE_READS = frozenset(('face_style_catalog','face_style_preview','face_st
 FACE_STYLE_ACTIONS = FACE_STYLE_READS | {'face_style_confirm'}
 EYE_BAG_READS = frozenset(('eye_bag_source_image','eye_bag_reference','eye_bag_preview','eye_bag_image'))
 EYE_BAG_ACTIONS = EYE_BAG_READS | {'eye_bag_confirm'}
+DECORATION_READS = frozenset(('face_decoration_reference',))
+DECORATION_ACTIONS = DECORATION_READS | {'face_decoration_review'}
 
 
 def face_style_read_only(raw):
@@ -25,6 +27,10 @@ def eye_bag_read_only(raw):
     return _review_read_only(raw,EYE_BAG_READS)
 
 
+def face_decoration_read_only(raw):
+    return _review_read_only(raw,DECORATION_READS)
+
+
 def _review_read_only(raw,actions):
     if (type(raw) is not dict or raw.get('cmd') != 'people'
             or type(raw.get('action')) is not str or raw['action'] not in actions):
@@ -32,7 +38,9 @@ def _review_read_only(raw,actions):
     if set(raw) != {'cmd','document_id','document_epoch','document_revision','state_revision','association_revision','request_id','target','action','payload'}:
         return False
     try:
-        if raw['action'] in EYE_BAG_READS:
+        if raw['action'] in DECORATION_READS:
+            from .face_decoration_host import check_action
+        elif raw['action'] in EYE_BAG_READS:
             from .eye_bag_preserve_host import check_action
         else:
             from .face_style_review import check_action
@@ -49,7 +57,8 @@ def checked(engine,p):
     if why:raise ValueError(why)
     style_action=p.get('action') in FACE_STYLE_ACTIONS
     eye_bag_action=p.get('action') in EYE_BAG_ACTIONS
-    if style_action or eye_bag_action:
+    decoration_action=p.get('action') in DECORATION_ACTIONS
+    if style_action or eye_bag_action or decoration_action:
         from .people_preset_plan import require_active_owner
         owner=require_active_owner(engine)
     else:
@@ -59,8 +68,10 @@ def checked(engine,p):
     asset=binding['asset_sha256']
     if (target['scope']=='face' and target['face_ref']['asset_sha256']!=asset) or (target['scope']=='all_people' and target['target_id']!=asset):
         raise ValueError('People command targets another source asset')
-    if style_action or eye_bag_action:
-        if eye_bag_action:
+    if style_action or eye_bag_action or decoration_action:
+        if decoration_action:
+            from .face_decoration_host import check_action
+        elif eye_bag_action:
             from .eye_bag_preserve_host import check_action
         else:
             from .face_style_review import check_action
@@ -212,6 +223,10 @@ def apply(engine,raw,emit):
         from .blush_makeup_host import palette_action
         palette_action(engine,p)
         frame=None
+    elif action=='face_decoration_reference':
+        from .face_decoration_host import reference
+        records[request]['payload']=reference(engine,state,target,payload,request_id=request)
+        frame=None
     elif action=='blush_reference':
         from .blush_makeup_host import reference
         reference(engine,state,target,payload)
@@ -275,6 +290,9 @@ def apply(engine,raw,emit):
         elif action=='lipstick_review':
             from .lipstick_host import stage_review
             candidate=stage_review(engine,state,target,payload)
+        elif action=='face_decoration_review':
+            from .face_decoration_host import stage_review
+            candidate,records[request]['payload']=stage_review(engine,state,target,payload)
         elif action=='blush_review':
             from .blush_makeup_host import stage_review
             candidate=stage_review(engine,state,target,payload)
@@ -325,6 +343,8 @@ def finish(engine,p,error,emit):
     eye_bag_action=p.get('action') in EYE_BAG_ACTIONS
     review_read=style_read or p.get('action') in EYE_BAG_READS
     echo={'face_style_request':deepcopy({key:p.get(key) for key in ('action','document_id','document_epoch','document_revision','state_revision','association_revision','target','payload')})} if style_action else {}
+    if p.get('action') in ('face_decoration_reference','face_decoration_review'):
+        echo={'face_decoration_request':deepcopy({key:p.get(key) for key in ('action','document_id','document_epoch','document_revision','state_revision','association_revision','target','payload')})}
     if eye_bag_action:
         echo={'eye_bag_request':deepcopy({key:p.get(key) for key in ('action','document_id','document_epoch','document_revision','state_revision','association_revision','target','payload')})}
     digest=hashlib.sha256(json.dumps({k:v for k,v in p.items() if k!='cmd'},sort_keys=True,allow_nan=False).encode()).hexdigest()
@@ -338,7 +358,7 @@ def finish(engine,p,error,emit):
         controller(engine).retire(p['request_id'])
     # Publication can succeed before status emission or history recording fails.
     # Rollback also advances the graph fence; neither case is a proven refusal.
-    guarded_review=style_action or eye_bag_action
+    guarded_review=style_action or eye_bag_action or p.get('action') in DECORATION_ACTIONS
     owner=engine.__dict__.get('_people_graph_owner') if guarded_review else None
     fence_changed=(old.get('before_fence') is not None and
                    ((owner is None or owner.fence!=old['before_fence']) if guarded_review else engine._people_owner().fence!=old['before_fence']))
@@ -364,6 +384,8 @@ def finish(engine,p,error,emit):
             result.update(success=False,outcome_unknown=True,
                 error=f"{error or 'People result state unavailable'}; {type(state_error).__name__}: {state_error}")
     records[p['request_id']]={'result':result,'digest':digest}
+    from .face_decoration_host import bound_receipt_images
+    bound_receipt_images(records)
     from .skin_colour_body_host import bound_receipt_payloads
     bound_receipt_payloads(records)
     # Readback PNGs are session display pages, not durable outcome records.

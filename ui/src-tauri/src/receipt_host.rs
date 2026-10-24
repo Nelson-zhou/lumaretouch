@@ -188,6 +188,11 @@ impl ReviewBinding {
             if bytes > 192 * 1024 { return Err("eye bag source review identity exceeds receipt budget".into()); }
             return Ok(Some(Self { fields, bytes, read_only: crate::people_api::eye_bag::read_only(value), strict_failure_identity: true }));
         }
+        if let Some(fields) = crate::people_api::face_decoration::binding(value)? {
+            let bytes = fields.to_string().len();
+            if bytes > 256 * 1024 { return Err("face decoration source review identity exceeds receipt budget".into()); }
+            return Ok(Some(Self { fields, bytes, read_only: crate::people_api::face_decoration::read_only(value), strict_failure_identity: true }));
+        }
         if let Some(fields) = crate::people_api::face_style::binding(value)? {
             let bytes = fields.to_string().len();
             if bytes > 16 * 1024 { return Err("face style review identity exceeds receipt budget".into()); }
@@ -322,7 +327,7 @@ impl Receipt {
         self.result.as_ref().is_some_and(|result| self.review.is_none() || result["outcome_unknown"] != true
             // Only explicitly classified head/collarbone preflight or paged
             // image reads may expire; an unknown commit remains guarded.
-            || (matches!(self.action.as_str(), "preflight" | "collarbone_visual" | "eye_bag_visual" | "eye_bag_cohort_visual" | "face_style_visual" | "portrait_cohort_visual" | "face_style_catalog" | "face_style_preview" | "face_style_image" | "eye_bag_source_image" | "eye_bag_reference" | "eye_bag_preview" | "eye_bag_image") && self.review.as_ref().is_some_and(|review| review.read_only)))
+            || (matches!(self.action.as_str(), "preflight" | "collarbone_visual" | "eye_bag_visual" | "eye_bag_cohort_visual" | "face_style_visual" | "portrait_cohort_visual" | "face_style_catalog" | "face_style_preview" | "face_style_image" | "eye_bag_source_image" | "eye_bag_reference" | "eye_bag_preview" | "eye_bag_image" | "face_decoration_reference") && self.review.as_ref().is_some_and(|review| review.read_only)))
     }
 }
 pub(crate) struct ReceiptHost<K: ReceiptKind> {

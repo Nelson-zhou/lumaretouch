@@ -40,6 +40,7 @@ export function batchScopeOptions(modules: readonly {operation_id: string; trans
   if(supported.has('lnx.iris_makeup.v1'))out.push({label:'美瞳（图案与程度；目标须独立虹膜、实测瞳孔和高光审核）',ops:['lnx.iris_makeup.v1']});
   if(supported.has('lnx.eyelash.v1'))out.push({label:'睫毛（四部位参数；目标须独立根部及延伸区审核）',ops:['lnx.eyelash.v1']});
   if(supported.has('lnx.lipstick.v1'))out.push({label:'口红（仅参数；目标须独立可见唇部审核）',ops:['lnx.lipstick.v1']});
+  if(supported.has('lnx.face_decoration.v1'))out.push({label:'脸部装饰（5 雀斑 / 3 点痣与程度；目标独立审核，不复制笔迹或图像）',ops:['lnx.face_decoration.v1']});
   if(supported.has('lnx.blush_makeup.v1'))out.push({label:'腮红（仅参数；目标须独立人物审核）',ops:['lnx.blush_makeup.v1']});
   if(supported.has('lnx.lip_makeup.v1'))out.push({label:'唇妆增强（三控件，逐张须单脸）',ops:['lnx.lip_makeup.v1']});
   if(supported.has('lnx.facial_wrinkles.v1'))out.push({label:'面部祛纹八部位（逐张须单脸，仅参数）',ops:['lnx.facial_wrinkles.v1']});

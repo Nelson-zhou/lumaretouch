@@ -616,6 +616,7 @@ class PreviewPipeline:
             out=PEOPLE_PIPE.source_effect(self,'lip_texture',out)
             out=PEOPLE_PIPE.source_effect(self,'lip_makeup',out)
             out=PEOPLE_PIPE.source_effect(self,'blush_makeup',out)
+            out=PEOPLE_PIPE.source_effect(self,'face_decoration',out)
             out=PEOPLE_PIPE.source_effect(self,'lipstick',out)
             out=PEOPLE_PIPE.source_effect(self,'eyeliner',out)
             out=PEOPLE_PIPE.source_effect(self,'eyelash',out)

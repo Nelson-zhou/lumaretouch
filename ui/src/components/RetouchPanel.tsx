@@ -10,6 +10,7 @@ import {ConnectedColourGradingPanel} from "../colourGrading/ConnectedColourGradi
 import {ConnectedPhotoDetailPanel} from "../photoDetail/ConnectedPhotoDetailPanel";
 import {ConnectedExtendedTonePanel} from "../extendedTone/ConnectedExtendedTonePanel";
 import {ConnectedCustomLutPanel} from "../customLut/ConnectedCustomLutPanel";
+import {FaceDecorationPanel} from '../faceDecoration/FaceDecorationPanel';
 import {PeoplePanel} from '../people/PeoplePanel';
 import type {PeopleOwner} from '../people/usePeopleWorkflow';
 import {peopleContext, type ParameterPatch} from '../people/model';
@@ -334,6 +335,7 @@ const WIRED: Record<string, string> = {
   "PC-32471|局部妆容/口红/奶油": "lipstick.cream",
   "PC-32471|局部妆容/口红/珠光": "lipstick.pearl",
   "PC-32471|局部妆容/口红/水光": "lipstick.water_gloss",
+  "PC-32471|局部妆容/脸部装饰": "face_decoration.family",
   "PC-32471|局部妆容/腮红": "blush.family",
   "PC-32471|局部妆容/腮红/推荐颜色": "blush.recommended",
   "PC-32471|局部妆容/腮红/吸管": "blush.eyedropper",
@@ -723,6 +725,10 @@ export default function RetouchPanel(props: RetouchProps) {
     if (kind.startsWith("browMakeup.")) return null;
     if (kind === "lipstick.family") return <div key={leaf.path}>{props.lipstickPanel}</div>;
     if (kind.startsWith("lipstick.")) return null;
+    if (kind === "face_decoration.family") return <FaceDecorationPanel key={leaf.path} people={props.people}
+      capability={status?.ready_caps} faceOk={props.faceOk} faceWhy={props.faceWhy}
+      blocked={dim || props.hairBusy || !!props.whiteBalanceBusy || portraitRequestsBusy()
+        || !!status?.edit_queue?.in_flight || !!status?.edit_queue?.pending || !!status?.edit_queue?.closed}/>;
     if (kind === "blush.family") return <div key={leaf.path}>{props.blushMakeupPanel}</div>;
     if (kind.startsWith("blush.")) return null;
     if (kind === "lip.family") return <LipMakeupControls key={leaf.path} value={doc?.lip_makeup?.recipe??neutralLips()}

@@ -16,7 +16,7 @@ pub(crate) fn supported_target(value: &Value) -> bool {
     matches!(value.as_str(), Some(
         "skin_smoothing" | "fabric_fine" | "background_replace" | "id_background"
         | "facial_wrinkles" | "lip_makeup" | "eye_light" | "blush_makeup"
-        | "lipstick" | "eyeliner" | "eyelash" | "brow_makeup" | "iris_makeup" | "eye_bag_preserve"
+        | "lipstick" | "eyeliner" | "eyelash" | "brow_makeup" | "iris_makeup" | "eye_bag_preserve" | "face_decoration"
     ))
 }
 
@@ -242,8 +242,8 @@ impl RecoveryPreviewHost {
 #[cfg(test)]
 mod tests {
     use super::*;
-    const FACES: [&str; 10] = ["facial_wrinkles", "lip_makeup", "eye_light", "blush_makeup",
-        "lipstick", "eyeliner", "eyelash", "brow_makeup", "iris_makeup", "eye_bag_preserve"];
+    const FACES: [&str; 11] = ["facial_wrinkles", "lip_makeup", "eye_light", "blush_makeup",
+        "lipstick", "eyeliner", "eyelash", "brow_makeup", "iris_makeup", "eye_bag_preserve", "face_decoration"];
     const PREVIEW: &str = "11111111111111111111111111111111";
     const CAPTURE: &str = "22222222222222222222222222222222";
 

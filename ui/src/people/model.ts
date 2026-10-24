@@ -58,6 +58,7 @@ export type PeopleView = {
   brow_makeup?: import('../browMakeup/model').BrowMakeupView | null;
   lipstick?: import('../lipstick/model').LipstickView | null;
   blush_makeup?: import('../blushMakeup/model').BlushView | null;
+  face_decoration?: import('../faceDecoration/model').FaceDecorationView | null;
   eye_bag_preserve?: {recipe: import('../eyeBagPreserve/model').EyeBagRecipe | null; support_sha256: string | null; support_error: string | null; conflicts: unknown[]; source: import('../eyeBagPreserve/support').RidgeSource; face_ref: FaceRef; legacy_amount: number | null; reviewed: boolean; reviewed_eyes: ('left' | 'right')[]; changed_pixels: number; suspended: string | null} | null;
   eye_light?: import('../eyeLight/model').EyeLightView | null;
   skin_body?: import('../skinColour/bodyReviewModel').SkinBodyReport | null;
@@ -68,7 +69,7 @@ export type PeopleView = {
   analysis_notice?: string; refusals?: {face_instance_id: string; reason: string}[];
 }
 export type PeopleAction = PeopleEnvelope & {
-  action: 'eye_bag_source_image' | 'eye_bag_reference' | 'eye_bag_preview' | 'eye_bag_image' | 'eye_bag_confirm' | 'face_style_catalog' | 'face_style_preview' | 'face_style_image' | 'face_style_confirm' | 'patch' | 'link' | 'group' | 'face_status' | 'manual_add' | 'create_person' | 'select' | 'target' | 'analyse_face' | 'resolve_legacy' | 'eye_light_reference' | 'eye_light_review' | 'blush_palette' | 'blush_reference' | 'blush_review' | 'lipstick_palette' | 'lipstick_reference' | 'lipstick_review' | 'eyeliner_palette' | 'eyeliner_reference' | 'eyeliner_review' | 'iris_reference' | 'iris_review' | 'eyelash_palette' | 'eyelash_reference' | 'eyelash_review' | 'brow_makeup_palette' | 'brow_makeup_reference' | 'brow_makeup_review' | 'skin_body_reference' | 'skin_body_preview' | 'skin_body_confirm' | 'skin_body_detach' | 'skin_finish_body_reference' | 'skin_finish_body_preview' | 'skin_finish_body_confirm' | 'skin_finish_body_detach' | 'body_skin_evenness_reference' | 'body_skin_evenness_preview' | 'body_skin_evenness_confirm' | 'body_skin_evenness_detach' | 'body_face_match_reference' | 'body_face_match_preview' | 'body_face_match_confirm' | 'body_face_match_detach' | 'collarbone_reference' | 'collarbone_preview' | 'collarbone_confirm' | 'collarbone_detach';
+  action: 'eye_bag_source_image' | 'eye_bag_reference' | 'eye_bag_preview' | 'eye_bag_image' | 'eye_bag_confirm' | 'face_style_catalog' | 'face_style_preview' | 'face_style_image' | 'face_style_confirm' | 'patch' | 'link' | 'group' | 'face_status' | 'manual_add' | 'create_person' | 'select' | 'target' | 'analyse_face' | 'resolve_legacy' | 'eye_light_reference' | 'eye_light_review' | 'blush_palette' | 'blush_reference' | 'blush_review' | 'face_decoration_reference' | 'face_decoration_review' | 'lipstick_palette' | 'lipstick_reference' | 'lipstick_review' | 'eyeliner_palette' | 'eyeliner_reference' | 'eyeliner_review' | 'iris_reference' | 'iris_review' | 'eyelash_palette' | 'eyelash_reference' | 'eyelash_review' | 'brow_makeup_palette' | 'brow_makeup_reference' | 'brow_makeup_review' | 'skin_body_reference' | 'skin_body_preview' | 'skin_body_confirm' | 'skin_body_detach' | 'skin_finish_body_reference' | 'skin_finish_body_preview' | 'skin_finish_body_confirm' | 'skin_finish_body_detach' | 'body_skin_evenness_reference' | 'body_skin_evenness_preview' | 'body_skin_evenness_confirm' | 'body_skin_evenness_detach' | 'body_face_match_reference' | 'body_face_match_preview' | 'body_face_match_confirm' | 'body_face_match_detach' | 'collarbone_reference' | 'collarbone_preview' | 'collarbone_confirm' | 'collarbone_detach';
   payload: Record<string, unknown>;
 }
 export type PeopleResult = {
@@ -79,6 +80,7 @@ export type PeopleResult = {
   batch_id?: string | null;
   eye_bag_request?: Omit<PeopleAction, 'request_id'>;
   face_style_request?: Omit<PeopleAction, 'request_id'>;
+  face_decoration_request?: Omit<PeopleAction, 'request_id'>;
 }
 export type PeopleMailbox = {phase: 'pending' | 'done' | 'unavailable'; request_id: string; result?: PeopleResult; error?: string}
 export const PEOPLE_CONTROL_IDS = {
@@ -132,7 +134,7 @@ export function operationLabel(id: string): string {
     'lnx.brow_shape.v1': '眉形', 'lnx.nose_shape.v1': '鼻形',
     'lnx.eye_shape.v1': '眼形', 'lnx.mouth_shape.v1': '嘴形',
     'lnx.eye_symmetry.v1': '眼睛对称（独立水平与大小，参考眼仅用于大小）',
-    'lnx.hair_colour.v1': '发色与已有高光光泽', 'lnx.eye_light.v1': '眼神光素材', 'lnx.blush_makeup.v1': '腮红', 'lnx.lipstick.v1': '口红', 'lnx.eyeliner.v1': '眼线', 'lnx.iris_makeup.v1': '美瞳', 'lnx.eyelash.v1': '睫毛（上下/左右独立）', 'lnx.brow_makeup.v1': '眉妆'} as Record<string, string>)[id] ?? id;
+    'lnx.hair_colour.v1': '发色与已有高光光泽', 'lnx.eye_light.v1': '眼神光素材', 'lnx.face_decoration.v1': '脸部装饰（原创雀斑与点痣，目标独立审核）', 'lnx.blush_makeup.v1': '腮红', 'lnx.lipstick.v1': '口红', 'lnx.eyeliner.v1': '眼线', 'lnx.iris_makeup.v1': '美瞳', 'lnx.eyelash.v1': '睫毛（上下/左右独立）', 'lnx.brow_makeup.v1': '眉妆'} as Record<string, string>)[id] ?? id;
 }
 export function bindingKey(binding: PeopleBinding): string {
   return `${binding.document_epoch}:${binding.document_id}:${binding.asset_sha256}`;

@@ -96,8 +96,8 @@ def _merge_chroma(pipe, stage):
 
 def source_effect(pipe,stage,pixels):
     import torch
-    if stage not in ('body_face_match','body_skin_evenness','collarbone','skin_evenness','skin_colour','facial_wrinkles','lip_texture','lip_makeup','hair_colour','eye_light','blush_makeup','lipstick','eyeliner','eyelash','brow_enhance','brow_makeup','iris_makeup'):raise ValueError('This effect belongs after common geometry')
-    if stage in ('body_face_match', 'body_skin_evenness', 'collarbone', 'skin_evenness', 'brow_enhance', 'lip_texture') and not any(r.stage == stage for r in pipe.people_prepared.effects):
+    if stage not in ('body_face_match','body_skin_evenness','collarbone','skin_evenness','skin_colour','facial_wrinkles','lip_texture','lip_makeup','hair_colour','eye_light','blush_makeup','face_decoration','lipstick','eyeliner','eyelash','brow_enhance','brow_makeup','iris_makeup'):raise ValueError('This effect belongs after common geometry')
+    if stage in ('body_face_match', 'body_skin_evenness', 'collarbone', 'skin_evenness', 'brow_enhance', 'lip_texture', 'face_decoration') and not any(r.stage == stage for r in pipe.people_prepared.effects):
         return pixels  # Exact neutral: no new full-frame scratch or native work.
     if stage == 'collarbone':
         from .collarbone_composition import apply_records_t
@@ -108,6 +108,9 @@ def source_effect(pipe,stage,pixels):
         from .skin_evenness_composition import apply_t
         return apply_t(pixels, _merge_chroma(pipe, stage))
     delta=_merge_delta(pipe,stage,align=False)
+    if stage == 'face_decoration':
+        from .people_source_vector import apply_t
+        return apply_t(pixels,delta,label='Face decoration')
     if stage == 'lip_texture':
         from .lip_texture_composition import apply_t
         return apply_t(pixels, delta)

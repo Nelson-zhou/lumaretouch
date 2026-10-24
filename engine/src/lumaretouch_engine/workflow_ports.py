@@ -9,6 +9,7 @@ def emit(event):
 class WorkflowPortsMixin:
     def _people_preset_capture(self):
         from .eye_light_scope import capture
+        from .face_decoration_scope import capture as capture_decoration
         from .blush_makeup_scope import capture as capture_blush
         from .lipstick_scope import capture as capture_lipstick
         from .eyeliner_scope import capture as capture_eyeliner
@@ -39,6 +40,7 @@ class WorkflowPortsMixin:
         state = capture_face_size(self,capture_slim_face(self,capture_face_contour(self,capture_skin_texture(self,capture_skin_gloss(self,state)))))
         state = capture_collarbone(self,capture_body_skin_evenness(self,capture_skin_evenness(self,state)))
         state = capture_body_face_match(self,state)
+        state = capture_decoration(self,state)
         state = capture_philtrum(self,capture_chin_length(self,capture_chin_shape(self,capture_mid_face(self,capture_lower_face(self,state)))))
         return capture_eye_bag_preserve(self,capture_lip_texture(self,capture_brow_enhance(self,capture_eye_symmetry(self,state))))
 

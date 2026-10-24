@@ -9,12 +9,12 @@ from . import local_mask_recipe as R, local_mask_state as M
 from . import facial_wrinkle_recovery as FACE
 
 VERSION = 1
-TARGETS = ('skin_smoothing', 'fabric_fine', 'facial_wrinkles', 'lip_makeup', 'eye_light', 'blush_makeup', 'lipstick', 'eyeliner','eyelash', 'brow_makeup', 'iris_makeup', 'background_replace', 'id_background', 'eye_bag_preserve')
+TARGETS = ('skin_smoothing', 'fabric_fine', 'facial_wrinkles', 'lip_makeup', 'eye_light', 'blush_makeup', 'face_decoration', 'lipstick', 'eyeliner','eyelash', 'brow_makeup', 'iris_makeup', 'background_replace', 'id_background', 'eye_bag_preserve')
 LABELS = {'eye_bag_preserve': '祛眼袋 v2 局部恢复', 'skin_smoothing': '磨皮与肌理', 'fabric_fine': '衣物细褶',
-          'background_replace': '换底边缘', 'id_background': '证件照换背景', 'facial_wrinkles': '面部祛纹八部位', 'lip_makeup': '唇妆增强', 'eye_light': '眼神光素材', 'blush_makeup': '腮红', 'lipstick': '口红', 'eyeliner': '眼线', 'eyelash': '睫毛', 'brow_makeup': '眉妆', 'iris_makeup': '美瞳'}
+          'background_replace': '换底边缘', 'id_background': '证件照换背景', 'facial_wrinkles': '面部祛纹八部位', 'lip_makeup': '唇妆增强', 'eye_light': '眼神光素材', 'blush_makeup': '腮红', 'face_decoration': '面部装饰', 'lipstick': '口红', 'eyeliner': '眼线', 'eyelash': '睫毛', 'brow_makeup': '眉妆', 'iris_makeup': '美瞳'}
 STAGES = {'eye_bag_preserve': 'source-owned-before-shared-geometry-eye-bag-v2', 'skin_smoothing': 'pre-deform-smoothing', 'fabric_fine': 'pre-deform-fabric',
           'background_replace': 'post-grade-background', 'id_background': 'post-grade-id-background', 'facial_wrinkles': 'pre-deform-facial-wrinkles',
-          'lip_makeup': 'pre-deform-lip-makeup', 'eye_light': 'pre-deform-eye-light', 'blush_makeup': 'pre-deform-blush-makeup', 'lipstick': 'pre-deform-lipstick', 'eyeliner': 'pre-deform-eyeliner', 'eyelash': 'pre-deform-eyelash', 'brow_makeup': 'pre-deform-brow-makeup', 'iris_makeup': 'pre-deform-iris-makeup'}
+          'lip_makeup': 'pre-deform-lip-makeup', 'eye_light': 'pre-deform-eye-light', 'blush_makeup': 'pre-deform-blush-makeup', 'face_decoration': 'pre-deform-face-decoration', 'lipstick': 'pre-deform-lipstick', 'eyeliner': 'pre-deform-eyeliner', 'eyelash': 'pre-deform-eyelash', 'brow_makeup': 'pre-deform-brow-makeup', 'iris_makeup': 'pre-deform-iris-makeup'}
 MAX_STROKES = 128
 MAX_MASK_PIXELS = 128_000_000
 

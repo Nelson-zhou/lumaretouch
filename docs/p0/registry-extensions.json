@@ -4,6 +4,39 @@
   "scope_note": "RGB/master point recipes v1 remain compatible. Recipe v2 adds explicit linear-sRGB Y-ratio luminance, not Lab L*. Recipe v3 adds an independent Rust-owned four-region parametric stage before point curves, with split-aligned floating LUTs. Basic integrated CI/Qoder checks are recorded in docs/development/parametric-curves-verification.md; native UI acceptance remains pending. Eyedroppers and live/full-source histograms remain separate unfinished features. Original frozen registry is unchanged. Levels is a separate display-sRGB operator with explicit active-channel input clipping and reversible output endpoints; histogram and eyedroppers remain separate.",
   "entries": [
     {
+      "operation_id": "lnx.face_decoration.v1",
+      "parameter_key": "recipe",
+      "type": "object",
+      "neutral": {
+        "version": 1,
+        "pattern": "freckle_dust",
+        "strength": 0
+      },
+      "range": {
+        "version": [
+          1,
+          1
+        ],
+        "pattern": [
+          "freckle_dust",
+          "freckle_bridge",
+          "freckle_constellation",
+          "freckle_sunburst",
+          "freckle_scatter",
+          "mole_left_cheek",
+          "mole_right_cheek",
+          "mole_pair"
+        ],
+        "strength": [
+          0,
+          1
+        ]
+      },
+      "transferable": true,
+      "source_requirement": "LNX-REF-PC-32471-C-dd14134407",
+      "reason": "Original versioned five freckle and three mole-style analytic materials, one operation. Active targets require their own verified face, measured effective-source skin and decoration-specific manually reviewed visible coverage. Scalar intent only, no donor support or coordinates. Local strength range is not an official disclosed numeric range. Not original-mark removal, automatic segmentation, proprietary material equivalence or photographic acceptance. Runtime and quality UNRUN."
+    },
+    {
       "operation_id": "lnx.eye_bags.v2",
       "parameter_key": "recipe",
       "type": "object",

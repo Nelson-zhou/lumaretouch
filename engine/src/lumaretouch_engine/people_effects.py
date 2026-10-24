@@ -10,7 +10,7 @@ from .facial_wrinkle_layer import FacialWrinkleLayer, bounds as wrinkle_bounds
 from .under_eye_layer import UnderEyeLayer, bounds as eye_bounds, KEYS as EYE_KEYS
 from .ops import enhance as H
 
-STAGES = ('body_face_match', 'body_skin_evenness', 'collarbone', 'skin_evenness', 'skin_colour', 'facial_wrinkles', 'eye_detail', 'eye_bag_preserve', 'lip_texture', 'lip_makeup', 'enhance', 'hair_colour', 'eye_light', 'blush_makeup', 'lipstick','eyeliner','eyelash','brow_enhance','brow_makeup','iris_makeup')
+STAGES = ('body_face_match', 'body_skin_evenness', 'collarbone', 'skin_evenness', 'skin_colour', 'facial_wrinkles', 'eye_detail', 'eye_bag_preserve', 'lip_texture', 'lip_makeup', 'enhance', 'hair_colour', 'eye_light', 'blush_makeup', 'face_decoration', 'lipstick','eyeliner','eyelash','brow_enhance','brow_makeup','iris_makeup')
 
 
 @dataclass(frozen=True)
@@ -33,7 +33,7 @@ class LocalEffect:
         return self.delta
 
 
-def prepare(face_ref, landmarks, recipes, source, *, excluded, skin, backend, semantic_sha, blush_review=None, lipstick_review=None, source_only=False):
+def prepare(face_ref, landmarks, recipes, source, *, excluded, skin, backend, semantic_sha, blush_review=None, lipstick_review=None, face_decoration_review=None, face_decoration_skin=None, face_decoration_excluded=None, source_only=False):
     """Source is frozen repaired working-sRGB, never another face's corrected RGB."""
     h, w = source.shape[:2]; records = []
     ref = S.check_ref(face_ref)
@@ -54,6 +54,12 @@ def prepare(face_ref, landmarks, recipes, source, *, excluded, skin, backend, se
         from .lipstick_layer import prepare_record as prepare_lipstick
         lipstick=prepare_lipstick(ref,landmarks,recipes[A.LIPSTICK.OP],source,excluded=excluded,backend=backend,semantic_sha=semantic_sha,reviewed=lipstick_review)
         if lipstick is not None:records.append(lipstick)
+    if A.FACE_DECORATION.active(recipes[A.FACE_DECORATION.OP]):
+        from .face_decoration_layer import prepare_record as prepare_decoration
+        decoration = prepare_decoration(ref,landmarks,recipes[A.FACE_DECORATION.OP],source,excluded=face_decoration_excluded,skin=face_decoration_skin,
+            backend=backend,semantic_sha=semantic_sha,reviewed=face_decoration_review)
+        if decoration is None: raise ValueError('Requested face decoration returned no effect record')
+        records.append(decoration)
     amounts = recipes[A.WRINKLES]
     if W.active(amounts):
         if skin is None or semantic_sha is None: raise ValueError('Wrinkles need actual source skin evidence')
@@ -126,9 +132,9 @@ def apply(stage, current, records, *, recovery=None):
         active = np.any(delta != 0, axis=2); used = occupied[y:y+rh,x:x+rw]
         overlap += int(np.count_nonzero(active & used)); take = active & ~used
         total[y:y+rh,x:x+rw][take] = delta[take]; used[take] = True
-    if stage == 'eye_bag_preserve':
+    if stage in ('eye_bag_preserve','face_decoration'):
         from .people_source_vector import apply_np
-        out = apply_np(current, total, label='Eye-bag preservation')
+        out = apply_np(current, total, label='Face decoration' if stage == 'face_decoration' else 'Eye-bag preservation')
         return out, {'stage':stage, 'overlap_pixels':overlap,
                      'composition':'direction-preserving-per-pixel-SDR-headroom-gain-no-channel-clipping',
                      'changed_pixels':int(np.count_nonzero(np.any(out != current, axis=2)))}

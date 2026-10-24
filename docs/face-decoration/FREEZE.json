@@ -1,0 +1,451 @@
+{
+  "baseline": "2d8ae05feafc7471f54d58ca4d0ed042c7bb5ebd",
+  "status": "FROZEN_SOURCE_ONLY_FACE_DECORATION_UNRUN",
+  "requirement_ids": [
+    "LNX-REF-PC-32471-C-dd14134407"
+  ],
+  "scope": "One original versioned face-decoration operation: five freckle and three mole-style analytic materials, current-source face-local placement, decoration-specific reviewed visible-skin support, original Rust contribution and canonical original/derived people pipeline. No proprietary material copies, automatic visibility or original-mark removal.",
+  "files": [
+    {
+      "path": "core/face_decoration/Cargo.toml",
+      "sha256": "5fa0f943b2c2bdbaddfe42126fd45e4dc5154c2db2d173d057e19db8dbbe41e7",
+      "bytes": 174
+    },
+    {
+      "path": "core/face_decoration/LICENSE",
+      "sha256": "3972dc9744f6499f0f9b2dbf76696f2ae7ad8af9b23dde66d6af86c9dfb36986",
+      "bytes": 35149
+    },
+    {
+      "path": "core/face_decoration/README.md",
+      "sha256": "1dc9deac74e1bad488f6fcad9983cbb78e29bd033066090558afee4c5681e0f9",
+      "bytes": 6645
+    },
+    {
+      "path": "core/face_decoration/face_decoration.h",
+      "sha256": "63ff042b9dbca5564effcf9021c48f30d3df89771acf45c91801503765bc60f9",
+      "bytes": 629
+    },
+    {
+      "path": "core/face_decoration/lib.rs",
+      "sha256": "3f2ea339220d78e23b94f99828db5b4cb312acae5569a7a845053f821ce8bf5a",
+      "bytes": 12370
+    },
+    {
+      "path": "docs/development/handbook-traceability.json",
+      "sha256": "614f25d59f86e1376c8b04ff75a0f523e298736bdd4003fa805abb6c250a1698",
+      "bytes": 474736
+    },
+    {
+      "path": "docs/development/ui-route-inventory.json",
+      "sha256": "c0fdb80a4704a359a145b04c3e6a7816e357da530f8432a072eee9f460ed2e04",
+      "bytes": 16748
+    },
+    {
+      "path": "docs/face-decoration/ACCEPTANCE-UNRUN.md",
+      "sha256": "97a96b2e104931505f90ff52059dc66a6afc6be5e46c03485fae1b042dc77a77",
+      "bytes": 4809
+    },
+    {
+      "path": "docs/face-decoration/IMPLEMENTATION.md",
+      "sha256": "db90871437650ec50fbb48e228fa1dffd1fcb725698554ea29b6ad103a50b08d",
+      "bytes": 7969
+    },
+    {
+      "path": "docs/face-decoration/REQUIREMENT-AND-RESEARCH.md",
+      "sha256": "386f30877781b7d77a54394ef1ce8363ddf11824d5c6494474239e8222386a6a",
+      "bytes": 4393
+    },
+    {
+      "path": "docs/p0/registry-extensions.json",
+      "sha256": "78599e688115ce1ce6eb730f05ad7dc94bc881dab488ef58e174c157325ef4ff",
+      "bytes": 52226
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/body_scalar_transfer_review.py",
+      "sha256": "149de23fdb3fec416ff32a182c865245b879f11fa40b8b80a7233fbb29a13b4c",
+      "bytes": 23077
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/creative_derived_makeup.py",
+      "sha256": "62d28a34faa959c9eaed233dafcc11d47db1e85e751e7836505aca039c7d66b6",
+      "bytes": 5232
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/creative_derived_recovery.py",
+      "sha256": "595d11950a21529f3db3f4a024fb3d39b4160354a12ea7963f89d36b482202ca",
+      "bytes": 12941
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/effect_recovery_runtime.py",
+      "sha256": "a1984585aafc5c22e38d8a90ffd3b2c3fd20c869f8df0832086bea6b069a3a29",
+      "bytes": 15758
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/effect_recovery_state.py",
+      "sha256": "37287e2a6462f3516775652e9eeaee318ab215e654808e11f0b3f5d6b6268f06",
+      "bytes": 9754
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/face_decoration_catalogue.py",
+      "sha256": "0ae6dfde405a9bec1c047fb6cfde9c30b6e8eb1e74ca2e52133c9d8b867a5e67",
+      "bytes": 1638
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/face_decoration_geometry.py",
+      "sha256": "b471f355a0568345a39afa9a6b5c6626ebc8e3cf1cb01f6dc9b94c2e9f798b28",
+      "bytes": 5858
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/face_decoration_host.py",
+      "sha256": "f557a0b21ea1c5a048581c8ae6d6d80a8641cf2f157b53f344428f04bb069feb",
+      "bytes": 10093
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/face_decoration_layer.py",
+      "sha256": "6f66b1910b1ed5e0c25a9fcbad310716366d5390972a290d3d07a7cc7dcbf75e",
+      "bytes": 6732
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/face_decoration_native.py",
+      "sha256": "08b6837751ae1717b103f5b1ce3177e14335273abba907b2356aa3e28c50497f",
+      "bytes": 2689
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/face_decoration_patterns.json",
+      "sha256": "414200ac138b5f75986db42b95c12ac77b5142816bc6a00f391287090956cf56",
+      "bytes": 20600
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/face_decoration_project.py",
+      "sha256": "2cb6af27289b4ad41c883b7900b74e3f6502ecb7cba8262c402182720bd4ffe6",
+      "bytes": 4211
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/face_decoration_scope.py",
+      "sha256": "fee00a9532777c59330e477615ac934a22670f0356dbf9446a3397cdc9a979ef",
+      "bytes": 4143
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/face_decoration_state.py",
+      "sha256": "95a0871515eada2507772e04789989ead345a3e8fc7f2dfa9c7d0ddb10706bdd",
+      "bytes": 3212
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/face_decoration_support.py",
+      "sha256": "71290914f485afc5ee72119aaef2e832dcc53be434f098d63e28a42af0b8eab9",
+      "bytes": 6084
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/facial_wrinkle_recovery.py",
+      "sha256": "fb5673c91954c6b504fda06a59988ba6651e351273ef445f5a039b78f2bdefed",
+      "bytes": 3842
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/history_policy.py",
+      "sha256": "ec76b8d1401aac4b0641b6bf97334d61a312ac0cf99a82971e207e246aea686b",
+      "bytes": 8334
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/original_shadow_transfer_review.py",
+      "sha256": "f01f163bc51683c31fb6b4242a1b68b41c0622aed14cea8dcbe98882249c5716",
+      "bytes": 13537
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_algorithms.py",
+      "sha256": "2428e4a5d7323d858d22c68a531e73bb03cde596cf4fe2f944bacb850b12dea4",
+      "bytes": 6664
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_candidate_render.py",
+      "sha256": "e0f605a1bce214542b1f52013ed8aab8e547655e54f371fb61dd3bbeea27883b",
+      "bytes": 504
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_effects.py",
+      "sha256": "b7ef0d58fa21deddb9d01bf86da4b9e25c57aaf90cd8d6d35354267e2e17ecd2",
+      "bytes": 9869
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_engine_runtime.py",
+      "sha256": "ecaf564ea95ec56a7d96699e7ff23d011d66c164d7fe53a4b0c5a9d98e22b00b",
+      "bytes": 12371
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_host.py",
+      "sha256": "17d4945bf870e82f706fd28fb81d093bf5353543a85df4a81f9e27ddc182c0fc",
+      "bytes": 25263
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_host_commands.py",
+      "sha256": "981aab59982dfb25eabd49bb3b7fb279b8655ce2e94faae2d6b459cf8d2e1e75",
+      "bytes": 29891
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_owned_inputs.py",
+      "sha256": "b509bf0f812e209901daa367f0b10919a63102fa548c781c71bf87cd87081669",
+      "bytes": 3971
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_pipeline.py",
+      "sha256": "c4d7557dbeccfc0298bdb960483a32365a0b35ae98d324b26732fc276f6ea8fb",
+      "bytes": 7951
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_project.py",
+      "sha256": "6ff3a2f216820eb52bf3286a757f65fff1ea0cf77fb2ec52104f1b525aaeeb6a",
+      "bytes": 5981
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_recovery.py",
+      "sha256": "9a1d210a2b6acf045f711ead71261242d2c5d1b8e11d25548bd5623a0d6a0f15",
+      "bytes": 11058
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_render_plan.py",
+      "sha256": "9bee0731d3422769395061c287bcd72bea68b080b64c0705e06e4fc7c514bc68",
+      "bytes": 7402
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_render_runtime.py",
+      "sha256": "b01f6565ec5022b969c878ae8e48bec554f00e73a1606da796b157865dce44fe",
+      "bytes": 35448
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_scope.py",
+      "sha256": "6f822f0170e69cca0ca00907ff01fafa1228989528dcac99fe031c5d2225cb5a",
+      "bytes": 45033
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_support_assets.py",
+      "sha256": "446db72cef998264038d13a43168b7ca8263953d5a246e37a7ee26e583f491f6",
+      "bytes": 12268
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/scope.py",
+      "sha256": "d21ad47d33b0715f5659e7c8fc79d9cfb0e65745378fb29e142490e92472ff2a",
+      "bytes": 65887
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/server.py",
+      "sha256": "b1f4238cafb1de2c07c732ea284f63a06d6f3bfe43809f913dacd20c7d0a4893",
+      "bytes": 470806
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/spill_transfer_review.py",
+      "sha256": "2f0c959b9eafff6f49f0a70e949e547df5535be927c8a8e5251dee58b40151f0",
+      "bytes": 13268
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/vram.py",
+      "sha256": "28c2fd67a0f3803df57bd1b038fefbe60dfc18da234f4e66c7ef7dce63b26371",
+      "bytes": 136378
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/workflow_ports.py",
+      "sha256": "8e10d1d2f40af328752ffac2235791e240e4b099384ed71e77c9ac56eceb3775",
+      "bytes": 15456
+    },
+    {
+      "path": "engine/tests/test_face_decoration_core_unrun.py",
+      "sha256": "dc16d66a9f881409ffe6c7ebfc7828b63ddd674ae6dcdf4d9d678b4b9fbbf914",
+      "bytes": 8724
+    },
+    {
+      "path": "engine/tests/test_face_decoration_integration_unrun.py",
+      "sha256": "e797fabcc747e7075a9f781f26bd379b51df48ff20bea3a02c3f47d8e53be49f",
+      "bytes": 7895
+    },
+    {
+      "path": "engine/tests/test_face_decoration_support_host_unrun.py",
+      "sha256": "953d5c4aa794ef064806012188da98efe3fcd2c58a590b44fb6bd3601c674cde",
+      "bytes": 11557
+    },
+    {
+      "path": "packaging/build-face-decoration.sh",
+      "sha256": "a8fdc90684019f0dd5d6770a94b24af034256221082ffa66cff822db851e41dd",
+      "bytes": 432
+    },
+    {
+      "path": "packaging/stage-engine.sh",
+      "sha256": "1abeeb59af20771b6a8be065112de069fddc47c4341fa56eb40396ec9ba0d03f",
+      "bytes": 27575
+    },
+    {
+      "path": "ui/src-tauri/src/effect_recovery_api.rs",
+      "sha256": "19992a14acbab33a5b6237531295c50379b9cfbfab34a46a9ab81efa61034ce9",
+      "bytes": 11174
+    },
+    {
+      "path": "ui/src-tauri/src/effect_recovery_host.rs",
+      "sha256": "1a651f580587a6a550148cf73d24b00d2da2386a7c9ae8005c4761b933f7ad0c",
+      "bytes": 19844
+    },
+    {
+      "path": "ui/src-tauri/src/engine.rs",
+      "sha256": "e7bd741678aaae60931da83dce89737b202b3573d738766a12ea1055194fdf15",
+      "bytes": 40818
+    },
+    {
+      "path": "ui/src-tauri/src/face_decoration_protocol.rs",
+      "sha256": "c10c17ccb404633f96cc03dcdfae24b95f190c008982c4b7f7af483a75ccf55d",
+      "bytes": 16988
+    },
+    {
+      "path": "ui/src-tauri/src/face_decoration_protocol_unrun.rs",
+      "sha256": "192406bfefaa2b7b418a625a33d2d0df22cb074424c6a77bb286e36386706f34",
+      "bytes": 15097
+    },
+    {
+      "path": "ui/src-tauri/src/native_dispatch.rs",
+      "sha256": "3b0775961089ec2b1d558a7b4cddfc50ea5fe3a36c60816cf1c0e25280571082",
+      "bytes": 10854
+    },
+    {
+      "path": "ui/src-tauri/src/people_api.rs",
+      "sha256": "3b9f600cc05d0b9230231abb90831e0558c5afc599873283c0b760eed4364718",
+      "bytes": 16145
+    },
+    {
+      "path": "ui/src-tauri/src/preset_alias_recovery_fence.rs",
+      "sha256": "2d6d186960d2f726b90170c3df6ed80f05ece79bd85e8d41dad4601c9a5d3b1c",
+      "bytes": 7194
+    },
+    {
+      "path": "ui/src-tauri/src/project_recovery_fence.rs",
+      "sha256": "4ad23a8ea41604db3ec6077c1a4ddb64226d71856a113b3a2c87fb91e7344ef6",
+      "bytes": 8927
+    },
+    {
+      "path": "ui/src-tauri/src/receipt_host.rs",
+      "sha256": "4df03af7e2eb2daa7f8c1cc0ccb0621f2ae3b44f7b5db3f022970b5c60d9946b",
+      "bytes": 34274
+    },
+    {
+      "path": "ui/src/batch/batchScopeOptions.ts",
+      "sha256": "ffd31263200257849673fc97059e765815c10ada644034ab5baeae9a865a60e6",
+      "bytes": 5703
+    },
+    {
+      "path": "ui/src/components/RetouchPanel.tsx",
+      "sha256": "c623bb686ebe94078961eb5c25b46cf9992f52f055ffcd08f988c490af98dff6",
+      "bytes": 88272
+    },
+    {
+      "path": "ui/src/faceDecoration/ACCEPTANCE_UNRUN.md",
+      "sha256": "3dca95d390f1ad57e147ea0d963388652575379a5540dbbeeff029ce8637a576",
+      "bytes": 5466
+    },
+    {
+      "path": "ui/src/faceDecoration/FaceDecorationPanel.tsx",
+      "sha256": "db2df95ac1f98144987b5cbb0af7d1bc27870c126f51ad66bf0ddca46067ef52",
+      "bytes": 9680
+    },
+    {
+      "path": "ui/src/faceDecoration/FaceDecorationSupportEditor.tsx",
+      "sha256": "f2f8ab07cafbce0cc246f3c4ebfea48ef4bb2302bbbfd1848776dac67db4649f",
+      "bytes": 11301
+    },
+    {
+      "path": "ui/src/faceDecoration/catalogue.ts",
+      "sha256": "c4d97fdc73632ccccced94cde919000eac77547098fb8f84c8e9c9e1b36ea1cb",
+      "bytes": 17504
+    },
+    {
+      "path": "ui/src/faceDecoration/faceDecoration.css",
+      "sha256": "72b30eb34755a0bf0fb632a759334d518952cc4ec1f68eb7dc7a14ca3bd14377",
+      "bytes": 1652
+    },
+    {
+      "path": "ui/src/faceDecoration/fixture.unrun.test.ts",
+      "sha256": "e6926660fa4b227351083a4fb4b36252e55b43ef716e703fe09d3801d90d7886",
+      "bytes": 2844
+    },
+    {
+      "path": "ui/src/faceDecoration/model.ts",
+      "sha256": "1c7caefdcf66c580c065494a75b2032bea420d1c73dcaf9d8636d95bede77627",
+      "bytes": 15350
+    },
+    {
+      "path": "ui/src/faceDecoration/model.unrun.test.ts",
+      "sha256": "00a5c3bc0b561a84b66ff566ccc88d35e08fa75c1e6ff2abfbc378d208c61a18",
+      "bytes": 10717
+    },
+    {
+      "path": "ui/src/faceDecoration/review.ts",
+      "sha256": "33054c020b293976ccf8d4d69415b48601c03961cceb78ee04383fbe81537c42",
+      "bytes": 2355
+    },
+    {
+      "path": "ui/src/faceDecoration/wiring.unrun.test.ts",
+      "sha256": "1d853ace4567d52a4af76dd8341f0f69e9837455a64d21d8926069b8b2b8b9e2",
+      "bytes": 5283
+    },
+    {
+      "path": "ui/src/faceDecoration/workflow.unrun.test.ts",
+      "sha256": "8aefc75c89b685ba003ebd1cbe45bc350078d7a6e3c737bc37e779311add4fc7",
+      "bytes": 9030
+    },
+    {
+      "path": "ui/src/native.ts",
+      "sha256": "737184a13f2d1b6b01b1891ba2ab16227a481dc79aa89743c93792502bfc39de",
+      "bytes": 111172
+    },
+    {
+      "path": "ui/src/people/model.ts",
+      "sha256": "2871a08d1d73419ad551387cea313857a4a676a4f9ab0d73a5da2a28e4c02254",
+      "bytes": 10708
+    },
+    {
+      "path": "ui/src/people/workflow.ts",
+      "sha256": "65a2e6dc9ee86aaa7f4e575630bb6e40be8d314fd840aa63e0dd4af678a96cb7",
+      "bytes": 26612
+    },
+    {
+      "path": "ui/src/presets/PresetPanel.tsx",
+      "sha256": "eb031841133e3e4af82b615e8ffa327ff1bc0af98fb8acf2357ca68720077767",
+      "bytes": 17582
+    },
+    {
+      "path": "ui/src/presets/presetModel.ts",
+      "sha256": "e806e1b87985eec45f5b3f10070fc4c2dd16f72a91cd6e9639ad615deff4574a",
+      "bytes": 7555
+    }
+  ],
+  "static_checks": {
+    "python_ast_files": 1385,
+    "changed_json_toml": "stdlib parse only",
+    "relative_ui_imports_existing": 151,
+    "git_diff_check": "clean",
+    "prior_numeric_solver_core_decoder_and_frozen_sources_byte_identical": 328,
+    "line_caps": {
+      "ui/src/App.tsx": 2131,
+      "ui/src-tauri/src/main.rs": 2047,
+      "engine/src/lumaretouch_engine/server.py": 7036
+    }
+  },
+  "integration_map": {
+    "core": "Original eight-layout catalogue and bounded Rust source-pixel area integration, immutable float32 source, separate delta, exact neutral.",
+    "ownership": "Authenticated target face_skin plus known and retained foreign-face exclusions, decoration-only source-vector review and source/FaceRef/landmark/PNG proof.",
+    "pipeline": "Original and supported derived canonical people render/export/history, stage before common geometry, bounded direction-preserving source-vector composition and effect-only recovery.",
+    "native_ui": "Exact people receipt protocol, capability-gated catalogue, real raw source canvas hash/decode and ownership acknowledgments; no second history owner.",
+    "presets_transfer": "Original-photo library replay and existing frozen scalar batch/confirmed mappings/persistent associations with target-local support, no copied coordinates/masks. Ordinary derived fullpreset and unsupported aliases remain guarded.",
+    "packaging": "Explicit build script and source/licence staging authored, not executed."
+  },
+  "limitations": [
+    "Manual visible-skin review is required; no automatic person-instance or complete occlusion segmentation, proprietary materials or original-mark removal.",
+    "Moderately frontal visible faces only; 4M source ROI pixels,64 marks,32M clip-candidate budget; conservative unmeasured memory preflight, no all-resolution performance claim.",
+    "Existing opaque SDR portrait path only, no alpha/HDR support added. Source review is RGB8 reduced display, not native-resolution photo acceptance or master quantization.",
+    "Generic target scalar preflight/render is not a new dedicated paged photographic batch/cohort ACK workflow.",
+    "Ordinary whole-image derived preset replay remains refused; supported derived direct people edits and explicit confirmed mapping are separate routes.",
+    "Same-owner shared-source alias mutations remain refused until complete affected-document review exists. Independent copy owners stay separate.",
+    "Native solve remains synchronous and bounded; no immediate in-flight cancellation claim.",
+    "All tests/build/typecheck/product execution/imports/inference/downloads and runtime/native/UI/history/numerical/photo acceptance UNRUN."
+  ],
+  "excluded_unrelated_untracked": [
+    "docs/colour-grading/FREEZE.json",
+    "docs/eye-light/FREEZE.json",
+    "docs/iris-makeup/isolated-manifest.json"
+  ],
+  "prohibited_actions_performed": []
+}

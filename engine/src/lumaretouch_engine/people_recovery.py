@@ -106,6 +106,10 @@ def prepare(engine, recovery, target, *, expected=None, _eye_bag_alias=None):
         live(engine, _alias_admission=_eye_bag_alias)
     if expected is not None and captured != expected:
         raise ValueError('人物恢复预览的确切归属已过期')
+    if target == 'face_decoration':
+        from .face_decoration_project import require_unaliased
+        from .virtual_copy_people import current_row
+        require_unaliased(engine,current_row(engine),{captured['source']['sha256']})
     current = value(engine)
     recovery = R.check(recovery)
     # This reviewed gesture can change one family only, never an unrelated
