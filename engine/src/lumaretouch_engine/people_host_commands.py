@@ -17,6 +17,8 @@ DECORATION_ALIAS_READS = frozenset(('face_decoration_alias_preview','face_decora
 DECORATION_ALIAS_ACTIONS = DECORATION_ALIAS_READS | {'face_decoration_alias_confirm'}
 DECORATION_SUPPORT_ALIAS_READS = frozenset(('face_decoration_support_alias_preview','face_decoration_support_alias_image'))
 DECORATION_SUPPORT_ALIAS_ACTIONS = DECORATION_SUPPORT_ALIAS_READS | {'face_decoration_support_alias_confirm'}
+SCULPT_READS = frozenset(('facial_sculpt_reference',))
+SCULPT_ACTIONS = SCULPT_READS | {'facial_sculpt_review'}
 DECORATION_READS = frozenset(('face_decoration_reference',)) | DECORATION_ALIAS_READS | DECORATION_SUPPORT_ALIAS_READS
 DECORATION_ACTIONS = DECORATION_READS | {'face_decoration_review','face_decoration_alias_confirm','face_decoration_support_alias_confirm'}
 
@@ -31,6 +33,10 @@ def eye_bag_read_only(raw):
     return _review_read_only(raw,EYE_BAG_READS)
 
 
+def facial_sculpt_read_only(raw):
+    return _review_read_only(raw,SCULPT_READS)
+
+
 def face_decoration_read_only(raw):
     return _review_read_only(raw,DECORATION_READS)
 
@@ -42,7 +48,9 @@ def _review_read_only(raw,actions):
     if set(raw) != {'cmd','document_id','document_epoch','document_revision','state_revision','association_revision','request_id','target','action','payload'}:
         return False
     try:
-        if raw['action'] in DECORATION_READS:
+        if raw['action'] in SCULPT_READS:
+            from .facial_sculpt_host import check_action
+        elif raw['action'] in DECORATION_READS:
             from .face_decoration_host import check_action
         elif raw['action'] in EYE_BAG_READS:
             from .eye_bag_preserve_host import check_action
@@ -62,7 +70,8 @@ def checked(engine,p):
     style_action=p.get('action') in FACE_STYLE_ACTIONS
     eye_bag_action=p.get('action') in EYE_BAG_ACTIONS
     decoration_action=p.get('action') in DECORATION_ACTIONS
-    if style_action or eye_bag_action or decoration_action:
+    sculpt_action=p.get('action') in SCULPT_ACTIONS
+    if style_action or eye_bag_action or decoration_action or sculpt_action:
         from .people_preset_plan import require_active_owner
         owner=require_active_owner(engine)
     else:
@@ -72,8 +81,10 @@ def checked(engine,p):
     asset=binding['asset_sha256']
     if (target['scope']=='face' and target['face_ref']['asset_sha256']!=asset) or (target['scope']=='all_people' and target['target_id']!=asset):
         raise ValueError('People command targets another source asset')
-    if style_action or eye_bag_action or decoration_action:
-        if decoration_action:
+    if style_action or eye_bag_action or decoration_action or sculpt_action:
+        if sculpt_action:
+            from .facial_sculpt_host import check_action
+        elif decoration_action:
             from .face_decoration_host import check_action
         elif eye_bag_action:
             from .eye_bag_preserve_host import check_action
@@ -237,6 +248,10 @@ def apply(engine,raw,emit):
         from .blush_makeup_host import palette_action
         palette_action(engine,p)
         frame=None
+    elif action=='facial_sculpt_reference':
+        from .facial_sculpt_host import reference
+        records[request]['payload']=reference(engine,state,target,payload,request_id=request)
+        frame=None
     elif action=='face_decoration_reference':
         from .face_decoration_host import reference
         records[request]['payload']=reference(engine,state,target,payload,request_id=request)
@@ -310,6 +325,9 @@ def apply(engine,raw,emit):
         elif action=='lipstick_review':
             from .lipstick_host import stage_review
             candidate=stage_review(engine,state,target,payload)
+        elif action=='facial_sculpt_review':
+            from .facial_sculpt_host import stage_review
+            candidate,records[request]['payload']=stage_review(engine,state,target,payload)
         elif action=='face_decoration_review':
             from .face_decoration_host import stage_review
             candidate,records[request]['payload']=stage_review(engine,state,target,payload)
@@ -381,6 +399,8 @@ def finish(engine,p,error,emit):
     eye_bag_action=p.get('action') in EYE_BAG_ACTIONS
     review_read=style_read or p.get('action') in EYE_BAG_READS or p.get('action') in ('face_decoration_alias_image','face_decoration_support_alias_image')
     echo={'face_style_request':deepcopy({key:p.get(key) for key in ('action','document_id','document_epoch','document_revision','state_revision','association_revision','target','payload')})} if style_action else {}
+    if p.get('action') in SCULPT_ACTIONS:
+        echo={'facial_sculpt_request':deepcopy({key:p.get(key) for key in ('action','document_id','document_epoch','document_revision','state_revision','association_revision','target','payload')})}
     if p.get('action') in ('face_decoration_reference','face_decoration_review'):
         echo={'face_decoration_request':deepcopy({key:p.get(key) for key in ('action','document_id','document_epoch','document_revision','state_revision','association_revision','target','payload')})}
     if p.get('action') in DECORATION_ALIAS_ACTIONS:
@@ -401,7 +421,7 @@ def finish(engine,p,error,emit):
         controller(engine).retire(p['request_id'])
     # Publication can succeed before status emission or history recording fails.
     # Rollback also advances the graph fence; neither case is a proven refusal.
-    guarded_review=style_action or eye_bag_action or p.get('action') in DECORATION_ACTIONS
+    guarded_review=style_action or eye_bag_action or p.get('action') in DECORATION_ACTIONS or p.get('action') in SCULPT_ACTIONS
     owner=engine.__dict__.get('_people_graph_owner') if guarded_review else None
     fence_changed=(old.get('before_fence') is not None and
                    ((owner is None or owner.fence!=old['before_fence']) if guarded_review else engine._people_owner().fence!=old['before_fence']))
@@ -441,6 +461,8 @@ def finish(engine,p,error,emit):
         # evidence. Preserve only verified terminal/uncertain ledger diagnostics.
         result.pop('payload',None);result.pop('doc_state',None);result.pop('payload_released',None)
     records[p['request_id']]={'result':result,'digest':digest}
+    from .facial_sculpt_host import bound_receipt_images as bound_sculpt_images
+    bound_sculpt_images(records)
     from .face_decoration_host import bound_receipt_images
     bound_receipt_images(records)
     from .skin_colour_body_host import bound_receipt_payloads

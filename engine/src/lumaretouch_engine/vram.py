@@ -613,6 +613,7 @@ class PreviewPipeline:
             out=PEOPLE_PIPE.source_effect(self,'skin_evenness',out)
             out=PEOPLE_PIPE.source_effect(self,'skin_colour',out)
             out=PEOPLE_PIPE.source_effect(self,'facial_wrinkles',out)
+            out=PEOPLE_PIPE.source_effect(self,'facial_sculpt',out)
             out=PEOPLE_PIPE.source_effect(self,'lip_texture',out)
             out=PEOPLE_PIPE.source_effect(self,'lip_makeup',out)
             out=PEOPLE_PIPE.source_effect(self,'blush_makeup',out)

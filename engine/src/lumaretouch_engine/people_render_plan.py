@@ -21,10 +21,10 @@ def _assets_require_analysis(face, resolved):
     assets = face['local_assets']
     if not assets: return False
     from . import body_skin_evenness_state as EVENNESS, body_face_match_state as MATCH, collarbone_state as COLLARBONE
-    from . import eye_bag_preserve_state as EYE_BAGS, face_decoration_state as DECORATION
+    from . import eye_bag_preserve_state as EYE_BAGS, face_decoration_state as DECORATION, facial_sculpt_state as SCULPT
     families = {'body_skin_evenness_visibility': EVENNESS, 'body_face_match_visibility': MATCH,
                 'collarbone_visibility': COLLARBONE, 'eye_bag_ridge_visibility': EYE_BAGS,
-                'face_decoration_visibility': DECORATION, 'face_decoration': DECORATION}
+                'face_decoration_visibility': DECORATION, 'face_decoration': DECORATION, 'facial_sculpt_visibility': SCULPT}
     if set(assets) - set(families): return True
     from .people_resolver import materialize
     for kind, asset in assets.items():

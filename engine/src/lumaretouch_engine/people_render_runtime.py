@@ -70,9 +70,10 @@ def verify_analysis(face, analysis, shape):
 
 
 def prepare(state, asset_sha256, source, analyses, *, byte_budget, document_id=None, max_faces=32, recovery_assets=None, repaired=None,
-            creative_source=None, creative_repair_evidence=None, hair_assets=None, hair_evidence=None, hair_source_path=None, force_hair_prompted=False, eye_light_assets=None, blush_makeup_assets=None, face_decoration_assets=None, lipstick_assets=None,eyeliner_assets=None,eyelash_assets=None,brow_makeup_assets=None,iris_makeup_assets=None,skin_colour_body_assets=None,skin_finish_body_assets=None,body_skin_evenness_assets=None,body_face_match_assets=None,collarbone_assets=None,eye_bag_preserve_assets=None,body_bank=None):
+            creative_source=None, creative_repair_evidence=None, hair_assets=None, hair_evidence=None, hair_source_path=None, force_hair_prompted=False, eye_light_assets=None, blush_makeup_assets=None, face_decoration_assets=None,facial_sculpt_assets=None, lipstick_assets=None,eyeliner_assets=None,eyelash_assets=None,brow_makeup_assets=None,iris_makeup_assets=None,skin_colour_body_assets=None,skin_finish_body_assets=None,body_skin_evenness_assets=None,body_face_match_assets=None,collarbone_assets=None,eye_bag_preserve_assets=None,body_bank=None):
     state = S.check(state)
     A.FACE_DECORATION.validate_graph(state)
+    A.FACIAL_SCULPT.validate_graph(state)
     from .people_cross_owner import validate_owner
     validate_owner(state,asset_sha256,document_id)
     source_only = creative_source is not None
@@ -92,7 +93,7 @@ def prepare(state, asset_sha256, source, analyses, *, byte_budget, document_id=N
         # Each port carries the same canonical bank, but validate against its
         # actual supplied bank below rather than trusting that caller convention.
         banks = {'eye_light_visibility':eye_light_assets,'lipstick_visibility':lipstick_assets,
-            'blush_makeup_visibility':blush_makeup_assets,'face_decoration_visibility':face_decoration_assets,'eyeliner_visibility':eyeliner_assets,
+            'blush_makeup_visibility':blush_makeup_assets,'face_decoration_visibility':face_decoration_assets,'facial_sculpt_visibility':facial_sculpt_assets,'eyeliner_visibility':eyeliner_assets,
             'eyelash_visibility':eyelash_assets,'brow_makeup_visibility':brow_makeup_assets,
             'iris_makeup_visibility':iris_makeup_assets}
         for kind,bank in banks.items():
@@ -170,7 +171,7 @@ def prepare(state, asset_sha256, source, analyses, *, byte_budget, document_id=N
             face = state['faces'][key]; analysis = analyses[key]
             for asset in face['local_assets'].values():
                 stage = asset['kind']
-                if stage in ('skin_colour_body_visibility','skin_finish_body_visibility','body_skin_evenness_visibility','body_face_match_visibility','collarbone_visibility','eye_bag_ridge_visibility','face_decoration_visibility'):
+                if stage in ('skin_colour_body_visibility','skin_finish_body_visibility','body_skin_evenness_visibility','body_face_match_visibility','collarbone_visibility','eye_bag_ridge_visibility','face_decoration_visibility','facial_sculpt_visibility'):
                     # Separate operation-owned support, never generic recovery.
                     # Resolve each only when its own recipe is active below;
                     # dormant review cannot prevent disabling its own recipe.
@@ -402,6 +403,34 @@ def prepare(state, asset_sha256, source, analyses, *, byte_budget, document_id=N
                 local.extend(prepare_lip_texture(entry['face_ref'], analysis, effect_source,
                     values[A.LIP_TEXTURE.OP], byte_budget=byte_budget,
                     protected_boxes=lip_neighbors))
+            if A.FACIAL_SCULPT.active(values[A.FACIAL_SCULPT.OP]):
+                from .facial_sculpt_layer import prepare as prepare_facial_sculpt
+                from .facial_sculpt_support import raster as sculpt_raster
+                sculpt_neighbors = tuple(tuple(other['box']) for other_key, other in state['faces'].items()
+                    if other_key != key and other['asset_sha256'] == asset_sha256)
+                seen = set(); owned = 0
+                for row in analyses.values():
+                    for array in row.values():
+                        if isinstance(array,np.ndarray) and id(array) not in seen:
+                            seen.add(id(array)); owned += array.nbytes
+                owned += sum(f.resident_bytes() for f in fields)+field.resident_bytes()
+                owned += sum(a.nbytes for r in (*effects,*local)
+                    for a in (r.delta,r.weights,r.chroma_shift,r.log_gain) if a is not None)
+                for bank in (recovery_assets or {},owned_recovery):
+                    for row in bank.values():
+                        if not isinstance(row,dict): continue
+                        for array in row.values():
+                            if isinstance(array,np.ndarray) and id(array) not in seen:
+                                seen.add(id(array)); owned += array.nbytes
+                sculpt_budget=byte_budget-owned
+                if sculpt_budget < h*w*32+32*1024*1024:
+                    raise ValueError('Facial structure review raster exceeds remaining source memory budget')
+                sculpt_review = sculpt_raster(state,facial_sculpt_assets or {},entry['face_ref'],(h,w))
+                sculpt_record=prepare_facial_sculpt(entry['face_ref'],analysis,effect_source,
+                    values[A.FACIAL_SCULPT.OP],byte_budget=sculpt_budget,
+                    reviewed=sculpt_review,protected_boxes=sculpt_neighbors)
+                if sculpt_record is None: raise ValueError('Requested facial structure produced no source-owned field')
+                local.append(sculpt_record)
             if A.BROW_ENHANCE.active(values[A.BROW_ENHANCE.OP]):
                 from .brow_enhance_layer import prepare as prepare_brow_enhance
                 brow_neighbors = tuple(tuple(other['box']) for other_key, other in state['faces'].items()

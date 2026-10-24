@@ -10,7 +10,7 @@ from .facial_wrinkle_layer import FacialWrinkleLayer, bounds as wrinkle_bounds
 from .under_eye_layer import UnderEyeLayer, bounds as eye_bounds, KEYS as EYE_KEYS
 from .ops import enhance as H
 
-STAGES = ('body_face_match', 'body_skin_evenness', 'collarbone', 'skin_evenness', 'skin_colour', 'facial_wrinkles', 'eye_detail', 'eye_bag_preserve', 'lip_texture', 'lip_makeup', 'enhance', 'hair_colour', 'eye_light', 'blush_makeup', 'face_decoration', 'lipstick','eyeliner','eyelash','brow_enhance','brow_makeup','iris_makeup')
+STAGES = ('body_face_match', 'body_skin_evenness', 'collarbone', 'skin_evenness', 'skin_colour', 'facial_wrinkles', 'facial_sculpt', 'eye_detail', 'eye_bag_preserve', 'lip_texture', 'lip_makeup', 'enhance', 'hair_colour', 'eye_light', 'blush_makeup', 'face_decoration', 'lipstick','eyeliner','eyelash','brow_enhance','brow_makeup','iris_makeup')
 
 
 @dataclass(frozen=True)
@@ -112,6 +112,9 @@ def verify_recovery(face_ref, stage, recovery, shape):
 def apply(stage, current, records, *, recovery=None):
     """One operator's before/after pair; no repeated application on overlap."""
     if stage not in STAGES: raise ValueError('Unknown portrait stage')
+    if stage == 'facial_sculpt':
+        from .facial_sculpt_composition import apply_records_np
+        return apply_records_np(current, records, recovery)
     if stage == 'collarbone':
         from .collarbone_composition import apply_records_np
         return apply_records_np(current, records, recovery)

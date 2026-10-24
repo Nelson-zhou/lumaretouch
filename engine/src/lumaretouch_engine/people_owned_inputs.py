@@ -52,6 +52,7 @@ def preview(engine, state=None, *, body_bank=_MISSING, body_source=None, support
             'eye_light_assets': support_bank,
             'blush_makeup_assets': support_bank,
             'face_decoration_assets': support_bank,
+            'facial_sculpt_assets': support_bank,
             'lipstick_assets': support_bank,
             'eyeliner_assets': support_bank,
             'eyelash_assets': support_bank,

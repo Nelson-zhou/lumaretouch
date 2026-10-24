@@ -19,6 +19,12 @@ def digest(state, asset):
             (row['scope']=='person' and row['target_id'] in persons) or
             (row['scope']=='group' and row['target_id'] in groups)]
     defaults=A.defaults()
+    # v1 history proofs predate this additive operation. Do not inject its
+    # absent neutral defaults into old source-switch receipts. resolve() still
+    # includes every explicit local/group/person leaf and conflict, and the
+    # source slice retains its immutable support pointers. No stored intent is
+    # dropped or reinterpreted; only a newly invented default row is excluded.
+    defaults.pop('lnx.facial_sculpt.v1',None)
     resolved={}
     for key in sorted(faces):
         value=resolve(state,key,defaults)

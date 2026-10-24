@@ -1,0 +1,149 @@
+{
+  "version": 1,
+  "subset": "facial-sculpt-family-author-source",
+  "baseline": "b655c75a456e620b8ee937ed49756aeff7f9dd88",
+  "authored_at_utc": "2026-10-24T16:47:00Z",
+  "requirement_ids": [
+    "LNX-REF-PC-32471-C-8f773e9125",
+    "LNX-REF-PC-32471-C-01b2ee2d32"
+  ],
+  "verification": {
+    "stdlib_ast_parse": "PASSED_10_PYTHON_SOURCES",
+    "source_hashes": "RECORDED",
+    "build": "UNRUN",
+    "product_imports": "UNRUN",
+    "tests": "UNRUN",
+    "typecheck": "UNRUN",
+    "inference": "UNRUN",
+    "photographic_acceptance": "UNRUN"
+  },
+  "scope": "25 new family files; excludes parent shared integration/native boundary and this manifest itself",
+  "files": [
+    {
+      "path": "core/facial_sculpt/Cargo.toml",
+      "sha256": "5e455cd560649de822319253084ed9ca10b13f2f44f6f00b3a2d95cdee5fda85",
+      "bytes": 222
+    },
+    {
+      "path": "core/facial_sculpt/README.md",
+      "sha256": "f02dc00059afdf20397559170acead09f8e96b07a7625e24a8bafd55c61850b4",
+      "bytes": 1003
+    },
+    {
+      "path": "core/facial_sculpt/facial_sculpt.h",
+      "sha256": "e5b252d5bf4e3cff11b30e8f0cbc7ed9a813a76114527a57ad9ed4ea0631291d",
+      "bytes": 802
+    },
+    {
+      "path": "core/facial_sculpt/facial_sculpt_tests.rs",
+      "sha256": "102eb4e6e01d3c605cd0fe9ea25b513391572502601bf15df6ff1ab5b60072b5",
+      "bytes": 3068
+    },
+    {
+      "path": "core/facial_sculpt/lib.rs",
+      "sha256": "992a8bcb53ff0b5418b6697c58b61f0e11593e0841746df15b0072d2792dfe39",
+      "bytes": 7407
+    },
+    {
+      "path": "docs/facial-sculpt/ACCEPTANCE_UNRUN.md",
+      "sha256": "304914122395302fe84e38a181ad767f3bbe5a77cdcbbc26011385f03ae34ade",
+      "bytes": 4533
+    },
+    {
+      "path": "docs/facial-sculpt/INTEGRATION.md",
+      "sha256": "a1911273d20e7f1e1ba18d31fa8e32996520be1349d26ef8ebecafcc3425074c",
+      "bytes": 9804
+    },
+    {
+      "path": "docs/facial-sculpt/README.md",
+      "sha256": "952a07e004b8f115a5356a47bcfc194f110b86378a11ac9bd4d7a0d997368aea",
+      "bytes": 7860
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/facial_sculpt_composition.py",
+      "sha256": "ffcd382c0e8795bd64742c61b555b602681b56a07c4bddc3e6e542bb6bb17010",
+      "bytes": 9382
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/facial_sculpt_geometry.py",
+      "sha256": "4414d415a4ea18e0a4705a5ded54f1dc9a0e92674d7db7d3bfa1cc78c5f7e336",
+      "bytes": 6394
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/facial_sculpt_host.py",
+      "sha256": "6a61a6681c598248c147c96e7eed24c6b22bc94ec5d85d4a4feb0777aa86525d",
+      "bytes": 10844
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/facial_sculpt_layer.py",
+      "sha256": "11083256763a1990085733a6b27734ec82bd9e856d46b2e05d9f41626a17c55d",
+      "bytes": 4597
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/facial_sculpt_native.py",
+      "sha256": "1d7b1c226cc2dafb666bc3c8dcd9aad02479abea3b20a9a42dcd7bcc27531508",
+      "bytes": 4751
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/facial_sculpt_project.py",
+      "sha256": "4445a73cf7010ea156831f5a79a0570d45c6b9fde13eeb17e47f942fa3983c1b",
+      "bytes": 5214
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/facial_sculpt_scope.py",
+      "sha256": "04fa9443a043827313da9869b8a9e1fc1abba0455268684dd9cf03ee4a941bef",
+      "bytes": 4132
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/facial_sculpt_state.py",
+      "sha256": "7648f4cd3672b6ef48d9b73d5f366f92c4a846dd5c5fcfe5868da8a243d50a58",
+      "bytes": 1860
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/facial_sculpt_support.py",
+      "sha256": "318c61791ff7c1b88d60b03e1f1caaa90cc92263ba373e7271a38ff05adbc7d5",
+      "bytes": 6109
+    },
+    {
+      "path": "engine/tests/test_facial_sculpt_contract_unrun.py",
+      "sha256": "4de34cb0b27cfe6921bee2e8daeeb905955593dd4e6b7aeda461e4886fd65740",
+      "bytes": 5930
+    },
+    {
+      "path": "packaging/build-facial-sculpt.sh",
+      "sha256": "d667102c564584a4cc64f3b1e1983ceeca90d769280f887246cabdd9b37fbb14",
+      "bytes": 610
+    },
+    {
+      "path": "ui/src/facialSculpt/FacialSculptPanel.tsx",
+      "sha256": "73362cdc447cad4743a75bec0f0473ea419c1100e81efc591e4b8fed2dcaa9a0",
+      "bytes": 9095
+    },
+    {
+      "path": "ui/src/facialSculpt/FacialSculptSupportEditor.tsx",
+      "sha256": "b560a76d03a06a963e4a2980918f43bc2d19fecce248bbe51702fad3ceaf1261",
+      "bytes": 11321
+    },
+    {
+      "path": "ui/src/facialSculpt/facialSculpt.css",
+      "sha256": "702fec772690aea6a781da7ebd1f17509d5dd02c72a4b0ba3f363f90a78d76b5",
+      "bytes": 1020
+    },
+    {
+      "path": "ui/src/facialSculpt/facial_sculpt_model.unrun.test.ts",
+      "sha256": "bea9633f456ec8b011d7e704700ab4553f964575542d1dbeb5f0d4866bf4bbaf",
+      "bytes": 2309
+    },
+    {
+      "path": "ui/src/facialSculpt/model.ts",
+      "sha256": "073c393ce97a5451422eec69feef3a91774c360d4ef1737411f087d5f7496795",
+      "bytes": 13767
+    },
+    {
+      "path": "ui/src/facialSculpt/review.ts",
+      "sha256": "1bd304024a85584c000bef2a51dae30acf69d250685ee85454eee382c952622c",
+      "bytes": 2376
+    }
+  ],
+  "integration_adjustment": "Parent corrected matching released-reference draft cleanup after native/UI static audit; final integrated FREEZE.json supersedes isolated boundary claims."
+}

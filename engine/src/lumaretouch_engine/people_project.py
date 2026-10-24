@@ -37,6 +37,8 @@ def validate_records(value):
                 validate_brow_makeup_graph(value[key])
                 from .brow_enhance_project import validate_graph as validate_brow_enhance_graph
                 validate_brow_enhance_graph(value[key])
+                from .facial_sculpt_project import validate_graph as validate_facial_sculpt_graph
+                validate_facial_sculpt_graph(value[key])
                 from .eye_bag_preserve_project import validate_graph as validate_eye_bag_graph
                 validate_eye_bag_graph(value[key])
                 from .lip_texture_project import validate_graph as validate_lip_texture_graph
@@ -60,6 +62,8 @@ def validate_records(value):
             validate_project(value)
             from .face_decoration_support import validate_project as validate_decoration_support
             validate_decoration_support(value)
+            from .facial_sculpt_support import validate_project as validate_facial_sculpt_support
+            validate_facial_sculpt_support(value)
             from .blush_makeup_support import validate_project as validate_blush_support
             validate_blush_support(value)
             from .lipstick_support import validate_project as validate_lipstick_support

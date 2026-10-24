@@ -5369,9 +5369,23 @@
       "source_url": "https://www.pixcakeai.com/guide/32471",
       "source_child_index": 0,
       "title": "高光立体",
-      "status": "pending_independent_verification",
-      "implementation": [],
-      "verification": []
+      "status": "source_connected_manual_review_acceptance_unrun",
+      "implementation": [
+        "core/facial_sculpt/lib.rs",
+        "engine/src/lumaretouch_engine/facial_sculpt_layer.py",
+        "engine/src/lumaretouch_engine/people_render_runtime.py",
+        "engine/src/lumaretouch_engine/people_pipeline.py",
+        "ui/src/facialSculpt/FacialSculptPanel.tsx",
+        "ui/src/components/RetouchPanel.tsx"
+      ],
+      "verification": [
+        "docs/facial-sculpt/INTEGRATION-CONTRACT.md",
+        "docs/facial-sculpt/ACCEPTANCE_UNRUN.md",
+        "engine/tests/test_facial_sculpt_integration_unrun.py",
+        "ui/src-tauri/src/facial_sculpt_protocol_unrun.rs"
+      ],
+      "requirement_id": "LNX-REF-PC-32471-C-8f773e9125",
+      "scope_note": "独立高光/阴影参数；原始 Rust 双尺度支撑归一化对数亮度结构增强，实际当前来源、测量人物皮肤与独立人工可见性审核。不是光泽、磨皮、曝光别名，不声称学习式 AI、三维重光照或官方效果等价。当前照片原始/不透明 SDR 派生源接入规范预览、完整源导出、历史和持久化；跨照片预设/批量/人物分组传播、共享源多文档修改和专属效果恢复仍未接入。所有构建、运行、数值、真实照片及视觉验收 UNRUN。"
     },
     {
       "id": "control:PC-32471:2",
@@ -5380,9 +5394,23 @@
       "source_url": "https://www.pixcakeai.com/guide/32471",
       "source_child_index": 1,
       "title": "阴影立体",
-      "status": "pending_independent_verification",
-      "implementation": [],
-      "verification": []
+      "status": "source_connected_manual_review_acceptance_unrun",
+      "implementation": [
+        "core/facial_sculpt/lib.rs",
+        "engine/src/lumaretouch_engine/facial_sculpt_layer.py",
+        "engine/src/lumaretouch_engine/people_render_runtime.py",
+        "engine/src/lumaretouch_engine/people_pipeline.py",
+        "ui/src/facialSculpt/FacialSculptPanel.tsx",
+        "ui/src/components/RetouchPanel.tsx"
+      ],
+      "verification": [
+        "docs/facial-sculpt/INTEGRATION-CONTRACT.md",
+        "docs/facial-sculpt/ACCEPTANCE_UNRUN.md",
+        "engine/tests/test_facial_sculpt_integration_unrun.py",
+        "ui/src-tauri/src/facial_sculpt_protocol_unrun.rs"
+      ],
+      "requirement_id": "LNX-REF-PC-32471-C-01b2ee2d32",
+      "scope_note": "独立高光/阴影参数；原始 Rust 双尺度支撑归一化对数亮度结构增强，实际当前来源、测量人物皮肤与独立人工可见性审核。不是光泽、磨皮、曝光别名，不声称学习式 AI、三维重光照或官方效果等价。当前照片原始/不透明 SDR 派生源接入规范预览、完整源导出、历史和持久化；跨照片预设/批量/人物分组传播、共享源多文档修改和专属效果恢复仍未接入。所有构建、运行、数值、真实照片及视觉验收 UNRUN。"
     },
     {
       "id": "control:PC-32471:3",
