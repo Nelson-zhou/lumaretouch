@@ -36,7 +36,7 @@ export function observeSupportAliasHistory(sync: unknown, observation?: number):
     if (!object(row) || !token(row.batch_id) || !Object.hasOwn(row, 'face_decoration_support_alias_review')) continue;
     const marker = row.face_decoration_support_alias_review;
     const valid = validSupportAliasMarker(marker) && row.targets === marker.member_count && JSON.stringify(row.module_scope) === JSON.stringify(['lnx.people_graph.v1'])
-      && !['face_decoration_alias_review', 'face_decoration_cohort_review', 'face_decoration_batch_review', 'face_style_alias_review', 'eye_bag_alias_review',
+      && !['face_decoration_preset_alias_review', 'face_decoration_alias_review', 'face_decoration_cohort_review', 'face_decoration_batch_review', 'face_style_alias_review', 'eye_bag_alias_review',
         'eye_bag_batch_review', 'eye_bag_cohort_review', 'eye_bag_preset_alias_review', 'eye_bag_recovery_alias_review'].some(field => Object.hasOwn(row, field));
     retain(workspace, row.batch_id, valid ? {memberCount: marker.member_count, marker: structuredClone(marker)} : {memberCount: null, marker: null});
   }

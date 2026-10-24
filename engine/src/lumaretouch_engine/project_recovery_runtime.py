@@ -51,7 +51,7 @@ def finish(engine, boundary, error=None):
     if decoration_cohort_read_only(message):return
     from .face_decoration_batch_store import read_only as decoration_batch_read_only
     from .face_decoration_preset_store import read_only as decoration_preset_read_only
-    if decoration_batch_read_only(message) or decoration_preset_read_only(message):return
+    if decoration_batch_read_only(message) or decoration_preset_read_only(message):return  # Includes exact paged mixed alias reads; no publication.
     from .eye_bag_batch_store import read_only as eye_bag_batch_read_only
     if eye_bag_batch_read_only(message):return  # Exact target review cannot publish or taint committed state.
     from .eye_bag_preset_store import read_only as eye_bag_preset_read_only

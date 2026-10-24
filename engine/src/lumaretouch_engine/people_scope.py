@@ -21,7 +21,7 @@ def legacy_batch_face_check(engine,row,*,live=False):
     return engine._face_known_single(row,live=live)
 
 
-def plan_preset(engine,state,*,require_active=True,reviewed_collarbone=False,reviewed_face_decoration=False,reviewed_eye_bag=False,reviewed_eye_bag_aliases=False,replace_legacy_eye_bag=False,**kwargs):
+def plan_preset(engine,state,*,require_active=True,reviewed_collarbone=False,reviewed_face_decoration=False,reviewed_face_decoration_aliases=False,reviewed_eye_bag=False,reviewed_eye_bag_aliases=False,replace_legacy_eye_bag=False,**kwargs):
     """Preserve existing single-face presets; never infer a multi-face target.
 
     The existing preset owner owns receipts, rollback, document fences/history.
@@ -35,6 +35,8 @@ def plan_preset(engine,state,*,require_active=True,reviewed_collarbone=False,rev
         raise ValueError('Shared eye-bag planning requires its exact dedicated review owner')
     if type(reviewed_face_decoration) is not bool:
         raise ValueError('Decoration planner review admission is a private boolean, not imported recipe authority')
+    if type(reviewed_face_decoration_aliases) is not bool or (reviewed_face_decoration_aliases and not reviewed_face_decoration):
+        raise ValueError('Shared decoration planning requires its dedicated complete preset review')
     managed=engine._people_managed()
     if managed and require_active:require_active_owner(engine)
     from . import enhance_scope as ENHANCE, teeth_colour_apply as TEETH, red_eye_apply as RED_EYE
@@ -175,7 +177,7 @@ def plan_preset(engine,state,*,require_active=True,reviewed_collarbone=False,rev
             raise ValueError('唇部暗细纹预设需要当前明确的规范人物，不能静默丢弃或转换为口红或 AI 祛瑕配方')
         if eye_bag_requested or eye_bag_recipe!=EYE_BAG_PRESERVE.S.neutral():
             raise ValueError('眼袋保留预设需要当前规范人物，不能静默丢弃或转换旧版眼袋配方')
-        return snapshot(state,kwargs)
+        return snapshot(state,kwargs,review_only=reviewed_face_decoration_aliases)
     owner=engine._people_owner();owner_fence=owner.fence
     before=owner.snapshot();asset=engine._people_source()['sha256']
     faces=[face for face in before['faces'].values() if face['asset_sha256']==asset and face['enabled']]
@@ -410,6 +412,13 @@ def plan_preset(engine,state,*,require_active=True,reviewed_collarbone=False,rev
             raise ValueError('眼袋保留预设的文档、人物归属或有效来源已变化，请重新选择')
     decoration_involved=(FACE_DECORATION.FIELD in state and
         (decoration_requested or decoration_recipe!=current[FACE_DECORATION.FIELD]))
+    if reviewed_face_decoration_aliases:
+        # Planning only: use the explicit selected retained face, never infer a
+        # one-face donor or discard other enabled faces from the actual graph.
+        from .face_decoration_preset_plan import admit
+        admit(engine,before,current[FACE_DECORATION.TARGET],decoration_recipe,reviewed_aliases=True)
+        faces=[face for face in faces if S.face_ref(face)==current[FACE_DECORATION.TARGET]]
+        if len(faces)!=1:raise ValueError('Mixed decoration preset requires its exact selected retained face')
     if decoration_involved:
         if reviewed_face_decoration:
             from .face_decoration_preset_admission import validate_target
@@ -468,7 +477,8 @@ def plan_preset(engine,state,*,require_active=True,reviewed_collarbone=False,rev
             values=A.recipes(resolve(candidate,current[CHIN_LENGTH.TARGET]['face_instance_id'],A.defaults()))
             CHIN_LENGTH.S.check_coexistence(values[CHIN_LENGTH.OP],values[A.DEFORM]['small_chin'])
         return snapshot(state,kwargs,owner=owner,owner_fence=owner_fence,before=before,candidate=candidate,
-                        target_ref=S.face_ref(faces[0]) if len(faces)==1 else None)
+                        target_ref=S.face_ref(faces[0]) if len(faces)==1 else None,
+                        review_only=reviewed_face_decoration_aliases)
     if len(faces)!=1:raise ValueError('A legacy portrait preset requires one explicit unambiguous enabled face; use people parameter review for multiple faces')
     key=faces[0]['face_instance_id']
     if decoration_involved and current[FACE_DECORATION.TARGET]!=S.face_ref(faces[0]):
@@ -514,7 +524,10 @@ def plan_preset(engine,state,*,require_active=True,reviewed_collarbone=False,rev
     if eye_bag_involved and current[EYE_BAG_PRESERVE.TARGET]!=S.face_ref(faces[0]):
         raise ValueError('眼袋保留预设的当前人物与唯一可应用目标不一致')
     for op,path,value in patches:candidate=S.set_override(candidate,'face',key,op,path,value)
-    if decoration_involved:
+    if reviewed_face_decoration_aliases:
+        from .face_decoration_preset_plan import check_scalar_graph
+        check_scalar_graph(before,candidate,S.face_ref(faces[0]))
+    elif decoration_involved:
         from .face_decoration_project import require_transition
         require_transition(engine,before,candidate)
     if eye_bag_involved:
@@ -548,7 +561,7 @@ def plan_preset(engine,state,*,require_active=True,reviewed_collarbone=False,rev
     # depend on whether graph publication has already happened.
     if any(op in (A.ENHANCE,EYE_LIGHT,FACE_DECORATION.OP,BLUSH,LIPSTICK,EYELINER,EYELASH,BROW_MAKEUP,IRIS,SKIN_COLOUR.OP,SKIN_FINISH.OP,SKIN_GLOSS.OP,SKIN_TEXTURE.OP,SKIN_EVENNESS.OP,BODY_SKIN_EVENNESS.OP,COLLARBONE.OP,BODY_FACE_MATCH.OP,FACE_CONTOUR.OP,SLIM_FACE.OP,FACE_SIZE.OP,LOWER_FACE.OP,MID_FACE.OP,CHIN_SHAPE.OP,CHIN_LENGTH.OP,PHILTRUM.OP,EYE_SYMMETRY.OP,BROW_ENHANCE.OP,LIP_TEXTURE.OP,EYE_BAG_PRESERVE.OP) for op,_,_ in patches):kwargs['strict_local']=True
     return snapshot(state,kwargs,owner=owner,owner_fence=owner_fence,before=before,candidate=candidate,
-                    patches=patches,target_ref=S.face_ref(faces[0]))
+                    patches=patches,target_ref=S.face_ref(faces[0]),review_only=reviewed_face_decoration_aliases)
 
 
 def execute_plan(engine,plan,**kwargs):
@@ -558,7 +571,7 @@ def execute_plan(engine,plan,**kwargs):
     additionally fences document, source, full state and support before entry.
     """
     from .people_preset_plan import PresetReplayPlan, clone_state
-    if not isinstance(plan,PresetReplayPlan):raise ValueError('Exact portrait preset plan required')
+    if type(plan) is not PresetReplayPlan:raise ValueError('Alias review-only plans require their composite batch ledger; exact ordinary plan required')
     options={**plan.kwargs,**kwargs}
     if plan.kwargs.get('strict_local') is True:options['strict_local']=True
     if not plan.managed:
@@ -588,7 +601,7 @@ def restore_plan(engine,plan,previous_state,*,expected_owner_fence=None,**kwargs
     remains responsible for source/document/non-people state and history fences.
     """
     from .people_preset_plan import PresetReplayPlan, clone_state, graph_content
-    if not isinstance(plan,PresetReplayPlan):raise ValueError('Exact portrait preset rollback plan required')
+    if type(plan) is not PresetReplayPlan:raise ValueError('Alias review-only rollback requires its composite batch ledger; exact ordinary plan required')
     options={**kwargs,'strict_local':True}
     if not plan.managed:return engine._replay_state(clone_state(previous_state),**options)
     owner=engine._people_owner()

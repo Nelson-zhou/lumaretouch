@@ -54,7 +54,7 @@ closing the editor cannot. Reopen is not a claim the old request never wrote.
   selected/active faces; oversized coverage refuses before rendering, never truncates. Dormant/unavailable or
   hidden source-bearing state without complete proof remains a refusal.
 - Independent virtual-copy/import owners are not merged by matching pixels.
-- Mixed-preset aliases and alias effect-recovery painting remain separate gaps.
+- Mixed-preset aliases now use PRESET-ALIAS-CONTRACT.md; alias effect-recovery painting remains a deferred gap.
 - Source review and output comparison are bounded RGB8 display evidence, not
   native-resolution or high-bit photographic acceptance. Original/derived
   opaque SDR and the existing PNG16 master contracts remain unchanged.

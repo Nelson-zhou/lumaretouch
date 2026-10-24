@@ -19,6 +19,14 @@ fn require_xmp_support(state: &AppState, command: &Value) -> Result<(), String> 
     }
     Ok(())
 }
+fn require_decoration_alias_support(state: &AppState, command: &Value) -> Result<(), String> {
+    if (face_decoration::alias_apply(command) || (command["action"] == "face_decoration_visual"
+        && command.get("member_document_id").is_some()))
+        && state.ready_caps.lock().map_err(|_| "capability lock poisoned")?["face_decoration_preset_alias_protocol"] != 1 {
+        return Err("current engine does not support complete decoration preset alias review".into());
+    }
+    Ok(())
+}
 pub(crate) fn enqueue(state: &AppState, handle: &EngineHandle, command: Value) -> Result<(), String> {
     face_decoration::command(&command)?;
     eye_bag::command(&command)?;
@@ -30,6 +38,7 @@ pub(crate) fn enqueue(state: &AppState, handle: &EngineHandle, command: Value) -
     crate::torso_transfer_protocol::head_command(&command)?;
     crate::preset_host::xmp_protocol::command(&command)?;
     require_xmp_support(state, &command)?;
+    require_decoration_alias_support(state, &command)?;
     let Some(id) = command["request_id"].as_str().map(str::to_owned) else { return handle.send(command) };
     let mut host = state.preset_results.lock().map_err(|_| "preset receipt lock poisoned")?;
     host.begin_command(handle.epoch(), &command)?;
@@ -126,6 +135,7 @@ pub(crate) fn preset(
     crate::torso_transfer_protocol::head_command(&cmd)?;
     crate::preset_host::xmp_protocol::command(&cmd)?;
     require_xmp_support(&state, &cmd)?;
+    require_decoration_alias_support(&state, &cmd)?;
     state.send_to_engine(cmd)?;
     Ok(json!({"requested": true}))
 }

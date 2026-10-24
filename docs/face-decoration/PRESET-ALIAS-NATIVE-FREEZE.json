@@ -1,0 +1,81 @@
+{
+  "baseline": "279b7f28d2ba281e1f514dccba89ced06f59282a",
+  "status": "FROZEN_SOURCE_ONLY_FACE_DECORATION_PRESET_ALIAS_NATIVE_UNRUN",
+  "scope": "Additive complete decoration mixed-preset native boundary, exact owned review/publication/history and bounded transport-first late terminal settlement. No main.rs or legacy scalar rewrites.",
+  "validation": {
+    "static_review": "Source schema/call-path inspection; independent audit found no blocking late-terminal ownership hole.",
+    "whitespace": "git diff --check -- ui/src-tauri/src docs/face-decoration/PRESET-ALIAS-NATIVE-CONTRACT.md completed without findings.",
+    "native": "UNRUN",
+    "runtime": "UNRUN",
+    "typecheck": "UNRUN",
+    "image_acceptance": "UNRUN",
+    "tests": "AUTHORED_UNRUN"
+  },
+  "files": [
+    {
+      "path": "ui/src-tauri/src/face_decoration_preset_alias_protocol.rs",
+      "sha256": "d76c29782837461cabfe28d76367cf4d151a32785617f5655f9df1ab20f92118",
+      "bytes": 9375
+    },
+    {
+      "path": "ui/src-tauri/src/face_decoration_preset_alias_protocol_unrun.rs",
+      "sha256": "628676d1663a549282352906f72a446fec4b86ba4edb92f2b2c5c865fb0d08ae",
+      "bytes": 18710
+    },
+    {
+      "path": "ui/src-tauri/src/face_decoration_preset_history_unrun.rs",
+      "sha256": "26343d43799ef2f6c6f055c5a9038a7da84b47806f26398173444ca7eea7683a",
+      "bytes": 8868
+    },
+    {
+      "path": "ui/src-tauri/src/face_decoration_preset_protocol.rs",
+      "sha256": "c70932d854fe90fbe29eb7cdc912dc063bc63b8610760f926f85e7023228904e",
+      "bytes": 10675
+    },
+    {
+      "path": "ui/src-tauri/src/eye_bag_preset_protocol.rs",
+      "sha256": "1410daab0ee202245404228dc3f4c3e2d226f512cd53d5204f8002e8667c9939",
+      "bytes": 11038
+    },
+    {
+      "path": "ui/src-tauri/src/preset_api.rs",
+      "sha256": "1e3f3e3ecb54491a7ed0d7ebbf232f9dd9a47df1cb0ec8a263d8f2d251faa81c",
+      "bytes": 7053
+    },
+    {
+      "path": "ui/src-tauri/src/receipt_host.rs",
+      "sha256": "3b8f6ecf63e03251208d8c07a7b34a532109810ac4b83d34eaa7e12f7455ae23",
+      "bytes": 43372
+    },
+    {
+      "path": "ui/src-tauri/src/batch_history_protocol.rs",
+      "sha256": "37e68707890232185232d48bc3f7b0daa31cbb01dc5aa9b5b2a8b46c825a8720",
+      "bytes": 7656
+    },
+    {
+      "path": "ui/src-tauri/src/preset_alias_history_fence.rs",
+      "sha256": "13023b77faf068dd67a855df8ec6f778cd95aee11c016ce263dffc3eba39aafc",
+      "bytes": 10098
+    },
+    {
+      "path": "ui/src-tauri/src/preset_alias_recovery_fence.rs",
+      "sha256": "1f71d2f5e9d927f5ee1e48779e51bd453f4c67ce7686ee0a02b9653f266228be",
+      "bytes": 7547
+    },
+    {
+      "path": "ui/src-tauri/src/project_recovery_fence.rs",
+      "sha256": "8093220dd760d96170d9442243dada4a09de1c5c2af806cda59f08a083365fa9",
+      "bytes": 10528
+    },
+    {
+      "path": "ui/src-tauri/src/effect_recovery_alias_protocol.rs",
+      "sha256": "c2b7186e1d5eca9e4d91d4325f4b6ab6a5723bc20113bd72f9b6ce8565571c84",
+      "bytes": 10409
+    },
+    {
+      "path": "docs/face-decoration/PRESET-ALIAS-NATIVE-CONTRACT.md",
+      "sha256": "3501970952de686fa39abc80bb0b3d5104ed7302b8c16a200cbc2c0b19e87259",
+      "bytes": 5522
+    }
+  ]
+}

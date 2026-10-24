@@ -1,3 +1,4 @@
+import {decorationPresetAliasWritePending,subscribeDecorationPresetAliasWrites,decorationPresetAliasWorkspace,subscribeDecorationPresetAliasWorkspace,sameDecorationPresetAliasMarker,decorationPresetAliasReadback,retainDecorationPresetAliasReadback,completeDecorationPresetAliasReadback,type DecorationPresetAliasReadback} from '../faceDecoration/presetAliasHistoryRegistry';
 import {OP as DECORATION_OP,decorationPresetKey,decorationPresetAck} from '../faceDecoration/transferModel';
 import {EYE_BAG_PRESET_OP,eyeBagPresetKey,eyeBagPresetAck,neutralEyeBagPreset} from '../eyeBagPreserve/presetModel';
 import {COLLARBONE_PRESET_OP,collarbonePresetKey,collarbonePresetAck} from '../collarbone/presetModel';
@@ -9,14 +10,15 @@ import {WAIST_TRANSFER_OP,waistTransferReviewKey,waistTransferAck} from '../wais
 import {HEAD_TRANSFER_OP,headTransferReviewKey,headTransferAck} from '../headSize/transferModel';
 import {OPTICS_AUTO_OP,OPTICS_MANUAL_OP} from '../optics/transferReviewModel';
 import {defaultMaskTransfer,LOCAL_GRADE_OP} from '../localMasks/transfer';
-import {useEffect,useReducer,useRef,useState} from 'react';
+import {useEffect,useReducer,useRef,useState,useSyncExternalStore} from 'react';
 import {confirm,open} from '@tauri-apps/plugin-dialog';
-import {runPreset,readPresetResult,type PresetState} from '../native';
+import {runPreset,readPresetResult,decorationPresetAliasAvailable,engineStatus,type PresetState} from '../native';
 import {createPresetWorkflow,initialPresetUi,type PresetContext,type PresetUi} from './presetWorkflow';
 import {initialPresetForm,presetFormReducer,presetFromLabel,unavailableScope} from './presetModel';
 import {validXmpAck,validXmpSummary,xmpReviewAck,xmpReviewKey,type XmpAck,type XmpReport} from '../xmpImport/model';
 type XmpImportDraft={path:string;id?:string;report:XmpReport};
 export function usePresetWorkflow(context:PresetContext,catalog:PresetState|null,onRefresh:()=>Promise<void>,face:{ok:boolean;why:string}){
+  const decorationAliasPending=useSyncExternalStore(subscribeDecorationPresetAliasWrites,decorationPresetAliasWritePending,decorationPresetAliasWritePending);
   const [decorationImage,setDecorationImage]=useState<{key:string;ready:boolean}>({key:'',ready:false});
   const [eyeBagReplaceLegacy,setEyeBagReplaceLegacy]=useState<boolean|null>(null);
   const [eyeBagImage,setEyeBagImage]=useState<{key:string;ready:boolean}>({key:'',ready:false});
@@ -35,6 +37,27 @@ export function usePresetWorkflow(context:PresetContext,catalog:PresetState|null
   useEffect(()=>setLocalMaskTransfer(v=>({...v,groups:null})),[form.selectedId]);
   useEffect(()=>setSaveMaskTransfer(v=>({...v,groups:null})),[context.documentId]);
   const [note,setNote]=useState(''),[dialogBusy,setDialogBusy]=useState(false);
+  const [decorationReadbackError,setDecorationReadbackError]=useState(()=>decorationPresetAliasReadback()?'已有一笔终态已确认的完整成员状态尚未核对，请重试只读刷新；不会再次应用。':''),[decorationRefreshing,setDecorationRefreshing]=useState(false);
+  const decorationReadback=useRef<DecorationPresetAliasReadback|null>(decorationPresetAliasReadback());
+  useEffect(()=>subscribeDecorationPresetAliasWorkspace(replacement=>{
+    if(decorationReadback.current?.epoch===replacement.previous){decorationReadback.current=null;setDecorationReadbackError('');setDecorationRefreshing(false);}
+  }),[]);
+  async function refreshDecorationReadback(){
+    const captured=decorationReadback.current;if(!captured)return;
+    setDecorationRefreshing(true);
+    try{
+      await latest.current.onRefresh();const fresh=await engineStatus();
+      if(decorationReadback.current!==captured)return;
+      const sync=fresh.session?.sync,row=sync?.batches.find(item=>item.batch_id===captured.batchId);
+      const publicationMatches=captured.marker?!!row&&!row.undone&&row.targets===captured.marker.member_count&&JSON.stringify(row.module_scope)===JSON.stringify(['lnx.people_graph.v1'])
+        &&sameDecorationPresetAliasMarker(row.face_decoration_preset_alias_review,captured.marker):!!sync&&!sync.batches.some(item=>item.face_decoration_preset_alias_review?.review_sha256===captured.reviewSha256);
+      if(!fresh.engine_alive||sync?.workspace_generation!==captured.epoch||decorationPresetAliasWorkspace()!==captured.epoch
+        ||!publicationMatches
+        ||!captured.memberIds.every(id=>fresh.session?.docs.filter(doc=>doc.document_id===id&&!doc.trashed).length===1))throw Error('新状态未完整证明原批次、全部成员和当前工作区');
+      completeDecorationPresetAliasReadback(captured.id);decorationReadback.current=null;setDecorationReadbackError('');
+    }catch(error){if(decorationReadback.current===captured)setDecorationReadbackError(`应用或补偿恢复回执已确认，但完整成员状态刷新尚未核对：${String(error)}。请重试只读刷新，不要重复应用。`);}
+    finally{if(decorationReadback.current===captured||!decorationReadback.current)setDecorationRefreshing(false);}
+  }
   const latest=useRef({context,catalog,onRefresh,face,form,localMaskTransfer,saveMaskTransfer,eyeBagReplaceLegacy});latest.current={context,catalog,onRefresh,face,form,localMaskTransfer,saveMaskTransfer,eyeBagReplaceLegacy};
   const flow=useRef<ReturnType<typeof createPresetWorkflow>|null>(null),dialogLock=useRef(false),savedRevision=useRef(0);
   useEffect(()=>{
@@ -54,6 +77,12 @@ export function usePresetWorkflow(context:PresetContext,catalog:PresetState|null
         if(result.success&&result.action==='xmp_inspect'&&result.xmp_report&&importTarget&&result.path===importTarget.path){
           const draft={...importTarget,report:result.xmp_report};xmpDraft.current=draft;setXmpImport(draft);
         }
+        if(result.action==='apply'&&result.outcome_unknown===false&&(result.success&&result.batch_id&&result.face_decoration_preset_alias_review||result.rolled_back===true)&&state.submitted?.decorationAliasEpoch
+          &&state.submitted.options.faceDecorationPresetAck&&'members'in state.submitted.options.faceDecorationPresetAck){
+          const readback={id:`decoration-preset-readback-${result.request_id}`,epoch:state.submitted.decorationAliasEpoch,batchId:result.batch_id??null,reviewSha256:state.submitted.options.faceDecorationPresetAck.review_sha256,
+            marker:result.face_decoration_preset_alias_review?structuredClone(result.face_decoration_preset_alias_review):null,memberIds:state.submitted.options.faceDecorationPresetAck.members.map(member=>member.document_id)};
+          decorationReadback.current=readback;retainDecorationPresetAliasReadback(readback);void refreshDecorationReadback();return;
+        }
         // A read-only preflight must not request session_state: that advances
         // the host view revision and would invalidate its own visual review.
         // Mutations still fetch fresh state, never install receipt.doc_state.
@@ -67,7 +96,7 @@ export function usePresetWorkflow(context:PresetContext,catalog:PresetState|null
   const contextKey=JSON.stringify(context);
   useEffect(()=>{flow.current?.updateContext(context);},[contextKey]);
   const current=()=>{flow.current?.updateContext(latest.current.context);return flow.current;};
-  const locked=()=>dialogLock.current||!!xmpDraft.current||['working','uncertain'].includes(flow.current?.snapshot().phase??'');
+  const locked=()=>decorationPresetAliasWritePending()||dialogLock.current||!!xmpDraft.current||['working','uncertain'].includes(flow.current?.snapshot().phase??'');
   const selected=catalog?.list.find(p=>p.id===form.selectedId);
   async function save(){
     if(locked())return;const value=latest.current;
@@ -128,7 +157,8 @@ export function usePresetWorkflow(context:PresetContext,catalog:PresetState|null
   const collarboneReady=!review?.module_scope?.includes(COLLARBONE_PRESET_OP)||!!collarboneKey&&collarboneImage.key===collarboneKey&&collarboneImage.ready;
   useEffect(()=>setCollarboneImage({key:'',ready:false}),[collarboneKey]);
   const decorationKey=review?.face_decoration_preset&&review.preflight_token&&review.id?decorationPresetKey(review.preflight_token,review.request_id,review.id,review.face_decoration_preset):'';
-  const decorationReady=review?.face_decoration_visual_required!==true||!!decorationKey&&decorationImage.key===decorationKey&&decorationImage.ready;
+  const decorationProtocolReady=review?.face_decoration_preset?.version!==2||decorationPresetAliasAvailable();
+  const decorationReady=review?.face_decoration_visual_required!==true||decorationProtocolReady&&!!decorationKey&&decorationImage.key===decorationKey&&decorationImage.ready;
   useEffect(()=>setDecorationImage({key:'',ready:false}),[decorationKey]);
   const eyeBagKey=review?.eye_bag_preset&&review.preflight_token&&review.id?eyeBagPresetKey(review.preflight_token,review.request_id,review.id,review.eye_bag_preset):'';
   const eyeBagReady=!review?.eye_bag_preset||!!eyeBagKey&&eyeBagImage.key===eyeBagKey&&eyeBagImage.ready;
@@ -191,10 +221,10 @@ export function usePresetWorkflow(context:PresetContext,catalog:PresetState|null
   }
   async function refresh(){if(locked())return;setNote('');await current()?.submit('list');}
   async function inspect(){try{await latest.current.onRefresh();setNote('已请求当前状态，请核对照片与预设列表；不会重复提交操作。');}catch(error){setNote(String(error));}}
-  return {decorationKey,decorationReady,setDecorationImage,eyeBagReplaceLegacy,setEyeBagReplaceLegacy:changeEyeBagReplaceLegacy,eyeBagKey,eyeBagReady,setEyeBagImage,ui,form,note,selected,catalog,context,dialogBusy,face,localMaskTransfer,setLocalMaskTransfer,saveMaskTransfer,setSaveMaskTransfer,review,confirmLocal,cropKey,cropReady,setCropImage,
+  return {decorationAliasPending,decorationReadbackError,decorationRefreshing,refreshDecorationReadback,decorationProtocolReady,decorationKey,decorationReady,setDecorationImage,eyeBagReplaceLegacy,setEyeBagReplaceLegacy:changeEyeBagReplaceLegacy,eyeBagKey,eyeBagReady,setEyeBagImage,ui,form,note,selected,catalog,context,dialogBusy,face,localMaskTransfer,setLocalMaskTransfer,saveMaskTransfer,setSaveMaskTransfer,review,confirmLocal,cropKey,cropReady,setCropImage,
     collarboneKey,collarboneReady,setCollarboneImage,headKey,headReady,setHeadImage,waistKey,waistReady,setWaistImage,torsoKey,torsoReady,setTorsoImage,shadowKey,shadowReady,setShadowImage,spillKey,spillReady,setSpillImage,dismissReview:()=>{setDecorationImage({key:'',ready:false});setEyeBagImage({key:'',ready:false});setCollarboneImage({key:'',ready:false});setSpillImage({key:'',ready:false});setShadowImage({key:'',ready:false});setTorsoImage({key:'',ready:false});setWaistImage({key:'',ready:false});setHeadImage({key:'',ready:false});current()?.dismissReview();},
     xmpKey,xmpReady,setXmpImage,xmpImport,cancelXmpImport,confirmXmpImport,
-    busy:dialogBusy||!!xmpImport||ui.phase==='working'||ui.phase==='uncertain',
+    busy:decorationAliasPending||dialogBusy||!!xmpImport||ui.phase==='working'||ui.phase==='uncertain',
     setName:(value:string)=>dispatch({type:'name',value}),select:(id:string)=>dispatch({type:'select',id}),
     setScope:(ops:string[])=>dispatch({type:'scope',ops:ops.includes(OPTICS_AUTO_OP)&&ops.includes(OPTICS_MANUAL_OP)?ops.filter(op=>op!==(ops[ops.length-1]===OPTICS_MANUAL_OP?OPTICS_AUTO_OP:OPTICS_MANUAL_OP)):ops}),save,apply,importFile,remove,refresh,inspect,
     applyByLabel:(label:string)=>{const list=latest.current.catalog?.list??[];const p=presetFromLabel(label,list);if(!p){setNote('预设标签不存在或有歧义，请在模块预设面板按 ID 选择');return;}return apply(p.id);},

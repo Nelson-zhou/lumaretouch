@@ -3,29 +3,43 @@
 use serde_json::{json, Value};
 use crate::original_shadow_transfer_protocol::{hex, revision};
 use super::visual::{fields,text,image,visual,face};
+#[path="face_decoration_preset_alias_protocol.rs"]
+mod alias;
 pub(crate) const OP: &str = "lnx.face_decoration.v1";
 pub(crate) const ACK: &str = "face_decoration_preset_ack";
+pub(crate) const ALIAS_MARKER: &str = "face_decoration_preset_alias_review";
 pub(crate) fn selected(value:&Value)->bool {
     value["module_scope"].as_array().is_some_and(|ops|ops.iter().any(|op|op==OP))
 }
 fn image_request(value:&Value)->bool {
-    fields(value,&["cmd","action","request_id","id","document_id","preflight_token","revision","side","sha256"])
+    let mut keys=vec!["cmd","action","request_id","id","document_id","preflight_token","revision","side","sha256"];
+    if value.get("member_document_id").is_some()||value.get("member_revision").is_some(){
+        keys.extend(["member_document_id","member_revision"]);
+        if !alias::image_identity(value){return false;}
+    }
+    fields(value,&keys)
         &&value["cmd"]=="preset"&&value["action"]=="face_decoration_visual"&&text(&value["request_id"])
         &&text(&value["id"])&&text(&value["document_id"])&&hex(&value["preflight_token"],32)
         &&revision(&value["revision"])&&matches!(value["side"].as_str(),Some("before"|"after"))&&hex(&value["sha256"],64)
 }
 pub(crate) fn acknowledgment(value:&Value)->bool {
+    if value.get("members").is_some(){return alias::acknowledgment(value);}
     fields(value,&["document_id","revision","before_sha256","after_sha256","coverage_sha256","preset_sha256","applies_sha256"])
         &&text(&value["document_id"])&&revision(&value["revision"])
         &&["before_sha256","after_sha256","coverage_sha256","preset_sha256","applies_sha256"].iter().all(|key|hex(&value[*key],64))
 }
+pub(crate) fn alias_apply(value:&Value)->bool {
+    value["cmd"]=="preset"&&value["action"]=="apply"&&value[ACK].get("members").is_some()&&command(value).is_ok()
+}
+pub(crate) fn retained_alias_publication(value:&Value)->Option<Value> {alias::retained_publication(value)}
+pub(crate) fn alias_summary(value:&Value)->bool {alias::summary(value)}
 pub(crate) fn command(value:&Value)->Result<(),String> {
     if value["cmd"]!="preset" {return Ok(());}
     if matches!(value["action"].as_str(),Some("eye_bag_visual"|"collarbone_visual")){return Ok(());}
     if value["action"]=="face_decoration_visual" {
         return if image_request(value){Ok(())}else{Err("Preset image retrieval requires its exact preset/load/token/side identity".into())};
     }
-    if ["revision","side","sha256"].iter().any(|key|value.get(*key).is_some()) {
+    if ["revision","side","sha256","member_document_id","member_revision"].iter().any(|key|value.get(*key).is_some()) {
         return Err("Preset image coordinates cannot accompany another action".into());
     }
     if let Some(ack)=value.get(ACK) {
@@ -54,8 +68,14 @@ pub(crate) fn read_only(value:&Value)->bool {
 pub(crate) fn binding(value:&Value)->Result<Option<Value>,String> {
     command(value)?;
     if value["cmd"]!="preset"{return Ok(None);}
-    if image_request(value){return Ok(Some(json!({"id":value["id"],"document_id":value["document_id"],
-        "preflight_token":value["preflight_token"],"revision":value["revision"],"side":value["side"],"sha256":value["sha256"]})));}
+    if image_request(value){
+        let mut out=json!({"id":value["id"],"document_id":value["document_id"],"preflight_token":value["preflight_token"],
+            "revision":value["revision"],"side":value["side"],"sha256":value["sha256"]});
+        if value.get("member_document_id").is_some(){
+            out["member_document_id"]=value["member_document_id"].clone();out["member_revision"]=value["member_revision"].clone();
+        }
+        return Ok(Some(out));
+    }
     if value.get(ACK).is_some(){
         let mut out=json!({"id":value["id"],"document_id":value["document_id"],"preflight_token":value["preflight_token"],(ACK):value[ACK]});
         for key in ["xmp_review_ack","spill_review_ack","shadow_review_ack","torso_review_ack","waist_review_ack","head_review_ack"] {
@@ -87,9 +107,14 @@ pub(crate) fn coverage(value:&Value,source:&Value,required:&Value)->bool {
     refs.iter().all(|reference|rows.iter().any(|row|&row["face_ref"]==reference))
 }
 pub(crate) fn review(value:&Value)->bool {
+    let p=&value["face_decoration_preset"];
+    if p["version"].as_u64()==Some(2){return alias::review(value);}
+    fields(p,&["version","preset_sha256","applies_sha256","load_id","owner","face_ref","coverage","visual"])
+        &&p["version"].as_u64()==Some(1)&&review_base(value)
+}
+fn review_base(value:&Value)->bool {
     let p=&value["face_decoration_preset"];let owner=&p["owner"];let doc=&owner["document"];
-    if !fields(p,&["version","preset_sha256","applies_sha256","load_id","owner","face_ref","coverage","visual"])
-        ||p["version"].as_u64()!=Some(1)||p["load_id"]!=value["document_id"]||!text(&p["load_id"])
+    if p["load_id"]!=value["document_id"]||!text(&p["load_id"])
         ||!hex(&p["preset_sha256"],64)||!hex(&p["applies_sha256"],64)
         ||!fields(owner,&["document","people_scope","state_revision","association_revision","graph_sha256","source_proof"])
         ||!fields(doc,&["document_id","epoch","revision"])||!text(&doc["document_id"])||!text(&doc["epoch"])
@@ -109,6 +134,8 @@ fn parameters(value:&Value)->bool {
         &&matches!(recipe["pattern"].as_str(),Some("freckle_dust"|"freckle_bridge"|"freckle_constellation"|"freckle_sunburst"|"freckle_scatter"|"mole_left_cheek"|"mole_right_cheek"|"mole_pair"))
 }
 pub(crate) fn receipt(value:&Value)->bool {
+    if (value.get(ALIAS_MARKER).is_some()||(value.get("alias_members").is_some()&&value.get("eye_bag_preset_ack").is_none()))
+        &&(value["action"]!="apply"||value[ACK].get("members").is_none()){return false;}
     let required=value["face_decoration_visual_required"]==true;
     if value.get("face_decoration_visual_required").is_some()&&!required{return false;}
 
@@ -116,11 +143,13 @@ pub(crate) fn receipt(value:&Value)->bool {
         if value["success"]!=true{return true;}
         return text(&value["id"])&&text(&value["document_id"])&&hex(&value["preflight_token"],32)&&revision(&value["revision"])
             &&matches!(value["side"].as_str(),Some("before"|"after"))&&hex(&value["sha256"],64)
+            &&((value.get("member_document_id").is_none()&&value.get("member_revision").is_none())||alias::image_identity(value))
             &&value["image"]["sha256"]==value["sha256"]&&image(&value["image"]);
     }
     if !value["face_decoration_preset"].is_null()&&(!required||value["action"]!="preflight"||value["success"]!=true){return false;}
     if value["action"]=="preflight"&&value["success"]==true&&(selected(value)||required||value.get("face_decoration_preset").is_some()){return (!selected(value)||parameters(&value["applies"][OP]))&&hex(&value["preflight_token"],32)&&review(value);}
-    if let Some(ack)=value.get(ACK){return required&&value["action"]=="apply"&&acknowledgment(ack)&&hex(&value["preflight_token"],32);}
+    if let Some(ack)=value.get(ACK){return required&&value["action"]=="apply"&&acknowledgment(ack)&&hex(&value["preflight_token"],32)
+        &&(ack.get("members").is_none()||alias::receipt(value));}
     !(value["action"]=="apply"&&(selected(value)||required)&&(value["success"]==true||value["outcome_unknown"]==true))
 }
 #[cfg(test)]

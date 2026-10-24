@@ -37,9 +37,9 @@ fn recovery(value: &Value) -> bool {
 }
 
 pub(super) fn applies(command: &Value) -> bool {
-    command["cmd"] == "preset" && command["action"] == "apply"
+    crate::preset_api::face_decoration::alias_apply(command) || (command["cmd"] == "preset" && command["action"] == "apply"
         && command["eye_bag_preset_ack"].get("members").is_some()
-        && crate::preset_api::eye_bag::command(command).is_ok()
+        && crate::preset_api::eye_bag::command(command).is_ok())
 }
 
 pub(super) fn safe_during_pending(command: &Value) -> bool {
@@ -105,7 +105,10 @@ pub(super) fn settled(command: &Value, receipt: &Value) -> bool {
 }
 pub(super) fn matches_request(command: &Value, receipt: &Value) -> bool {
     if !crate::preset_host::PresetKind::valid(receipt, command["document_id"].as_str()) { return false; }
-    let Ok(Some(identity)) = crate::preset_api::eye_bag::binding(command) else { return false; };
+    let binding = if crate::preset_api::face_decoration::alias_apply(command) {
+        crate::preset_api::face_decoration::binding(command)
+    } else { crate::preset_api::eye_bag::binding(command) };
+    let Ok(Some(identity)) = binding else { return false; };
     identity.as_object().is_some_and(|fields| fields.iter().all(|(key, expected)| receipt.get(key) == Some(expected)))
 }
 

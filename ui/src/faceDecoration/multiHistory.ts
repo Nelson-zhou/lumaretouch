@@ -14,7 +14,7 @@ export function observeDecorationMultiHistory(sync:unknown,observation?:number){
  for(const row of sync.batches){if(!object(row)||!token(row.batch_id))continue;
   const found=fields.filter(k=>Object.hasOwn(row,k));if(!found.length)continue;
   const field=found[0],marker=row[field];
-  const incompatible=['face_decoration_support_alias_review','face_decoration_batch_review','face_style_alias_review','eye_bag_alias_review','eye_bag_preset_alias_review','eye_bag_recovery_alias_review','eye_bag_batch_review'];
+  const incompatible=['face_decoration_preset_alias_review','face_decoration_support_alias_review','face_decoration_batch_review','face_style_alias_review','eye_bag_alias_review','eye_bag_preset_alias_review','eye_bag_recovery_alias_review','eye_bag_batch_review'];
   const valid=found.length===1&&!incompatible.some(k=>Object.hasOwn(row,k))&&(field==='face_decoration_cohort_review'||!Object.hasOwn(row,'eye_bag_cohort_review'))&&validDecorationBatchMarker(marker)&&marker.member_count>=2&&row.targets===marker.member_count&&JSON.stringify(row.module_scope)===JSON.stringify(['lnx.people_graph.v1']);
   registerDecorationMultiHistory(epoch!,row.batch_id,field,valid?marker:null);
  }

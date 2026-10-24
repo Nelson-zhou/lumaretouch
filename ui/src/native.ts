@@ -1,3 +1,4 @@
+import {observeDecorationPresetAliasHistory} from './faceDecoration/presetAliasHistoryRegistry';
 import {observeDecorationMultiHistory} from './faceDecoration/multiHistory';
 import {observeSupportAliasHistory} from './faceDecoration/supportAliasHistoryRegistry';
 import {observeDecorationBatchHistory} from './faceDecoration/batchHistoryRegistry';
@@ -361,6 +362,7 @@ export interface SyncState {
     face_decoration_alias_review?: {version:1;review_sha256:string;member_count:number};
     face_decoration_support_alias_review?: import('./faceDecoration/supportAliasHistoryRegistry').SupportAliasMarker;
     eye_bag_batch_review?: {version: 1; review_sha256: string; member_count: number};
+    face_decoration_preset_alias_review?: import('./faceDecoration/presetAliasHistoryRegistry').DecorationPresetAliasMarker;
     eye_bag_preset_alias_review?: import('./eyeBagPreserve/presetAliasHistoryRegistry').EyeBagPresetAliasMarker;
     eye_bag_recovery_alias_review?: import('./effectRecovery/aliasHistoryRegistry').RecoveryAliasMarker }[];
   undoable: string[];
@@ -1054,6 +1056,7 @@ export interface EngineStatus {
     blush_makeup_protocol?: number;
     face_decoration_protocol?: number;
     face_decoration_support_alias_protocol?: number;
+    face_decoration_preset_alias_protocol?: number;
     face_decoration_available?: boolean;
     face_decoration_reason?: string | null;
     lipstick_protocol?: number;
@@ -1368,16 +1371,21 @@ export const frameAcked = (seq: number, jsDrawUs: number) =>
 export const framePresented = (seq: number) => invoke("frame_presented", { seq });
 
 export const benchStats = () => invoke<Stats>("bench_stats");
-let engineStatusRequestSequence = 0;
+let engineStatusRequestSequence = 0, decorationPresetCapabilityObservation = 0;
+let decorationPresetAliasReady = false;
+/** Latest observed native capability only; never stores document edit state. */
+export const decorationPresetAliasAvailable = () => decorationPresetAliasReady;
 export const engineStatus = async () => {
   const observation = ++engineStatusRequestSequence;
   const status = await invoke<EngineStatus>("engine_status");
+  if (observation > decorationPresetCapabilityObservation) {decorationPresetCapabilityObservation = observation; decorationPresetAliasReady = status.engine_alive === true && status.ready_caps?.face_decoration_preset_alias_protocol === 1;}
   observeFaceStyleAliasHistory(status.session?.sync, observation);
   observeEyeBagAliasHistory(status.session?.sync, observation);
   observeDecorationBatchHistory(status.session?.sync, observation);observeDecorationMultiHistory(status.session?.sync, observation);observeSupportAliasHistory(status.session?.sync, observation);
   observeEyeBagBatchHistory(status.session?.sync, observation);
   observeEyeBagCohortHistory(status.session?.sync, observation);
   observeEyeBagPresetAliasHistory(status.session?.sync, observation);
+  observeDecorationPresetAliasHistory(status.session?.sync, observation);
   observeRecoveryAliasHistory(status.session?.sync, observation);
   return status;
 };
@@ -2031,7 +2039,7 @@ export function runHeadSize(request:import('./headSize/nativeTransport').Command
 }
 
 /** Immutable full mixed decoration review images; read-only mailbox only. */
-export const requestDecorationPresetImage=(value:import('./faceDecoration/visualTransport').DecorationImageRequest)=>invoke<{requested:boolean}>('preset',{action:'face_decoration_visual',...value});
+export const requestDecorationPresetImage=(value:import('./faceDecoration/visualTransport').DecorationImageRequest)=>value.memberDocumentId!==undefined&&!decorationPresetAliasAvailable()?Promise.reject(Error('当前引擎尚未声明完整混合预设共享来源协议，不能读取成员图像。')):invoke<{requested:boolean}>('preset',{action:'face_decoration_visual',...value});
 export const readDecorationPresetImage=(requestId:string)=>invoke<{phase:string;request_id:string;result?:import('./faceDecoration/visualTransport').DecorationImageReply;error?:string}>('preset_result',{requestId});
 export const requestDecorationBatchImage=(value:import('./faceDecoration/visualTransport').DecorationImageRequest)=>invoke<{requested:boolean}>('batch',{action:'face_decoration_visual',...value});
 export const readDecorationBatchImage=(requestId:string)=>invoke<{phase:string;request_id:string;result?:import('./faceDecoration/visualTransport').DecorationImageReply;error?:string}>('batch_result',{requestId});

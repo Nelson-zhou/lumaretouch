@@ -30,11 +30,13 @@ def checked(value, asset):
     return deepcopy(value)
 
 
-def coverage(engine, row, graph, ref, before=None):
+def coverage(engine, row, graph, ref, before=None, *, state=None):
     from .face_decoration_host import support_status
     from .creative_derived_source import row_proof
     ref=P.check_ref(ref); before=graph if before is None else before
-    proof=row_proof({**row,'state':engine._people_preset_capture()})
+    # Every alias owns its original provenance and immutable effective source.
+    own=engine._people_preset_capture() if state is None else state
+    proof=row_proof({**row,'state':own})
     if proof['asset_sha256'] != ref['asset_sha256']: raise ValueError('Decoration review source changed')
     targets=[]
     for key in sorted(set(graph['faces'])|set(before['faces'])):

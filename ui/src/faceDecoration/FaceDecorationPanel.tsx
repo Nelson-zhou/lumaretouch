@@ -2,6 +2,7 @@
 import {useLayoutEffect, useRef, useState} from 'react';
 import type {PeopleOwner} from '../people/usePeopleWorkflow';
 import {sourceLabel, targetLabel, type PeopleAction} from '../people/model';
+import {FaceDecorationPresetAliasHistory} from './FaceDecorationPresetAliasHistory';
 import {FaceDecorationAliasHistory} from './FaceDecorationAliasHistory';
 import {FaceDecorationAliasEditor} from './FaceDecorationAliasEditor';
 import {FaceDecorationSupportAliasEditor} from './FaceDecorationSupportAliasEditor';
@@ -102,6 +103,7 @@ export function FaceDecorationPanel({people, capability, blocked, faceOk, faceWh
     {people.state.message && <p role="status">{people.state.message}</p>}
     {people.state.uncertain && <button type="button" onClick={() => void people.check().catch(cause => setError(String(cause)))}>查询原请求结果（不重发）</button>}
     <FaceDecorationAliasHistory people={people}/>
+    <FaceDecorationPresetAliasHistory people={people}/>
     <FaceDecorationSupportAliasHistory people={people}/>
     {error && error !== people.state.message && <p role="alert">{error}</p>}
     <small>手绘审核不等于自动分割或效果验收；核心就绪也不代表此脸可用。当前实现面向 RGB SDR，不宣称 HDR 支持。严重侧脸、遮挡或分辨率不足时拒绝；不补绘不可见皮肤。预设和批量仅携带图案与程度，目标逐图、逐人物独立审核，不复制源图像素或笔迹。真实照片与安装版效果验收尚未运行。</small>

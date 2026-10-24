@@ -113,7 +113,7 @@ acknowledgment and the existing frozen scalar ledger. Only pattern/strength
 travel, with each target's own evidence. Generic whole-state batches and
 unreviewed persistent associations with active decoration remain refused; the dedicated complete-image cohort route is documented separately. Metadata preflight is not photographic review.
 
-Direct scalar aliases now have complete affected-document review. Alias support/recovery pointer changes, mixed presets and dormant override changes remain refused pending their own exact support/state transactions. Independent virtual-copy owners remain
+Direct scalar aliases now have complete affected-document review. Alias support changes and complete mixed presets now use their distinct reviewed transactions. Alias recovery pointer changes and dormant override changes remain refused. Independent virtual-copy owners remain
 independent. Existing eye-bag or face-style alias review cannot authorize new
 decoration state. Unsupported aliases must remain visible refusals rather than
 silently changing hidden siblings.
@@ -130,6 +130,5 @@ The [separate support-alias route](SUPPORT-ALIAS-CONTRACT.md) stages the real
 source-canvas visibility record and requires complete affected-document image
 review before atomic graph/bank publication. It preserves scalar protocol and
 old recipes. Append-only retained assets plus exact pointer history are explicit,
-not a promise of whole-bank snapshot rollback. Alias effect recovery and mixed
-presets remain guarded. This is source-connected workflow work, not new algorithm
+not a promise of whole-bank snapshot rollback. Alias effect recovery remains guarded. Complete mixed presets are described in PRESET-ALIAS-CONTRACT.md. This is source-connected workflow work, not new algorithm
 or photographic acceptance; every runtime check remains UNRUN.

@@ -41,6 +41,8 @@ def check(entry):
     """Validate only explicitly marked entries; an absent marker means legacy."""
     if KEY not in entry:
         return None
+    if 'face_decoration_preset_alias_review' in entry:
+        raise ValueError('Mixed decoration preset history cannot reuse another history authority')
     if 'face_decoration_support_alias_review' in entry:
         raise ValueError('Visible-support alias history cannot reuse another history authority')
     marker = entry[KEY]

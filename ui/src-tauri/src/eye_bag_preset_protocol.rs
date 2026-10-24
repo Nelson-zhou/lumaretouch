@@ -36,6 +36,7 @@ pub(crate) fn strict_failure_identity(value:&Value)->bool {
 pub(crate) fn retained_alias_publication(value:&Value)->Option<Value> {alias::retained_publication(value)}
 pub(crate) fn command(value:&Value)->Result<(),String> {
     if value["cmd"]!="preset" {return Ok(());}
+    if value["action"]=="face_decoration_visual" {return super::face_decoration::command(value);}
     if value["action"]=="eye_bag_visual" {
         return if image_request(value){Ok(())}else{Err("Eye-bag preset image requires exact preset/load/token/side identity".into())};
     }
@@ -131,7 +132,7 @@ fn parameters(value:&Value)->bool {
         &&["amount","preserve"].iter().all(|key|recipe[*key].as_f64().is_some_and(|v|v.is_finite()&&(0.0..=1.0).contains(&v)))
 }
 pub(crate) fn receipt(value:&Value)->bool {
-    if (value.get("eye_bag_preset_alias_review").is_some()||value.get("alias_members").is_some())
+    if (value.get("eye_bag_preset_alias_review").is_some()||(value.get("alias_members").is_some()&&value.get(super::face_decoration::ACK).is_none()))
         &&(value["action"]!="apply"||value[ACK].get("members").is_none()){return false;}
     if value["action"]=="eye_bag_visual" {
         if value["success"]!=true{return true;}

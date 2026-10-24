@@ -1,6 +1,7 @@
 import {EYE_BAG_PRESET_OP,neutralEyeBagPreset} from '../eyeBagPreserve/presetModel';
 import {EyeBagPresetReview} from '../eyeBagPreserve/EyeBagPresetReview';
-import {DecorationTransferReview} from '../faceDecoration/TransferReview';
+import {DecorationPresetReview} from '../faceDecoration/DecorationPresetReview';
+import {OP as DECORATION_OP} from '../faceDecoration/transferModel';
 import {COLLARBONE_PRESET_OP} from '../collarbone/presetModel';
 import {CollarbonePresetReview} from '../collarbone/CollarbonePresetReview';
 import {SHADOW_TRANSFER_OP} from '../originalShadow/transferModel';
@@ -62,7 +63,7 @@ export function PresetPanel({workflow:w}:{workflow:PresetWorkflowBinding}){
       <option value="">请明确选择</option><option value="false">不替换旧版，冲突时拒绝</option><option value="true">明确替换旧版去眼袋，其他眼部效果保留</option></select>
       <small>目标须先在去眼袋 v2 面板独立绘制并审核可见逐眼保护。供图的保护、恢复笔迹或分析不复制；未审核眼保持不处理。</small></label>}
     <div className="presetButtons">
-      <button disabled={!w.context.enabled||!w.context.editable||w.busy||!w.selected||faceBlocked||xmpUnsupported||unavailableScope(selectedOps,modules).length>0} onClick={()=>void w.apply()}>{eyeBagActive||w.selected?.xmp_import||selectedOps.some(op=>[LOCAL_GRADE_OP,OPTICS_AUTO_OP,"lnx.reference_color.v1",CROP_OP,SPILL_TRANSFER_OP,SHADOW_TRANSFER_OP,TORSO_TRANSFER_OP,WAIST_TRANSFER_OP,HEAD_TRANSFER_OP,COLLARBONE_PRESET_OP].includes(op))?'预检所选预设':'应用所选'}</button>
+      <button disabled={!w.context.enabled||!w.context.editable||w.busy||!w.selected||faceBlocked||xmpUnsupported||unavailableScope(selectedOps,modules).length>0} onClick={()=>void w.apply()}>{w.catalog?.face_decoration_review_required===true||eyeBagActive||w.selected?.xmp_import||selectedOps.some(op=>[DECORATION_OP,LOCAL_GRADE_OP,OPTICS_AUTO_OP,"lnx.reference_color.v1",CROP_OP,SPILL_TRANSFER_OP,SHADOW_TRANSFER_OP,TORSO_TRANSFER_OP,WAIST_TRANSFER_OP,HEAD_TRANSFER_OP,COLLARBONE_PRESET_OP].includes(op))?'预检所选预设':'应用所选'}</button>
       <button disabled={!w.context.enabled||w.busy} onClick={()=>void w.refresh()}>刷新列表</button>
       <button disabled={!w.context.enabled||w.busy||!w.selected||w.selected.builtin} onClick={()=>void w.remove()}>移入回收站</button>
     </div>
@@ -74,8 +75,9 @@ export function PresetPanel({workflow:w}:{workflow:PresetWorkflowBinding}){
       {w.review.torso_transfer&&<TorsoTransferReview value={w.review.torso_transfer} reviewKey={w.torsoKey} disabled={w.busy} onReady={(key,ready)=>w.setTorsoImage({key,ready})}/>}
       {w.review.waist_transfer&&<WaistTransferReview value={w.review.waist_transfer} reviewKey={w.waistKey} disabled={w.busy} onReady={(key,ready)=>w.setWaistImage({key,ready})}/>}
       {w.review.head_transfer&&<HeadTransferReview value={w.review.head_transfer} reviewKey={w.headKey} disabled={w.busy} onReady={(key,ready)=>w.setHeadImage({key,ready})}/>}
-      {w.review.face_decoration_preset&&w.review.id&&w.review.preflight_token&&<DecorationTransferReview value={w.review.face_decoration_preset.visual} coverage={w.review.face_decoration_preset.coverage} token={w.review.preflight_token} reviewKey={w.decorationKey} preset={{id:w.review.id,loadId:w.review.face_decoration_preset.load_id}} disabled={w.busy} onReady={(key,ready)=>w.setDecorationImage({key,ready})}/>}
-      {!w.decorationReady&&<p role="status">请读取并确认完整混合预设及目标已有脸部装饰的真实前后图。</p>}
+      {w.review.face_decoration_preset&&w.review.id&&w.review.preflight_token&&<DecorationPresetReview value={w.review.face_decoration_preset} id={w.review.id} token={w.review.preflight_token} reviewKey={w.decorationKey} disabled={w.busy} onReady={(key,ready)=>w.setDecorationImage({key,ready})}/>}
+      {!w.decorationProtocolReady&&<p role="alert">当前引擎未声明完整混合预设共享来源协议，不能读取或确认此多成员审核。</p>}
+      {!w.decorationReady&&<p role="status">请逐张读取、解码并独立确认所有受影响成员的完整混合前后图及本人可见皮肤范围。</p>}
       {w.review.collarbone_preset&&w.review.id&&w.review.preflight_token&&<CollarbonePresetReview value={w.review.collarbone_preset} id={w.review.id} token={w.review.preflight_token} reviewKey={w.collarboneKey} disabled={w.busy} onReady={(key,ready)=>w.setCollarboneImage({key,ready})}/>}
       {w.review.eye_bag_preset&&w.review.id&&w.review.preflight_token&&<EyeBagPresetReview value={w.review.eye_bag_preset} id={w.review.id} token={w.review.preflight_token} reviewKey={w.eyeBagKey} disabled={w.busy} onReady={(key,ready)=>w.setEyeBagImage({key,ready})}/>}
       {!w.eyeBagReady&&<p role="status">请逐张读取并确认全部受影响成员的逐眼保护、明确替换策略及完整混合前后效果。</p>}
@@ -85,7 +87,7 @@ export function PresetPanel({workflow:w}:{workflow:PresetWorkflowBinding}){
       {!w.torsoReady&&<p role="status">请查看并勾选确认本目标身体及本人面部的上身长度前后效果。</p>}
       {!w.waistReady&&<p role="status">请查看并勾选确认本目标身体及本人面部的腰长前后效果。</p>}
       {!w.headReady&&<p role="status">请查看并勾选确认本目标身体及本人面部的小头前后效果。</p>}
-      <button disabled={w.busy||!w.context.editable||!w.decorationReady||!w.eyeBagReady||!w.cropReady||!w.xmpReady||!w.spillReady||!w.shadowReady||!w.torsoReady||!w.waistReady||!w.headReady||!w.collarboneReady} onClick={()=>void w.confirmLocal()}>{w.review.eye_bag_preset?.version===2?'确认全部成员并应用此混合预设':'确认本次目标预设并应用'}</button>
+      <button disabled={w.busy||!w.context.editable||!w.decorationReady||!w.eyeBagReady||!w.cropReady||!w.xmpReady||!w.spillReady||!w.shadowReady||!w.torsoReady||!w.waistReady||!w.headReady||!w.collarboneReady} onClick={()=>void w.confirmLocal()}>{w.review.eye_bag_preset?.version===2||w.review.face_decoration_preset?.version===2?'确认全部成员并应用此混合预设':'确认本次目标预设并应用'}</button>
       <button disabled={w.busy} onClick={w.dismissReview}>关闭本次审核</button></div>}
     <fieldset><legend>保存当前照片的模块参数</legend>
       <label>预设名称<input aria-label="预设名称" value={w.form.name} maxLength={160} placeholder="例如：室外婚纱暖调" onChange={e=>w.setName(e.target.value)}/><small>{nameLength}/80 字符</small></label>
@@ -117,6 +119,7 @@ export function PresetPanel({workflow:w}:{workflow:PresetWorkflowBinding}){
     <div role="status" aria-live="polite">
       {w.ui.phase==='working'&&<p>正在{w.ui.action?verbs[w.ui.action]:'处理'}，尚未确认完成…</p>}
       {w.ui.phase==='done'&&<p>{w.ui.action?verbs[w.ui.action]:'操作'}已确认成功{w.ui.result?.id?`：${w.ui.result.name??w.ui.result.preset?.name??w.ui.result.id}`:''}。</p>}
+      {w.ui.result?.success&&w.ui.result.face_decoration_preset_alias_review&&<p>已确认全部 {w.ui.result.face_decoration_preset_alias_review.member_count} 张成员，批次 {w.ui.result.batch_id}。原当前照片接收完整所选配方，其他成员保留自己的非人像编辑。请在脸部装饰面板的“混合预设共享来源全成员历史”统一撤销或重做，不使用当前照片本地撤销。</p>}
       {w.ui.result?.success&&w.ui.result.eye_bag_preset_alias_review&&<p>已确认全部 {w.ui.result.eye_bag_preset_alias_review.member_count} 张成员，批次 {w.ui.result.batch_id}。只有原当前照片接收所选色彩、裁剪等配方，其他成员保留自己的当前编辑。请在去眼袋 v2 面板的“混合预设共享来源全成员历史”统一撤销或重做；不使用当前照片本地撤销。</p>}
       {w.ui.message&&<p>{w.ui.message}</p>}{w.note&&<p>{w.note}</p>}
       {oldDocument&&<p>这笔操作属于之前的照片，不会用旧回执覆盖当前照片的控制项。</p>}
@@ -124,11 +127,15 @@ export function PresetPanel({workflow:w}:{workflow:PresetWorkflowBinding}){
     </div>
     {w.ui.phase==='uncertain'&&<div className="presetUncertain"><p>{w.ui.action==='preflight'||w.ui.action==='xmp_inspect'?'只读检查仍未确认完成，尚未导入或应用；可以查询同一笔任务，不会重复提交。':'结果尚未确认。不会自动重试，也不能据此认定没有保存或应用。'}</p>
       {w.ui.result?.batch_id&&<p>待核对批次 ID：{w.ui.result.batch_id}。此标识不是请求成功终态，也不会单独授权撤销或重做。</p>}
+      {w.ui.submitted?.options.faceDecorationPresetAck!==undefined&&<p>本次脸部装饰完整预设只能查询原请求，不能释放冻结令牌后重新应用。换照片、关闭面板或普通刷新不解除等待；若一直未知，请先核对保存的项目，再手动重新打开并检查全部原成员。重新打开只确认新工作区，不证明旧操作成功或未执行。</p>}
       {w.ui.submitted?.options.eyeBagPresetAck!==undefined&&<p>本次去眼袋预设应用只可查询原请求，冻结令牌和逐成员图像确认不会释放后重发。原生已记录的未知回执可能保持不变，重复查询不保证解锁。若仍未知，请先核对已保存的项目，再手动重新打开项目并检查全部成员；不要重复应用。普通换照片、关面板或刷新状态不能解除旧工作区等待。</p>}
       {w.ui.submitted?.options.headReviewAck!==undefined&&<p>本次小头应用只可查询原请求，冻结令牌及逐图确认不会被释放后重新提交。原生回执读取的既有限制仍可能阻止结果确认；当前状态刷新不等于这笔操作的终态证明。</p>}
       <button onClick={()=>void w.query()}>查询同一笔结果</button><button onClick={()=>void w.inspect()}>请求当前状态供核对</button>
       {w.ui.submitted?.options.waistReviewAck===undefined&&w.ui.submitted?.options.headReviewAck===undefined&&w.ui.submitted?.options.faceDecorationPresetAck===undefined&&w.ui.submitted?.options.collarbonePresetAck===undefined&&w.ui.submitted?.options.eyeBagPresetAck===undefined&&<button onClick={w.acknowledgeInspection}>我已核对，结束本次等待</button>}
     </div>}
+    {w.decorationAliasPending&&!w.decorationReadbackError&&!w.decorationRefreshing&&!['working','uncertain'].includes(w.ui.phase)&&<p role="status">当前工作区仍有未确认的脸部装饰共享来源操作。请查询原请求；如果原等待面板已不可恢复，请先核对保存的项目，再手动重新打开并检查全部原成员。普通刷新不会解除保护。</p>}
+    {w.decorationReadbackError&&<div role="alert"><p>{w.decorationReadbackError}</p><button disabled={w.decorationRefreshing} onClick={()=>void w.refreshDecorationReadback()}>重新读取已确认批次的完整成员状态</button></div>}
+    {w.decorationRefreshing&&<p role="status">正在核对已确认批次的全部成员与新状态，不重复应用。</p>}
     {!!w.catalog?.errors.length&&<details><summary>预设目录问题（{w.catalog.errors.length}）</summary>
       {w.catalog.errors.map((e,i)=><p key={`${e.file}-${i}`}>{e.file}：{e.error}</p>)}</details>}
   </section>;

@@ -21,3 +21,15 @@ test('wrong token, id, side, source document, revision or malformed bytes cannot
 test('navigation cancels publication but does not claim the underlying read stopped',async()=>{
  const f=await fixture();await assert.rejects(fetchDecorationImage(f.api,f.request,f.expected,()=>false));assert.equal(f.calls(),1);
 });
+
+test('preset alias image pages bind both outer load and exact member identity without affecting legacy pages',async()=>{
+ const f=await fixture(true),request={...f.request,memberDocumentId:'b'.repeat(32),memberRevision:'7'};
+ f.reply.member_document_id=request.memberDocumentId;f.reply.member_revision=request.memberRevision;
+ assert.deepEqual(await fetchDecorationImage(f.api,request,f.expected,()=>true),f.image);
+ f.reply.member_revision='8';await assert.rejects(fetchDecorationImage(f.api,request,f.expected,()=>true));
+ delete f.reply.member_revision;delete f.reply.member_document_id;
+ await assert.rejects(fetchDecorationImage(f.api,request,f.expected,()=>true));
+ f.reply.member_document_id=request.memberDocumentId;f.reply.member_revision='7';
+ await assert.rejects(fetchDecorationImage(f.api,f.request,f.expected,()=>true));
+ await assert.rejects(fetchDecorationImage(f.api,{...request,memberRevision:undefined},f.expected,()=>true));
+});

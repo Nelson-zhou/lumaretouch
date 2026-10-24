@@ -129,8 +129,13 @@ def _publish(owner,engine,plans,targets):
     finally:engine._people_staged=None
 
 
-def commit_scoped(owner,engine,plans,*,request_id,prepare=True,prepared_targets=None,alias_history=None,eye_bag_history=None,face_decoration_history=None,face_decoration_alias_history=None,face_decoration_cohort_history=None,eye_bag_cohort_history=None,eye_bag_alias_history=None,eye_bag_preset_alias_history=None,preset_alias_verify=None,eye_bag_recovery_alias_history=None,recovery_alias_assets=None,recovery_alias_verify=None,face_decoration_support_alias_history=None,decoration_support_alias_assets=None,decoration_support_alias_verify=None,decoration_support_alias_started=lambda:None):
-    composite=eye_bag_preset_alias_history is not None
+def commit_scoped(owner,engine,plans,*,request_id,prepare=True,prepared_targets=None,alias_history=None,eye_bag_history=None,face_decoration_history=None,face_decoration_alias_history=None,face_decoration_cohort_history=None,eye_bag_cohort_history=None,eye_bag_alias_history=None,eye_bag_preset_alias_history=None,preset_alias_verify=None,eye_bag_recovery_alias_history=None,recovery_alias_assets=None,recovery_alias_verify=None,face_decoration_support_alias_history=None,decoration_support_alias_assets=None,decoration_support_alias_verify=None,decoration_support_alias_started=lambda:None,face_decoration_preset_alias_history=None,decoration_preset_alias_verify=None,decoration_preset_alias_started=lambda:None):
+    decoration_preset=face_decoration_preset_alias_history is not None
+    composite=eye_bag_preset_alias_history is not None or decoration_preset
+    if decoration_preset and any(value is not None for value in (alias_history,eye_bag_history,face_decoration_history,
+            face_decoration_alias_history,face_decoration_cohort_history,eye_bag_cohort_history,
+            eye_bag_alias_history,eye_bag_preset_alias_history,eye_bag_recovery_alias_history,face_decoration_support_alias_history)):
+        raise ValueError('Mixed decoration preset authority cannot share another scalar, support or history marker')
     recovery=eye_bag_recovery_alias_history is not None
     support=face_decoration_support_alias_history is not None
     if support and any(value is not None for value in (alias_history,eye_bag_history,face_decoration_history,
@@ -180,10 +185,14 @@ def commit_scoped(owner,engine,plans,*,request_id,prepare=True,prepared_targets=
         from .eye_bag_alias_history import KEY as EYE_ALIAS_KEY, check as check_eye_alias_history
         entry[EYE_ALIAS_KEY]=deepcopy(eye_bag_alias_history)
         check_eye_alias_history(entry)
-    if composite:
+    if eye_bag_preset_alias_history is not None:
         from . import eye_bag_preset_alias_history as MIXED, eye_bag_preset_alias_transaction as TRANSACTION
         entry[MIXED.KEY]=deepcopy(eye_bag_preset_alias_history);MIXED.check(entry)
         if prepare:TRANSACTION.prepare(engine,plans,targets,entry,redo=True)
+    if decoration_preset:
+        from . import face_decoration_preset_alias_history as DECORATION_PRESET, face_decoration_preset_alias_transaction as DECORATION_PRESET_TRANSACTION
+        entry[DECORATION_PRESET.KEY]=deepcopy(face_decoration_preset_alias_history);DECORATION_PRESET.check(entry)
+        if prepare:DECORATION_PRESET_TRANSACTION.prepare(engine,plans,targets,entry,redo=True)
     if recovery:
         from . import eye_bag_recovery_alias_history as RECOVERY, eye_bag_recovery_alias_transaction as RECOVERY_TRANSACTION
         entry[RECOVERY.KEY]=deepcopy(eye_bag_recovery_alias_history);RECOVERY.check(entry)
@@ -193,7 +202,9 @@ def commit_scoped(owner,engine,plans,*,request_id,prepare=True,prepared_targets=
         entry[SUPPORT.KEY]=deepcopy(face_decoration_support_alias_history);SUPPORT.check(entry)
         if prepare:SUPPORT_TRANSACTION.prepare(engine,plans,targets,entry,redo=True,assets=decoration_support_alias_assets)
     result={'kind':'commit','batch_id':bid,'applied':[int(k) for k in targets],'skipped':[]}
-    frame=(TRANSACTION.publish(owner,engine,plans,targets,entry,redo=True,verify_before=preset_alias_verify)
+    frame=(DECORATION_PRESET_TRANSACTION.publish(owner,engine,plans,targets,entry,redo=True,
+               verify_before=decoration_preset_alias_verify,mark_started=decoration_preset_alias_started) if decoration_preset else
+           TRANSACTION.publish(owner,engine,plans,targets,entry,redo=True,verify_before=preset_alias_verify)
            if composite else RECOVERY_TRANSACTION.publish(owner,engine,plans,targets,entry,redo=True,
                assets=recovery_alias_assets,verify_before=recovery_alias_verify) if recovery else
            SUPPORT_TRANSACTION.publish(owner,engine,plans,targets,entry,redo=True,assets=decoration_support_alias_assets,
@@ -203,7 +214,7 @@ def commit_scoped(owner,engine,plans,*,request_id,prepare=True,prepared_targets=
     try:owner.editor.mark_dirty()
     except Exception as error:
         if composite or recovery or support:error.side_effects_started=True;error.batch_id=bid
-        if recovery or support:error.rolled_back=False;error.requires_reload=True
+        if decoration_preset or recovery or support:error.rolled_back=False;error.requires_reload=True
         raise
     return bid,frame
 
@@ -238,8 +249,10 @@ def restore_scoped(engine,batch,redo):
     recovery_history=RECOVERY.check(batch)
     from . import face_decoration_support_alias_history as SUPPORT, face_decoration_support_alias_transaction as SUPPORT_TRANSACTION
     support_history=SUPPORT.check(batch)
+    from . import face_decoration_preset_alias_history as DECORATION_PRESET, face_decoration_preset_alias_transaction as DECORATION_PRESET_TRANSACTION
+    decoration_preset_history=DECORATION_PRESET.check(batch)
     owner=engine._batch_controller();plans={};reviewed={}
-    if decoration_alias is not None or decoration_cohort is not None or decoration_history is not None or eye_history is not None or cohort_history is not None or eye_alias_history is not None or mixed_history is not None or recovery_history is not None or support_history is not None:
+    if decoration_alias is not None or decoration_cohort is not None or decoration_history is not None or eye_history is not None or cohort_history is not None or eye_alias_history is not None or mixed_history is not None or recovery_history is not None or support_history is not None or decoration_preset_history is not None:
         # The scoped restore route bypasses the legacy undo() wrapper. Capture
         # the current document so unsaved repair/crop edits cannot hide behind
         # a parked row's older dependency digest.
@@ -263,9 +276,13 @@ def restore_scoped(engine,batch,redo):
         if record['scope'] in reviewed:
             plans[record['scope']]['reviewed_face_refs']=list({(ref['asset_sha256'],ref['face_instance_id'],ref['analysis_revision']):ref
                 for ref in reviewed[record['scope']]}.values())
-    targets=(MIXED.targets(engine,mixed_history,plans['project']['before']) if mixed_history is not None else
+    targets=(DECORATION_PRESET.targets(engine,decoration_preset_history,plans['project']['before']) if decoration_preset_history is not None else
+             MIXED.targets(engine,mixed_history,plans['project']['before']) if mixed_history is not None else
              RECOVERY.targets(engine,recovery_history,plans['project']['before']) if recovery_history is not None else
              SUPPORT.targets(engine,support_history,plans['project']['before']) if support_history is not None else _targets(owner,engine,plans))
+    if decoration_preset_history is not None:
+        DECORATION_PRESET_TRANSACTION.prepare(engine,plans,targets,batch,redo=redo)
+        return DECORATION_PRESET_TRANSACTION.publish(owner,engine,plans,targets,batch,redo=redo)
     if support_history is not None:
         assets=SUPPORT_TRANSACTION.bank(engine)
         SUPPORT_TRANSACTION.prepare(engine,plans,targets,batch,redo=redo,assets=assets)
@@ -308,12 +325,17 @@ def restore(owner,request):
     recovery_marker=recovery_summary(batch)
     from .face_decoration_support_alias_history import KEY as SUPPORT_KEY,status_summary as support_summary
     support_marker=support_summary(batch)
+    from .face_decoration_preset_alias_history import KEY as DP_KEY,status_summary as dp_summary
+    dp_marker=dp_summary(batch)
     from .face_decoration_batch_history import KEY as DECORATION_KEY,status_summary as decoration_summary
     decoration_marker=decoration_summary(batch)
     from .face_decoration_alias_history import KEY as DA_KEY,status_summary as da_summary
     from .face_decoration_cohort_history import KEY as DC_KEY,status_summary as dc_summary
     da_marker=da_summary(batch);dc_marker=dc_summary(batch)
     try:
+        if dp_marker is not None:
+            from .face_decoration_preset_alias_transaction import require_history_request as require_dp_request
+            require_dp_request(owner,request,batch)
         if marker is not None:
             from .eye_bag_preset_alias_transaction import require_history_request
             require_history_request(owner,request,batch)
@@ -333,6 +355,7 @@ def restore(owner,request):
         if decoration_marker is not None:body[DECORATION_KEY]=decoration_marker
         if da_marker is not None:body[DA_KEY]=da_marker
         if dc_marker is not None:body[DC_KEY]=dc_marker
+        if dp_marker is not None:body[DP_KEY]=dp_marker
         if marker is not None:body[MIXED_KEY]=marker
         if recovery_marker is not None:body[RECOVERY_KEY]=recovery_marker
         if support_marker is not None:body[SUPPORT_KEY]=support_marker
@@ -340,6 +363,10 @@ def restore(owner,request):
         if frame is not None:owner.emit(frame)
         return body
     except Exception as error:
+        if dp_marker is not None:
+            started=bool(getattr(error,'side_effects_started',published))
+            error.face_decoration_preset_alias_history_no_write=not started
+            error.face_decoration_preset_alias_history_rolled_back=started and bool(getattr(error,'rolled_back',False))
         if marker is not None:
             error.eye_bag_preset_alias_history_no_write=not getattr(error,'side_effects_started',published)
         if support_marker is not None:

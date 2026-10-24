@@ -195,6 +195,8 @@ class BatchSyncController:
             from .face_decoration_support_alias_transaction import failure_context as support_failure_context
             recovery_context=recovery_failure_context(self,p)
             recovery_context.update(support_failure_context(self,p))
+            from .face_decoration_preset_alias_transaction import failure_context as dp_failure_context
+            recovery_context.update(dp_failure_context(self,p))
             recovery_rollback=bool(recovery_context and rolled_back and not no_write)
             if recovery_context:
                 recovery_context["no_write"]=bool(no_write)
@@ -405,8 +407,8 @@ class BatchSyncController:
             self.preflight.emit_result(p,{**body,"success":True,"mode":"direct_unreviewed"})
         except Exception as e:
             self._reject(p,f"batch {action} 被拒：{e}",
-                no_write=getattr(e,'face_decoration_support_alias_history_no_write',getattr(e,'eye_bag_recovery_alias_history_no_write',getattr(e,'eye_bag_preset_alias_history_no_write',not mutation_may_have_started))),
-                rolled_back=getattr(e,'face_decoration_support_alias_history_rolled_back',getattr(e,'eye_bag_recovery_alias_history_rolled_back',False)))
+                no_write=getattr(e,'face_decoration_preset_alias_history_no_write',getattr(e,'face_decoration_support_alias_history_no_write',getattr(e,'eye_bag_recovery_alias_history_no_write',getattr(e,'eye_bag_preset_alias_history_no_write',not mutation_may_have_started)))),
+                rolled_back=getattr(e,'face_decoration_preset_alias_history_rolled_back',getattr(e,'face_decoration_support_alias_history_rolled_back',getattr(e,'eye_bag_recovery_alias_history_rolled_back',False))))
 
     def commit(self, ops: list[str], mods: dict, rows: list[dict],
                       policy: str, bad: list[dict], source_snapshot=None) -> dict:
@@ -916,6 +918,7 @@ class BatchSyncController:
         from .eye_bag_preset_alias_history import status_summary as mixed_preset_status_summary
         from .eye_bag_recovery_alias_history import status_summary as recovery_status_summary
         from .face_decoration_support_alias_history import status_summary as support_status_summary
+        from .face_decoration_preset_alias_history import status_summary as dp_status_summary
         items = []
         for key, entry in self.ledger.items():
             item = {"batch_id": key, "module_scope": entry["ops"], "targets": len(entry["targets"]),
@@ -940,6 +943,8 @@ class BatchSyncController:
             if recovery_marker is not None: item["eye_bag_recovery_alias_review"] = recovery_marker
             support_marker=support_status_summary(entry)
             if support_marker is not None:item["face_decoration_support_alias_review"]=support_marker
+            dp_marker=dp_status_summary(entry)
+            if dp_marker is not None:item["face_decoration_preset_alias_review"]=dp_marker
             items.append(item)
         un = [i for i in items if not i["undone"]]
         return {"batches": items, "workspace_generation": self.versions.workspace,

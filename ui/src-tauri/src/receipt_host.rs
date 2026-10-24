@@ -224,7 +224,8 @@ impl ReviewBinding {
         if let Some(mut fields) = crate::batch_api::history::binding(value)? {
             if let Some(markers) = crate::project_recovery_fence::shared_history_markers(epoch, value)? {
                 for (key, marker) in markers.as_object().unwrap() { fields[key] = marker.clone(); }
-                if markers.get("eye_bag_recovery_alias_review").is_some() || markers.get(crate::people_api::decoration_support_alias::MARKER).is_some() { fields["module_scope"] = json!(["lnx.people_graph.v1"]); }
+                if markers.get("eye_bag_recovery_alias_review").is_some() || markers.get(crate::people_api::decoration_support_alias::MARKER).is_some()
+                    || markers.get(crate::preset_api::face_decoration::ALIAS_MARKER).is_some() { fields["module_scope"] = json!(["lnx.people_graph.v1"]); }
             }
             let bytes = fields.to_string().len();
             return Ok(Some(Self { fields, bytes, read_only: false, strict_failure_identity: true }));
@@ -306,7 +307,7 @@ impl ReviewBinding {
             && ["face_decoration_cohort", "face_decoration_cohort_ack", "face_decoration_cohort_visual", "module_scope", "face_decoration_review_ack", "face_decoration_preset_ack", "face_decoration_preset", "face_decoration_visual_required", "torso_review_ack", "waist_review_ack", "head_review_ack", "collarbone_review_ack", "collarbone_preset_ack", "collarbone_preset", "face_style_review_ack", "face_style", "face_style_visual",
                 "eye_bag_cohort", "eye_bag_cohort_ack", "eye_bag_cohort_visual", "eye_bag_preset", "eye_bag_preset_ack", "eye_bag_review_ack", "eye_bag", "eye_bag_coverage", "eye_bag_visual", "portrait_cohort_ack", "portrait_cohort", "portrait_visual", "persistent_association", "association_source", "source_outcome", "collarbone_cohort",
                 "torso_transfer", "waist_transfer", "head_transfer",
-                "member_document_id", "member_revision", "before", "after", "doc_state", "batch_id", "applied", "committed", "operation_committed"]
+                "face_decoration_preset_alias_review", "alias_members", "member_document_id", "member_revision", "before", "after", "doc_state", "batch_id", "applied", "committed", "operation_committed"]
                 .iter().all(|key| value.get(*key).is_none())
             && (value["preflight_token"].is_null() || value.get("preflight_token") == self.fields.get("preflight_token"))
             && value.get("target_outcomes").map_or(true, |outcomes| outcomes.as_array().is_some_and(|rows|
@@ -341,16 +342,20 @@ impl ReviewBinding {
         }))
     }
     fn decorate(&self, value: &mut Value) {
+        if self.fields[crate::preset_api::face_decoration::ACK].get("members").is_some() {
+            value["face_decoration_visual_required"] = json!(true);
+        }
         if (self.fields["protocol"] == 2 && self.fields.get("ack").is_some())
             || self.fields.get("eye_bag_recovery_alias_review").is_some()
             || self.fields.get(crate::people_api::decoration_support_alias::MARKER).is_some()
+            || self.fields.get(crate::preset_api::face_decoration::ALIAS_MARKER).is_some()
             || self.fields["face_decoration_support_alias_request"]["action"] == "face_decoration_support_alias_confirm" { value["no_write"] = json!(false); }
         for (key, expected) in self.fields.as_object().unwrap() {
             if !["face_decoration_cohort_applies_sha256", "face_decoration_applies_sha256", "eye_bag_cohort_applies_sha256", "eye_bag_applies_sha256", "collarbone_applies_sha256", "face_style_applies_sha256", "portrait_applies_sha256"].contains(&key.as_str()) {value[key] = expected.clone();}
         }
     }
 }
-struct Receipt { id: String, action: String, document: Option<String>, review: Option<ReviewBinding>, result: Option<Value>, bytes: usize, native_unknown: bool, support_history_workspace: Option<String> }
+struct Receipt { id: String, action: String, document: Option<String>, review: Option<ReviewBinding>, result: Option<Value>, bytes: usize, native_unknown: bool, late_terminal_workspace: Option<String> }
 impl Receipt {
     fn evictable(&self) -> bool {
         self.result.as_ref().is_some_and(|result| self.review.is_none() || result["outcome_unknown"] != true
@@ -388,14 +393,15 @@ impl<K: ReceiptKind> ReceiptHost<K> {
         let id = command["request_id"].as_str().ok_or("missing receipt request ID")?;
         let action = command["action"].as_str().ok_or("missing receipt action")?;
         let review = ReviewBinding::from_command(epoch, command)?;
-        let support_history_workspace = review.as_ref().and_then(|review|
-            crate::project_recovery_fence::support_history_workspace(epoch, &review.fields));
+        let late_terminal_workspace = review.as_ref().and_then(|review|
+            crate::project_recovery_fence::support_history_workspace(epoch, &review.fields)
+                .or_else(|| crate::project_recovery_fence::decoration_preset_workspace(epoch, &review.fields)));
         self.begin_bound(epoch, id, action, bound)?;
         // begin_bound just appended this unique request, within the same lock.
         let record = self.records.back_mut().unwrap();
-        record.bytes = review.as_ref().map_or(0, |binding| binding.bytes) + support_history_workspace.as_ref().map_or(0, |workspace| workspace.len());
+        record.bytes = review.as_ref().map_or(0, |binding| binding.bytes) + late_terminal_workspace.as_ref().map_or(0, |workspace| workspace.len());
         record.review = review;
-        record.support_history_workspace = support_history_workspace;
+        record.late_terminal_workspace = late_terminal_workspace;
         self.trim_bytes();
         Ok(())
     }
@@ -415,7 +421,7 @@ impl<K: ReceiptKind> ReceiptHost<K> {
             let index = self.records.iter().position(Receipt::evictable).ok_or_else(|| format!("too many pending or uncertain {} requests", K::NAME))?;
             self.records.remove(index);
         }
-        self.records.push_back(Receipt { id: id.into(), action: action.into(), document: document.map(str::to_owned), review: None, result: None, bytes: 0, native_unknown: false, support_history_workspace: None });
+        self.records.push_back(Receipt { id: id.into(), action: action.into(), document: document.map(str::to_owned), review: None, result: None, bytes: 0, native_unknown: false, late_terminal_workspace: None });
         Ok(())
     }
     fn unknown(record: &Receipt, error: &str) -> Value {
@@ -439,7 +445,7 @@ impl<K: ReceiptKind> ReceiptHost<K> {
                     && review.fields.get("eye_bag_request").is_some() && review.matches(value))
                 && value["outcome_unknown"] == false && K::valid(value, record.document.as_deref())
                 && value.to_string().len() <= MAX_RESULT_BYTES;
-            // Only the new support protocol may reconcile a locally synthesized
+            // The dedicated support protocol may reconcile a locally synthesized
             // transport unknown with the original exact engine terminal.
             // An engine-issued unknown or any known terminal stays immutable.
             let bound_support_event = K::NAME == "people" && record.native_unknown && previous["outcome_unknown"] == true
@@ -455,11 +461,23 @@ impl<K: ReceiptKind> ReceiptHost<K> {
                 && value["event"] == "batch_result" && matches!(record.action.as_str(), "undo" | "redo")
                 && record.review.as_ref().is_some_and(|review|
                     review.fields.get(crate::people_api::decoration_support_alias::MARKER).is_some() && review.matches(value)
-                    && record.support_history_workspace.as_ref().is_some_and(|workspace|
+                    && record.late_terminal_workspace.as_ref().is_some_and(|workspace|
                         crate::project_recovery_fence::support_history_workspace(epoch, &review.fields).as_ref() == Some(workspace)))
                 && K::valid(value, record.document.as_deref()) && value.to_string().len() <= MAX_RESULT_BYTES;
-            let support_reconciliation = (bound_support_event || bound_support_history_event) && value["outcome_unknown"] == false;
-            let support_engine_unknown = (bound_support_event || bound_support_history_event) && value["outcome_unknown"] == true;
+            // Only a transport-generated unknown may reconcile for decoration
+            // mixed-preset apply/history. Capture and compare workspace without
+            // changing ordinary preset/scalar/eye-bag terminal semantics.
+            let bound_decoration_preset_event = record.native_unknown && previous["outcome_unknown"] == true
+                && ((K::NAME == "preset" && record.action == "apply" && value["event"] == "preset_result")
+                    || (K::NAME == "batch" && matches!(record.action.as_str(), "undo" | "redo") && value["event"] == "batch_result"))
+                && record.review.as_ref().is_some_and(|review| review.matches(value)
+                    && ((K::NAME == "preset" && review.fields[crate::preset_api::face_decoration::ACK].get("members").is_some())
+                        || (K::NAME == "batch" && review.fields.get(crate::preset_api::face_decoration::ALIAS_MARKER).is_some()))
+                    && record.late_terminal_workspace.as_ref().is_some_and(|workspace|
+                        crate::project_recovery_fence::decoration_preset_workspace(epoch, &review.fields).as_ref() == Some(workspace)))
+                && K::valid(value, record.document.as_deref()) && value.to_string().len() <= MAX_RESULT_BYTES;
+            let support_reconciliation = (bound_support_event || bound_support_history_event || bound_decoration_preset_event) && value["outcome_unknown"] == false;
+            let support_engine_unknown = (bound_support_event || bound_support_history_event || bound_decoration_preset_event) && value["outcome_unknown"] == true;
             if !read_reconciliation && !support_reconciliation && !support_engine_unknown { return; }
             // An exact engine unknown replaces the transport diagnostic, not
             // its authority: it closes late-terminal reconciliation and stays fenced.
@@ -484,6 +502,9 @@ impl<K: ReceiptKind> ReceiptHost<K> {
                 if let Some(publication) = crate::preset_api::eye_bag::retained_alias_publication(&result) {
                     for (key, value) in publication.as_object().unwrap() { compact[key] = value.clone(); }
                 }
+                if let Some(publication) = crate::preset_api::face_decoration::retained_alias_publication(&result) {
+                    for (key, value) in publication.as_object().unwrap() { compact[key] = value.clone(); }
+                }
             }
             if K::NAME == "people" {
                 if let Some(publication) = crate::people_api::decoration_support_alias::retained_publication(&result) {
@@ -503,7 +524,7 @@ impl<K: ReceiptKind> ReceiptHost<K> {
         }
         record.native_unknown = result["outcome_unknown"] == true && record.native_unknown;
         record.bytes = result.to_string().len() + record.review.as_ref().map_or(0, |binding| binding.bytes)
-            + record.support_history_workspace.as_ref().map_or(0, |workspace| workspace.len());
+            + record.late_terminal_workspace.as_ref().map_or(0, |workspace| workspace.len());
         record.result = Some(result);
         if record.review.is_some() {
             // Use the retained, validated result, never the raw engine event.

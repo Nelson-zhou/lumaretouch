@@ -133,8 +133,10 @@ def test_static_publication_and_image_ownership_are_distinct_from_graph_only_ali
     assert 'from .eye_bag_preset_alias_transaction import commit' in review
     assert 'verify_images()' in review and 'current_after=entry[\'plan\'].state' in review
     assert 'affected_assets(plan.before, plan.candidate) - {plan.target_ref[\'asset_sha256\']}' in review
-    assert controller.index("bid,frame=publish(") < controller.index("self.ports.advance()")
-    assert 'verify_claimed(self.reviews' in controller and 'release_claimed(self.reviews' in controller
+    publication=(root/'preset_alias_publication.py').read_text()
+    assert controller.index("return publish(self,p,portrait") < controller.index("self.ports.advance()")
+    assert 'portrait.store.verify_claimed(controller.reviews' in publication and 'release_claimed(self.reviews' in controller
+    assert "if name=='face_decoration':options['ack']" in publication
     assert 'cache.prune(set(reviews.pending) | set(claimed))' in store
     assert 'reviewed_eye_bag_aliases=False' in planner
 

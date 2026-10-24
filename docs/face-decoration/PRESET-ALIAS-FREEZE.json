@@ -1,0 +1,432 @@
+{
+  "baseline": "279b7f28d2ba281e1f514dccba89ced06f59282a",
+  "status": "FROZEN_SOURCE_ONLY_FACE_DECORATION_MIXED_PRESET_ALIAS_UNRUN",
+  "requirement_ids": [
+    "LNX-REF-PC-32471-C-dd14134407"
+  ],
+  "scope": "Complete selected-current mixed preset, sibling-local document state, target-owned support and full affected-image ACK, atomic shared graph/current-state history. Workflow extension, no new algorithm count.",
+  "files": [
+    {
+      "path": "docs/development/handbook-traceability.json",
+      "sha256": "91dbd772f5017621cac8e1c1b85dbd999bb5f801e9f7784204acd35171eba3d5",
+      "bytes": 475693
+    },
+    {
+      "path": "docs/face-decoration/IMPLEMENTATION.md",
+      "sha256": "deb11a313095e5dcac1a19641fe521ad642cbb5fa516dbbc0ab6e7132745b788",
+      "bytes": 9245
+    },
+    {
+      "path": "docs/face-decoration/MULTIOWNER-CONTRACT.md",
+      "sha256": "f9ea475218d92b973a4e7f5147a9b3c2690e447a35c1c3ff9549e001b7094bb3",
+      "bytes": 3871
+    },
+    {
+      "path": "docs/face-decoration/PRESET-ALIAS-ACCEPTANCE-UNRUN.md",
+      "sha256": "be98d8c12476614ddd02ba1c6fa9653fcf0b0a76038d1f6f98418cf552691174",
+      "bytes": 2080
+    },
+    {
+      "path": "docs/face-decoration/PRESET-ALIAS-CONTRACT.md",
+      "sha256": "13fb6018fbfc939a54c9e9c2272a88ef5f3de1ec95abfba99e2eb0da586c15fe",
+      "bytes": 2732
+    },
+    {
+      "path": "docs/face-decoration/PRESET-ALIAS-NATIVE-CONTRACT.md",
+      "sha256": "3501970952de686fa39abc80bb0b3d5104ed7302b8c16a200cbc2c0b19e87259",
+      "bytes": 5522
+    },
+    {
+      "path": "docs/face-decoration/PRESET-ALIAS-NATIVE-FREEZE.json",
+      "sha256": "bd13cf8fe5e8a456fe83650f6f39968dd9b62b9f5c00332268bb6e2d0cc6f30c",
+      "bytes": 3155
+    },
+    {
+      "path": "docs/face-decoration/PRESET-ALIAS-RESEARCH.md",
+      "sha256": "720c862e35f9065d2abc4d3aa77646fb706cb628b43eb9aec917c8f9c89b0028",
+      "bytes": 2488
+    },
+    {
+      "path": "docs/face-decoration/PRESET-ALIAS-REVIEW-CONTRACT.md",
+      "sha256": "121da4a6335798567a6b17d133439c5a609545baa118372be47b831bac164a7d",
+      "bytes": 5294
+    },
+    {
+      "path": "docs/face-decoration/PRESET-ALIAS-REVIEW-FREEZE.json",
+      "sha256": "fbb6fba719bca2148649964643b955856ee24bd4bde01058fbe9c696b486e6d5",
+      "bytes": 2566
+    },
+    {
+      "path": "docs/face-decoration/SUPPORT-ALIAS-CONTRACT.md",
+      "sha256": "80db016e61263c819718ba41aca049e613af7ba0f9c5acb64691475620e15429",
+      "bytes": 3975
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/batch_dispatch_receipt.py",
+      "sha256": "2c569337c0b71faabe1713de812a60cf02d1af37f79c87acfd527e497dc640ee",
+      "bytes": 4379
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/batch_sync.py",
+      "sha256": "3fff29b40f3a422ebd3ab445c332a2cc52311ce3843365e8b9e2ef22e1d0713c",
+      "bytes": 67704
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/eye_bag_alias_history.py",
+      "sha256": "9b0bf23dd924fefc608cab49ed0ce449ee41fb2245501fd6a417236477cb6c1f",
+      "bytes": 18300
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/eye_bag_batch_history.py",
+      "sha256": "9ecf886a3723aa9371325ccddf85d731c10f2037dae2703816ad7ad41b6a4f81",
+      "bytes": 11246
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/eye_bag_cohort_history.py",
+      "sha256": "cc5866f1cc3309d1362fa3f7ff845953a293c1a53890f259dc37999ddedea1d9",
+      "bytes": 14714
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/eye_bag_preset_alias_history.py",
+      "sha256": "6771b82fd5879dcbe669567aa8a21f7da5d7b306c36a3c867f6304389640df5e",
+      "bytes": 20745
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/eye_bag_recovery_alias_history.py",
+      "sha256": "37e0848d76c8cccb769ee34e620ac02080ceecd7f78f5b74f71a29668e4f1edc",
+      "bytes": 18713
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/face_decoration_preset_alias_authority.py",
+      "sha256": "3c2d60cd85e351799bf5ce784c9c25dd5566d6a9b055b3b7d034e129b6551e42",
+      "bytes": 6388
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/face_decoration_preset_alias_history.py",
+      "sha256": "66be3acb107cd23ffe82e6e2502d8407936dea648ed1a8ac5838cae14a5e37ac",
+      "bytes": 26107
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/face_decoration_preset_alias_review.py",
+      "sha256": "67d5ed562bab33d59f650bab55bff19af1f1c5b44c39e434f56d0a67ba617dbc",
+      "bytes": 18610
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/face_decoration_preset_alias_transaction.py",
+      "sha256": "a43fd31f0ae52264315fea177f08fc71671ff89c7195bce69f52a84f76818533",
+      "bytes": 16083
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/face_decoration_preset_coverage.py",
+      "sha256": "f730f8579541d3741a4ff529b38220b737a9bb871db3cc412c84253fb0c93930",
+      "bytes": 3802
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/face_decoration_preset_plan.py",
+      "sha256": "8c8845a400604dde62f1c00037d1bb8ee85cbf4a5dcb1c1c70e1ad558580a158",
+      "bytes": 2599
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/face_decoration_preset_review.py",
+      "sha256": "fa6ba1083093bffea22c1c9ea72deb4e56b9b227795e2443547672d8cbc895dd",
+      "bytes": 16665
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/face_decoration_preset_store.py",
+      "sha256": "b383d1d9e48b0aa22eb21f5026d52f8b97ba24448f15faff6892169963a74a28",
+      "bytes": 8753
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/face_decoration_project.py",
+      "sha256": "f0667e72c26e3aab1010ac5f2c20899f8a1b4e6ed801dc49c113ead86457918c",
+      "bytes": 4743
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/face_decoration_support_alias_history.py",
+      "sha256": "ec3a21d97e11a4a4a7c5d07e89e64b77b4a83741a2ea2bde6fbfb63ff9c8f1d4",
+      "bytes": 22768
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/face_style_alias_history.py",
+      "sha256": "fe92521b10a1e12583a5b037cab4cf59c733dbb5e33f375af84fda56f84d911b",
+      "bytes": 8589
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/local_grade_preset_review.py",
+      "sha256": "5f5a6048d2f218e7990c7b4fc78e8c0975b968b7de5009dcc5ec612cb4be0cba",
+      "bytes": 21170
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_batch_ledger.py",
+      "sha256": "ad5e5128efcf2152e4729db0bac4135ee7ff2e6745a174b0873d7e3634ebf218",
+      "bytes": 25655
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_history_persistence.py",
+      "sha256": "a34640c14ec86a953c2feddb395604aae10806202c0d7864023b90f4f0332b7a",
+      "bytes": 14125
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_preset_plan.py",
+      "sha256": "056d7382dd35a15c59ac047f6d71c2f98fe8482c15d85ce54dda016df8221e3a",
+      "bytes": 3332
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_scope.py",
+      "sha256": "dfc584fcbf2588572f799e2efe46206335f792d7c129c9497021d8b7eb686d97",
+      "bytes": 46678
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/preset_alias_publication.py",
+      "sha256": "0256dcdf8a7e022fa08e25fb6b81c08d0b17fbba33e2d9565b88140037cf6cfc",
+      "bytes": 3150
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/preset_controller.py",
+      "sha256": "ae266834b5086a9b22d8de63dc7129d8c0e97208168ff2c9c34b6cff75f99204",
+      "bytes": 50554
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/project_recovery_runtime.py",
+      "sha256": "e99c3c781ac04b4dfca25eb5beac2d9f0ff04a5bfcbdc5e95d59c57cdebe986d",
+      "bytes": 9088
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/server.py",
+      "sha256": "39219d69778a3bb403514bbeb3395d3e2488260820db654bb2c32213b25bc37e",
+      "bytes": 471675
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/workflow_ports.py",
+      "sha256": "9256f9bfda68cda157069c1aa2bd5fc7da153d4b46fc774704e315086a63554f",
+      "bytes": 17522
+    },
+    {
+      "path": "engine/tests/test_decoration_preset_alias_publication_unrun.py",
+      "sha256": "f3e45004d679aca8da7cb17e3b76128a63f72dc48fa6986a074f1d6becd2992a",
+      "bytes": 3897
+    },
+    {
+      "path": "engine/tests/test_eye_bag_preset_alias_review_unrun.py",
+      "sha256": "0cffbb007126b31e0351681c908fccdbd05540d3e3df7bc5f554712af1e709d2",
+      "bytes": 12409
+    },
+    {
+      "path": "engine/tests/test_face_decoration_preset_alias_history_unrun.py",
+      "sha256": "c6df6ab2629d99b8a3ca6cbdf0ec7f5cec82cb967f70fd6d20e099e06e87e51e",
+      "bytes": 18399
+    },
+    {
+      "path": "engine/tests/test_face_decoration_preset_alias_review_unrun.py",
+      "sha256": "754a9c15a8fe44198a6492ec4e10af0bf3cfa689cfeb92119735b8c1c77ce231",
+      "bytes": 16571
+    },
+    {
+      "path": "engine/tests/test_face_decoration_preset_replay_unrun.py",
+      "sha256": "c31735044487cc4e537270c5f383b99366a368304d20d6ad12abac3a7fcc621d",
+      "bytes": 8594
+    },
+    {
+      "path": "ui/src-tauri/src/batch_history_protocol.rs",
+      "sha256": "37e68707890232185232d48bc3f7b0daa31cbb01dc5aa9b5b2a8b46c825a8720",
+      "bytes": 7656
+    },
+    {
+      "path": "ui/src-tauri/src/effect_recovery_alias_protocol.rs",
+      "sha256": "c2b7186e1d5eca9e4d91d4325f4b6ab6a5723bc20113bd72f9b6ce8565571c84",
+      "bytes": 10409
+    },
+    {
+      "path": "ui/src-tauri/src/eye_bag_preset_protocol.rs",
+      "sha256": "1410daab0ee202245404228dc3f4c3e2d226f512cd53d5204f8002e8667c9939",
+      "bytes": 11038
+    },
+    {
+      "path": "ui/src-tauri/src/face_decoration_preset_alias_protocol.rs",
+      "sha256": "d76c29782837461cabfe28d76367cf4d151a32785617f5655f9df1ab20f92118",
+      "bytes": 9375
+    },
+    {
+      "path": "ui/src-tauri/src/face_decoration_preset_alias_protocol_unrun.rs",
+      "sha256": "628676d1663a549282352906f72a446fec4b86ba4edb92f2b2c5c865fb0d08ae",
+      "bytes": 18710
+    },
+    {
+      "path": "ui/src-tauri/src/face_decoration_preset_history_unrun.rs",
+      "sha256": "26343d43799ef2f6c6f055c5a9038a7da84b47806f26398173444ca7eea7683a",
+      "bytes": 8868
+    },
+    {
+      "path": "ui/src-tauri/src/face_decoration_preset_protocol.rs",
+      "sha256": "c70932d854fe90fbe29eb7cdc912dc063bc63b8610760f926f85e7023228904e",
+      "bytes": 10675
+    },
+    {
+      "path": "ui/src-tauri/src/preset_alias_history_fence.rs",
+      "sha256": "13023b77faf068dd67a855df8ec6f778cd95aee11c016ce263dffc3eba39aafc",
+      "bytes": 10098
+    },
+    {
+      "path": "ui/src-tauri/src/preset_alias_recovery_fence.rs",
+      "sha256": "1f71d2f5e9d927f5ee1e48779e51bd453f4c67ce7686ee0a02b9653f266228be",
+      "bytes": 7547
+    },
+    {
+      "path": "ui/src-tauri/src/preset_api.rs",
+      "sha256": "1e3f3e3ecb54491a7ed0d7ebbf232f9dd9a47df1cb0ec8a263d8f2d251faa81c",
+      "bytes": 7053
+    },
+    {
+      "path": "ui/src-tauri/src/project_recovery_fence.rs",
+      "sha256": "8093220dd760d96170d9442243dada4a09de1c5c2af806cda59f08a083365fa9",
+      "bytes": 10528
+    },
+    {
+      "path": "ui/src-tauri/src/receipt_host.rs",
+      "sha256": "3b8f6ecf63e03251208d8c07a7b34a532109810ac4b83d34eaa7e12f7455ae23",
+      "bytes": 43372
+    },
+    {
+      "path": "ui/src/batch/batchWorkflow.ts",
+      "sha256": "de8ec8b6952a89eb449dee3861dee10fab2d95e17d8e3cb498365a3424370a65",
+      "bytes": 90862
+    },
+    {
+      "path": "ui/src/eyeBagPreserve/presetAliasHistoryRegistry.ts",
+      "sha256": "df4db450a075a74a6020524d745ff589bbfebb39ccb336ca03686a2cca9b5b26",
+      "bytes": 6502
+    },
+    {
+      "path": "ui/src/faceDecoration/DecorationPresetReview.tsx",
+      "sha256": "f3fbafc18d6d68890261e108245a7cc1c70c490e5c7a4f372b177c5045cc1740",
+      "bytes": 8073
+    },
+    {
+      "path": "ui/src/faceDecoration/FaceDecorationPanel.tsx",
+      "sha256": "bcb522d2528c0ec8c4a784d758c63819d681560008ad1cb1982e177d74a3f056",
+      "bytes": 11390
+    },
+    {
+      "path": "ui/src/faceDecoration/FaceDecorationPresetAliasHistory.tsx",
+      "sha256": "c675f3e045703489e40f73dbc5d93a39c54332f0b9dcfe6d2d64de04bc72841d",
+      "bytes": 2109
+    },
+    {
+      "path": "ui/src/faceDecoration/PRESET-ALIAS-ACCEPTANCE-UNRUN.md",
+      "sha256": "20ecf7f24cf986a4ece04d3fc8ad529f00babd1f9061641b2d0d678cdf864ada",
+      "bytes": 3472
+    },
+    {
+      "path": "ui/src/faceDecoration/batchHistoryRegistry.ts",
+      "sha256": "11f012b1b8159a814ebbbd90b089614500e8fc7cf725c72d833e883d59782cbd",
+      "bytes": 4519
+    },
+    {
+      "path": "ui/src/faceDecoration/multiHistory.ts",
+      "sha256": "1fe91a8060a2efb14156d1b1fce9817831610fa858ebb6a20dc2799d0ffba530",
+      "bytes": 2920
+    },
+    {
+      "path": "ui/src/faceDecoration/presetAlias.unrun.test.ts",
+      "sha256": "f1c122c79fe28c38d8a86299d453885857e2462a9c54bc4dddcb0a28b8eb495b",
+      "bytes": 23794
+    },
+    {
+      "path": "ui/src/faceDecoration/presetAliasBatchReceipt.ts",
+      "sha256": "6364a8bb437bf8faf9481b3b04d55e31e238a205812d29a6263291bd3872a3c9",
+      "bytes": 3703
+    },
+    {
+      "path": "ui/src/faceDecoration/presetAliasHistoryRegistry.ts",
+      "sha256": "6982049c7b35d68bf98177b8e2d9d26f56e21e2fb3981ecb791046320266c9f2",
+      "bytes": 8268
+    },
+    {
+      "path": "ui/src/faceDecoration/presetAliasReceipt.ts",
+      "sha256": "1d56306f6433c9237f155f55c4b05fcb51b75206d5990427743e6164d668522c",
+      "bytes": 6435
+    },
+    {
+      "path": "ui/src/faceDecoration/supportAliasHistoryRegistry.ts",
+      "sha256": "b229fee047c3266dee265d523072a644046d515400412f42c8ae2b2c7847da3d",
+      "bytes": 5264
+    },
+    {
+      "path": "ui/src/faceDecoration/transferModel.ts",
+      "sha256": "48623964a249a969535c6766f4b7dfbb0fb3c7c05187e94bce16aae48006d1a6",
+      "bytes": 8764
+    },
+    {
+      "path": "ui/src/faceDecoration/visualTransport.ts",
+      "sha256": "f4187767bd8ead3ccd6f582bea05cd382b9e6740ba09a2896430c78a27757aa5",
+      "bytes": 3600
+    },
+    {
+      "path": "ui/src/faceDecoration/visualTransport.unrun.test.ts",
+      "sha256": "38fed2d4bdc332c3574c95ad48a11c17bfdb4ca7f1216f0017a63488399f4ac5",
+      "bytes": 3464
+    },
+    {
+      "path": "ui/src/native.ts",
+      "sha256": "b7a8c4104192359205d020a94ca7ee61c9578de6b8d76a59579f9ad5f52d5156",
+      "bytes": 114719
+    },
+    {
+      "path": "ui/src/people/decorationPresetReadback.ts",
+      "sha256": "75ca5e870568f8a82db442ec453e65fec3855fa15bf13386c66541fc00140724",
+      "bytes": 2728
+    },
+    {
+      "path": "ui/src/people/usePeopleWorkflow.ts",
+      "sha256": "9940b498404ee5a8c0b6cda2f5cb1ad963f31eeb90184ca059d5d682cce7008b",
+      "bytes": 22464
+    },
+    {
+      "path": "ui/src/presets/PresetPanel.tsx",
+      "sha256": "f4158cb14f22b71e1053cb0fea684ee698918f960512f8ea42c6ccfc678518e7",
+      "bytes": 20134
+    },
+    {
+      "path": "ui/src/presets/presetWorkflow.ts",
+      "sha256": "7b1c3e9a0b2612dfc33da140dc8c35c9e2d710f59e7aae5f7ba7f5137c368d1f",
+      "bytes": 54244
+    },
+    {
+      "path": "ui/src/presets/usePresetWorkflow.ts",
+      "sha256": "aac69fbb042866d0898dcf3c6d7b20ccde974d50ad607b177c3b3541b6ef2ae1",
+      "bytes": 25815
+    }
+  ],
+  "static_checks": {
+    "python_ast_files": 1422,
+    "changed_json_toml": "stdlib parse only",
+    "relative_ui_imports_existing": 176,
+    "git_diff_check": "clean",
+    "prior_numeric_source_and_frozen_sources_byte_identical": 343,
+    "line_caps": {
+      "ui/src/App.tsx": 2131,
+      "ui/src-tauri/src/main.rs": 2047,
+      "engine/src/lumaretouch_engine/server.py": 7045
+    }
+  },
+  "integration_map": {
+    "planning": "Typed detached alias plan; original/derived effective source and exact full selected modules, all retained active decoration coverage.",
+    "review": "Per-member complete renders, lazy immutable image reads, served/decoded/hash-checked pairs, exact ordered ACK and unchanged support bank.",
+    "publication": "Distinct typed authority and composite current-state/shared-graph transaction; siblings preserve non-portrait settings; generic replay cannot execute alias plan.",
+    "history": "Exact distinct marker, graph-noop/state-change semantics, complete-member undo/redo/reopen and conservative compensation/unknown receipts.",
+    "native_ui": "Versioned capability, exact member/provenance/ACK boundaries, narrow transport-first late reconciliation, persistent uncertainty and confirmed-write readback fences."
+  },
+  "limitations": [
+    "Complete available shared-owner 2–16 members and up to 64 covered faces; dormant/unavailable/hidden incomplete state refuses.",
+    "Manual visibility, moderately frontal anatomy, opaque SDR and existing PNG16 master contracts; no automatic segmentation/vendor parity/HDR claim.",
+    "Bounded RGB8 comparison images are not native resolution or photographic acceptance.",
+    "Incompatible selected review owners refuse whole operation; alias effect-recovery painting remains deferred, no donor visibility/recovery vectors.",
+    "All product execution/imports/tests/builds/typechecks/inference/downloads and runtime/UI/history/quality/performance acceptance UNRUN."
+  ],
+  "excluded_unrelated_untracked": [
+    "docs/colour-grading/FREEZE.json",
+    "docs/eye-light/FREEZE.json",
+    "docs/iris-makeup/isolated-manifest.json"
+  ],
+  "prohibited_actions_performed": []
+}

@@ -59,6 +59,9 @@ def rejected(request, error, boundary, emit):
             from .face_decoration_support_alias_transaction import failure_context as support_failure_context
             support = support_failure_context(owner, request)
             if support: context.update(support, no_write=True, restored=[])
+            from .face_decoration_preset_alias_transaction import failure_context as dp_failure_context
+            mixed = dp_failure_context(owner, request)
+            if mixed: context.update(mixed, no_write=True, restored=[])
     if not context:
         return
     emit({'event': 'batch_result', 'action': action, 'request_id': identity,

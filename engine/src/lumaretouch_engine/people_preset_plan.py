@@ -22,6 +22,11 @@ class PresetReplayPlan:
     owner: object = field(default=None, repr=False, compare=False)
 
 
+@dataclass(frozen=True)
+class PresetAliasReviewPlan(PresetReplayPlan):
+    """Detached review data, never accepted by generic replay or rollback."""
+
+
 def require_active_owner(engine):
     """A preview must not silently activate, migrate or create another owner."""
     from .virtual_copy_people import current_row
@@ -49,11 +54,13 @@ def clone_state(value):
 
 
 def snapshot(state, kwargs, *, owner=None, owner_fence=None, before=None,
-             candidate=None, patches=(), target_ref=None):
+             candidate=None, patches=(), target_ref=None, review_only=False):
     """Detached graph/state values with an explicitly session-only owner fence."""
     if owner is not None and (owner.fence != owner_fence or owner.snapshot() != before):
         raise ValueError('Portrait owner changed while preparing the preset; review again')
-    return PresetReplayPlan(clone_state(state), dict(kwargs), owner is not None,
+    if type(review_only) is not bool:raise ValueError('Private preset planning mode must be explicit')
+    kind = PresetAliasReviewPlan if review_only else PresetReplayPlan
+    return kind(clone_state(state), dict(kwargs), owner is not None,
         deepcopy(before), deepcopy(candidate), tuple(deepcopy(patches)),
         deepcopy(target_ref), owner_fence, owner)
 

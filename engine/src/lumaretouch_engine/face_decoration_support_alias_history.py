@@ -19,7 +19,8 @@ KEY = 'face_decoration_support_alias_review'
 TARGET = 'face_decoration_visibility'
 OTHER_MARKERS = ('face_style_alias_review', 'eye_bag_batch_review', 'eye_bag_cohort_review',
                  'eye_bag_alias_review', 'eye_bag_preset_alias_review', 'eye_bag_recovery_alias_review',
-                 'face_decoration_batch_review', 'face_decoration_alias_review', 'face_decoration_cohort_review')
+                 'face_decoration_batch_review', 'face_decoration_alias_review', 'face_decoration_cohort_review',
+                 'face_decoration_preset_alias_review')
 
 
 def current_state(engine, row):

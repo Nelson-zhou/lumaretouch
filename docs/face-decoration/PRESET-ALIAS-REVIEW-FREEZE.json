@@ -1,0 +1,65 @@
+{
+  "baseline": "279b7f28d2ba281e1f514dccba89ced06f59282a",
+  "status": "FROZEN_SOURCE_ONLY_FACE_DECORATION_MIXED_PRESET_ALIAS_REVIEW_UNRUN",
+  "scope": "Owned exact review/planning subset; current full selected state, sibling-owned nonportrait state, complete all-face/all-member frozen source and bank evidence, typed read-only planning.",
+  "validation": {
+    "static_ast_parse": "9 owned Python source/fixture files parsed without importing or executing product code",
+    "runtime": "UNRUN",
+    "native": "UNRUN",
+    "ui_typecheck": "UNRUN",
+    "image_acceptance": "UNRUN",
+    "tests": "AUTHORED_UNRUN"
+  },
+  "files": [
+    {
+      "path": "engine/src/lumaretouch_engine/face_decoration_preset_alias_review.py",
+      "sha256": "67d5ed562bab33d59f650bab55bff19af1f1c5b44c39e434f56d0a67ba617dbc",
+      "bytes": 18610
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/face_decoration_preset_plan.py",
+      "sha256": "8c8845a400604dde62f1c00037d1bb8ee85cbf4a5dcb1c1c70e1ad558580a158",
+      "bytes": 2599
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/face_decoration_preset_review.py",
+      "sha256": "fa6ba1083093bffea22c1c9ea72deb4e56b9b227795e2443547672d8cbc895dd",
+      "bytes": 16665
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/face_decoration_preset_coverage.py",
+      "sha256": "f730f8579541d3741a4ff529b38220b737a9bb871db3cc412c84253fb0c93930",
+      "bytes": 3802
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/face_decoration_project.py",
+      "sha256": "f0667e72c26e3aab1010ac5f2c20899f8a1b4e6ed801dc49c113ead86457918c",
+      "bytes": 4743
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_preset_plan.py",
+      "sha256": "056d7382dd35a15c59ac047f6d71c2f98fe8482c15d85ce54dda016df8221e3a",
+      "bytes": 3332
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_scope.py",
+      "sha256": "dfc584fcbf2588572f799e2efe46206335f792d7c129c9497021d8b7eb686d97",
+      "bytes": 46678
+    },
+    {
+      "path": "engine/tests/test_face_decoration_preset_alias_review_unrun.py",
+      "sha256": "754a9c15a8fe44198a6492ec4e10af0bf3cfa689cfeb92119735b8c1c77ce231",
+      "bytes": 16571
+    },
+    {
+      "path": "engine/tests/test_face_decoration_preset_replay_unrun.py",
+      "sha256": "c31735044487cc4e537270c5f383b99366a368304d20d6ad12abac3a7fcc621d",
+      "bytes": 8594
+    },
+    {
+      "path": "docs/face-decoration/PRESET-ALIAS-REVIEW-CONTRACT.md",
+      "sha256": "121da4a6335798567a6b17d133439c5a609545baa118372be47b831bac164a7d",
+      "bytes": 5294
+    }
+  ]
+}

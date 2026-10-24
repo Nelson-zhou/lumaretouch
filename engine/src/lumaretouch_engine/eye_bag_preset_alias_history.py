@@ -128,6 +128,8 @@ def _changes(entry, marker):
 
 def check(entry):
     if KEY not in entry: return None
+    if 'face_decoration_preset_alias_review' in entry:
+        raise ValueError('Mixed decoration preset history cannot reuse another history authority')
     if 'face_decoration_support_alias_review' in entry:
         raise ValueError('Visible-support alias history cannot reuse another history authority')
     marker = entry[KEY]

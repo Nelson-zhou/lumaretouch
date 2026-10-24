@@ -52,6 +52,9 @@ pub(crate) fn shared_history_markers(epoch:[u8;16],command:&Value)->Result<Optio
 pub(crate) fn support_history_workspace(epoch: [u8;16], binding: &Value) -> Option<String> {
     preset_alias_history::support_workspace(epoch, binding)
 }
+pub(crate) fn decoration_preset_workspace(epoch: [u8;16], binding: &Value) -> Option<String> {
+    preset_alias_history::decoration_workspace(epoch, binding)
+}
 pub(crate) fn observed(epoch:[u8;16], value:&Value){
     let Ok(mut store)=pending().lock() else{return;};
     preset_alias_history::observe_session(epoch,value);

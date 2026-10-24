@@ -25,6 +25,9 @@ def digest(value):
 
 
 def checked(value):
+    if type(value) is dict and type(value.get('version')) is int and value['version']==2:
+        from .face_decoration_preset_alias_review import checked as aliases
+        return aliases(value)
     from .people_transfer_inventory import check_proof
     from .people_state import check_ref
     if type(value) is not dict or set(value) != FIELDS or type(value['version']) is not int or value['version'] != 1:
@@ -50,6 +53,9 @@ def checked(value):
 
 
 def checked_ack(value):
+    if type(value) is dict and 'members' in value:
+        from .face_decoration_preset_alias_review import check_ack
+        return check_ack(value)
     keys={'document_id','revision','before_sha256','after_sha256','coverage_sha256','preset_sha256','applies_sha256'}
     if type(value) is not dict or set(value)!=keys:
         raise ValueError('Face-decoration acknowledgment requires exact image and preset identities')
@@ -61,6 +67,9 @@ def checked_ack(value):
 
 
 def acknowledgment(raw, wrapper):
+    if type(wrapper) is dict and wrapper.get('version')==2:
+        from .face_decoration_preset_alias_review import acknowledgment as aliases
+        return aliases(raw,wrapper)
     raw=checked_ack(raw)
     wrapper = checked(wrapper); visual = wrapper['visual']
     expected = {'document_id': visual['document_id'], 'revision': visual['revision'],
@@ -89,7 +98,7 @@ def take_images(wrapper):
     return images
 
 
-def _target(engine, row, load_id, revision):
+def _target(engine, row, load_id, revision, *, reviewed_aliases=False):
     from .virtual_copy_people import current_row
     from .people_preset_plan import require_active_owner
     if current_row(engine) is not row or getattr(engine, '_load_id', None) != load_id:
@@ -99,7 +108,9 @@ def _target(engine, row, load_id, revision):
     owner = require_active_owner(engine)
     from .face_decoration_project import require_unaliased
     from .creative_derived_source import row_asset
-    require_unaliased(engine, row, {row_asset({**row, 'state': engine._people_preset_capture()})})
+    if type(reviewed_aliases) is not bool:raise ValueError('Private exact alias admission required')
+    if not reviewed_aliases:
+        require_unaliased(engine, row, {row_asset({**row, 'state': engine._people_preset_capture()})})
     return owner, version.document_id
 
 
@@ -119,6 +130,9 @@ def _image(*args, **kwargs):
 
 
 def prepare(engine, row, before, candidate, load_id, revision, preset, modules):
+    from .face_decoration_preset_alias_review import required, prepare as aliases
+    if required(engine,row,load_id,revision):
+        return aliases(engine,row,before,candidate,load_id,revision,preset,modules)
     from .people_scope import plan_preset
     from .people_preset_plan import clone_state
     from .people_transfer_inventory import proof
@@ -169,6 +183,9 @@ def prepare(engine, row, before, candidate, load_id, revision, preset, modules):
 
 
 def verify(engine, row, before, candidate, load_id, revision, wrapper):
+    if type(wrapper) is dict and wrapper.get('version')==2:
+        from .face_decoration_preset_alias_review import verify as aliases
+        return aliases(engine,row,before,candidate,load_id,revision,wrapper)
     from .optics_candidate_identity import fingerprint
     from .creative_derived_source import verify_row
     entry = _entry(wrapper, engine); plan = entry['plan']; owner, document = _target(engine, row, load_id, revision)
@@ -184,6 +201,8 @@ def verify(engine, row, before, candidate, load_id, revision, wrapper):
 
 
 def replay(engine, row, value, load_id, revision, wrapper, rollback=False, **kwargs):
+    if type(wrapper) is dict and wrapper.get('version')==2:
+        raise ValueError('Mixed decoration aliases publish only through their composite batch ledger')
     from .people_scope import execute_plan, restore_plan
     from .optics_candidate_identity import fingerprint
     from .creative_derived_source import verify_row
@@ -213,6 +232,8 @@ def replay(engine, row, value, load_id, revision, wrapper, rollback=False, **kwa
 
 
 def verify_applied(engine, row, actual, load_id, revision, wrapper, rollback=False):
+    if type(wrapper) is dict and wrapper.get('version')==2:
+        raise ValueError('Mixed decoration aliases verify only through their composite batch ledger')
     from .creative_derived_source import verify_row
     entry = _entry(wrapper, engine); plan = entry['plan']; owner, document = _target(engine, row, load_id, revision)
     if (entry['row'] is not row or load_id != wrapper['load_id'] or document != wrapper['visual']['document_id']

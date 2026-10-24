@@ -22,7 +22,7 @@ from . import preset_portrait_review as PORTRAIT, eye_bag_preserve_scope as EYE_
 
 ACTIONS = ("list", "preflight", "apply", "save", "import", "delete", "xmp_inspect", "collarbone_visual", "eye_bag_visual", "face_decoration_visual")
 LEGACY_KEYS = {"cmd", "action", "id", "path", "modules", "module_scope", "name", "kind", "force", "note", "local_mask_transfer", "preflight_token"}
-FIELDS = {"face_decoration_visual": {"id", "document_id", "revision", "side", "sha256", "preflight_token"}, "eye_bag_visual": {"id", "document_id", "revision", "side", "sha256", "preflight_token", "member_document_id", "member_revision"}, "collarbone_visual": {"id", "document_id", "revision", "side", "sha256", "preflight_token"}, "list": set(), "apply": {"id", "document_id", "preflight_token", "xmp_review_ack", "spill_review_ack", "shadow_review_ack", "torso_review_ack", "waist_review_ack", "head_review_ack", "collarbone_preset_ack", "eye_bag_preset_ack", "face_decoration_preset_ack"},
+FIELDS = {"face_decoration_visual": {"id", "document_id", "revision", "side", "sha256", "preflight_token", "member_document_id", "member_revision"}, "eye_bag_visual": {"id", "document_id", "revision", "side", "sha256", "preflight_token", "member_document_id", "member_revision"}, "collarbone_visual": {"id", "document_id", "revision", "side", "sha256", "preflight_token"}, "list": set(), "apply": {"id", "document_id", "preflight_token", "xmp_review_ack", "spill_review_ack", "shadow_review_ack", "torso_review_ack", "waist_review_ack", "head_review_ack", "collarbone_preset_ack", "eye_bag_preset_ack", "face_decoration_preset_ack"},
           "preflight": {"id", "document_id", "local_mask_transfer", "module_scope", "eye_bag_replace_legacy"},
           "save": {"id", "name", "kind", "force", "note", "module_scope", "document_id", "local_mask_transfer"},
           "import": {"path", "id", "force", "xmp_ack"}, "xmp_inspect": {"path"}, "delete": {"id"}}
@@ -62,6 +62,8 @@ class PresetPorts:
     prepare_head: Callable | None = None
     verify_head: Callable | None = None
     head_history_identity: Callable | None = None
+    verify_face_decoration_alias: Callable | None = None
+    publish_face_decoration_alias: Callable | None = None
     prepare_face_decoration: Callable | None = None
     verify_face_decoration: Callable | None = None
     face_decoration_replay: Callable | None = None
@@ -257,17 +259,22 @@ class PresetController:
                 evidence = {"id": p.get("id"), "path": gone}
             result.update(success=True, **evidence)
         except Exception as error:
-            unknown = self._effect_started and (not isinstance(error, SC.ScopeError)
-                or type(self._scalar_receipt.get('eye_bag_preset_ack')) is dict
-                and 'members' in self._scalar_receipt['eye_bag_preset_ack'])
+            composite=any(type(self._scalar_receipt.get(key)) is dict and 'members' in self._scalar_receipt[key]
+                for key in ('eye_bag_preset_ack','face_decoration_preset_ack'))
+            unknown = self._effect_started and (not isinstance(error, SC.ScopeError) or composite)
             if isinstance(error, PresetApplyError):
                 unknown = not error.rolled_back
                 result.update(rolled_back=error.rolled_back, requires_reload=error.requires_reload)
-            elif type(self._scalar_receipt.get('eye_bag_preset_ack')) is dict and 'members' in self._scalar_receipt['eye_bag_preset_ack']:
+            elif any(type(self._scalar_receipt.get(key)) is dict and 'members' in self._scalar_receipt[key] for key in ('eye_bag_preset_ack','face_decoration_preset_ack')):
                 # A compensated composite claim still advanced monotonic
                 # fences. Report the rollback fact without calling it no-write.
                 result.update({key:getattr(error,key) for key in ('rolled_back','requires_reload')
                     if type(getattr(error,key,None)) is bool})
+                if (type(self._scalar_receipt.get('face_decoration_preset_ack')) is dict
+                        and 'members' in self._scalar_receipt['face_decoration_preset_ack']
+                        and getattr(error,'rolled_back',False) is True and getattr(error,'requires_reload',True) is False
+                        and self._scalar_receipt.get('batch_id') is None):
+                    unknown=False  # Verified compensation, not a claim of no prior write.
             if isinstance(error, OrganisationError):
                 unknown = error.outcome_unknown
             if isinstance(error, PS.PresetStorageError):
@@ -280,6 +287,8 @@ class PresetController:
             if action == 'apply' and type(p.get('preflight_token')) is str:
                 from .eye_bag_preset_store import release_claimed
                 release_claimed(self.reviews,p['preflight_token'])
+                from .face_decoration_preset_store import release_claimed as release_decoration_claimed
+                release_decoration_claimed(self.reviews,p['preflight_token'])
             if request is not None and request not in self._pending:
                 self._pending[request] = (digest, result)
 
@@ -310,7 +319,7 @@ class PresetController:
         if any(key in result for key in ('collarbone_preset_ack','eye_bag_preset_ack','face_decoration_preset_ack')):
             review_fields.update({key:deepcopy(result[key]) for key in
                 ('id','document_id','xmp_review_ack','spill_review_ack','shadow_review_ack','face_decoration_visual_required',
-                 'batch_id','alias_members','eye_bag_preset_alias_review','rolled_back','requires_reload') if key in result})
+                 'batch_id','alias_members','eye_bag_preset_alias_review','face_decoration_preset_alias_review','rolled_back','requires_reload') if key in result})
         try:
             json.dumps(result, allow_nan=False, ensure_ascii=False).encode("utf-8")
             raw = json.dumps(result, allow_nan=False, ensure_ascii=True)
@@ -472,41 +481,11 @@ class PresetController:
                     or (current.get('document_id'),current.get('path'),self.ports.document_id())!=reviewed_identity
                     or self.ports.revision()!=reviewed_revision):
                 raise SC.ScopeError('目标图在冻结审核期间发生变化，未写入照片')
-        if collarbone and portrait.name=='eye_bag' and record['eye_bag']['version']==2:
-            # This branch must precede current-only revision advancement and the
-            # legacy rollback owner. The composite ledger owns graph + recipe,
-            # every affected revision and the only undo/redo publication.
-            publish=self.ports.publish_eye_bag_alias
-            if publish is None or self.ports.verify_eye_bag_alias is None:
-                raise SC.ScopeError('Complete mixed preset alias publication is unavailable')
-            try:
-                from .eye_bag_preset_store import verify_claimed
-                bid,frame=publish(reviewed_row,previous,state,reviewed_identity[2],str(reviewed_revision),
-                    record['eye_bag'],mods,self.request_id(p),
-                    verify_images=lambda:verify_claimed(self.reviews,p['preflight_token'],record['eye_bag']))
-                self._effect_started=True
-                self._scalar_receipt['batch_id']=bid
-                aliases=[{'document_id':member['visual']['document_id'],
-                    'expected_revision':member['visual']['revision'],
-                    'result_revision':str(int(member['visual']['revision'])+1)} for member in record['eye_bag']['members']]
-                marker={'version':1, **{key:record['eye_bag'][key] for key in ('review_sha256','preset_sha256','applies_sha256')},
-                    'current_document_id':aliases[0]['document_id'],'member_count':len(aliases),'selected_modules':ops}
-                self._scalar_receipt.update(alias_members=aliases,eye_bag_preset_alias_review=marker)
-                after=OA.before_params(state,ops)
-                self.last={'id':pid,'name':doc['name'],'ops':ops,'params':after}
-                render_ms=frame.pop('render_ms',0)
-                self.emit({'event':'preset_applied','id':pid,'kind':doc['kind'],'name':doc['name'],
-                    'modules':ops,'before':before,'after':after,'render_ms':render_ms,'doc_state':self.ports.status()})
-                self.emit(frame)
-                return {'id':pid,'name':doc['name'],'module_scope':ops,'before':before,'after':after,
-                    'document_id':reviewed_identity[2],'preflight_token':p['preflight_token'],
-                    'source_proof':source_proof,**deepcopy(self._scalar_receipt)}
-            except Exception as error:
-                self._effect_started=self._effect_started or bool(getattr(error,'side_effects_started',False))
-                if getattr(error,'batch_id',None) is not None:self._scalar_receipt['batch_id']=error.batch_id
-                for key in ('alias_members','eye_bag_preset_alias_review'):
-                    if getattr(error,key,None) is not None:self._scalar_receipt[key]=deepcopy(getattr(error,key))
-                raise
+        if collarbone and portrait.name in ('eye_bag','face_decoration') and record[portrait.name]['version']==2:
+            # Composite ledger precedes all current-only advancement/rollback.
+            from .preset_alias_publication import publish
+            return publish(self,p,portrait,record,mods,doc,reviewed_row,reviewed_identity,
+                reviewed_revision,previous,state,before,ops,source_proof)
         def verify_after():
             if collarbone:collarbone_transaction.verify()
             current=self.ports.target_row()

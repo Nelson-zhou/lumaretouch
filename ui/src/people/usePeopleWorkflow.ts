@@ -1,4 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
+import {decorationHistoryReadback,beginDecorationHistoryReadback,observeDecorationHistoryTerminal,settleDecorationHistoryReadback} from './decorationPresetReadback';
+import {decorationPresetAliasHistoryClass,decorationPresetAliasWritePending,subscribeDecorationPresetAliasWrites,sameDecorationPresetAliasMarker} from '../faceDecoration/presetAliasHistoryRegistry';
 import {supportAliasHistoryClass,sameSupportAliasMarker,supportAliasWritePending,subscribeSupportAliasWrites,subscribeSupportAliasWorkspace} from '../faceDecoration/supportAliasHistoryRegistry';
 import {decorationMultiHistory} from '../faceDecoration/multiHistory';
 import {eyeBagPresetAliasHistoryClass,eyeBagPresetAliasWritePending,subscribeEyeBagPresetAliasWrites,sameEyeBagPresetAliasMarker} from '../eyeBagPreserve/presetAliasHistoryRegistry';
@@ -25,13 +27,14 @@ export function usePeopleWorkflow(status: EngineStatus | null, doc: DocState | n
   const recoveryReadback=useRef<{id:string;epoch:string;batchId:string;action:'undo'|'redo';marker:RecoveryAliasMarker;terminalKnown:boolean}|null>(null);
   const [recoveryNeedsRefresh,setRecoveryNeedsRefresh]=useState(false);
   useLayoutEffect(()=>subscribeRecoveryAliasWorkspace(replacement=>{if(recoveryReadback.current?.epoch===replacement.previous){recoveryReadback.current=null;setRecoveryNeedsRefresh(false);}}),[]);
-  const [historyKind, setHistoryKind] = useState<'face_style' | 'eye_bag' | 'eye_bag_preset' | 'eye_bag_recovery' | 'face_decoration_alias' | 'face_decoration_support_alias' | null>(null);
+  const [historyKind, setHistoryKind] = useState<'face_style' | 'eye_bag' | 'eye_bag_preset' | 'eye_bag_recovery' | 'face_decoration_alias' | 'face_decoration_support_alias' | 'face_decoration_preset_alias' | null>(null);
   async function refreshHistory() {
+    const decorationAtStart=decorationHistoryReadback(),decorationTerminalAtStart=decorationAtStart?.terminalKnown===true;
     const recoveryAtStart=recoveryReadback.current,terminalAtStart=recoveryAtStart?.terminalKnown===true;
     setHistoryRefreshing(true);
-    try {await refreshRef.current(); setHistoryRefreshError('');
+    try {await refreshRef.current(); await settleDecorationHistoryReadback(decorationAtStart,decorationTerminalAtStart); setHistoryRefreshError('');
       if(terminalAtStart&&recoveryAtStart&&recoveryReadback.current===recoveryAtStart&&recoveryAtStart.terminalKnown&&recoveryAliasWorkspace()===recoveryAtStart.epoch){setRecoveryAliasWritePending(recoveryAtStart.id,false);recoveryReadback.current=null;setRecoveryNeedsRefresh(false);}}
-    catch (cause) {setHistoryRefreshError(recoveryAtStart&&!terminalAtStart
+    catch (cause) {setHistoryRefreshError(decorationAtStart&&!decorationTerminalAtStart?'原装饰预设历史结果仍未确认；刷新不能解除保护，请查询原请求。':recoveryAtStart&&!terminalAtStart
       ?`原恢复批次结果仍未确认，状态刷新也失败：${String(cause)}。刷新不能解除原请求保护，请查询原请求，不要重复提交。`
       :`批次结果已确认，但状态刷新失败：${String(cause)}。请刷新，不要重复提交。`);}
     finally {setHistoryRefreshing(false);}
@@ -43,6 +46,7 @@ export function usePeopleWorkflow(status: EngineStatus | null, doc: DocState | n
   // It lives with the people queue, so collapsing a review cannot abandon an uncertain undo.
   const history = useBatchWorkflow({docs: [], moduleScope: [], conflictPolicy: 'recheck',
     sourceDocumentId: value?.binding.document_id ?? '', enabled: false, label: '共享来源人物受保护批次历史'}, completed => {
+      observeDecorationHistoryTerminal(completed);
       const readback=recoveryReadback.current,result=completed.result;
       if(readback&&result&&['done','error'].includes(completed.phase)&&result.outcome_unknown===false
         &&completed.operation===readback.action&&result.batch_id===readback.batchId&&recoveryAliasWorkspace()===readback.epoch
@@ -52,7 +56,8 @@ export function usePeopleWorkflow(status: EngineStatus | null, doc: DocState | n
   const presetAliasPending=useSyncExternalStore(subscribeEyeBagPresetAliasWrites,eyeBagPresetAliasWritePending,eyeBagPresetAliasWritePending);
   const recoveryAliasPending=useSyncExternalStore(subscribeRecoveryAliasWrites,recoveryAliasWritePending,recoveryAliasWritePending);
   const decorationSupportPending=useSyncExternalStore(subscribeSupportAliasWrites,supportAliasWritePending,supportAliasWritePending);
-  const historyBusy = decorationSupportPending || recoveryAliasPending || presetAliasPending || historyRefreshing || ['preflighting', 'committing', 'uncertain'].includes(history.ui.phase);
+  const decorationPresetPending=useSyncExternalStore(subscribeDecorationPresetAliasWrites,decorationPresetAliasWritePending,decorationPresetAliasWritePending);
+  const historyBusy = decorationPresetPending || decorationSupportPending || recoveryAliasPending || presetAliasPending || historyRefreshing || ['preflighting', 'committing', 'uncertain'].includes(history.ui.phase);
   useLayoutEffect(() => {workflow.update(value, enabled && !historyBusy);}, [workflow, value, enabled, historyBusy]);
   const receipt = state.lastAliasCommit;
   useLayoutEffect(() => {if (receipt) history.protectFaceStyleAlias(receipt);}, [receipt]);
@@ -154,6 +159,23 @@ export function usePeopleWorkflow(status: EngineStatus | null, doc: DocState | n
     setHistoryKind('face_decoration_support_alias');setHistoryRefreshError('');workflow.update(value,false);
     return action==='undo'?history.undo(batchId):history.redo(batchId);
   }
+  const decorationPresetAliasBatches=(status?.session?.sync?.batches??[]).filter(batch=>Object.hasOwn(batch,'face_decoration_preset_alias_review'));
+  const canDecorationPresetAliasHistory=(batchId:string,action:'undo'|'redo')=>{
+    const batch=decorationPresetAliasBatches.find(row=>row.batch_id===batchId),classification=decorationPresetAliasHistoryClass(batchId);
+    return enabled&&status?.ready_caps?.face_decoration_preset_alias_protocol===1&&status?.ready_caps?.batch_preflight_protocol===1&&!!batch&&!!classification?.marker
+      &&status.session?.sync?.workspace_generation===value?.binding.document_epoch
+      &&sameDecorationPresetAliasMarker(batch.face_decoration_preset_alias_review,classification.marker)
+      &&batch.targets===classification.memberCount&&JSON.stringify(batch.module_scope)===JSON.stringify(['lnx.people_graph.v1'])
+      &&!state.pending&&!state.uncertain&&!historyBusy&&!historyRefreshError&&!status?.edit_queue?.in_flight&&!status?.edit_queue?.pending
+      &&(action==='undo'?!batch.undone&&!!status.session?.sync?.undoable.includes(batchId):batch.undone);
+  };
+  function restoreDecorationPresetAlias(batchId:string,action:'undo'|'redo'){
+    if(decorationHistoryReadback()||!canDecorationPresetAliasHistory(batchId,action))return;
+    setHistoryKind('face_decoration_preset_alias');setHistoryRefreshError('');workflow.update(value,false);
+    const work=action==='undo'?history.undo(batchId):history.redo(batchId);
+    if(work&&value)beginDecorationHistoryReadback(value.binding.document_epoch,batchId,action,decorationPresetAliasHistoryClass(batchId)!.marker!);
+    return work;
+  }
   const guard = () => {
     if (historyBusy) throw Error('共享来源批次历史仍在处理或查询中，不能重发修改。');
   };
@@ -178,6 +200,12 @@ export function usePeopleWorkflow(status: EngineStatus | null, doc: DocState | n
       canRedo: canHistory && !!ledger!.undone,
       undo: () => restoreAlias('undo'), redo: () => restoreAlias('redo'), query: history.query,
       refreshing: historyRefreshing, refresh: refreshHistory},
+    decorationPresetAliasHistory:{batches:decorationPresetAliasBatches,
+      state:historyKind==='face_decoration_preset_alias'?history.ui:{...history.ui,phase:'closed' as const,result:null},
+      writePending:decorationPresetPending,needsRefresh:decorationHistoryReadback()?.terminalKnown===true,
+      canUndo:(id:string)=>canDecorationPresetAliasHistory(id,'undo'),canRedo:(id:string)=>canDecorationPresetAliasHistory(id,'redo'),
+      undo:(id:string)=>restoreDecorationPresetAlias(id,'undo'),redo:(id:string)=>restoreDecorationPresetAlias(id,'redo'),query:history.query,
+      refreshError:historyRefreshError,refreshing:historyRefreshing,refresh:refreshHistory},
     decorationSupportAliasHistory:{batches:decorationSupportAliasBatches,
       state:historyKind==='face_decoration_support_alias'?history.ui:{...history.ui,phase:'closed' as const,result:null},
       writePending:decorationSupportPending,

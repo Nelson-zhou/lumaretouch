@@ -114,6 +114,8 @@ def test_commit_verification_rejects_candidate_state_with_before_graph(monkeypat
 
 
 def test_prepare_images_use_complete_planned_graph_and_full_state(monkeypatch):
+    from lumaretouch_engine import face_decoration_preset_alias_review as ALIASES
+    monkeypatch.setattr(ALIASES, 'required', lambda *a: False)  # This fixture isolates the original v1 route.
     engine, row, before, incoming, plan, owner, live, wrapper, entry, calls = setup(monkeypatch)
     from lumaretouch_engine import people_transfer_inventory as INVENTORY
     monkeypatch.setattr(PLANNER, 'plan_preset', lambda *a, **k: plan)

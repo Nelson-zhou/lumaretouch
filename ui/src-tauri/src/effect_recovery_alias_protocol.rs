@@ -101,7 +101,7 @@ fn publication(value: &Value) -> bool {
                 && revision(&before["revision"]).and_then(|n| n.checked_add(1)) == revision(&after["result_revision"]))
 }
 pub(crate) fn receipt(value: &Value) -> bool {
-    if ["eye_bag_preset_alias_review", "eye_bag_alias_review", "eye_bag_batch_review", "eye_bag_cohort_review",
+    if ["face_decoration_preset_alias_review", "face_decoration_preset_ack", "eye_bag_preset_alias_review", "eye_bag_alias_review", "eye_bag_batch_review", "eye_bag_cohort_review",
         "eye_bag_preset_ack", "eye_bag_request", "people_transfer"].iter().any(|key| value.get(*key).is_some()) { return false; }
     if value["protocol"] != 2 || value["action"] != "apply" || !acknowledgment(&value["ack"])
         || !value["success"].is_boolean() || !value["outcome_unknown"].is_boolean() || !value["requires_reload"].is_boolean() || !value["no_write"].is_boolean()
