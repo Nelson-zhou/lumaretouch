@@ -11,7 +11,7 @@ import {OPERATION_ID, ack, eyeBagBinding, imageMetadata, neutral, object, review
   validCandidate, validConfirmation, validReference, validReview, type EyeBagAction, type EyeBagCandidate,
   type EyeBagRecipe, type EyeBagReference, type EyeBagReview, type EyeBagSide} from './model';
 
-type Expected = {id: string; binding: string; draft: string; action: EyeBagAction; candidate?: EyeBagCandidate; review?: EyeBagReview; side?: EyeBagSide; cropSide?: EyeSide; reference?: EyeBagReference};
+type Expected = {id: string; binding: string; draft: string; action: EyeBagAction; candidate?: EyeBagCandidate; review?: EyeBagReview; side?: EyeBagSide; cropSide?: EyeSide; reference?: EyeBagReference; preserveDraft?: boolean};
 const noMasks = (): Record<EyeSide, RidgeMask> => ({left: emptyMask(), right: emptyMask()});
 const noFlags = (): Record<EyeSide, boolean> => ({left: false, right: false});
 /** Drafts and image load state only; original people queue owns requests/history/uncertainty. */
@@ -19,9 +19,12 @@ export function EyeBagPreservePanel({people, blocked, faceOk, coreAvailable}: {
   people: PeopleOwner; blocked: boolean; faceOk: boolean; coreAvailable: boolean;
 }) {
   const view = people.value, binding = eyeBagBinding(view), report = view?.eye_bag_preserve;
-  const [reference, setReference] = useState<EyeBagReference | null>(null), [recipe, setRecipe] = useState<EyeBagRecipe>(neutral);
-  const [masks, setMasks] = useState(noMasks), [flags, setFlags] = useState(noFlags), [side, setSide] = useState<EyeSide>('left');
-  const [replaceLegacy, setReplaceLegacy] = useState(false), [sourceLoaded, setSourceLoaded] = useState(noFlags);
+  const saved = useRef(people.eyeBagDraft(binding));
+  const [draftSaving, setDraftSaving] = useState(true);
+  const [draftBinding, setDraftBinding] = useState(binding), [reviewPaused, setReviewPaused] = useState(!!saved.current);
+  const [reference, setReference] = useState<EyeBagReference | null>(null), [recipe, setRecipe] = useState<EyeBagRecipe>(() => saved.current?.recipe ?? neutral());
+  const [masks, setMasks] = useState(() => saved.current?.masks ?? noMasks()), [flags, setFlags] = useState(noFlags), [side, setSide] = useState<EyeSide>('left');
+  const [replaceLegacy, setReplaceLegacy] = useState(saved.current?.replaceLegacy ?? false), [sourceLoaded, setSourceLoaded] = useState(noFlags);
   const [review, setReview] = useState<EyeBagReview | null>(null), [images, setImages] = useState<Partial<Record<EyeBagSide, SpillImage>>>({});
   const [loaded, setLoaded] = useState<Partial<Record<EyeBagSide, boolean>>>({}), [accepted, setAccepted] = useState(false), [error, setError] = useState('');
   const [sourceCrops, setSourceCrops] = useState<Partial<Record<EyeSide, SourceCrop>>>({});
@@ -30,7 +33,7 @@ export function EyeBagPreservePanel({people, blocked, faceOk, coreAvailable}: {
   const draft = canonical([recipe, masks, flags, replaceLegacy]);
   const busy = blocked || !people.enabled || people.state.pending || people.state.uncertain;
   const allowed = faceOk && targetReady(view);
-  const live = useRef({binding, draft, busy, allowed, review, view}); live.current = {binding, draft, busy, allowed, review, view};
+  const live = useRef({binding, draft, busy, allowed, review, view, reviewPaused}); live.current = {binding, draft, busy, allowed, review, view, reviewPaused};
   useLayoutEffect(() => {mounted.current = true; return () => {mounted.current = false; expected.current = null;};}, []);
   function confirmationOwner(request: Expected): boolean {
     const owner = request.review?.owner, v = live.current.view;
@@ -44,10 +47,15 @@ export function EyeBagPreservePanel({people, blocked, faceOk, coreAvailable}: {
   function invalidate() {setReview(null); setImages({}); setLoaded({}); setAccepted(false); setError('');}
   useLayoutEffect(() => {
     if (!expected.current || !confirmationOwner(expected.current)) expected.current = null;
-    setReference(null); setMasks(noMasks()); setFlags(noFlags()); setRecipe(report?.recipe ?? neutral());
-    setReplaceLegacy(false); setSourceLoaded(noFlags()); setSourceCrops({}); invalidate();
+    const kept = people.eyeBagDraft(binding);
+    setDraftSaving(true); setDraftBinding(binding); setReviewPaused(!!kept);
+    setReference(null); setMasks(kept?.masks ?? noMasks()); setFlags(noFlags()); setRecipe(kept?.recipe ?? report?.recipe ?? neutral());
+    setReplaceLegacy(kept?.replaceLegacy ?? false); setSourceLoaded(noFlags()); setSourceCrops({}); invalidate();
   }, [binding]);
-  function close() {expected.current = null; setReference(null); setSourceLoaded(noFlags()); setSourceCrops({}); setMasks(noMasks()); setFlags(noFlags()); invalidate();}
+  useEffect(() => {
+    if (draftSaving && draftBinding === binding) people.saveEyeBagDraft(binding, {recipe, masks, replaceLegacy});
+  }, [binding, draftBinding, draftSaving, recipe, masks, replaceLegacy]);
+  function close() {setDraftSaving(false); people.saveEyeBagDraft(binding, null); setRecipe(report?.recipe ?? neutral()); setReplaceLegacy(false); setReviewPaused(true); expected.current = null; setReference(null); setSourceLoaded(noFlags()); setSourceCrops({}); setMasks(noMasks()); setFlags(noFlags()); invalidate();}
   function send(action: EyeBagAction, payload: Record<string, unknown>, details: Partial<Expected> = {}) {
     if (!mounted.current || live.current.binding !== binding || live.current.draft !== draft || live.current.busy || !live.current.allowed || expected.current) return;
     const context = peopleContext(view); if (!context) return;
@@ -73,8 +81,9 @@ export function EyeBagPreservePanel({people, blocked, faceOk, coreAvailable}: {
         if (request.action === 'eye_bag_reference') {
           if (!validReference(payload, view)) throw Error('来源图、人物或分析版本不匹配，不能复制旧笔迹。');
           if (current()) {
-            setReferenceSession(n => n + 1); setReference(payload); setRecipe(payload.recipe); setReplaceLegacy(false);
-            setMasks({left: payload.eyes.left?.recipe ?? emptyMask(), right: payload.eyes.right?.recipe ?? emptyMask()});
+            setDraftSaving(true); setReferenceSession(n => n + 1); setReference(payload); setReviewPaused(false);
+            if (!request.preserveDraft) {setRecipe(payload.recipe); setReplaceLegacy(false);}
+            if (!request.preserveDraft) setMasks({left: payload.eyes.left?.recipe ?? emptyMask(), right: payload.eyes.right?.recipe ?? emptyMask()});
             setFlags(noFlags()); setSourceLoaded(noFlags()); setSourceCrops({}); invalidate();
           }
         } else if (request.action === 'eye_bag_source_image') {
@@ -105,14 +114,25 @@ export function EyeBagPreservePanel({people, blocked, faceOk, coreAvailable}: {
     }
   }, [people.state]);
   useEffect(() => {
-    if (!review || busy || expected.current || error || !allowed) return;
+    if (reviewPaused || !review || busy || expected.current || error || !allowed) return;
     const side = (['support', 'before', 'after'] as const).find(k => !images[k]);
     if (side) send('eye_bag_image', {token: review.token, side, sha256: imageMetadata(review, side).sha256}, {review, side});
-  }, [review, images, busy, error, binding, draft]);
+  }, [reviewPaused, review, images, busy, error, binding, draft]);
   useEffect(() => {
-    if (!reference || busy || expected.current || error || !allowed || sourceCrops[side]) return;
+    if (reviewPaused || !reference || busy || expected.current || error || !allowed || sourceCrops[side]) return;
     send('eye_bag_source_image', {token: reference.source_crops.token, side, sha256: reference.source_crops.eyes[side].image.sha256}, {cropSide: side, reference});
-  }, [reference, side, sourceCrops, busy, error, binding, draft]);
+  }, [reviewPaused, reference, side, sourceCrops, busy, error, binding, draft]);
+  useEffect(() => {
+    if (people.state.eyeBagCancel === 'none') return;
+    expected.current = null; setReviewPaused(true); invalidate();
+    setFlags(noFlags()); setSourceLoaded(noFlags()); setSourceCrops({});
+  }, [people.state.eyeBagCancel]);
+  const canCancel = people.state.pending && !!people.state.pendingAction
+    && ['eye_bag_reference', 'eye_bag_preview', 'eye_bag_image', 'eye_bag_source_image'].includes(people.state.pendingAction);
+  async function cancelRead() {
+    expected.current = null; setReviewPaused(true); invalidate(); setFlags(noFlags());
+    try {await people.cancelEyeBagRead();} catch (cause) {setError(String(cause));}
+  }
   const paintedCropsReady = (['left', 'right'] as const).every(eye => !masks[eye].objects.length || sourceLoaded[eye]);
   let candidate: EyeBagCandidate | null = null;
   try {const value = {recipe, eyes: reviewEyes(masks, flags), replace_legacy: replaceLegacy}; if (validCandidate(value)) candidate = value;} catch { /* no submitted review yet */ }
@@ -145,7 +165,11 @@ export function EyeBagPreservePanel({people, blocked, faceOk, coreAvailable}: {
     {report?.support_error && <p role="status">原保护范围需要重新审核：{report.support_error}</p>}
     {report?.suspended && <p role="status">当前效果暂停：{report.suspended}</p>}
     {report && <p>当前已审核眼侧：{report.reviewed_eyes.length ? report.reviewed_eyes.map(s => s === 'left' ? '人物左眼' : '人物右眼').join('、') : '无'}。引擎报告本操作变化 {report.changed_pixels} 像素，不代表整张画面最终变化。</p>}
-    <button type="button" disabled={busy || !allowed} onClick={() => send('eye_bag_reference', {})}>读取此脸当前来源并审核</button>
+    <button type="button" disabled={busy || !allowed} onClick={() => send('eye_bag_reference', {}, {preserveDraft: reviewPaused && draftSaving})}>读取此脸当前来源并审核{reviewPaused && draftSaving ? '（保留草稿，重新确认）' : ''}</button>
+    {canCancel && <button type="button" disabled={people.state.eyeBagCancel === 'requested'} onClick={() => void cancelRead()}>请求停止只读审核，保留草稿</button>}
+    {canCancel && people.state.uncertain && <button type="button" onClick={() => void people.recoverEyeBagRead().catch(cause => setError(String(cause)))}>核对原只读请求并恢复等待</button>}
+    {people.state.pendingAction === 'eye_bag_confirm' && <p role="status">确认修改已发送，只能查询原请求，不能视为已取消或再次提交。</p>}
+    {reviewPaused && draftSaving && <p role="status">草稿已保留；请重新读取当前来源并逐眼确认，旧图像和审核凭据不再授权应用。</p>}
     <button type="button" disabled={busy || !allowed} onClick={() => void reset()}>归零新版祛眼袋（保留保护设置）</button>
     {reference && <fieldset disabled={busy}>
       <legend>当前源图上的逐眼保护草稿</legend>
@@ -161,8 +185,8 @@ export function EyeBagPreservePanel({people, blocked, faceOk, coreAvailable}: {
         setSourceCrops(old => {const next = {...old}; delete next[side]; return next;});
         setSourceLoaded(old => ({...old, [side]: false})); setFlags(old => ({...old, [side]: false})); invalidate();
       }}>重新读取当前眼原生裁片（保留草稿，重新确认）</button>
-      <RidgeSourceEditor key={`${binding}:${referenceSession}:${side}:${sourceCrops[side]?.image.sha256 ?? 'pending'}`} context={`${binding}:${referenceSession}`} crop={sourceCrops[side] ?? null} source={reference.source} side={side} masks={masks} disabled={busy}
-        onLoaded={ready => {if (!mounted.current || live.current.binding !== binding) return; setSourceLoaded(old => ({...old, [side]: ready})); if (!ready) {setAccepted(false);}}} onDraftStart={invalidate}
+      <RidgeSourceEditor key={`${binding}:${referenceSession}:${side}:${sourceCrops[side]?.image.sha256 ?? 'pending'}`} context={`${binding}:${referenceSession}`} crop={sourceCrops[side] ?? null} source={reference.source} side={side} masks={masks} disabled={busy || reviewPaused}
+        onLoaded={ready => {if (!mounted.current || live.current.binding !== binding || live.current.reviewPaused) return; setSourceLoaded(old => ({...old, [side]: ready})); if (!ready) {setAccepted(false);}}} onDraftStart={invalidate}
         onChange={(eye, mask) => {setMasks(old => ({...old, [eye]: mask})); setFlags(old => ({...old, [eye]: false})); invalidate();}}/>
       <label><input type="checkbox" checked={flags[side]} disabled={!sourceLoaded[side] || !masks[side].objects.length}
         onChange={e => {setFlags(old => ({...old, [side]: e.target.checked})); invalidate();}}/>

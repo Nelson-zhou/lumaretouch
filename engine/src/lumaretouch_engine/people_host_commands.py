@@ -156,7 +156,11 @@ def apply(engine,raw,emit):
         from . import eye_bag_preserve_host as eye_bag_review
         method={'eye_bag_source_image':eye_bag_review.source_image,'eye_bag_reference':eye_bag_review.reference,'eye_bag_preview':eye_bag_review.preview,
                 'eye_bag_image':eye_bag_review.image}[action]
-        records[request]['payload']=method(engine,state,target,payload)
+        from . import eye_bag_review_jobs as jobs
+        try:records[request]['payload']=jobs.run(engine,request,method,state,target,payload)
+        except jobs.Cancelled:
+            records[request]['eye_bag_cancelled']=True
+            raise
         frame=None
     elif action in ('skin_body_reference','skin_body_preview','skin_finish_body_reference','skin_finish_body_preview','body_skin_evenness_reference','body_skin_evenness_preview','collarbone_reference','collarbone_preview','body_face_match_reference','body_face_match_preview'):
         from . import skin_colour_body_host as skin_body
@@ -327,17 +331,29 @@ def finish(engine,p,error,emit):
               'success':False,'error':'People request identity was reused with different content','outcome_unknown':False,
               **echo,**({} if review_read else {'doc_state':engine.doc_state()})});return
     if 'result' in old:emit(old['result']);return
+    if p.get('action') in EYE_BAG_READS:
+        from .eye_bag_review_jobs import controller
+        controller(engine).retire(p['request_id'])
     # Publication can succeed before status emission or history recording fails.
     # Rollback also advances the graph fence; neither case is a proven refusal.
     guarded_review=style_action or eye_bag_action
     owner=engine.__dict__.get('_people_graph_owner') if guarded_review else None
     fence_changed=(old.get('before_fence') is not None and
                    ((owner is None or owner.fence!=old['before_fence']) if guarded_review else engine._people_owner().fence!=old['before_fence']))
-    unknown=engine._vram is None or bool(error and
-        (old.get('success') or old.get('side_effects_started') or fence_changed))
+    proven_cancel=(old.get('eye_bag_cancelled') is True and p.get('action') in EYE_BAG_READS
+        and old.get('before_fence') is not None and not fence_changed
+        and not old.get('side_effects_started') and not old.get('success') and not old.get('frame_emitted'))
+    # A completed read unwind cannot publish, even if its display pipeline has
+    # since disappeared. Never apply this proof to writes or a changed fence.
+    unknown=False if proven_cancel else (engine._vram is None or bool(error and
+        (old.get('success') or old.get('side_effects_started') or fence_changed)))
     result={'event':'people_result','protocol':1,'action':p.get('action'),'request_id':p['request_id'],'document_id':p.get('document_id'),
         'success':bool(old.get('success')) and not error,'error':error,'outcome_unknown':unknown,
         'created_id':old.get('created_id'),'batch_id':old.get('batch_id'),'frame_emitted':old.get('frame_emitted',False),**echo}
+    if proven_cancel:
+        result.update(success=False,eye_bag_cancelled=True,error=error or 'Eye-bag read stopped after cancellation')
+        old.pop('payload',None)
+        result.pop('batch_id',None);result.pop('created_id',None)
     if 'payload' in old:result['payload']=old['payload']
     if old.get('payload_released'):result['payload_released']=True
     if engine._vram is not None and not review_read:

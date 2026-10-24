@@ -1,0 +1,173 @@
+{
+  "baseline": "7b0b2be6e596e323654d1554999b21cbbeae02c5",
+  "status": "FROZEN_SOURCE_ONLY_EYE_BAG_READ_CANCELLATION_RECOVERY_UNRUN",
+  "requirement_ids": [
+    "LNX-REF-PC-32464-C-e5fac5fdcf"
+  ],
+  "scope": "Request-specific cooperative cancellation of read-only eye-bag source/crop/preview/image work, exact original receipt reconciliation, same-owner session draft recovery. Confirmation remains query-only; no effect-recovery painting or new algorithm count.",
+  "files": [
+    {
+      "path": "docs/development/handbook-traceability.json",
+      "sha256": "ac37459207f63193532b26159162d00f154f06203e3cc9d1336b95a0380c5315",
+      "bytes": 471988
+    },
+    {
+      "path": "docs/eye-bag-preserve/CANCELLATION-AND-RECOVERY.md",
+      "sha256": "b542a622d1362d6f41d4c4df141c6a9b9c8856a233654737932ddd8f2e39949a",
+      "bytes": 4255
+    },
+    {
+      "path": "docs/eye-bag-preserve/INTEGRATION-AND-RESIDUALS.md",
+      "sha256": "576a142eb7d317d32bf37d11186b200710428a42644c3c64cce6dfa9c253f331",
+      "bytes": 5044
+    },
+    {
+      "path": "docs/eye-bag-preserve/SOURCE-CROP-CONTRACT.md",
+      "sha256": "d0cce6879dc6b31c251f0f4a38f22f09bb3a28f3b64fc664e6bf200debdc3ff0",
+      "bytes": 4652
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/eye_bag_preserve_host.py",
+      "sha256": "cff7f21a39d0ff342cd2c06be86d96f62343c0e098c1f6101008354375d6ac38",
+      "bytes": 29928
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/eye_bag_review_jobs.py",
+      "sha256": "a085d70e8a7a10b13e68e24f05486d7306f090b9e39e29def28031c929c40168",
+      "bytes": 5646
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_host_commands.py",
+      "sha256": "d80821f1ddfc7b0667c47239283a70a27156f1aa48222db9adc9a77d6e9b5953",
+      "bytes": 28286
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/portrait_review_render.py",
+      "sha256": "f4183f8e3f5c1872e19c3b086e06eca7f469d3f3ac611911e183bd5223822e8b",
+      "bytes": 3654
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/server.py",
+      "sha256": "45d25105531e67f6c2e0845c331f744d17e4f79c1e1825cdf6c3ab45546f9e3e",
+      "bytes": 469300
+    },
+    {
+      "path": "engine/tests/test_eye_bag_cancel_routes_unrun.py",
+      "sha256": "d396ffb8a3ffc24bb61b3dee29777d3b059061a451f8f53be9ea722b7b4ae739",
+      "bytes": 2064
+    },
+    {
+      "path": "engine/tests/test_eye_bag_preserve_host_unrun.py",
+      "sha256": "97431332f24342450cc09952173afa975501f5e3d88b545f056424ddbc7b33f6",
+      "bytes": 28443
+    },
+    {
+      "path": "engine/tests/test_eye_bag_review_jobs_unrun.py",
+      "sha256": "8adbf10d1497fe3f6dec1991b7cebd870aff268e200fd58e1790751dfce848a2",
+      "bytes": 3574
+    },
+    {
+      "path": "ui/src-tauri/src/engine.rs",
+      "sha256": "c4d883082a524baca69f17959a4e7a5d08dca1833a7ad85da0459725cd555b6a",
+      "bytes": 40645
+    },
+    {
+      "path": "ui/src-tauri/src/eye_bag_cancel_native_unrun.rs",
+      "sha256": "9f26a66415dde4b5286bcd96385a6e1f10b905ce34fdbf34041a86f9c8a3d607",
+      "bytes": 6975
+    },
+    {
+      "path": "ui/src-tauri/src/eye_bag_preserve.rs",
+      "sha256": "92d2c90d7cc807615d9bae5aa6477b572da85309221bf5198faadabdbec5691b",
+      "bytes": 17291
+    },
+    {
+      "path": "ui/src-tauri/src/people_api.rs",
+      "sha256": "519c53040724f29810cc6c5754c614f50faebecd35609fabe9f0e5f4baa71e26",
+      "bytes": 15068
+    },
+    {
+      "path": "ui/src-tauri/src/receipt_host.rs",
+      "sha256": "5bb28ce91bd8d777fc78b4d23f858e8bf4956249e1af230b9968a4a446da4584",
+      "bytes": 29048
+    },
+    {
+      "path": "ui/src/eyeBagPreserve/ACCEPTANCE_UNRUN.md",
+      "sha256": "158c906f39b237db9f0bd947be900571c548552888ba6bf462dd912bcb056863",
+      "bytes": 4576
+    },
+    {
+      "path": "ui/src/eyeBagPreserve/EyeBagPreservePanel.tsx",
+      "sha256": "c95d09b6c535323415cb3390a318bc10d175a6ecc23943e54d71526e92cd5ed4",
+      "bytes": 21704
+    },
+    {
+      "path": "ui/src/eyeBagPreserve/cancellation.unrun.test.ts",
+      "sha256": "12dd878d9838a5e6abe6a6b143c19e432875d70126eeb944f9e4c9bfa46b755a",
+      "bytes": 7464
+    },
+    {
+      "path": "ui/src/eyeBagPreserve/draft.ts",
+      "sha256": "96e0789734f86c67ca7c263304b108efe9ed573f0c2fc0dd15f139e33d63ff01",
+      "bytes": 1094
+    },
+    {
+      "path": "ui/src/eyeBagPreserve/support.ts",
+      "sha256": "eb8c717181e87adcc1229d5fb99b1477696dd3d85f92f617e68baf7b8e699f46",
+      "bytes": 5332
+    },
+    {
+      "path": "ui/src/native.ts",
+      "sha256": "a249c7cfbbe8ed13e5ed8839b26790bb9fc9a1837fc54ce043f51b732b76cbe0",
+      "bytes": 108167
+    },
+    {
+      "path": "ui/src/people/model.ts",
+      "sha256": "081619322a4d04e5e834571ed4f77906d9caf72742d38a64f4d7e291cd0f8110",
+      "bytes": 10418
+    },
+    {
+      "path": "ui/src/people/usePeopleWorkflow.ts",
+      "sha256": "56a9b90793a4c6f4eec7c069372259d4af97aff12f9eef6db553f06602d569ab",
+      "bytes": 5636
+    },
+    {
+      "path": "ui/src/people/workflow.ts",
+      "sha256": "7dcc5859164ca190d59d264eccaccb0251ad8fb7f47cfcae57b2f10c95201d2d",
+      "bytes": 23461
+    }
+  ],
+  "static_checks": {
+    "python_ast_files": 1329,
+    "changed_json_toml": "stdlib parse only",
+    "relative_ui_imports_existing": 40,
+    "git_diff_check": "clean",
+    "prior_numeric_solver_core_decoder_and_frozen_sources_byte_identical": 323,
+    "line_caps": {
+      "ui/src/App.tsx": 2131,
+      "ui/src-tauri/src/main.rs": 2047,
+      "engine/src/lumaretouch_engine/server.py": 7019
+    }
+  },
+  "integration_map": {
+    "engine": "eye_bag_review_jobs event owner; server reader control ingress/EOF/exit; people_host_commands exact read wrapper and unwind terminal",
+    "checkpoints": "eye_bag_preserve_host crop/support/overlay and portrait_review_render optional callback into existing full candidate render",
+    "native": "people_api retained mailbox proof; EngineHandle shared input writer; receipt_host narrow unknown-read reconciliation; eye_bag_preserve terminal validator",
+    "ui": "people workflow request-generation polling/cancel/recovery, app-lifetime bounded recipe/vector draft slot; dedicated panel preserves draft and requires fresh review",
+    "history": "existing people graph/history and unknown confirmation authority unchanged; canceled reads invalidate only unpublished review authority"
+  },
+  "limitations": [
+    "Cooperative cancellation waits for existing decode/ICC/PNG and individual solver calls; no immediate stop or measured latency claim.",
+    "Confirmation/applied/unknown writes cannot be canceled or released as reads; original query/reload fences remain.",
+    "Reopen draft retention is app-lifetime only and same exact owner/revision; no disk draft persistence across process restart.",
+    "Missing or evicted native original request proof cannot be fabricated for recovery; foreign engine epoch does not prove old process stopped.",
+    "Automatic anatomical ridge detection, active preset/batch/cohort/shared-alias review and effect-specific arbitrary recovery painting remain incomplete.",
+    "All tests/build/typecheck/product execution/imports/inference/downloads and runtime/native/UI/history/numerical/photo acceptance UNRUN."
+  ],
+  "excluded_unrelated_untracked": [
+    "docs/colour-grading/FREEZE.json",
+    "docs/eye-light/FREEZE.json",
+    "docs/iris-makeup/isolated-manifest.json"
+  ],
+  "prohibited_actions_performed": []
+}

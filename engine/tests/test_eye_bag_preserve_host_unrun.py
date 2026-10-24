@@ -117,7 +117,7 @@ def host(monkeypatch):
         support = candidate['faces'][ref['face_instance_id']]['local_assets'][S.KIND]['content_sha256']
         return deepcopy(bank[support]), support
     monkeypatch.setattr(SUPPORT, 'resolve', resolve_support)
-    def render(actual, item, current, candidate, document, revision):
+    def render(actual, item, current, candidate, document, revision, **kwargs):
         actual.render_calls.append((deepcopy(current), deepcopy(candidate)))
         compact, pixels = display(R.digest(candidate) + R.digest(current))
         return compact, pixels, {'source_proof': source_proof({**item, 'state': current}),
@@ -429,3 +429,41 @@ def test_native_crop_expiry_and_repair_change_release_cached_bytes(host, monkeyp
     engine._eye_bag_reference['expires'] = 0
     with pytest.raises(ValueError): R.source_image(engine, state, target, request)
     assert engine._eye_bag_reference is None
+
+
+@pytest.mark.parametrize('pipeline_present', [True, False])
+def test_actual_finish_cancelled_read_has_native_terminal_shape(host, pipeline_present):
+    engine, owner, _, state, target = host
+    request = {'cmd': 'people', 'action': 'eye_bag_preview', 'request_id': 'read-cancelled',
+        'document_id': 'doc-eye', 'document_epoch': 'epoch-eye', 'document_revision': 4,
+        'state_revision': state['revision'], 'association_revision': state['association_revision'],
+        'target': target, 'payload': payload()}
+    engine._vram = object() if pipeline_present else None
+    engine._people_receipts[request['request_id']] = {'success': False,
+        'before_fence': owner.fence, 'eye_bag_cancelled': True,
+        'payload': {'review': 'late-result-must-not-escape'}}
+    output = []
+    H.finish(engine, request, 'Eye-bag read stopped after cancellation', output.append)
+    result = output[-1]
+    assert result['eye_bag_cancelled'] is True
+    assert result['success'] is False and result['outcome_unknown'] is False
+    assert isinstance(result['error'], str) and result['frame_emitted'] is False
+    assert not {'payload', 'doc_state', 'batch_id', 'created_id'} & result.keys()
+    assert result['eye_bag_request'] == {key: request[key] for key in (
+        'action','document_id','document_epoch','document_revision','state_revision',
+        'association_revision','target','payload')}
+    assert engine._people_receipts[request['request_id']]['result'] == result
+
+
+def test_actual_finish_changed_fence_cannot_claim_cancelled_success(host):
+    engine, owner, _, state, target = host
+    request = {'cmd': 'people', 'action': 'eye_bag_preview', 'request_id': 'read-fence-changed',
+        'document_id': 'doc-eye', 'document_epoch': 'epoch-eye', 'document_revision': 4,
+        'state_revision': state['revision'], 'association_revision': state['association_revision'],
+        'target': target, 'payload': payload()}
+    engine._people_receipts[request['request_id']] = {'success': False,
+        'before_fence': owner.fence - 1, 'eye_bag_cancelled': True}
+    engine._vram = None
+    output = []; H.finish(engine, request, 'Unexpected fence change', output.append)
+    assert output[-1]['outcome_unknown'] is True
+    assert 'eye_bag_cancelled' not in output[-1]

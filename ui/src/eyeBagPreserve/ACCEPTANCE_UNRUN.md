@@ -46,3 +46,20 @@ image/hash corruption, zoom/pan and pointer cancellation. Crops use integer
 source edges, max 2048 per side and 4,000,000 combined pixels; no resize fallback.
 Each paged PNG is at most 4 MiB. Full-source decode and host cache bounds remain
 explicit and are not a measured all-resolution/performance guarantee.
+
+## Read cancellation and session recovery (AUTHORED / UNRUN)
+
+- A cancellation request keeps the original read pending until its exact terminal
+  receipt. Codecs and an individual solver call may still be running. A known
+  completed read is discarded without claiming it stopped early.
+- Native retained read-only proof can release a terminal read or an ended/changed
+  engine authority; it cannot release confirmation writes, missing ownership or
+  an uncertain live write. Confirmation remains query-only.
+- Late read/send/refresh callbacks must not revive a released candidate or lock.
+- Closing and reopening the panel retains bounded recipe/vector drafts in the
+  existing app-lifetime people workflow for the same exact binding. Images,
+  tokens and visibility acknowledgments are not retained as authority. Fresh
+  source reads and per-eye review are required. Explicit discard clears the slot.
+- App/process restart draft persistence is not implemented. A lost native mailbox
+  is not permission to infer a confirmation outcome or resend a write.
+- Cancellation/recovery and incomplete-draft fixtures are authored only, not run.

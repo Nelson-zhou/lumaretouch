@@ -49,13 +49,15 @@ def snapshot_key(engine, row, state, graph):
             'graph_sha256': fingerprint(_graph_content(graph))}
 
 
-def image(engine, row, state, graph, document, revision):
+def image(engine, row, state, graph, document, revision, *, cancelled=lambda: False):
     from .full_candidate_render import render
     from PIL import Image
     import numpy as np
-    rgb, proof = render(engine, row, state, document, str(revision), people_graph=graph)
+    rgb, proof = render(engine, row, state, document, str(revision), people_graph=graph, cancelled=cancelled)
+    if cancelled(): raise InterruptedError('Portrait image review cancelled')
     size = preview_size(proof['output_size']); channels = []
     for channel in range(3):
+        if cancelled(): raise InterruptedError('Portrait image review cancelled')
         with Image.fromarray(rgb[:, :, channel].astype(np.float32)) as plane:
             with plane.resize(size, Image.Resampling.LANCZOS) as small:
                 channels.append(np.asarray(small).copy())
@@ -63,5 +65,6 @@ def image(engine, row, state, graph, document, revision):
     with Image.fromarray(np.rint(np.clip(np.stack(channels, axis=2), 0, 1)*255).astype(np.uint8), 'RGB') as display:
         output = io.BytesIO(); display.save(output, format='PNG'); raw = output.getvalue()
     if len(raw) > MAX_PNG_BYTES: raise ValueError('Preset image exceeds bounded review transport; no detail reduction')
+    if cancelled(): raise InterruptedError('Portrait image review cancelled')
     compact = {'mime': 'image/png', 'width': size[0], 'height': size[1], 'sha256': sha256(raw).hexdigest()}
     return compact, {**compact, 'base64': base64.b64encode(raw).decode('ascii')}, proof

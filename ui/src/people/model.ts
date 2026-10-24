@@ -73,7 +73,7 @@ export type PeopleAction = PeopleEnvelope & {
 }
 export type PeopleResult = {
   protocol: 1; request_id: string; action: PeopleAction['action']; document_id: string;
-  success: boolean; outcome_unknown: boolean; error?: string;
+  success: boolean; outcome_unknown: boolean; error?: string; eye_bag_cancelled?: boolean;
   doc_state?: {people?: PeopleView};
   payload?: unknown; payload_released?: boolean;
   batch_id?: string | null;

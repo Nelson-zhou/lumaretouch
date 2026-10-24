@@ -64,9 +64,12 @@ to publish an unverified graph. No corrupt-project recovery acceptance is claime
 - New effect-specific recovery painting is not connected. The preservation
   brush protects only this operation's approved ridge region, not arbitrary
   recovery or the old enhancement family.
-- Complete UI cancellation is not wired through canonical preparation; native
-  cancellation and private publication exist, but legacy OpenCV and mask-worker
-  execution retain their existing interruption limits.
+- Read-only UI cancellation now uses the existing native control lane and
+  request-specific engine Events. Only original-job unwind reports stopped;
+  confirmation remains query-only. Same-owner session drafts survive panel
+  reopen without retaining review authority. See `CANCELLATION-AND-RECOVERY.md`.
+  Codecs and individual solver calls retain interruption limits; no immediate
+  stop, disk draft persistence or runtime acceptance is claimed.
 - Alpha/HDR, automatic person segmentation, native-pixel appearance parity,
   broad photo suitability and measured memory/performance remain unaccepted.
 

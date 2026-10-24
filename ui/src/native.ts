@@ -1924,9 +1924,10 @@ export function runMouthShapeRequest(request:MouthRequest|{action:'status';reque
 
 /** Commands carry exact engine binding; status lookups never mutate captures. */
 export function runPeopleRequest(request: {action: 'status'; request_id: string}): Promise<PeopleMailbox>;
+export function runPeopleRequest(request: {action: 'cancel_eye_bag_read' | 'recover_eye_bag_read'; request_id: string}): Promise<unknown>;
 export function runPeopleRequest(request: PeopleAction): Promise<{requested: boolean}>;
-export function runPeopleRequest(request: PeopleAction | {action: 'status'; request_id: string}) {
-  return request.action === 'status' ? tauriInvoke<PeopleMailbox>('people', {request})
+export function runPeopleRequest(request: PeopleAction | {action: 'status' | 'cancel_eye_bag_read' | 'recover_eye_bag_read'; request_id: string}) {
+  return request.action === 'status' || request.action === 'cancel_eye_bag_read' || request.action === 'recover_eye_bag_read' ? tauriInvoke<PeopleMailbox>('people', {request})
     : invoke<{requested: boolean}>('people', {request});
 }
 

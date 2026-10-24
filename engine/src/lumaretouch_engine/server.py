@@ -4748,6 +4748,8 @@ class Engine(FringeRepairHostMixin, PresetOrganisationHostMixin, HairColourHostM
         return self._custom_lut_service().execute(self, p, emit)
 
     def _custom_lut_reader_stop(self):
+        from .eye_bag_review_jobs import controller as eye_bag_jobs
+        eye_bag_jobs(self).stop()
         self._photo_detail_service().stop()
         self._extended_tone_service().stop()
         self._photo_grain_service().stop()
@@ -4763,6 +4765,8 @@ class Engine(FringeRepairHostMixin, PresetOrganisationHostMixin, HairColourHostM
         self._owned_reader_stop()
 
     def _custom_lut_ingress(self, line):
+        from .eye_bag_review_jobs import controller as eye_bag_jobs
+        if eye_bag_jobs(self).ingress(line): return True  # Cancellation control cannot invalidate unrelated edit owners.
         primary_consumed=self._primary_calibration_service().ingress(line)
         selective_consumed=self._selective_colour_service().ingress(line)
         editor_consumed=self._colour_editor_service().ingress(line)
@@ -6931,6 +6935,8 @@ class Engine(FringeRepairHostMixin, PresetOrganisationHostMixin, HairColourHostM
                 self.shm.unlink()
             raise
         sample_host = self._sample_library_host()
+        from .eye_bag_review_jobs import controller as eye_bag_jobs
+        eye_bag_jobs(self)  # Establish one owner before the reader and executor share Events.
         reader = threading.Thread(target=read_commands, name="command-reader",
             args=(input_fd, wake_read, inbox, reader_stop),
             kwargs={"ingress": self._custom_lut_ingress, "on_eof": self._custom_lut_reader_stop})
@@ -6974,6 +6980,7 @@ class Engine(FringeRepairHostMixin, PresetOrganisationHostMixin, HairColourHostM
             relocation = self.__dict__.get('_source_relocation_controller')
             if relocation is not None: relocation.close()
             self._owned_reader_stop()
+            eye_bag_jobs(self).stop()
             reader_stop.set()
             try:
                 os.write(wake_write, b"x")

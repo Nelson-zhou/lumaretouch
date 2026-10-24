@@ -6,14 +6,18 @@ import {faceStyleAck, faceStyleEchoMatches, faceStyleReceiptCurrent, object, sam
 import {skinBodyActionFamily, skinBodyFamilyMatches, skinBodyReceiptCurrent, type SkinBodyResult} from '../skinColour/bodyReviewModel';
 
 import {ack as eyeBagAck, echoMatches as eyeBagEchoMatches, isEyeBagAction, receiptCurrent as eyeBagReceiptCurrent, validCandidate as validEyeBagCandidate, validConfirmation as validEyeBagConfirmation, validReview as validEyeBagReview, type EyeBagReview, type EyeBagReceipt} from '../eyeBagPreserve/model';
+import {validDraft, type EyeBagDraft} from '../eyeBagPreserve/draft';
+import {eyeBagBinding} from '../eyeBagPreserve/model';
 import {canonical as eyeBagCanonical} from '../eyeBagPreserve/support';
 
-type View = {pending: boolean; pendingAction: PeopleAction['action'] | null; uncertain: boolean; message: string;
+type View = {eyeBagCancel: 'none' | 'requested' | 'stopped' | 'completed' | 'released'; pending: boolean; pendingAction: PeopleAction['action'] | null; uncertain: boolean; message: string;
   lastEyeBagResult: EyeBagReceipt | null; lastBodyResult: SkinBodyResult | null; lastFaceStyleResult: FaceStyleReceipt | null; lastAliasCommit: FaceStyleAliasCommit | null};
 type Ports = {
   send: (command: PeopleAction) => Promise<unknown>;
   read: (requestId: string) => Promise<PeopleMailbox>;
   refresh: () => Promise<void>;
+  cancelEyeBagRead?: (requestId: string) => Promise<unknown>;
+  recoverEyeBagRead?: (requestId: string) => Promise<unknown>;
 };
 /** One in-flight receipt and latest scalar intentions, never a second people graph.
  * Body results retain their exact action and family-tagged payload; sharing this
@@ -21,12 +25,16 @@ type Ports = {
 export function createPeopleWorkflow(ports: Ports) {
   let current: PeopleView | null = null, enabled = false;
   let pending: PeopleAction | null = null, checking: Promise<void> | null = null;
+  let checkingCommand: PeopleAction | null = null;
   let aliasReview: FaceStyleReviewV2 | null = null, pendingAliasReview: FaceStyleReviewV2 | null = null;
   let eyeBagReview: EyeBagReview | null = null, pendingEyeBagReview: EyeBagReview | null = null;
   let pendingPreviewView: PeopleView | null = null;
+  let eyeDraft: {binding: string; value: EyeBagDraft} | null = null;
+  let cancelIntent: PeopleAction | null = null;
+  const eyeRead = (command: PeopleAction) => isEyeBagAction(command.action) && command.action !== 'eye_bag_confirm';
   let queued: {key: string; patches: Map<string, ParameterPatch>} | null = null;
   let waitFor: {key: string; revision: number; documentRevision: number} | null = null;
-  let view: View = {pending: false, pendingAction: null, uncertain: false, message: '', lastEyeBagResult: null, lastBodyResult: null, lastFaceStyleResult: null, lastAliasCommit: null};
+  let view: View = {eyeBagCancel: 'none', pending: false, pendingAction: null, uncertain: false, message: '', lastEyeBagResult: null, lastBodyResult: null, lastFaceStyleResult: null, lastAliasCommit: null};
   const listeners = new Set<() => void>();
   const publish = (patch: Partial<View>) => {view = {...view, ...patch}; listeners.forEach(listener => listener());};
   const targetKey = (value: PeopleView) => `${bindingKey(value.binding)}:${value.association_revision}:${JSON.stringify(value.editing_target)}`;
@@ -50,6 +58,7 @@ export function createPeopleWorkflow(ports: Ports) {
     try {
       while (pending === command) {
         const reply = await bounded(ports.read(command.request_id), deadline - Date.now());
+        if (pending !== command) return;
         if (reply.request_id !== command.request_id) throw Error('人物修改回执身份不匹配；请查询原请求。');
         if (reply.phase === 'done') {
           const result = reply.result;
@@ -60,7 +69,14 @@ export function createPeopleWorkflow(ports: Ports) {
           const faceStyle = command.action.startsWith('face_style_');
           const eyeBag = isEyeBagAction(command.action);
           if (eyeBag && !eyeBagEchoMatches(command, result)) throw Error('卧蚕保护回执与原请求不匹配，请查询原请求，未重发。');
-          if (result.success && command.action === 'eye_bag_preview') {
+          if (Object.hasOwn(result, 'eye_bag_cancelled') && result.eye_bag_cancelled !== true)
+            throw Error('取消标记无效，只能查询原请求。');
+          const cancelled = result.eye_bag_cancelled === true;
+          if (cancelled && (!eyeRead(command) || result.success || result.outcome_unknown || result.doc_state !== undefined || result.payload !== undefined))
+            throw Error('取消回执不能代表已应用或结果未知的修改，只能查询原请求。');
+          let discardedRead = eyeRead(command) && (cancelIntent === command || cancelled);
+          if (discardedRead) eyeBagReview = null;
+          if (!discardedRead && result.success && command.action === 'eye_bag_preview') {
             eyeBagReview = null;
             if (!validEyeBagCandidate(command.payload) || !object(result.payload) || result.payload.kind !== 'eye_bag_preview'
               || !validEyeBagReview(result.payload.review, pendingPreviewView, command.payload))
@@ -118,24 +134,28 @@ export function createPeopleWorkflow(ports: Ports) {
           // Receipt proves the operation; only the next engine status replaces UI facts.
           let refreshError = '';
           try {await bounded(ports.refresh(), 10000);} catch {refreshError = '修改结果已确认，但照片状态刷新失败。请刷新查看，勿重复提交。';}
+          if (pending !== command) return;
+          discardedRead = discardedRead || eyeRead(command) && cancelIntent === command;
+          if (discardedRead) eyeBagReview = null;
           pending = null;
           pendingAliasReview = null;
           pendingEyeBagReview = null;
           if (command.action === 'eye_bag_confirm') eyeBagReview = null;
           pendingPreviewView = null;
+          cancelIntent = null;
           if (aliasCommit) aliasReview = null;
           const bodyFamily = skinBodyActionFamily(command.action);
           const bodyPayloadInvalid = !!bodyFamily && !result.payload_released && !skinBodyFamilyMatches(result.payload, bodyFamily);
-          publish({pending: !!queued, pendingAction: queued ? 'patch' : null, uncertain: false,
-            lastEyeBagResult: eyeBagReceiptCurrent(command, result, current) ? {command, result} : null,
+          publish({eyeBagCancel: discardedRead ? (cancelled ? 'stopped' : 'completed') : 'none', pending: !!queued, pendingAction: queued ? 'patch' : null, uncertain: false,
+            lastEyeBagResult: !discardedRead && eyeBagReceiptCurrent(command, result, current) ? {command, result} : null,
             lastFaceStyleResult: faceStyleReceiptCurrent(command, result, current) ? {command, result} : null,
             ...(aliasCommit ? {lastAliasCommit: aliasCommit} : {}),
             lastBodyResult: skinBodyReceiptCurrent(command, result, current)
               ? {command, result} : null,
-            message: !result.success ? (result.error ?? '人物修改被拒绝，未重试。')
+            message: discardedRead ? (cancelled ? '引擎已确认只读审核停止；草稿保留，未应用任何候选。' : '原只读请求已结束；迟到结果已丢弃，不表示解码曾被中断。草稿保留。') : !result.success ? (result.error ?? '人物修改被拒绝，未重试。')
               : bodyPayloadInvalid ? '请求结果已收到，但身体皮肤审核回执的功能身份不匹配。请重新读取来源参考；已发送的修改不会重发。'
               : refreshError || (owns(command) ? (command.action === 'eye_bag_confirm' ? '引擎已确认应用卧蚕保护候选；通过现有照片历史撤销或重做。' : '') : '原照片请求已确认，未将编辑范围或参数套用到当前照片。')});
-          if (!result.success) throw new ConfirmedFailure(result.error ?? '人物修改被拒绝。');
+          if (!result.success && !discardedRead) throw new ConfirmedFailure(result.error ?? '人物修改被拒绝。');
           return;
         }
         if (reply.phase !== 'pending') throw Error(reply.error ?? '原请求结果无法查询；未自动重发。');
@@ -143,12 +163,19 @@ export function createPeopleWorkflow(ports: Ports) {
         await pause(100);
       }
     } catch (error) {
-      if (!(error instanceof ConfirmedFailure)) publish({pending: true, uncertain: true, message: String(error)});
+      if (pending === command && !(error instanceof ConfirmedFailure)) publish({pending: true, uncertain: true, message: String(error)});
       throw error;
     }
   }
   function check(): Promise<void> {
-    if (!checking) checking = poll().finally(() => {checking = null; flush();});
+    if (!pending) return Promise.resolve();
+    if (!checking || checkingCommand !== pending) {
+      checkingCommand = pending;
+      const job = poll().finally(() => {
+        if (checking === job) {checking = null; checkingCommand = null; flush();}
+      });
+      checking = job;
+    }
     return checking;
   }
   async function submit(command: PeopleAction): Promise<void> {
@@ -176,10 +203,52 @@ export function createPeopleWorkflow(ports: Ports) {
     pendingPreviewView = (command.action === 'face_style_preview' || command.action === 'eye_bag_preview') ? structuredClone(current) : null;
     if (command.action === 'face_style_preview') aliasReview = null;
     pending = command;
-    publish({pending: true, pendingAction: command.action, uncertain: false, lastEyeBagResult: null, lastBodyResult: null, lastFaceStyleResult: null, message: '正在提交人物修改，等待引擎确认。'});
+    cancelIntent = null;
+    publish({eyeBagCancel: 'none', pending: true, pendingAction: command.action, uncertain: false, lastEyeBagResult: null, lastBodyResult: null, lastFaceStyleResult: null, message: '正在提交人物修改，等待引擎确认。'});
     try {await bounded(ports.send(command), 10000);}
-    catch (error) {publish({uncertain: true, message: `${String(error)}。正在查询原请求，不重发修改。`});}
-    await check();
+    catch (error) {if (pending === command) publish({uncertain: true, message: `${String(error)}。正在查询原请求，不重发修改。`});}
+    if (pending === command) await check();
+  }
+  async function cancelEyeBagRead(): Promise<void> {
+    const command = pending;
+    if (!command || !eyeRead(command) || !ports.cancelEyeBagRead)
+      throw Error('只有当前只读卧蚕审核可取消；已发送确认必须查询原请求。');
+    if (cancelIntent === command) return;
+    cancelIntent = command; eyeBagReview = null;
+    publish({eyeBagCancel: 'requested', lastEyeBagResult: null,
+      message: '已请求停止只读审核，尚未确认停止；正在等待解码或求解安全返回。草稿保留。'});
+    try {
+      const reply = await bounded(ports.cancelEyeBagRead(command.request_id), 10000);
+      if (!object(reply) || Object.keys(reply).sort().join('|') !== 'cancel_requested|eye_bag_request|request_id|stopped'
+        || reply.request_id !== command.request_id || typeof reply.cancel_requested !== 'boolean' || reply.stopped !== false
+        || !eyeBagEchoMatches(command, reply as unknown as import('./model').PeopleResult))
+        throw Error('取消请求回执不匹配');
+    }
+    catch (error) {
+      if (pending === command) publish({message: `取消请求结果未确认：${String(error)}。继续查询原请求，不重发修改。`});
+    }
+    // Never release pending merely because cancellation was requested or its send failed.
+    // The original correlated receipt remains the only terminal authority.
+    if (pending === command) await check();
+  }
+  async function recoverEyeBagRead(): Promise<void> {
+    const command = pending;
+    if (!command || !eyeRead(command) || !ports.recoverEyeBagRead)
+      throw Error('只有已保留身份的只读审核可恢复；确认修改必须查询原请求。');
+    const reply = await bounded(ports.recoverEyeBagRead(command.request_id), 10000);
+    if (!object(reply) || Object.keys(reply).sort().join('|') !== 'eye_bag_request|read_only|reason|released|request_id|stopped'
+      || reply.request_id !== command.request_id || reply.read_only !== true || reply.released !== true
+      || !['terminal_read', 'engine_ended'].includes(String(reply.reason)) || typeof reply.stopped !== 'boolean'
+      || !eyeBagEchoMatches(command, reply as unknown as import('./model').PeopleResult))
+      throw Error('原只读请求的恢复证明不匹配，保留原请求等待查询。');
+    if (pending !== command) return;
+    // Native proof is restricted to a known read; it never proves a write failed.
+    pending = null; queued = null; waitFor = null; cancelIntent = null;
+    pendingPreviewView = null; eyeBagReview = null;
+    publish({pending: false, pendingAction: null, uncertain: false, eyeBagCancel: 'released', lastEyeBagResult: null,
+      message: reply.reason === 'terminal_read' ? '原只读请求已有终态，迟到图像已释放；请重新读取来源，草稿保留。'
+        : reply.stopped ? '原引擎已结束，已释放其只读审核等待；请重新读取来源，草稿保留。'
+        : '原引擎身份已失效，已释放旧只读审核等待；不代表旧工作曾被中断，请重新读取来源。'});
   }
   function flush() {
     if (pending || checking || !queued || !current?.editing_target || !enabled || view.uncertain) return;
@@ -201,6 +270,7 @@ export function createPeopleWorkflow(ports: Ports) {
     update(value: PeopleView | null, canEdit: boolean) {
       const changed = !!current && (!value || targetKey(current) !== targetKey(value));
       current = value; enabled = canEdit;
+      if (eyeDraft && eyeDraft.binding !== eyeBagBinding(value)) eyeDraft = null;
       if (view.lastEyeBagResult && !eyeBagReceiptCurrent(view.lastEyeBagResult.command, view.lastEyeBagResult.result, value)) publish({lastEyeBagResult: null});
       if (view.lastFaceStyleResult && !faceStyleReceiptCurrent(view.lastFaceStyleResult.command, view.lastFaceStyleResult.result, value)) publish({lastFaceStyleResult: null});
       if (view.lastBodyResult && !skinBodyReceiptCurrent(view.lastBodyResult.command, view.lastBodyResult.result, value)) publish({lastBodyResult: null});
@@ -216,6 +286,17 @@ export function createPeopleWorkflow(ports: Ports) {
     },
     subscribe(listener: () => void) {listeners.add(listener); return () => {listeners.delete(listener);};},
     snapshot: () => view,
+    cancelEyeBagRead,
+    recoverEyeBagRead,
+    eyeBagDraft(binding: string): EyeBagDraft | null {
+      return current && eyeDraft?.binding === binding && binding === eyeBagBinding(current) ? structuredClone(eyeDraft.value) : null;
+    },
+    saveEyeBagDraft(binding: string, value: EyeBagDraft | null) {
+      if (!current || binding !== eyeBagBinding(current)) return;
+      if (value === null) {eyeDraft = null; return;}
+      if (!validDraft(value)) throw Error('卧蚕草稿超出来源笔迹边界');
+      eyeDraft = {binding, value: structuredClone(value)};
+    },
     submit,
     patch(patches: ParameterPatch[]) {
       if (!current?.editing_target || !enabled || view.uncertain) throw Error('请先选择可编辑的人物范围并确认上一请求。');

@@ -66,6 +66,7 @@ impl EngineHandle {
 
     /// Cancellation is the only out-of-band command. It must reach the Python
     /// reader while the acknowledged command is still rendering/importing.
+    pub(crate) fn cancel_eye_bag_read(&self,request_id:&str)->Result<(),String>{self.cancel_owned_request("eye_bag_cancel",request_id)}
     pub(crate) fn cancel_sample_library(&self,request_id:&str)->Result<(),String>{self.cancel_owned_request("sample_library_cancel",request_id)}
     pub(crate) fn cancel_semantic_colour(&self,request_id:&str)->Result<(),String>{self.cancel_owned_request("semantic_colour_cancel",request_id)}
     fn cancel_owned_request(&self, command:&str, request_id: &str) -> Result<(), String> {

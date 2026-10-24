@@ -166,6 +166,13 @@ pub(crate) fn receipt(v: &Value) -> bool {
     let r = &v["eye_bag_request"];
     if !fields(r, &["action", "document_id", "document_epoch", "document_revision", "state_revision", "association_revision", "target", "payload"])
         || command(r).is_err() || r["action"] != v["action"] || r["document_id"] != v["document_id"] {return false;}
+    if v.get("eye_bag_cancelled").is_some() {
+        return v["eye_bag_cancelled"] == true && v["success"] == false && v["outcome_unknown"] == false
+            && matches!(v["action"].as_str(), Some("eye_bag_reference" | "eye_bag_preview" | "eye_bag_image" | "eye_bag_source_image"))
+            && v["error"].as_str().is_some_and(|s| !s.trim().is_empty())
+            && ["doc_state", "payload", "applied", "committed", "operation_committed", "batch_id", "requires_reload", "requires_readback", "status", "phase"]
+                .iter().all(|key| v.get(*key).is_none());
+    }
     if v["success"] != true {return true;}
     let p = &v["payload"];
     match v["action"].as_str() {

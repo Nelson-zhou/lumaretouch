@@ -70,9 +70,9 @@ second history owner or permit blind retries of uncertain confirmations.
 Automatic anatomical ridge detection, active preset/batch/cohort transfer,
 shared-source affected-set review and arbitrary recovery painting remain
 separate gaps. Crop display does not establish anatomy or visibility by itself.
-The crop helper exposes cancellation checkpoints, but the current reference
-command does not wire a user cancellation callback to them. Full-frame decode,
-ICC, individual repair kernels and PNG encoding retain their non-interruptible
-call boundaries. No end-to-end user cancellation or measured memory/performance
-claim is made. All actual decode, native, UI, numerical, history, export and photograph
+The reference command now wires the read-only job cancellation predicate into
+the crop checkpoints; see `CANCELLATION-AND-RECOVERY.md`. Full-frame decode, ICC,
+individual repair kernels and PNG encoding retain non-interruptible call
+boundaries. Request acceptance is not proof of stop, and measured cancellation
+latency, memory and performance remain UNRUN. All actual decode, native, UI, numerical, history, export and photograph
 acceptance is UNRUN.

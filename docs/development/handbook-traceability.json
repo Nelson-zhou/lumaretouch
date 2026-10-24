@@ -2802,6 +2802,7 @@
         "engine/src/lumaretouch_engine/eye_bag_preserve_host.py",
         "engine/src/lumaretouch_engine/eye_bag_preserve_crop.py",
         "docs/eye-bag-preserve/SOURCE-CROP-CONTRACT.md",
+        "docs/eye-bag-preserve/CANCELLATION-AND-RECOVERY.md",
         "ui/src/eyeBagPreserve/"
       ],
       "verification": [

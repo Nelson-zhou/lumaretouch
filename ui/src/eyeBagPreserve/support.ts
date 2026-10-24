@@ -27,7 +27,7 @@ export function ridgeBrush(side: EyeSide, mode: 'add' | 'subtract', radiusPixels
     enabled: true, operation: mode, kind: 'brush', opacity: 1, feather, points: [first], axes: [[radiusPixels / source.width, 0], [0, radiusPixels / source.height]]};
 }
 /** This validates bounded vectors only, not eye visibility or rasterized unit coverage. */
-export function validEyes(v: unknown, allowEmpty = true): v is RidgeEyes {
+export function validEyes(v: unknown, allowEmpty = true, requireAdd = true): v is RidgeEyes {
   if (!object(v) || Object.keys(v).some(k => k !== 'left' && k !== 'right') || (!allowEmpty && !Object.keys(v).length)) return false;
   let total = 0;
   return Object.values(v).every(eye => {
@@ -37,7 +37,7 @@ export function validEyes(v: unknown, allowEmpty = true): v is RidgeEyes {
     if (!keys(mask, ['version', 'domain', 'objects']) || mask.version !== 1 || mask.domain !== 'source-normalized'
       || !Array.isArray(mask.objects) || !mask.objects.length || mask.objects.length > 64) return false;
     const ids = new Set<string>();
-    return mask.objects.some(o => object(o) && o.enabled === true && o.operation === 'add' && o.opacity === 1)
+    return (!requireAdd || mask.objects.some(o => object(o) && o.enabled === true && o.operation === 'add' && o.opacity === 1))
       && mask.objects.every(o => {
         if (!object(o) || !keys(o, ['id', 'name', 'enabled', 'operation', 'kind', 'opacity', 'feather', 'points', 'axes'])
           || typeof o.id !== 'string' || !/^[A-Za-z0-9_-]{1,64}$/.test(o.id) || ids.has(o.id)

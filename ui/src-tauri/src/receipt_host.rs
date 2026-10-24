@@ -345,7 +345,19 @@ impl<K: ReceiptKind> ReceiptHost<K> {
         if epoch != self.epoch || epoch == [0; 16] { return; }
         let Some(id) = value["request_id"].as_str() else { return };
         let Some(record) = self.records.iter_mut().find(|r| r.id == id) else { return };
-        if record.result.is_some() || value["action"].as_str() != Some(record.action.as_str()) { return; }
+        if value["action"].as_str() != Some(record.action.as_str()) { return; }
+        if let Some(previous) = &record.result {
+            // A read can outlive a transport failure. Reconcile only this exact
+            // retained eye-bag read after its actual terminal arrives. Never
+            // replace a known terminal or reopen confirmation/write authority.
+            let read_reconciliation = K::NAME == "people" && previous["outcome_unknown"] == true
+                && matches!(record.action.as_str(), "eye_bag_reference" | "eye_bag_preview" | "eye_bag_image" | "eye_bag_source_image")
+                && record.review.as_ref().is_some_and(|review| review.read_only
+                    && review.fields.get("eye_bag_request").is_some() && review.matches(value))
+                && value["outcome_unknown"] == false && K::valid(value, record.document.as_deref())
+                && value.to_string().len() <= MAX_RESULT_BYTES;
+            if !read_reconciliation { return; }
+        }
         let mut result = if !K::valid(value, record.document.as_deref())
             || record.review.as_ref().is_some_and(|review| !review.matches(value))
             || value.to_string().len() > MAX_RESULT_BYTES {
@@ -384,6 +396,12 @@ impl<K: ReceiptKind> ReceiptHost<K> {
         let ids: Vec<String> = self.records.iter().filter(|r| r.result.is_none()).map(|r| r.id.clone()).collect();
         for id in ids { self.failed(&id, &format!("engine ended before {} completion was confirmed", K::NAME)); }
         self.epoch = [0; 16]; self.supported = false;
+    }
+    /// Query retained read-only proof without changing or settling its receipt.
+    /// The caller owns engine-epoch comparison, including an ended engine.
+    pub fn read_review_binding(&self, id: &str) -> Option<Value> {
+        self.records.iter().find(|r| r.id == id).and_then(|r| r.review.as_ref())
+            .filter(|review| review.read_only).map(|review| review.fields.clone())
     }
     pub fn status(&self, id: &str) -> Value {
         match self.records.iter().find(|r| r.id == id) {

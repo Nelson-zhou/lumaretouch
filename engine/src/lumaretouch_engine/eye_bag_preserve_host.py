@@ -20,6 +20,7 @@ import uuid
 from . import people_state as P, people_algorithms as A
 from . import creative_derived_source as SOURCE, eye_bag_preserve_state as S
 from .portrait_review_render import image as render_image, snapshot_key
+from . import eye_bag_review_jobs as JOBS
 
 READS = frozenset(('eye_bag_reference', 'eye_bag_preview', 'eye_bag_image', 'eye_bag_source_image'))
 ACTIONS = READS | {'eye_bag_confirm'}
@@ -129,7 +130,8 @@ def reference(engine, state, target, payload):
     engine._eye_bag_reference = None
     shown = source_preview(engine); recipe, legacy = _values(state, target)
     from .eye_bag_preserve_crop import prepare as prepare_crops
-    crops = prepare_crops(engine, state, target, current, engine._people_source(), digest(before))
+    crops = prepare_crops(engine, state, target, current, engine._people_source(), digest(before), cancelled=lambda: JOBS.cancelled(engine))
+    JOBS.checkpoint(engine)
     token = uuid.uuid4().hex
     crop_images = {side: base64.b64decode(record['image']['base64'], validate=True)
         for side, record in crops['eyes'].items()}
@@ -278,10 +280,11 @@ def _overlay(engine, candidate, target, shown, analysis):
     if type(budget) is not int or budget <= display_bytes:
         raise ValueError('Eye-bag support display exceeds its explicit memory admission')
     coverage, _ = SUPPORT.raster(candidate, engine._people_support, target['face_ref'],
-        (h, w), analysis=analysis, byte_budget=budget-display_bytes)
+        (h, w), analysis=analysis, byte_budget=budget-display_bytes, cancelled=lambda: JOBS.cancelled(engine))
     if coverage.shape != raw_source.shape[:2]: raise ValueError('Eye-bag support overlay has another source extent')
     mixed = np.empty((h, w, 3), dtype=np.uint8)
     for y in range(h):
+        JOBS.checkpoint(engine)
         for x in range(0, w, 4096):
             weight = coverage[y, x:x+4096]
             full = weight == np.float32(1); partial = (weight > 0) & ~full
@@ -326,13 +329,14 @@ def preview(engine, state, target, payload):
     analysis = engine._people_analyses.get(source['asset_sha256'], {}).get(target['target_id'])
     if analysis is None: raise ValueError('Current eye-bag face analysis is unavailable')
     candidate, bank = SUPPORT.retain(state, engine._people_support, target['face_ref'], payload['eyes'],
-        analysis=analysis, byte_budget=available_estimate())
+        analysis=analysis, byte_budget=available_estimate(), cancelled=lambda: JOBS.cancelled(engine))
     check_store(bank)
     _reference(engine, state, target, _live(engine, state, target))
     # Only append-only bytes become reachable here. No live graph pointer,
     # history, canonical recipe or current output changes until confirmation.
     if any(bank.get(key) != value for key, value in engine._people_support.items()):
         raise ValueError('Eye-bag preview cannot replace immutable support bytes')
+    JOBS.checkpoint(engine)
     engine._people_support = bank
     for key in S.KEYS:
         candidate = P.set_override(candidate, 'face', target['target_id'], S.OP, '/' + key, recipe[key])
@@ -353,12 +357,13 @@ def preview(engine, state, target, payload):
     # can reuse the source image without accepting unrelated bank mutations.
     shown['before_key'] = before_key
     after_key = snapshot_key(engine, row, current, candidate)
-    a, left, proof_a = render_image(engine, row, current, state, version.document_id, version.revision)
-    b, right, proof_b = render_image(engine, row, current, candidate, version.document_id, version.revision)
+    a, left, proof_a = render_image(engine, row, current, state, version.document_id, version.revision, cancelled=lambda: JOBS.cancelled(engine))
+    b, right, proof_b = render_image(engine, row, current, candidate, version.document_id, version.revision, cancelled=lambda: JOBS.cancelled(engine))
     if (proof_a['source_proof'] != source or proof_b['source_proof'] != source
             or proof_a['source_size'] != proof_b['source_size']):
         raise ValueError('Eye-bag before/after images changed effective source')
     overlay, overlay_image, overlay_source = _overlay(engine, candidate, target, shown['source_preview'], analysis)
+    JOBS.checkpoint(engine)
     token = uuid.uuid4().hex
     visual = {'version': 1, 'document_id': version.document_id, 'revision': str(version.revision),
         'source_proof': source, 'before_state_sha256': proof_a['candidate_sha256'],
@@ -382,6 +387,7 @@ def preview(engine, state, target, payload):
     store['images'].attach(_plan(review), {
         version.document_id: {'revision': visual['revision'], 'before': left, 'after': right},
         'support:' + version.document_id: {'revision': visual['revision'], 'before': overlay_image, 'after': overlay_image}})
+    JOBS.checkpoint(engine)
     store['pending'][token] = entry
     return {'kind': 'eye_bag_preview', 'review': deepcopy(review)}
 

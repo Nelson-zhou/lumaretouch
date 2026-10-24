@@ -134,10 +134,52 @@ pub(crate) fn enqueue(handle: &crate::engine::EngineHandle, mut command: Value) 
     }
     handle.send(command)
 }
+/// Only a retained original read proof can authorize control/recovery. Neither
+/// a caller-supplied action label nor an unknown confirmation is sufficient.
+fn eye_read_request(host: &ReceiptHost<PeopleKind>, id: &str) -> Result<Value, String> {
+    let binding = host.read_review_binding(id).ok_or("原请求不是可验证的只读卧蚕审核；不能取消或释放写入结果" )?;
+    let request = binding.get("eye_bag_request").ok_or("原请求不属于卧蚕审核")?;
+    let mut command = request.clone(); command["cmd"] = json!("people"); command["request_id"] = json!(id);
+    if !eye_bag::read_only(&command) {return Err("原卧蚕请求不是可取消的只读操作".into());}
+    Ok(request.clone())
+}
+fn settled_read(status: &Value) -> bool {
+    status["phase"] == "done" && status["result"]["outcome_unknown"] == false
+}
+fn eye_read_control(state: &crate::AppState, id: &str, recover: bool) -> Result<Value, String> {
+    let engine = state.engine.lock().map_err(|_| "引擎锁失败")?;
+    let mailbox = mailbox().lock().map_err(|_| "人物结果锁失败")?;
+    let request = eye_read_request(&mailbox.host, id)?;
+    let status = mailbox.host.status(id);
+    let same_live = engine.as_ref().is_some_and(|h| h.epoch() == mailbox.epoch && h.is_alive());
+    if recover {
+        if !settled_read(&status) && same_live {
+            return Err("只读审核仍可能运行，请请求取消后查询原请求；未释放正在运行的审核".into());
+        }
+        // A different current epoch proves loss of old authority, not that the
+        // old process stopped. Only an observed dead matching handle proves it.
+        let stopped = engine.as_ref().is_some_and(|h| h.epoch() == mailbox.epoch && !h.is_alive());
+        return Ok(json!({"request_id":id,"read_only":true,"released":true,
+            "reason":if settled_read(&status) {"terminal_read"} else {"engine_ended"},
+            "stopped":stopped,"eye_bag_request":request}));
+    }
+    if settled_read(&status) {
+        return Ok(json!({"request_id":id,"cancel_requested":false,"stopped":false,"eye_bag_request":request}));
+    }
+    let handle = engine.as_ref().filter(|h| h.epoch() == mailbox.epoch && h.is_alive())
+        .ok_or("原审核引擎不可用，请查询或恢复原只读请求；未向新引擎重发取消")?;
+    handle.cancel_eye_bag_read(id)?;
+    Ok(json!({"request_id":id,"cancel_requested":true,"stopped":false,"eye_bag_request":request}))
+}
+
 #[tauri::command]
 pub(crate) fn people(state: tauri::State<'_, std::sync::Arc<crate::AppState>>, request: Value) -> Result<Value, String> {
     let fields = request.as_object().ok_or("人物请求必须是对象")?;
     let id = request["request_id"].as_str().filter(|s| !s.is_empty() && s.len() <= 128).ok_or("人物请求身份无效")?;
+    if matches!(request["action"].as_str(), Some("cancel_eye_bag_read" | "recover_eye_bag_read")) {
+        if fields.len() != 2 {return Err("只读审核控制字段无效".into());}
+        return eye_read_control(&state, id, request["action"] == "recover_eye_bag_read");
+    }
     if request["action"] == "status" {
         if fields.len() != 2 { return Err("人物查询字段无效".into()); }
         return Ok(mailbox().lock().map_err(|_| "人物结果锁失败")?.host.status(id));
@@ -179,3 +221,8 @@ pub(crate) fn people(state: tauri::State<'_, std::sync::Arc<crate::AppState>>, r
 #[cfg(test)]
 #[path = "face_style_alias_host_tests.rs"]
 mod face_style_alias_host_tests;
+
+// AUTHORED / UNRUN: no native test execution was performed.
+#[cfg(test)]
+#[path = "eye_bag_cancel_native_unrun.rs"]
+mod eye_bag_cancel_tests;

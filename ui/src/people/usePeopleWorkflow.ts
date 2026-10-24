@@ -10,6 +10,8 @@ export function usePeopleWorkflow(status: EngineStatus | null, doc: DocState | n
   const refreshRef = useRef(refresh); refreshRef.current = refresh;
   const workflow = useMemo(() => createPeopleWorkflow({
     send: command => runPeopleRequest(command),
+    recoverEyeBagRead: request_id => runPeopleRequest({action: 'recover_eye_bag_read', request_id}),
+    cancelEyeBagRead: request_id => runPeopleRequest({action: 'cancel_eye_bag_read', request_id}),
     read: request_id => runPeopleRequest({action: 'status', request_id}) as Promise<PeopleMailbox>,
     refresh: () => refreshRef.current(),
   }), []);
@@ -60,6 +62,9 @@ export function usePeopleWorkflow(status: EngineStatus | null, doc: DocState | n
     uncertain: state.uncertain || history.ui.phase === 'uncertain'}, supported, enabled, submit,
     submitCaptured: async (command: PeopleAction) => {guard(); return workflow.submit(command);},
     patch: (patches: Parameters<typeof workflow.patch>[0]) => {guard(); return workflow.patch(patches);},
+    cancelEyeBagRead: workflow.cancelEyeBagRead,
+    recoverEyeBagRead: workflow.recoverEyeBagRead,
+    eyeBagDraft: workflow.eyeBagDraft, saveEyeBagDraft: workflow.saveEyeBagDraft,
     check: async () => {if (history.ui.phase === 'uncertain') await history.query(); else await workflow.check();},
     aliasHistory: {receipt: sameEpoch ? receipt : null, state: history.ui, ledger, refreshError: historyRefreshError,
       canUndo: canHistory && !ledger!.undone && !!status?.session?.sync?.undoable.includes(receipt!.batchId),
