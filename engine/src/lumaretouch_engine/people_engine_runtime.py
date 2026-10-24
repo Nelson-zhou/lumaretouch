@@ -10,7 +10,7 @@ from . import people_pipeline as PIPE
 
 
 def prepare_preview(pipe,state,asset_sha256,analyses,*,byte_budget,document_id=None,recovery_assets=None,body_bank=None,body_source=None,body_source_path=None,body_source_pixels=None,creative_source=None,creative_proxy=None,
-                    hair_assets=None,hair_evidence=None,hair_source_path=None,eye_light_assets=None,blush_makeup_assets=None,lipstick_assets=None,eyeliner_assets=None,eyelash_assets=None,brow_makeup_assets=None,iris_makeup_assets=None,skin_colour_body_assets=None,skin_finish_body_assets=None,body_skin_evenness_assets=None,body_face_match_assets=None):
+                    hair_assets=None,hair_evidence=None,hair_source_path=None,eye_light_assets=None,blush_makeup_assets=None,lipstick_assets=None,eyeliner_assets=None,eyelash_assets=None,brow_makeup_assets=None,iris_makeup_assets=None,skin_colour_body_assets=None,skin_finish_body_assets=None,body_skin_evenness_assets=None,body_face_match_assets=None,collarbone_assets=None):
     import torch
     if body_bank is None and getattr(getattr(pipe,'people_prepared',None),'body_fields',()):
         raise ValueError('Preview omitted independently retained body inputs')
@@ -44,7 +44,7 @@ def prepare_preview(pipe,state,asset_sha256,analyses,*,byte_budget,document_id=N
         repaired.setflags(write=False)
     prepared=prepare(state,asset_sha256,rgb,analyses,byte_budget=byte_budget,document_id=document_id,recovery_assets=recovery_assets,repaired=repaired,
         creative_source=creative_source,creative_repair_evidence=replay_evidence,hair_assets=hair_assets,hair_evidence=hair_evidence,hair_source_path=hair_source_path,eye_light_assets=eye_light_assets,blush_makeup_assets=blush_makeup_assets,lipstick_assets=lipstick_assets,eyeliner_assets=eyeliner_assets,eyelash_assets=eyelash_assets,brow_makeup_assets=brow_makeup_assets,iris_makeup_assets=iris_makeup_assets,
-        skin_colour_body_assets=skin_colour_body_assets,skin_finish_body_assets=skin_finish_body_assets,body_skin_evenness_assets=body_skin_evenness_assets,body_face_match_assets=body_face_match_assets,body_bank=body_bank)
+        skin_colour_body_assets=skin_colour_body_assets,skin_finish_body_assets=skin_finish_body_assets,body_skin_evenness_assets=body_skin_evenness_assets,body_face_match_assets=body_face_match_assets,collarbone_assets=collarbone_assets,body_bank=body_bank)
     if body_bank is not None:
         from .body_pose_render import prepare as prepare_body
         prepared=prepare_body(prepared,body_bank,state,body_source,byte_budget=body_budget(prepared,byte_budget),source_path=body_source_path,source_pixels=body_source_pixels)
@@ -52,9 +52,9 @@ def prepare_preview(pipe,state,asset_sha256,analyses,*,byte_budget,document_id=N
 
 
 def synchronize(pipe,state,asset_sha256,analyses,*,byte_budget,document_id=None,recovery_assets=None,body_bank=None,body_source=None,body_source_path=None,body_source_pixels=None,creative_source=None,creative_proxy=None,
-                    hair_assets=None,hair_evidence=None,hair_source_path=None,eye_light_assets=None,blush_makeup_assets=None,lipstick_assets=None,eyeliner_assets=None,eyelash_assets=None,brow_makeup_assets=None,iris_makeup_assets=None,skin_colour_body_assets=None,skin_finish_body_assets=None,body_skin_evenness_assets=None,body_face_match_assets=None):
+                    hair_assets=None,hair_evidence=None,hair_source_path=None,eye_light_assets=None,blush_makeup_assets=None,lipstick_assets=None,eyeliner_assets=None,eyelash_assets=None,brow_makeup_assets=None,iris_makeup_assets=None,skin_colour_body_assets=None,skin_finish_body_assets=None,body_skin_evenness_assets=None,body_face_match_assets=None,collarbone_assets=None):
     prepared=prepare_preview(pipe,state,asset_sha256,analyses,byte_budget=byte_budget,document_id=document_id,recovery_assets=recovery_assets,body_bank=body_bank,body_source=body_source,body_source_path=body_source_path,body_source_pixels=body_source_pixels,creative_source=creative_source,creative_proxy=creative_proxy,
-        hair_assets=hair_assets,hair_evidence=hair_evidence,hair_source_path=hair_source_path,eye_light_assets=eye_light_assets,blush_makeup_assets=blush_makeup_assets,lipstick_assets=lipstick_assets,eyeliner_assets=eyeliner_assets,eyelash_assets=eyelash_assets,brow_makeup_assets=brow_makeup_assets,iris_makeup_assets=iris_makeup_assets,skin_colour_body_assets=skin_colour_body_assets,skin_finish_body_assets=skin_finish_body_assets,body_skin_evenness_assets=body_skin_evenness_assets,body_face_match_assets=body_face_match_assets)
+        hair_assets=hair_assets,hair_evidence=hair_evidence,hair_source_path=hair_source_path,eye_light_assets=eye_light_assets,blush_makeup_assets=blush_makeup_assets,lipstick_assets=lipstick_assets,eyeliner_assets=eyeliner_assets,eyelash_assets=eyelash_assets,brow_makeup_assets=brow_makeup_assets,iris_makeup_assets=iris_makeup_assets,skin_colour_body_assets=skin_colour_body_assets,skin_finish_body_assets=skin_finish_body_assets,body_skin_evenness_assets=body_skin_evenness_assets,body_face_match_assets=body_face_match_assets,collarbone_assets=collarbone_assets)
     PIPE.install(pipe,prepared);pipe.people_suspended=None
     return prepared
 
@@ -71,6 +71,8 @@ def require_ready(pipe):
 
 def prepare_export(snapshot,source,repaired,*,byte_budget,document_id=None,recovery_assets=None,body_pose=None,body_source_path=None,creative_repair_evidence=None):
     """Original RGB8/16 enters once; all face solvers run before tile slicing."""
+    if type(source) is not np.ndarray or source.ndim != 3 or source.shape[2] != 3 or min(source.shape[:2]) < 1:
+        raise ValueError('People export requires actual RGB source pixels; alpha is unsupported')
     from .people_snapshot import at_dimensions
     from .people_cross_owner import validate_owner
     if snapshot.get('document_id') != document_id:
@@ -125,7 +127,7 @@ def prepare_export(snapshot,source,repaired,*,byte_budget,document_id=None,recov
         if frame['sha256']!=asset:raise ValueError('Body colour support belongs to another portrait source')
     prepared=prepare(state,asset,rgb,analyses,byte_budget=byte_budget,document_id=document_id,recovery_assets=recovery_assets,repaired=repaired,
         **source_inputs,force_hair_prompted=True,eye_light_assets=snapshot.get('support_assets',{}),blush_makeup_assets=snapshot.get('support_assets',{}),lipstick_assets=snapshot.get('support_assets',{}),eyeliner_assets=snapshot.get('support_assets',{}),eyelash_assets=snapshot.get('support_assets',{}),brow_makeup_assets=snapshot.get('support_assets',{}),iris_makeup_assets=snapshot.get('support_assets',{}),
-        skin_colour_body_assets=snapshot.get('support_assets',{}),skin_finish_body_assets=snapshot.get('support_assets',{}),body_skin_evenness_assets=snapshot.get('support_assets',{}),body_face_match_assets=snapshot.get('support_assets',{}),body_bank=bank)
+        skin_colour_body_assets=snapshot.get('support_assets',{}),skin_finish_body_assets=snapshot.get('support_assets',{}),body_skin_evenness_assets=snapshot.get('support_assets',{}),body_face_match_assets=snapshot.get('support_assets',{}),collarbone_assets=snapshot.get('support_assets',{}),body_bank=bank)
     if bank is not None:
         from .body_pose_render import prepare as prepare_body
         # Selection replay must use its canonical true-bit-depth decoder, even
@@ -138,7 +140,7 @@ def prepare_export(snapshot,source,repaired,*,byte_budget,document_id=None,recov
 def body_budget(prepared,budget):
     # Body composition already counts retained face evaluators and both maps.
     # Reserve independent colour/recovery arrays and source buffers as well.
-    colour=sum(array.nbytes for record in prepared.effects for array in (record.delta,record.weights,record.chroma_shift) if array is not None)
+    colour=sum(array.nbytes for record in prepared.effects for array in (record.delta,record.weights,record.chroma_shift,record.log_gain) if array is not None)
     recovery=sum(record['weight'].nbytes for record in prepared.recovery.values())
     h,w=prepared.geometry.delta.shape[1:3]
     return budget-colour-recovery-h*w*24

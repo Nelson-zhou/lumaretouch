@@ -10,7 +10,7 @@ from .facial_wrinkle_layer import FacialWrinkleLayer, bounds as wrinkle_bounds
 from .under_eye_layer import UnderEyeLayer, bounds as eye_bounds, KEYS as EYE_KEYS
 from .ops import enhance as H
 
-STAGES = ('body_face_match', 'body_skin_evenness', 'skin_evenness', 'skin_colour', 'facial_wrinkles', 'eye_detail', 'lip_texture', 'lip_makeup', 'enhance', 'hair_colour', 'eye_light', 'blush_makeup', 'lipstick','eyeliner','eyelash','brow_enhance','brow_makeup','iris_makeup')
+STAGES = ('body_face_match', 'body_skin_evenness', 'collarbone', 'skin_evenness', 'skin_colour', 'facial_wrinkles', 'eye_detail', 'lip_texture', 'lip_makeup', 'enhance', 'hair_colour', 'eye_light', 'blush_makeup', 'lipstick','eyeliner','eyelash','brow_enhance','brow_makeup','iris_makeup')
 
 
 @dataclass(frozen=True)
@@ -23,6 +23,7 @@ class LocalEffect:
     amounts: object = None
     facts: object = None
     chroma_shift: object = None
+    log_gain: object = None
 
     def contribution(self, current):
         y, x, h, w = self.window
@@ -80,7 +81,7 @@ def prepare(face_ref, landmarks, recipes, source, *, excluded, skin, backend, se
                           'requested': amounts[key], 'native_solver': 'rust-teeth-colour-v1'}
         records.append(LocalEffect(ref, 'enhance', window, weights=weights, amounts=amounts, facts=facts))
     for record in records:
-        for array in (record.delta, record.weights, record.chroma_shift):
+        for array in (record.delta, record.weights, record.chroma_shift, record.log_gain):
             if array is not None: array.setflags(write=False)
     return records
 
@@ -105,6 +106,9 @@ def verify_recovery(face_ref, stage, recovery, shape):
 def apply(stage, current, records, *, recovery=None):
     """One operator's before/after pair; no repeated application on overlap."""
     if stage not in STAGES: raise ValueError('Unknown portrait stage')
+    if stage == 'collarbone':
+        from .collarbone_composition import apply_records_np
+        return apply_records_np(current, records, recovery)
     if stage in ('skin_evenness', 'body_skin_evenness', 'body_face_match'):
         from .skin_evenness_composition import apply_records_np
         return apply_records_np(current, records, recovery, stage=stage)

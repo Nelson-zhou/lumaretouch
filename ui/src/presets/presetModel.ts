@@ -19,6 +19,7 @@ const labels:Record<string,string>={'lnx.original_shadow.v1':'原图阴影（开
   'lnx.lip_texture.v1':'唇部暗细纹减淡（独立强度，目标重算原有窄暗细纹；部分唇纹修整，非口红、模糊、AI 祛瑕或干皮裂口重建）',
   'lnx.skin_texture.v1':'皮肤质感（面部纹理与精细清晰，来源细节逐图重算）',
   'lnx.body_skin_evenness.v1':'身体肤色均匀（仅独立强度；目标单独审核身体范围并重算参考，不复制审核或手绘蒙版；部分非 AI 调整，不是身体与面部肤色匹配）',
+  'lnx.collarbone.v1':'锁骨现有明暗增强（仅独立强度；目标单独确认女/长辈女、审核身体范围与可见锁骨曲线并重算明暗；不复制曲线、类别确认或蒙版，非自动检测/AI 3D）',
   'lnx.body_face_match.v1':'身体与本人面部肤色匹配（仅独立强度；目标单独审核身体并从人像处理前的冻结有效来源重算本人面部参考，不复制审核、蒙版或参考；仅色度、部分非 AI，不匹配亮度或后续修脸效果）',
   'lnx.skin_evenness.v1':'面部肤色均匀（独立强度，目标自有参考肤色逐图重算；部分非 AI 调整，不转换旧版 skin.broad）',
   'lnx.curves.v1':'曲线','lnx.hsl.v1':'HSL','lnx.crop.v1':'裁剪','lnx.skin.v1':'磨皮','lnx.blemish.v1':'瑕疵处理','lnx.skin_mask.v1':'皮肤蒙版'};

@@ -1,0 +1,493 @@
+{
+  "baseline": "b32af87d662f7c7423d353dd6e6a33ccf867a031",
+  "status": "FROZEN_SOURCE_ONLY_MANUAL_ASSISTED_PARTIAL_UNRUN",
+  "requirement_ids": [
+    "LNX-REF-PC-32465-C-abf0a5c8c9"
+  ],
+  "scope": "Independent manually reviewed visible clavicle trace-normal observed-source light/shadow enhancement. No AI 3D detection, automatic anatomy or demographic inference. Version+amount only portable, exact target-local BodyRef/own FaceRef/source/semantic/manual support and separate eligibility/trace consent.",
+  "files": [
+    {
+      "path": "core/collarbone/Cargo.toml",
+      "sha256": "5fe21452f57c9d6cfb489484445b8adc4c4ecf2e78dea2752c9c008537135c79",
+      "bytes": 219
+    },
+    {
+      "path": "core/collarbone/README.md",
+      "sha256": "47f7595fe2480e18a30f2b66f07754e9616759e0b33ec32f55bd3a4bdd8171b2",
+      "bytes": 13596
+    },
+    {
+      "path": "core/collarbone/collarbone.h",
+      "sha256": "a09061c612642f277ee4ecbd52b45baffbd31af18d88c2c13066a2b4c84b227f",
+      "bytes": 2633
+    },
+    {
+      "path": "core/collarbone/lib.rs",
+      "sha256": "d46228013954f890896433c23cead564c2e293b2da49587c5cd40ca52b948a5f",
+      "bytes": 23373
+    },
+    {
+      "path": "core/collarbone/tests.rs",
+      "sha256": "8dbcb7743eece889fcf953c368a9a4c6f6b012b1040b8e584cfc8ce59ff50987",
+      "bytes": 8807
+    },
+    {
+      "path": "docs/collarbone/REQUIREMENT-AND-RESEARCH.md",
+      "sha256": "ad670f046daed8e8e54a79dd395ec034fcc87d952745b1155703d4dd28207d67",
+      "bytes": 6358
+    },
+    {
+      "path": "docs/development/handbook-traceability.json",
+      "sha256": "95386c050fec7800751b3ec0922886cfda75a3bd488d69d1e78f502b9ca9717d",
+      "bytes": 456107
+    },
+    {
+      "path": "docs/development/ui-route-inventory.json",
+      "sha256": "17fa115862223f1bd2fb4e7f57c955a0c1ff96b5a2c3d29a4ff70e54b711c1d3",
+      "bytes": 16702
+    },
+    {
+      "path": "docs/p0/registry-extensions.json",
+      "sha256": "a493e0af19090030ece263dc275147d0ec7a9d6421ec666dee1b439212e6e7ad",
+      "bytes": 49744
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/collarbone_composition.py",
+      "sha256": "8b06b71ad691894703be58287a6047059c782e8d1aa7c203acdb832fb55c3878",
+      "bytes": 8750
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/collarbone_layer.py",
+      "sha256": "eb16f78c45a049c9d78bb24347c70083ea3fc45280076d68acdca79a0c33dd7b",
+      "bytes": 7978
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/collarbone_native.py",
+      "sha256": "0dc319b588316ad4a4c4d55c1040933c84ae466d73432af1ac40c610115783db",
+      "bytes": 20343
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/collarbone_project.py",
+      "sha256": "0263d8729b10f1a40b28554e6d0c9d1f8056ccc2be1570868c2fc6c6f1d057cb",
+      "bytes": 1594
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/collarbone_scope.py",
+      "sha256": "d4c10d974a626c0f1aaf3d4944f7558ebe452fd49f5e9ec888d4350bbfad2df5",
+      "bytes": 7349
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/collarbone_state.py",
+      "sha256": "96570671fc5a739292aedd50fa1888c5d9d0d72ddc371298246ab499ad0a762b",
+      "bytes": 1288
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/collarbone_support.py",
+      "sha256": "55fe6108e5e18a3ecdb2d5691f80c6612d2e5230cfcc4bd356fc118ca2518399",
+      "bytes": 6732
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/creative_derived_effects.py",
+      "sha256": "9ffa7bea037d4b2374ad7338355108348485c1781aa5decdaca9f24203e4ee00",
+      "bytes": 16330
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/creative_derived_makeup.py",
+      "sha256": "0bc93ad61c6860a0c045f9c53e591d908c9a592f5d4971d6c748d9ad4caf80de",
+      "bytes": 4519
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_algorithms.py",
+      "sha256": "85f13be77653ab401d7c18c0a086ce3ad8f6bd62afdc6da4cd84416e6ddfbe0c",
+      "bytes": 6284
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_batch_transfer.py",
+      "sha256": "6addd4f5574eff08612de2dfd17753eea4b6611f3056f6b61a702058d88318e7",
+      "bytes": 21238
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_effects.py",
+      "sha256": "8c612b978ade77ab7cec3cf05cc746e4d0a51268bd920b49b468f146ffce2c5d",
+      "bytes": 8731
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_engine_runtime.py",
+      "sha256": "5ab168d6d752b819ad3cc716baecdbba0329d25b3a655178f94362a18bade162",
+      "bytes": 11954
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_export.py",
+      "sha256": "be54136581a7a8911eed49ca487ce2f712da494d09005b77ea38864d99c7b161",
+      "bytes": 8130
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_host.py",
+      "sha256": "eb15bcef338d34d14c96180779180af830a7cb6707456cf89ca75fabf5930397",
+      "bytes": 24665
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_host_commands.py",
+      "sha256": "a3f9f21619cd60f52d8fbe1913e11ec5ebc2e0469f7db192292e1a52192041be",
+      "bytes": 20223
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_owned_inputs.py",
+      "sha256": "e50649330ec112527ad37b4bb084c2a5afc6c5aba30e143daa13ce1487ba0a42",
+      "bytes": 3810
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_pipeline.py",
+      "sha256": "452e8141707218546e55033eb6665baf935cfe37550eec76bb3bee1927e002da",
+      "bytes": 7208
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_project.py",
+      "sha256": "140ee1676b1360f377875b8d61c0c1337ffa251666bd3f832e81ea73bab789f7",
+      "bytes": 5403
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_render_plan.py",
+      "sha256": "7c9747d155f6cccd9add3a9a024b507180dc474f68c99818a05085b75bd3f870",
+      "bytes": 6507
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_render_runtime.py",
+      "sha256": "cc7bb683bd89efa5d1f9faa5273a8d086d22b8aa8e78740344817a85b5d317b0",
+      "bytes": 30025
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_scope.py",
+      "sha256": "ffcbbfdf508cf346d5be2bdbefe2e0515d270f5d45353e8c0e187f17b28d0f8c",
+      "bytes": 37098
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_support_assets.py",
+      "sha256": "f41bd1e8b1164b6910d5e85aba9898ab02a5032322ab4507caef590cc669e6d5",
+      "bytes": 11551
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/preset_controller.py",
+      "sha256": "883df07d9ceaec0d4168d8560024dfc0e671c6cd4018e24ee35d04a979d60e2e",
+      "bytes": 39496
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/scope.py",
+      "sha256": "f00ecb52a102fe5dc3964a2882018d62f3355292f0d19df54bcee39ad2288b8f",
+      "bytes": 64324
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/server.py",
+      "sha256": "c6bcce151b0ca9f3e05e3e5828ea266369db9ccc95a1ddd53ea4e72f4a517780",
+      "bytes": 467568
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/skin_colour_body_actions.py",
+      "sha256": "0479fb350c94b5f6c3cc578db55971c6f0958517f1300e6e47829b5f0d230934",
+      "bytes": 4797
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/skin_colour_body_host.py",
+      "sha256": "893711c25fc671013df1d8e1bf2625d19525cc29de350e163147bed687e004d6",
+      "bytes": 19056
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/skin_colour_body_support.py",
+      "sha256": "b08d9c71a5d2725ab398a59ae012673d6189369b63b7a03040be2df5ff6fd763",
+      "bytes": 26874
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/skin_colour_transfer_review.py",
+      "sha256": "011c89636f1b1725b54ca3be329138fa19a05d634240081646b578ccbb4174f5",
+      "bytes": 7523
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/vram.py",
+      "sha256": "aa8fa898fae854cf96f5fb8b533343ccc847f413891973e5b5422e1b471e7060",
+      "bytes": 136285
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/workflow_ports.py",
+      "sha256": "dcdbd1c91d1adf3728012dab41d90022c32912cccc08a11a7e50d4fca9ddfd24",
+      "bytes": 12273
+    },
+    {
+      "path": "engine/tests/test_body_face_match_consent_unrun.py",
+      "sha256": "a521ca4f8b274f8ff0e44a904f2c07e199ddc535959ac2d1c6eb8f195e19f093",
+      "bytes": 17973
+    },
+    {
+      "path": "engine/tests/test_body_face_match_support_unrun.py",
+      "sha256": "8d805c2dd86ebb988e23209b2fdcd87f315c3cc850fd9b8661d4ea394b3b642c",
+      "bytes": 15727
+    },
+    {
+      "path": "engine/tests/test_body_skin_evenness_consent_unrun.py",
+      "sha256": "d7667e1574bcc411be2d5373354c7675e9253311617a2c75437312d1fdd3260c",
+      "bytes": 25992
+    },
+    {
+      "path": "engine/tests/test_collarbone_integration_unrun.py",
+      "sha256": "4003251df37bb8e827ed4a6fe12839e9cbbd9b138d0ee1ae69b1b03293896670",
+      "bytes": 4559
+    },
+    {
+      "path": "engine/tests/test_collarbone_layer_unrun.py",
+      "sha256": "473d17fa4e0a2c7cd057d41404deb97faf29ca556275793f7682d1835121104c",
+      "bytes": 7915
+    },
+    {
+      "path": "engine/tests/test_collarbone_native_unrun.py",
+      "sha256": "7303ebaafa64340d8a76976f36fc2d92d8014f87fde45f13896e637697b78868",
+      "bytes": 9686
+    },
+    {
+      "path": "engine/tests/test_collarbone_render_unrun.py",
+      "sha256": "284e7ca6459570475ffd7f88904e62762ec6b61468d8560814fc84b27db4e2bb",
+      "bytes": 21851
+    },
+    {
+      "path": "engine/tests/test_collarbone_review_host_unrun.py",
+      "sha256": "2fb7a2efdf93004c1081e986f4862de260fc93b0fc3e0c74957d602685226659",
+      "bytes": 7162
+    },
+    {
+      "path": "engine/tests/test_collarbone_support_unrun.py",
+      "sha256": "665c1d14d0683fb3b804eca7b9c7334cbc5f45fdfca508aec26c1e1c88830591",
+      "bytes": 12361
+    },
+    {
+      "path": "engine/tests/test_skin_gloss_integration_unrun.py",
+      "sha256": "3dbcb1627019152e7a99411027fa6772293356f6b1c7acc059f8795368f32551",
+      "bytes": 2302
+    },
+    {
+      "path": "packaging/build-collarbone.sh",
+      "sha256": "dcec58a82434e9c239b4c7a40d4f778f7e61e42d2f5911f59002950b65da6b41",
+      "bytes": 671
+    },
+    {
+      "path": "packaging/stage-engine.sh",
+      "sha256": "73c794dd9891d1bb3a5f198ddf3acd39b443af9348df25f9785d8dbc0e0b8354",
+      "bytes": 26771
+    },
+    {
+      "path": "ui/src-tauri/src/people_api.rs",
+      "sha256": "dcbdf18c0d7432b30533d570753f230034422fc3a6200f6decd09c3635afb1ce",
+      "bytes": 7401
+    },
+    {
+      "path": "ui/src/collarbone/ACCEPTANCE_UNRUN.md",
+      "sha256": "a8396ecbf829ad1f75d7fb28cb90e96f56f23cb692e27d5fa19993c670981bbe",
+      "bytes": 4908
+    },
+    {
+      "path": "ui/src/collarbone/ClavicleSourceEditor.tsx",
+      "sha256": "0501e54d396090220dc63f3907b02988ed7f350f2287f9f786070b81d2faf694",
+      "bytes": 12256
+    },
+    {
+      "path": "ui/src/collarbone/CollarboneControl.tsx",
+      "sha256": "a54f5e5d0f49b0da49c110ebb692e661670b38bbab5cdf7ea57c1db13e01fd77",
+      "bytes": 10266
+    },
+    {
+      "path": "ui/src/collarbone/bodyReview.unrun.test.ts",
+      "sha256": "8f86dc019f28667a0951fbaf222804927c1460b34020a0682324ae3fc1bcbe8c",
+      "bytes": 10927
+    },
+    {
+      "path": "ui/src/collarbone/clavicleReview.ts",
+      "sha256": "bfa59eeb9bbea22e222d44933b5e84d87b9863eef61e41ede649a90ad6b3ce9f",
+      "bytes": 7376
+    },
+    {
+      "path": "ui/src/collarbone/clavicleReview.unrun.test.ts",
+      "sha256": "8e62631c6fd21e61637efdf35b74213dfc576a25ab0cb154cd618cdc6ee2b5aa",
+      "bytes": 6646
+    },
+    {
+      "path": "ui/src/collarbone/model.ts",
+      "sha256": "abbed3a74ae42f76223b861ab7ec6bebd265e53dcd30c0a6c7713b7b4db2c4e7",
+      "bytes": 12095
+    },
+    {
+      "path": "ui/src/collarbone/model.unrun.test.ts",
+      "sha256": "92ddf32a32af962ec9a1ec8440ce325f5f82e32f8b64afa4377458135488460a",
+      "bytes": 21169
+    },
+    {
+      "path": "ui/src/collarbone/wiring.unrun.test.ts",
+      "sha256": "4c2276954e1c8d96c67399c98e830be4d8d5f3080d09c76a26137e5e68a64eba",
+      "bytes": 5767
+    },
+    {
+      "path": "ui/src/components/RetouchPanel.tsx",
+      "sha256": "6a7e0eeb9612e3ab2d86157a19ea798bf056d45e828e83ebafe2b38bf5dd7828",
+      "bytes": 85797
+    },
+    {
+      "path": "ui/src/native.ts",
+      "sha256": "51c7c5787c10d35fe2aff317085ff365bf9f73055572077c66af802aa13e9b2f",
+      "bytes": 104867
+    },
+    {
+      "path": "ui/src/people/collarboneCoverage.unrun.test.ts",
+      "sha256": "1d691d5d6951c4578e9ebb94aabe5433a3e2d25c16b8eedea517a4ed8b0f3fe1",
+      "bytes": 6331
+    },
+    {
+      "path": "ui/src/people/model.ts",
+      "sha256": "f0f6ada5861a03975a6ff20941dd592c8ce6c9519f1b5913ec750c11c7b5339d",
+      "bytes": 9590
+    },
+    {
+      "path": "ui/src/people/skinColourCoverage.unrun.test.ts",
+      "sha256": "3f5715af4aaf4c816735a596d55f85e072e8687662a5d00b3d09841c603c0acf",
+      "bytes": 4913
+    },
+    {
+      "path": "ui/src/people/skinFinishCoverage.unrun.test.ts",
+      "sha256": "1eb3856382fa841e511ef7b21a817d50a6fc5be3ebdc453326d867920f4e8211",
+      "bytes": 6673
+    },
+    {
+      "path": "ui/src/people/transferProof.ts",
+      "sha256": "1e24a5fb69d43439799b3751900490a1ad1c16442a8c45ee04b6d9c49bfc2739",
+      "bytes": 22980
+    },
+    {
+      "path": "ui/src/people/transferReview.tsx",
+      "sha256": "78d8fdd4d2986cb35a5c87fbce67634386e5ff0051a7ea8ef671d779a5bb2b00",
+      "bytes": 6895
+    },
+    {
+      "path": "ui/src/presets/presetModel.ts",
+      "sha256": "ca2089fff17bccc66acda92956223a0a1e6b0bbc4ac6e75643093d0065452d3f",
+      "bytes": 7286
+    },
+    {
+      "path": "ui/src/skinColour/SkinBodyPanel.tsx",
+      "sha256": "25505183d2459bdee33df384920992d3ef0c447390efb1189f8a05f624f926f7",
+      "bytes": 24351
+    },
+    {
+      "path": "ui/src/skinColour/bodyReviewModel.ts",
+      "sha256": "7b28ccb617299b9ab71b2e9a2b1e56e202a699c1abf98644de5782cda80dcec3",
+      "bytes": 16586
+    }
+  ],
+  "static_checks": {
+    "python_ast_files": 1271,
+    "changed_json_toml": "stdlib parse only",
+    "relative_ui_imports_existing": 126,
+    "git_diff_check": "clean",
+    "payload_whitespace": "clean",
+    "prior_core_ops_common_geometry_sources_byte_identical": 221,
+    "line_caps": {
+      "ui/src/App.tsx": 2131,
+      "ui/src-tauri/src/main.rs": 2047,
+      "engine/src/lumaretouch_engine/server.py": 6998
+    },
+    "fixture_declarations_in_payload_all_unrun": {
+      "python": {
+        "engine/tests/test_body_face_match_consent_unrun.py": 15,
+        "engine/tests/test_body_face_match_support_unrun.py": 19,
+        "engine/tests/test_body_skin_evenness_consent_unrun.py": 23,
+        "engine/tests/test_collarbone_integration_unrun.py": 11,
+        "engine/tests/test_collarbone_layer_unrun.py": 12,
+        "engine/tests/test_collarbone_native_unrun.py": 8,
+        "engine/tests/test_collarbone_render_unrun.py": 15,
+        "engine/tests/test_collarbone_review_host_unrun.py": 6,
+        "engine/tests/test_collarbone_support_unrun.py": 17,
+        "engine/tests/test_skin_gloss_integration_unrun.py": 4
+      },
+      "rust": {
+        "core/collarbone/tests.rs": 13
+      },
+      "typescript": {
+        "ui/src/collarbone/bodyReview.unrun.test.ts": 7,
+        "ui/src/collarbone/clavicleReview.unrun.test.ts": 12,
+        "ui/src/collarbone/model.unrun.test.ts": 16,
+        "ui/src/collarbone/wiring.unrun.test.ts": 6,
+        "ui/src/people/collarboneCoverage.unrun.test.ts": 7,
+        "ui/src/people/skinColourCoverage.unrun.test.ts": 7,
+        "ui/src/people/skinFinishCoverage.unrun.test.ts": 9
+      }
+    }
+  },
+  "integration_map": {
+    "numeric": [
+      "core/collarbone",
+      "collarbone_native.py",
+      "packaging/build-collarbone.sh",
+      "packaging/stage-engine.sh"
+    ],
+    "owned_support": [
+      "collarbone_state.py",
+      "collarbone_project.py",
+      "collarbone_support.py",
+      "skin_colour_body_support.py",
+      "skin_colour_body_actions.py",
+      "skin_colour_body_host.py"
+    ],
+    "actual_render": [
+      "collarbone_layer.py",
+      "collarbone_composition.py",
+      "people_algorithms.py",
+      "people_effects.py",
+      "people_pipeline.py",
+      "people_render_plan.py",
+      "people_render_runtime.py",
+      "people_engine_runtime.py",
+      "people_owned_inputs.py",
+      "people_export.py",
+      "vram.py"
+    ],
+    "history_and_derived": [
+      "people_project.py",
+      "people_support_assets.py",
+      "people_host.py",
+      "people_host_commands.py",
+      "creative_derived_effects.py",
+      "creative_derived_makeup.py"
+    ],
+    "scalar_transfer": [
+      "collarbone_scope.py",
+      "scope.py",
+      "people_scope.py",
+      "workflow_ports.py",
+      "preset_controller.py",
+      "skin_colour_transfer_review.py",
+      "people_batch_transfer.py"
+    ],
+    "ui": [
+      "ui/src/collarbone",
+      "SkinBodyPanel/bodyReviewModel",
+      "RetouchPanel/native capability",
+      "people model/protocol/transfer review",
+      "presets selection"
+    ],
+    "requirement": [
+      "docs/collarbone/REQUIREMENT-AND-RESEARCH.md",
+      "handbook-traceability exact partial entry",
+      "registry-extensions",
+      "ui-route-inventory"
+    ]
+  },
+  "limitations": [
+    "Official AI 3D clavicle detection and fully automatic feature remain missing. Requirement remains partial; no whole-feature acceptance or new adapter algorithm counts.",
+    "Manual visible anatomy/category/ownership confirmation is mandatory. Existing explicit male/child labels conflict; no appearance-based demographic inference.",
+    "Existing source contrast can reflect folds, tattoos, accessories, coloured light or errors. No physically separated illumination/anatomy or aesthetic quality claim. Flat/unsupported positive candidate refuses; partial admitted bands may remain unchanged.",
+    "Only original/derived opaque SDR working-sRGB RGB; broader alpha/HDR paths remain unsupported, no silent clipping/flattening.",
+    "Generic people-batch transfer validates real full render and target-owned coverage metadata but lacks dedicated per-target before/after image review. Generic derived preset installation stays guarded; explicit owner mapping remains separate.",
+    "CPU/GPU boundary transport, source ROI memory admission and cancellation are source design only, not measured performance or 24MP support guarantees.",
+    "All product imports, test execution, build/compiler/typecheck, model inference/download, numerical/photo/quality/export/project/history/performance acceptance UNRUN."
+  ],
+  "excluded_unrelated_untracked": [
+    "docs/colour-grading/FREEZE.json",
+    "docs/eye-light/FREEZE.json",
+    "docs/iris-makeup/isolated-manifest.json"
+  ],
+  "prohibited_actions_performed": []
+}

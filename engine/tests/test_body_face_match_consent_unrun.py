@@ -100,7 +100,7 @@ def amount(state, face_id):
 
 
 def test_fourth_family_is_explicit_and_existing_defaults_remain():
-    assert S.FAMILIES == FAMILIES
+    assert S.FAMILIES == (*FAMILIES, 'collarbone')
     assert S.family_spec() == ('skin_colour_body_visibility', 'lnx.skin_colour.v1')
     assert S.family_spec(**OPTIONS) == ('body_face_match_visibility', 'lnx.body_face_match.v1')
     assert S.FACE_MATCH_KIND == 'body_face_match_visibility'

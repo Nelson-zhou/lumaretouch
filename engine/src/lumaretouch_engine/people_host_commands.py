@@ -90,10 +90,11 @@ def apply(engine,raw,emit):
     records[request]={'success':False,'digest':digest};state,binding,target=checked(engine,p);asset=binding['asset_sha256']
     records[request]['before_fence']=engine._people_owner().fence
     action=p.get('action');payload=p.get('payload');created=None;batch_id=None
-    if action in ('skin_body_reference','skin_body_preview','skin_finish_body_reference','skin_finish_body_preview','body_skin_evenness_reference','body_skin_evenness_preview','body_face_match_reference','body_face_match_preview'):
+    if action in ('skin_body_reference','skin_body_preview','skin_finish_body_reference','skin_finish_body_preview','body_skin_evenness_reference','body_skin_evenness_preview','collarbone_reference','collarbone_preview','body_face_match_reference','body_face_match_preview'):
         from . import skin_colour_body_host as skin_body
         method=skin_body.reference if action.endswith('_reference') else skin_body.preview
         options={'family':'skin_finish'} if action.startswith('skin_finish_body_') else {}
+        if action.startswith('collarbone_'):options={'family':'collarbone','operation_id':'lnx.collarbone.v1'}
         if action.startswith('body_skin_evenness_'):options={'family':'body_skin_evenness','operation_id':'lnx.body_skin_evenness.v1'}
         if action.startswith('body_face_match_'):options={'family':'body_face_match','operation_id':'lnx.body_face_match.v1'}
         records[request]['payload']=method(engine,state,target,payload,**options)
@@ -162,11 +163,12 @@ def apply(engine,raw,emit):
         # reachable while a requested face is suspended for correction.
         engine._people_sync();frame=None
     else:
-        if action in ('skin_body_confirm','skin_body_detach','skin_finish_body_confirm','skin_finish_body_detach','body_skin_evenness_confirm','body_skin_evenness_detach','body_face_match_confirm','body_face_match_detach'):
+        if action in ('skin_body_confirm','skin_body_detach','skin_finish_body_confirm','skin_finish_body_detach','body_skin_evenness_confirm','body_skin_evenness_detach','collarbone_confirm','collarbone_detach','body_face_match_confirm','body_face_match_detach'):
             from . import skin_colour_body_host as skin_body
             method=skin_body.confirm if action.endswith('_confirm') else skin_body.detach
             options={'mark_started':lambda:records[request].update(side_effects_started=True)} if action.endswith('_confirm') else {}
             if action.startswith('skin_finish_body_'):options['family']='skin_finish'
+            if action.startswith('collarbone_'):options.update(family='collarbone',operation_id='lnx.collarbone.v1')
             if action.startswith('body_skin_evenness_'):options.update(family='body_skin_evenness',operation_id='lnx.body_skin_evenness.v1')
             if action.startswith('body_face_match_'):options.update(family='body_face_match',operation_id='lnx.body_face_match.v1')
             candidate,records[request]['payload']=method(engine,state,target,payload,**options)
@@ -213,7 +215,7 @@ def apply(engine,raw,emit):
                 # A rejected preparation may leave only append-only unused
                 # support bytes. With an unchanged graph fence no pixels/recipe
                 # were published; do not manufacture an uncertain edit lock.
-                if action in ('skin_body_confirm','skin_finish_body_confirm','body_skin_evenness_confirm','body_face_match_confirm') and engine._people_owner().fence==records[request]['before_fence']:
+                if action in ('skin_body_confirm','skin_finish_body_confirm','body_skin_evenness_confirm','collarbone_confirm','body_face_match_confirm') and engine._people_owner().fence==records[request]['before_fence']:
                     records[request]['side_effects_started']=False
                 raise
         if action=='analyse_face':select(engine,engine._people_owner().snapshot(),asset,target)

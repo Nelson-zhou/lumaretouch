@@ -15,6 +15,9 @@ def _state(family):
     if family == 'skin_finish':
         from . import skin_finish_state
         return skin_finish_state
+    if family == 'collarbone':
+        from . import collarbone_state
+        return collarbone_state
     if family == 'body_skin_evenness':
         from . import body_skin_evenness_state
         return body_skin_evenness_state
@@ -30,7 +33,7 @@ def attached(graph, face_ref, *, family='skin_colour'):
     ref = P.check_ref(face_ref); face = graph['faces'].get(ref['face_instance_id'])
     if face is None or P.face_ref(face) != ref or not face['enabled']:
         label = {'skin_colour': 'Skin-colour', 'skin_finish': 'Skin-finish',
-                 'body_skin_evenness': 'Body-skin-evenness', 'body_face_match': 'Body-to-own-face-match'}[family]
+                 'body_skin_evenness': 'Body-skin-evenness', 'body_face_match': 'Body-to-own-face-match', 'collarbone': 'Reviewed-clavicle-light'}[family]
         raise ValueError(f'{label} coverage target is missing, disabled or changed')
     return kind in face['local_assets']
 
@@ -51,9 +54,11 @@ def describe(graph, assets, face_ref, body_bank, analysis, recipe, *, family='sk
     result = {'face_ref': ref, 'scope': 'neutral-no-effect', 'body_review_sha256': None}
     if family == 'body_face_match':
         result['own_face_reference'] = None
+    if family == 'collarbone':
+        result.update(clavicle_category=None,clavicle_sides=[])
     if not state.active(recipe):
         return result
-    if family in ('body_skin_evenness', 'body_face_match') and not has_body:
+    if family in ('body_skin_evenness', 'body_face_match', 'collarbone') and not has_body:
         raise ValueError('Body-skin operation needs its own target-local reviewed body region')
     result['scope'] = 'face-only'
     if has_body:
@@ -65,9 +70,13 @@ def describe(graph, assets, face_ref, body_bank, analysis, recipe, *, family='sk
         if resolved is None:
             raise ValueError('Attached body-skin review was omitted during target resolution')
         record, key = resolved; P.digest(key)
-        result.update(scope=('reviewed-body-own-face' if family == 'body_face_match'
+        result.update(scope=('reviewed-clavicle-only' if family == 'collarbone'
+                             else 'reviewed-body-own-face' if family == 'body_face_match'
                              else 'reviewed-body-only' if family == 'body_skin_evenness'
                              else 'face-and-reviewed-body'), body_review_sha256=key)
+        if family == 'collarbone':
+            anatomy=record['row']['review']['clavicle']
+            result.update(clavicle_category=anatomy['category'],clavicle_sides=[curve['id'] for curve in anatomy['curves']])
         if family == 'body_face_match':
             from .skin_colour_body_support import reference_identity
             # This is identity/provenance only, NOT samples, masks, a cached
@@ -91,7 +100,7 @@ def for_target(engine, row, candidate, payload, *, family='skin_colour'):
     graph = P.check(candidate); refs = payload['target_refs']
     recipes = {ref['face_instance_id']: A.recipes(R.resolve(graph, ref['face_instance_id'], A.defaults()))[state.OP]
                for ref in refs}
-    if family in ('body_skin_evenness', 'body_face_match') and any(state.active(recipes[ref['face_instance_id']])
+    if family in ('body_skin_evenness', 'body_face_match', 'collarbone') and any(state.active(recipes[ref['face_instance_id']])
             and not attached(graph, ref, family=family) for ref in refs):
         raise ValueError('Body-skin operation needs each target to independently review its own body region')
     needs_body = any(attached(graph, ref, family=family) and state.active(recipes[ref['face_instance_id']]) for ref in refs)
@@ -108,7 +117,7 @@ def for_target(engine, row, candidate, payload, *, family='skin_colour'):
                 or snapshot.get('document_id') != payload['target_document']['document_id']
                 or any(ref['asset_sha256'] != snapshot['asset_sha256'] for ref in refs)):
             label = {'skin_colour': 'Skin-colour', 'skin_finish': 'Skin-finish',
-                 'body_skin_evenness': 'Body-skin-evenness', 'body_face_match': 'Body-to-own-face-match'}[family]
+                 'body_skin_evenness': 'Body-skin-evenness', 'body_face_match': 'Body-to-own-face-match', 'collarbone': 'Reviewed-clavicle-light'}[family]
             raise ValueError(f'{label} coverage snapshot differs from the reviewed target')
         assets = snapshot.get('support_assets', {}); analyses = snapshot['analyses']
         # Body ownership is document state, not a portrait-context/source bank.

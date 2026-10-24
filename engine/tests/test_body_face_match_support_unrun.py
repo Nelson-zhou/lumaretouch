@@ -279,6 +279,10 @@ def test_competing_owner_of_every_family_reserves_body_coverage():
         record['row'].update(target=kind, operation_id=operation)
         record['row']['face_link']['face_instance_id'] = other_ref['face_instance_id']
         if family != 'body_face_match':record['row'].pop('face_skin_observation')
+        if family == 'collarbone':
+            record['row']['review']['clavicle'] = {'version':1,'domain':'source-normalized',
+                'category':'female','eligibility_confirmed':True,'visible_anatomy_confirmed':True,
+                'curves':[{'id':'left','width':.03125,'points':[[.4,.55],[.5,.54],[.6,.56]]}]}
         key = SUPPORT.content_digest(SUPPORT.check_record(record, family=family)); assets[key] = record
         other['local_assets'][kind] = {'owner': other_ref, 'kind': kind, 'content_sha256': key}
         state['faces'][other_ref['face_instance_id']] = other

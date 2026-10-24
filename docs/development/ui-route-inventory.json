@@ -1,7 +1,7 @@
 {
   "method": "历史静态路由清单，后续切片仅增补其明确改动的条目，不是当前 RetouchPanel WIRED 的完整重新提取。wired_routes 是本文件列出条目数。其它路由和特殊 UI 分支未完整计入，未列出不直接判缺失，已列出也不算已完成。",
   "families": 39,
-  "wired_routes": 54,
+  "wired_routes": 57,
   "items": [
     {
       "id": "PC-47211",
@@ -57,6 +57,11 @@
           "path": "肤色统一（身体）",
           "ui_route": "body_face_match.amount",
           "status": "partial_reviewed_own_face_chromatic_reference_not_brightness_or_learned_AI; AUTHORED_UNRUN"
+        },
+        {
+          "path": "锁骨增强",
+          "ui_route": "collarbone.amount",
+          "status": "partial_manual_visible_clavicle_source_light_not_AI_3D_or_automatic; AUTHORED_UNRUN"
         }
       ],
       "status": "implementation_and_semantics_require_verification"

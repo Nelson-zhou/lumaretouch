@@ -4,9 +4,10 @@ import type {BodyRef} from '../legShape/model';
 import type {SourcePreview} from '../legShape/sourcePreview';
 import type {MaskObject} from '../localMasks/model';
 import {validOwnFaceReference, validOwnFaceReferenceSupport, validReferenceSourceStage, type OwnFaceReference, type OwnFaceReferenceSupport, type ReferenceSourceStage} from '../bodyFaceMatch/reference';
+import {clavicleReviewError, type ClavicleReview} from '../collarbone/clavicleReview';
 import {matchesSource, previewImage} from '../legShape/sourcePreview';
 
-export type SkinBodyFamily = 'skin_colour' | 'skin_finish' | 'body_skin_evenness' | 'body_face_match';
+export type SkinBodyFamily = 'skin_colour' | 'skin_finish' | 'body_skin_evenness' | 'body_face_match' | 'collarbone';
 export const SKIN_BODY_FAMILIES = {
   skin_colour: {operation: 'lnx.skin_colour.v1', report: 'skin_body', actions: {
     reference: 'skin_body_reference', preview: 'skin_body_preview', confirm: 'skin_body_confirm', detach: 'skin_body_detach',
@@ -17,14 +18,17 @@ export const SKIN_BODY_FAMILIES = {
   body_skin_evenness: {operation: 'lnx.body_skin_evenness.v1', report: 'body_skin_evenness', actions: {
     reference: 'body_skin_evenness_reference', preview: 'body_skin_evenness_preview', confirm: 'body_skin_evenness_confirm', detach: 'body_skin_evenness_detach',
   }},
+  collarbone: {operation: 'lnx.collarbone.v1', report: 'collarbone', actions: {
+    reference: 'collarbone_reference', preview: 'collarbone_preview', confirm: 'collarbone_confirm', detach: 'collarbone_detach',
+  }},
   body_face_match: {operation: 'lnx.body_face_match.v1', report: 'body_face_match', actions: {
     reference: 'body_face_match_reference', preview: 'body_face_match_preview', confirm: 'body_face_match_confirm', detach: 'body_face_match_detach',
   }},
 } as const;
 export type SkinBodyAction = typeof SKIN_BODY_FAMILIES[SkinBodyFamily]['actions'][keyof typeof SKIN_BODY_FAMILIES.skin_colour.actions];
-type SkinBodyIdentity = {family?: SkinBodyFamily; operation_id?: 'lnx.skin_colour.v1' | 'lnx.skin_finish.v1' | 'lnx.body_skin_evenness.v1' | 'lnx.body_face_match.v1'};
+type SkinBodyIdentity = {family?: SkinBodyFamily; operation_id?: 'lnx.skin_colour.v1' | 'lnx.skin_finish.v1' | 'lnx.body_skin_evenness.v1' | 'lnx.body_face_match.v1' | 'lnx.collarbone.v1'};
 export function skinBodyActionFamily(action: PeopleAction['action']): SkinBodyFamily | null {
-  for (const family of ['skin_colour', 'skin_finish', 'body_skin_evenness', 'body_face_match'] as const) {
+  for (const family of ['skin_colour', 'skin_finish', 'body_skin_evenness', 'body_face_match', 'collarbone'] as const) {
     if ((Object.values(SKIN_BODY_FAMILIES[family].actions) as string[]).includes(action)) return family;
   }
   return null;
@@ -40,7 +44,7 @@ export function skinBodyFamilyMatches(value: unknown, family: SkinBodyFamily = '
 export type SkinBodySource = {sha256: string; width: number; height: number};
 export type SkinBodyMask = {version: 1; domain: 'source-normalized'; objects: Extract<MaskObject, {kind: 'brush'}>[]};
 export type SkinBodyChoice = {body_ref: BodyRef; points_sha256: string};
-export type SkinBodyReview = SkinBodyChoice & {recipe: SkinBodyMask; visible: true; unoccluded: true; ownership_confirmed: true};
+export type SkinBodyReview = SkinBodyChoice & {recipe: SkinBodyMask; visible: true; unoccluded: true; ownership_confirmed: true; clavicle?: ClavicleReview};
 export type SkinBodyReport = SkinBodyIdentity & {attached: boolean; face_ref: FaceRef; source: SkinBodySource; needs_review?: boolean; reason?: string | null;
   /** New family only; current retained identity does not prove current render observability. */
   own_face_reference?: OwnFaceReference | null};
@@ -171,11 +175,13 @@ export function renderedSkinImage(value: SkinBodyRendered | null | undefined): s
 }
 export function previewMatches(preview: SkinBodyPreview, reference: SkinBodyReference, review: SkinBodyReview, family: SkinBodyFamily = 'skin_colour', amount?: number): boolean {
   return preview.kind === 'preview' && skinBodyFamilyMatches(preview, family) && skinBodyFamilyMatches(reference, family)
-    && (!['body_skin_evenness', 'body_face_match'].includes(family) || (typeof amount === 'number' && Number.isFinite(amount) && amount > 0 && amount <= 1 && preview.amount === amount))
+    && (!['body_skin_evenness', 'body_face_match', 'collarbone'].includes(family) || (typeof amount === 'number' && Number.isFinite(amount) && amount > 0 && amount <= 1 && preview.amount === amount))
     && (family !== 'body_face_match' || (ownFaceReferenceMatches(reference)
       && preview.reference_source_stage === reference.reference_source_stage
       && bodyReviewKey(preview.own_face_reference) === bodyReviewKey(reference.own_face_reference)
       && bodyReviewKey(preview.reference_support) === bodyReviewKey(reference.reference_support)))
+    && (family === 'collarbone' ? clavicleReviewError(review.clavicle, reference.source) === null
+      : review.clavicle === undefined && preview.review?.clavicle === undefined)
     && token(preview.preview_id) && sameSkinFace(preview.face_ref, reference.face_ref)
     && sameSkinSource(preview.source, reference.source) && preview.runtime_quality_accepted === false
     && bodyReviewKey(preview.review) === bodyReviewKey(review)

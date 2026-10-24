@@ -3255,9 +3255,19 @@
       "source_url": "https://www.pixcakeai.com/guide/32465",
       "source_child_index": 7,
       "title": "锁骨增强",
-      "status": "pending_independent_verification",
-      "implementation": [],
-      "verification": []
+      "status": "partial_manual_source_implementation_unrun_missing_AI_3D_automation",
+      "implementation": [
+        "docs/collarbone/REQUIREMENT-AND-RESEARCH.md",
+        "core/collarbone",
+        "engine/src/lumaretouch_engine/collarbone_layer.py",
+        "ui/src/collarbone"
+      ],
+      "verification": [],
+      "remaining": [
+        "Official AI 3D clavicle detection and automatic anatomy remain missing.",
+        "All runtime, numerical, photographic and release acceptance UNRUN.",
+        "Generic people batch coverage metadata is not per-target visual image review."
+      ]
     },
     {
       "id": "control:PC-32465:9",

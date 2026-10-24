@@ -4,7 +4,7 @@ export * from './transferProof';
 
 export function PeopleTransferEvidence({value}: {value: PeopleTransferReview}) {
   const explicit = value.target_policy === 'explicit_face_map';
-  return <details open={explicit || !!value.skin_colour_coverage || !!value.skin_finish_coverage || !!value.body_skin_evenness_coverage || !!value.body_face_match_coverage}><summary>{explicit ? '仅本次指定配对' : '已确认关联'}：{value.target_refs.length} 张人脸 · {value.parameters.length} 项参数</summary>
+  return <details open={explicit || !!value.skin_colour_coverage || !!value.skin_finish_coverage || !!value.body_skin_evenness_coverage || !!value.body_face_match_coverage || !!value.collarbone_coverage}><summary>{explicit ? '仅本次指定配对' : '已确认关联'}：{value.target_refs.length} 张人脸 · {value.parameters.length} 项参数</summary>
     <p>只替换明确勾选的参数；不复制蒙版、关键点、局部素材或人物关联。</p>
     {value.target_policy === 'explicit_face_map' ? <>
       <p>确认仅授权本次同步，不建立持久人物关联，也不代表系统识别为同一人。</p>
@@ -47,6 +47,16 @@ export function PeopleTransferEvidence({value}: {value: PeopleTransferReview}) {
       </li>)}</ul>
       <p>保留此处理阶段实际输入的亮度，不匹配亮度，不复制 RGB，不追随后续修饰后的脸。每个参考身份来自该目标自己的观察，不是源预设的参考；元数据也不等于照片质量验收。</p>
       <p>预检中被拒绝的目标不会因其他人物已有审核而变为可用；请保留并处理原始拒绝原因。</p>
+    </section>}
+    {value.collarbone_coverage && <section aria-label="目标锁骨现有明暗增强覆盖范围">
+      <p>只同步独立强度；不复制身体蒙版、锁骨曲线、类别确认或人物关联。每个非零目标必须使用自己的身体审核与手工可见锁骨曲线，在目标来源上重新计算已有明暗支持；其他身体功能不能代替。</p>
+      <ul>{value.collarbone_coverage.targets.map(row => <li key={row.face_ref.face_instance_id}>
+        人物 {row.face_ref.face_instance_id}：{row.scope === 'reviewed-clavicle-only'
+          ? `仅此目标独立审核的可见锁骨；用户确认类别：${row.clavicle_category === 'female' ? '女' : '长辈女'}；手工图像侧：${row.clavicle_sides.map(side => side === 'left' ? '图像左侧' : '图像右侧').join('、')}`
+          : '本项强度为零，不产生锁骨增强；不据此声明类别、身体范围或可见锁骨审核有效'}
+      </li>)}</ul>
+      <p>这份披露是目标审核元数据，不是新生成的批量逐图视觉前后对比，也不代表照片质量验收。不能从一个目标的审核推及其他人物；不自动分类、检测锁骨、补全另一侧或进行 AI 3D 重建。</p>
+      <p>预检拒绝须逐目标处理，不能通过复制源图曲线或借用其他人物审核绕过。</p>
     </section>}
     <ul>{value.parameters.map(leaf => <li key={`${leaf.operation_id}:${leaf.parameter_path}`}>
       {operationLabel(leaf.operation_id)} · {leaf.parameter_path}：{String(leaf.value)}</li>)}</ul>

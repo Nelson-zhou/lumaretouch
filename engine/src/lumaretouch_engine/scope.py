@@ -48,6 +48,7 @@ from . import skin_gloss_scope as SKIN_GLOSS
 from . import skin_texture_scope as SKIN_TEXTURE
 from . import skin_evenness_scope as SKIN_EVENNESS
 from . import body_skin_evenness_scope as BODY_SKIN_EVENNESS
+from . import collarbone_scope as COLLARBONE
 from . import body_face_match_scope as BODY_FACE_MATCH
 from . import face_contour_scope as FACE_CONTOUR
 from . import slim_face_scope as SLIM_FACE
@@ -213,6 +214,10 @@ MODULES: dict[str, dict] = {
                      "transferable": True, "cmd": "people", "label": "面部肤色均匀（独立强度，部分非 AI 调整）",
                      "read": SKIN_EVENNESS.params_of, "write": SKIN_EVENNESS.install,
                      "why_not": "仅 0..1 强度；目标以自己的有效来源、真实面部皮肤观察、遮挡与 478 点独立重算参考肤色和色度位移，保留当前亮度；不复制样本、蒙版、像素或色度位移，不转换或清零旧版 skin.broad，不承诺全身或多人肤色匹配、瑕疵识别、模糊或全图色调替代"},
+    COLLARBONE.OP: {"params": ("recipe",), "state_fields": COLLARBONE.FIELDS, "single_face": True,
+                     "transferable": True, "cmd": "people", "label": "锁骨现有光影（人工独立审核，非 AI 3D）",
+                     "read": COLLARBONE.params_of, "write": COLLARBONE.install,
+                     "why_not": "仅强度；目标须独立确认适用类别、可见锁骨手工折线和身体归属，以自己的有效来源重算现有光影；不复制折线、身体范围、蒙版、类别或图像，不生成锁骨结构"},
     BODY_SKIN_EVENNESS.OP: {"params": ("recipe",), "state_fields": BODY_SKIN_EVENNESS.FIELDS, "single_face": True,
                      "transferable": True, "cmd": "people", "label": "身体肤色均匀（独立审核范围，部分非 AI 调整）",
                      "read": BODY_SKIN_EVENNESS.params_of, "write": BODY_SKIN_EVENNESS.install,
@@ -537,6 +542,9 @@ def check_params(op: str, params: dict) -> dict:
         except ValueError as error: raise ScopeError(str(error)) from error
     if op == SKIN_EVENNESS.OP:
         try: return SKIN_EVENNESS.check_params(params)
+        except ValueError as error: raise ScopeError(str(error)) from error
+    if op == COLLARBONE.OP:
+        try: return COLLARBONE.check_params(params)
         except ValueError as error: raise ScopeError(str(error)) from error
     if op == BODY_SKIN_EVENNESS.OP:
         try: return BODY_SKIN_EVENNESS.check_params(params)

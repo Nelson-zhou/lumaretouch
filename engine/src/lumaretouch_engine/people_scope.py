@@ -34,6 +34,7 @@ def replay_preset(engine,state,**kwargs):
     from . import skin_texture_scope as SKIN_TEXTURE
     from . import skin_evenness_scope as SKIN_EVENNESS
     from . import body_skin_evenness_scope as BODY_SKIN_EVENNESS
+    from . import collarbone_scope as COLLARBONE
     from . import body_face_match_scope as BODY_FACE_MATCH
     from . import face_contour_scope as FACE_CONTOUR
     from . import slim_face_scope as SLIM_FACE
@@ -66,6 +67,9 @@ def replay_preset(engine,state,**kwargs):
     evenness_recipe=SKIN_EVENNESS.S.check(state.get(SKIN_EVENNESS.FIELD))
     evenness_requested=state.get(SKIN_EVENNESS.REQUESTED) is True
     if SKIN_EVENNESS.S.active(evenness_recipe):kwargs['strict_local']=True
+    collarbone_recipe=COLLARBONE.S.check(state.get(COLLARBONE.FIELD))
+    collarbone_requested=state.get(COLLARBONE.REQUESTED) is True
+    if COLLARBONE.S.active(collarbone_recipe):kwargs['strict_local']=True
     body_evenness_recipe=BODY_SKIN_EVENNESS.S.check(state.get(BODY_SKIN_EVENNESS.FIELD))
     body_evenness_requested=state.get(BODY_SKIN_EVENNESS.REQUESTED) is True
     if BODY_SKIN_EVENNESS.S.active(body_evenness_recipe):kwargs['strict_local']=True
@@ -116,6 +120,8 @@ def replay_preset(engine,state,**kwargs):
             raise ValueError('皮肤质感预设需要当前明确的规范人物，不能静默丢弃为旧版全图配方')
         if evenness_requested or SKIN_EVENNESS.S.active(evenness_recipe):
             raise ValueError('面部肤色均匀预设需要当前明确的规范人物，不能静默丢弃或转换为旧版磨皮或全图色调配方')
+        if collarbone_requested or COLLARBONE.S.active(collarbone_recipe):
+            raise ValueError('人工锁骨光影预设需要当前明确的规范人物，不能静默丢弃或转换为面部肤色均匀、旧版磨皮或全图色调配方')
         if body_evenness_requested or BODY_SKIN_EVENNESS.S.active(body_evenness_recipe):
             raise ValueError('身体肤色均匀预设需要当前明确的规范人物，不能静默丢弃或转换为面部肤色均匀、旧版磨皮或全图色调配方')
         if body_face_match_requested or BODY_FACE_MATCH.S.active(body_face_match_recipe):
@@ -163,6 +169,7 @@ def replay_preset(engine,state,**kwargs):
     current=SKIN_GLOSS.capture(engine,current)
     current=SKIN_TEXTURE.capture(engine,current)
     current=SKIN_EVENNESS.capture(engine,current)
+    current=COLLARBONE.capture(engine,current)
     current=BODY_SKIN_EVENNESS.capture(engine,current)
     current=BODY_FACE_MATCH.capture(engine,current)
     current=FACE_CONTOUR.capture(engine,current)
@@ -218,6 +225,17 @@ def replay_preset(engine,state,**kwargs):
         if (state.get(SKIN_EVENNESS.TARGET)!=current[SKIN_EVENNESS.TARGET]
                 or SKIN_EVENNESS.owner_identity(state)!=SKIN_EVENNESS.owner_identity(current)):
             raise ValueError('面部肤色均匀预设的文档、人物归属、有效来源或当前人物已变化，请重新选择')
+    collarbone_involved=(COLLARBONE.FIELD in state and
+                           (collarbone_requested or COLLARBONE.S.active(collarbone_recipe)
+                            or collarbone_recipe!=current[COLLARBONE.FIELD]))
+    if collarbone_involved:
+        # The selected target must independently retain clavicle consent.
+        # Re-capture live body/person/source proof before staging amount only;
+        # final strict rendering rebuilds manual/semantic coverage and reference.
+        COLLARBONE.install(dict(current),{'recipe':collarbone_recipe})
+        if (state.get(COLLARBONE.TARGET)!=current[COLLARBONE.TARGET]
+                or COLLARBONE.owner_identity(state)!=COLLARBONE.owner_identity(current)):
+            raise ValueError('人工锁骨光影预设的文档、人物归属、有效来源或当前人物已变化，请重新选择')
     body_evenness_involved=(BODY_SKIN_EVENNESS.FIELD in state and
                            (body_evenness_requested or BODY_SKIN_EVENNESS.S.active(body_evenness_recipe)
                             or body_evenness_recipe!=current[BODY_SKIN_EVENNESS.FIELD]))
@@ -361,6 +379,7 @@ def replay_preset(engine,state,**kwargs):
     if SKIN_GLOSS.FIELD in state:fields[SKIN_GLOSS.OP]=SKIN_GLOSS.FIELD
     if SKIN_TEXTURE.FIELD in state:fields[SKIN_TEXTURE.OP]=SKIN_TEXTURE.FIELD
     if SKIN_EVENNESS.FIELD in state:fields[SKIN_EVENNESS.OP]=SKIN_EVENNESS.FIELD
+    if COLLARBONE.FIELD in state:fields[COLLARBONE.OP]=COLLARBONE.FIELD
     if BODY_SKIN_EVENNESS.FIELD in state:fields[BODY_SKIN_EVENNESS.OP]=BODY_SKIN_EVENNESS.FIELD
     if BODY_FACE_MATCH.FIELD in state:fields[BODY_FACE_MATCH.OP]=BODY_FACE_MATCH.FIELD
     if FACE_CONTOUR.FIELD in state:fields[FACE_CONTOUR.OP]=FACE_CONTOUR.FIELD
@@ -401,6 +420,8 @@ def replay_preset(engine,state,**kwargs):
         raise ValueError('皮肤质感预设的当前人物与唯一可应用目标不一致')
     if evenness_involved and current[SKIN_EVENNESS.TARGET]!=S.face_ref(faces[0]):
         raise ValueError('面部肤色均匀预设的当前人物与唯一可应用目标不一致')
+    if collarbone_involved and current[COLLARBONE.TARGET]!=S.face_ref(faces[0]):
+        raise ValueError('人工锁骨光影预设的当前人物与唯一可应用目标不一致')
     if body_evenness_involved and current[BODY_SKIN_EVENNESS.TARGET]!=S.face_ref(faces[0]):
         raise ValueError('身体肤色均匀预设的当前人物与唯一可应用目标不一致')
     if body_face_match_involved and current[BODY_FACE_MATCH.TARGET]!=S.face_ref(faces[0]):
@@ -458,7 +479,7 @@ def replay_preset(engine,state,**kwargs):
         # All selected portrait layers, including source-measured lip furrows
         # and separately added lip/brow makeup, compose in the complete renderer.
         # Never clear/convert other intent for local success.
-        if any(op in (A.ENHANCE,EYE_LIGHT,BLUSH,LIPSTICK,EYELINER,EYELASH,BROW_MAKEUP,IRIS,SKIN_COLOUR.OP,SKIN_FINISH.OP,SKIN_GLOSS.OP,SKIN_TEXTURE.OP,SKIN_EVENNESS.OP,BODY_SKIN_EVENNESS.OP,BODY_FACE_MATCH.OP,FACE_CONTOUR.OP,SLIM_FACE.OP,FACE_SIZE.OP,LOWER_FACE.OP,MID_FACE.OP,CHIN_SHAPE.OP,CHIN_LENGTH.OP,PHILTRUM.OP,EYE_SYMMETRY.OP,BROW_ENHANCE.OP,LIP_TEXTURE.OP) for op,_,_ in patches):kwargs['strict_local']=True
+        if any(op in (A.ENHANCE,EYE_LIGHT,BLUSH,LIPSTICK,EYELINER,EYELASH,BROW_MAKEUP,IRIS,SKIN_COLOUR.OP,SKIN_FINISH.OP,SKIN_GLOSS.OP,SKIN_TEXTURE.OP,SKIN_EVENNESS.OP,BODY_SKIN_EVENNESS.OP,COLLARBONE.OP,BODY_FACE_MATCH.OP,FACE_CONTOUR.OP,SLIM_FACE.OP,FACE_SIZE.OP,LOWER_FACE.OP,MID_FACE.OP,CHIN_SHAPE.OP,CHIN_LENGTH.OP,PHILTRUM.OP,EYE_SYMMETRY.OP,BROW_ENHANCE.OP,LIP_TEXTURE.OP) for op,_,_ in patches):kwargs['strict_local']=True
         return engine._replay_state(state,**kwargs)
     except Exception:
         before['association_revision']=owner.association_fence

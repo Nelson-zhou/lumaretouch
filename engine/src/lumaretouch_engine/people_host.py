@@ -54,6 +54,7 @@ class PeopleHostMixin:
         cache=(asset,id(pc),owner.fence)
         if self._people_analysis_key==cache:return source,state,self._people_analyses.get(asset,{})
         self._body_skin_evenness_reference=None;self._body_skin_evenness_preview=None
+        self._collarbone_reference=None;self._collarbone_preview=None
         self._body_face_match_reference=None;self._body_face_match_preview=None
         initialize=not any(f['asset_sha256']==asset for f in state['faces'].values()) and asset not in state['analysis_runs']
         candidate,analyses,refusals=B.bind(state,asset,pc,source_dimensions=(source['width'],source['height']),initialize=initialize)
@@ -160,6 +161,7 @@ class PeopleHostMixin:
             from .skin_colour_body_host import report as skin_body_report
             result['skin_body']=skin_body_report(self,state,source,self._people_cursors.get(asset))
             result['skin_finish_body']=skin_body_report(self,state,source,self._people_cursors.get(asset),family='skin_finish')
+            result['collarbone']=skin_body_report(self,state,source,self._people_cursors.get(asset),family='collarbone',operation_id='lnx.collarbone.v1')
             result['body_skin_evenness']=skin_body_report(self,state,source,self._people_cursors.get(asset),family='body_skin_evenness',operation_id='lnx.body_skin_evenness.v1')
             result['body_face_match']=skin_body_report(self,state,source,self._people_cursors.get(asset),family='body_face_match',operation_id='lnx.body_face_match.v1')
             from .eye_light_host import report as eye_light_report
@@ -241,6 +243,7 @@ class PeopleHostMixin:
         from .people_cross_owner_project import validate_project
         validate_project(project)
         self._body_skin_evenness_reference=None;self._body_skin_evenness_preview=None
+        self._collarbone_reference=None;self._collarbone_preview=None
         self._body_face_match_reference=None;self._body_face_match_preview=None
         HAIR.load(self,project)
         self._people_graph_owner=PeopleGraphOwner(project.get('people_graph'))

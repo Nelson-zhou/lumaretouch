@@ -70,7 +70,7 @@ def verify_analysis(face, analysis, shape):
 
 
 def prepare(state, asset_sha256, source, analyses, *, byte_budget, document_id=None, max_faces=32, recovery_assets=None, repaired=None,
-            creative_source=None, creative_repair_evidence=None, hair_assets=None, hair_evidence=None, hair_source_path=None, force_hair_prompted=False, eye_light_assets=None, blush_makeup_assets=None, lipstick_assets=None,eyeliner_assets=None,eyelash_assets=None,brow_makeup_assets=None,iris_makeup_assets=None,skin_colour_body_assets=None,skin_finish_body_assets=None,body_skin_evenness_assets=None,body_face_match_assets=None,body_bank=None):
+            creative_source=None, creative_repair_evidence=None, hair_assets=None, hair_evidence=None, hair_source_path=None, force_hair_prompted=False, eye_light_assets=None, blush_makeup_assets=None, lipstick_assets=None,eyeliner_assets=None,eyelash_assets=None,brow_makeup_assets=None,iris_makeup_assets=None,skin_colour_body_assets=None,skin_finish_body_assets=None,body_skin_evenness_assets=None,body_face_match_assets=None,collarbone_assets=None,body_bank=None):
     state = S.check(state)
     from .people_cross_owner import validate_owner
     validate_owner(state,asset_sha256,document_id)
@@ -126,6 +126,10 @@ def prepare(state, asset_sha256, source, analyses, *, byte_budget, document_id=N
                     and row['operation_id']==A.BODY_FACE_MATCH.OP):
                 from .body_face_match_project import validate_leaf as validate_body_face_match_leaf
                 validate_body_face_match_leaf(row['parameter_path'], row['value'])
+            if (row['scope']=='all_people' and row['target_id']==asset_sha256
+                    and row['operation_id']==A.COLLARBONE.OP):
+                from .collarbone_project import validate_leaf as validate_collarbone_leaf
+                validate_collarbone_leaf(row['parameter_path'], row['value'])
     if not any(face['asset_sha256']==asset_sha256 for face in state['faces'].values()) and any(
             row['scope']=='all_people' and row['target_id']==asset_sha256
             and row['value']!=A.defaults().get(row['operation_id'],{}).get(row['parameter_path'])
@@ -157,10 +161,10 @@ def prepare(state, asset_sha256, source, analyses, *, byte_budget, document_id=N
             face = state['faces'][key]; analysis = analyses[key]
             for asset in face['local_assets'].values():
                 stage = asset['kind']
-                if stage in ('skin_colour_body_visibility','skin_finish_body_visibility','body_skin_evenness_visibility','body_face_match_visibility'):
+                if stage in ('skin_colour_body_visibility','skin_finish_body_visibility','body_skin_evenness_visibility','body_face_match_visibility','collarbone_visibility'):
                     # Separate operation-owned support, never generic recovery.
                     # Resolve each only when its own recipe is active below;
-                    # dormant review cannot prevent disabling either recipe.
+                    # dormant review cannot prevent disabling its own recipe.
                     continue
                 if stage=='iris_makeup_visibility':
                     from .iris_makeup_support import resolve as resolve_iris_support
@@ -256,7 +260,7 @@ def prepare(state, asset_sha256, source, analyses, *, byte_budget, document_id=N
                             seen_arrays.add(id(array)); analysis_bytes += array.nbytes
                 prior_bytes = sum(f.resident_bytes() for f in fields) + field.resident_bytes()
                 prior_bytes += sum(a.nbytes for record in (*effects,*local)
-                                   for a in (record.delta,record.weights,record.chroma_shift) if a is not None)
+                                   for a in (record.delta,record.weights,record.chroma_shift,record.log_gain) if a is not None)
                 local.extend(prepare_skin_colour(entry['face_ref'], analysis, others, effect_source,
                     values[A.SKIN_COLOUR.OP], byte_budget=byte_budget-analysis_bytes-prior_bytes,
                     protected_boxes=protected_boxes,people_state=state,
@@ -283,7 +287,7 @@ def prepare(state, asset_sha256, source, analyses, *, byte_budget, document_id=N
                             seen.add(id(array)); owned += array.nbytes
                 owned += sum(f.resident_bytes() for f in fields) + field.resident_bytes()
                 owned += sum(a.nbytes for r in (*effects, *local)
-                             for a in (r.delta, r.weights, r.chroma_shift) if a is not None)
+                             for a in (r.delta, r.weights, r.chroma_shift, r.log_gain) if a is not None)
                 local.extend(prepare_skin_evenness(entry['face_ref'], analysis, effect_source,
                     values[A.SKIN_EVENNESS.OP], byte_budget=byte_budget-owned,
                     protected_boxes=evenness_neighbors))
@@ -296,7 +300,7 @@ def prepare(state, asset_sha256, source, analyses, *, byte_budget, document_id=N
                             seen.add(id(array)); owned += array.nbytes
                 owned += sum(f.resident_bytes() for f in fields) + field.resident_bytes()
                 owned += sum(a.nbytes for r in (*effects, *local)
-                             for a in (r.delta, r.weights, r.chroma_shift) if a is not None)
+                             for a in (r.delta, r.weights, r.chroma_shift, r.log_gain) if a is not None)
                 local.extend(prepare_body_evenness(entry['face_ref'], analysis, effect_source,
                     values[A.BODY_SKIN_EVENNESS.OP], people_state=state,
                     body_assets=body_skin_evenness_assets or {}, body_bank=body_bank,
@@ -310,10 +314,24 @@ def prepare(state, asset_sha256, source, analyses, *, byte_budget, document_id=N
                             seen.add(id(array)); owned += array.nbytes
                 owned += sum(f.resident_bytes() for f in fields) + field.resident_bytes()
                 owned += sum(a.nbytes for r in (*effects, *local)
-                             for a in (r.delta, r.weights, r.chroma_shift) if a is not None)
+                             for a in (r.delta, r.weights, r.chroma_shift, r.log_gain) if a is not None)
                 local.extend(prepare_body_face_match(entry['face_ref'], analysis, effect_source,
                     values[A.BODY_FACE_MATCH.OP], people_state=state,
                     body_assets=body_face_match_assets or {}, body_bank=body_bank,
+                    byte_budget=byte_budget-owned))
+            if A.COLLARBONE.active(values[A.COLLARBONE.OP]):
+                from .collarbone_layer import prepare as prepare_collarbone
+                seen = set(); owned = 0
+                for row in analyses.values():
+                    for array in row.values():
+                        if isinstance(array, np.ndarray) and id(array) not in seen:
+                            seen.add(id(array)); owned += array.nbytes
+                owned += sum(f.resident_bytes() for f in fields) + field.resident_bytes()
+                owned += sum(a.nbytes for r in (*effects, *local)
+                             for a in (r.delta, r.weights, r.chroma_shift, r.log_gain) if a is not None)
+                local.extend(prepare_collarbone(entry['face_ref'], analysis, effect_source,
+                    values[A.COLLARBONE.OP], people_state=state,
+                    body_assets=collarbone_assets or {}, body_bank=body_bank,
                     byte_budget=byte_budget-owned))
             if A.LIP_TEXTURE.active(values[A.LIP_TEXTURE.OP]):
                 from .lip_texture_layer import prepare as prepare_lip_texture
@@ -346,7 +364,7 @@ def prepare(state, asset_sha256, source, analyses, *, byte_budget, document_id=N
                         record.weights[2] *= mouth.teeth_support[y:y+rh,x:x+rw]
                         record.weights.setflags(write=False)
             resident = sum(f.resident_bytes() for f in fields)+field.resident_bytes()
-            resident += sum(a.nbytes for record in (*effects,*local) for a in (record.delta,record.weights,record.chroma_shift) if a is not None)
+            resident += sum(a.nbytes for record in (*effects,*local) for a in (record.delta,record.weights,record.chroma_shift,record.log_gain) if a is not None)
             if resident+h*w*256+128*1024*1024 > byte_budget: raise ValueError('Accumulated portrait fields exceed memory budget')
             fields.append(field); effects.extend(local)
             facts[key] = {record.stage:record.facts for record in local}
@@ -386,7 +404,7 @@ def prepare(state, asset_sha256, source, analyses, *, byte_budget, document_id=N
 
 def retained_bytes(prepared,*,include_geometry=True):
     total=sum(field.resident_bytes() for field in (*prepared.face_fields,*prepared.body_fields))
-    total+=sum(array.nbytes for record in prepared.effects for array in (record.delta,record.weights,record.chroma_shift) if array is not None)
+    total+=sum(array.nbytes for record in prepared.effects for array in (record.delta,record.weights,record.chroma_shift,record.log_gain) if array is not None)
     total+=sum(record['weight'].nbytes for record in prepared.recovery.values())
     if include_geometry:total+=prepared.geometry.delta.nbytes+prepared.geometry.owner.nbytes
     return total

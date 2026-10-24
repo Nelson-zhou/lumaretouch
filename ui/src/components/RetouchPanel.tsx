@@ -44,6 +44,7 @@ import {SkinTextureControl} from '../skinTexture/SkinTextureControl';
 import {LipTextureControl} from '../lipTexture/LipTextureControl';
 import {SkinEvennessControl} from '../skinEvenness/SkinEvennessControl';
 import {BodySkinEvennessControl} from '../bodySkinEvenness/BodySkinEvennessControl';
+import {CollarboneControl} from '../collarbone/CollarboneControl';
 import {BodyFaceMatchControl} from '../bodyFaceMatch/BodyFaceMatchControl';
 import {FaceContourControl} from '../faceContour/FaceContourControl';
 import {SlimFaceControl} from '../slimFace/SlimFaceControl';
@@ -386,6 +387,7 @@ const WIRED: Record<string, string> = {
   "PC-32465|质感磨皮": "skin.detail",
   "PC-32465|AI肤色统一（脸部）": "skin_evenness.amount",
   "PC-32465|AI肤色统一（身体）": "body_skin_evenness.amount",
+  "PC-32465|锁骨增强": "collarbone.amount",
   "PC-32465|肤色统一（身体）": "body_face_match.amount",
   "PC-32465|水润磨皮-脸部/身体": "skin.radius",
   "PC-32465|肤色色温": "skin_colour.temperature",
@@ -814,6 +816,12 @@ export default function RetouchPanel(props: RetouchProps) {
       }
       case "body_skin_evenness.amount":
         return <BodySkinEvennessControl key={leaf.path}
+          people={props.people} capability={status?.ready_caps}
+          blocked={dim || props.hairBusy || !!props.whiteBalanceBusy || portraitRequestsBusy()
+            || !!status?.edit_queue?.in_flight || !!status?.edit_queue?.pending || !!status?.edit_queue?.closed}
+          faceOk={props.faceOk} faceWhy={props.faceWhy} note={props.note} Slider={Slider}/>;
+      case "collarbone.amount":
+        return <CollarboneControl key={leaf.path}
           people={props.people} capability={status?.ready_caps}
           blocked={dim || props.hairBusy || !!props.whiteBalanceBusy || portraitRequestsBusy()
             || !!status?.edit_queue?.in_flight || !!status?.edit_queue?.pending || !!status?.edit_queue?.closed}

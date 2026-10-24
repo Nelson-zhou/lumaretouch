@@ -19,7 +19,8 @@ def _family(family,operation_id):
     # none borrows another family's review, receipt or support descriptor.
     options={} if family=='skin_colour' else {'family':family,'operation_id':operation}
     prefix={'skin_colour':'_skin_body','skin_finish':'_skin_finish_body',
-            'body_skin_evenness':'_body_skin_evenness','body_face_match':'_body_face_match'}[family]
+            'body_skin_evenness':'_body_skin_evenness','body_face_match':'_body_face_match',
+            'collarbone':'_collarbone'}[family]
     return kind,operation,options,prefix+'_reference',prefix+'_preview'
 
 
@@ -59,7 +60,7 @@ def _capture(engine,state,target,*,family='skin_colour',operation_id=None):
     if graph!=state:raise ValueError('Body skin owner changed during capture')
     bank=engine._body_bank()
     reference_proof={}
-    if family=='body_face_match':
+    if family in ('body_face_match','collarbone'):
         from hashlib import sha256
         pixels,stage,_=_reference_source(engine,source)
         reference_proof={'reference_source_stage':stage,'reference_source_shape':list(pixels.shape),
@@ -179,7 +180,7 @@ def preview(engine,state,target,payload,*,family='skin_colour',operation_id=None
         raise ValueError('Read the current body skin source reference again')
     setattr(engine,preview_key,None)
     candidate,assets=SUPPORT.retain(state,engine._people_support,ref,bank,analysis,payload['review'],**options)
-    if family in ('body_skin_evenness','body_face_match'):
+    if family in ('body_skin_evenness','body_face_match','collarbone'):
         # First use must not persist an unsupported active body-only amount.
         # The explicit local amount and support are one private comparison;
         # confirmation publishes their exact face-scoped candidate together.
@@ -192,14 +193,17 @@ def preview(engine,state,target,payload,*,family='skin_colour',operation_id=None
         from .skin_finish_state import OP, active
     elif family=='body_skin_evenness':
         from .body_skin_evenness_state import OP, active
-    else:
+    elif family=='body_face_match':
         from .body_face_match_state import OP, active
+    else:
+        from .collarbone_state import OP, active
     from .people_resolver import resolve
     from .people_algorithms import defaults,recipes
     if not active(recipes(resolve(candidate,ref['face_instance_id'],defaults()))[OP]):
         label={'skin_colour':'skin-colour','skin_finish':'skin-finish',
-               'body_skin_evenness':'body-skin-evenness','body_face_match':'body/own-face-matching'}[family]
-        suffix=' region' if family in ('body_skin_evenness','body_face_match') else ' extension'
+               'body_skin_evenness':'body-skin-evenness','body_face_match':'body/own-face-matching',
+               'collarbone':'reviewed-collarbone-contrast'}[family]
+        suffix=' region' if family in ('body_skin_evenness','body_face_match','collarbone') else ' extension'
         raise ValueError('Set a nonzero '+label+' amount before reviewing its visible body'+suffix)
     staged=deepcopy(context);staged['people_graph']=candidate;staged['people_support_assets']=assets
     from .full_candidate_render import render
@@ -228,7 +232,7 @@ def preview(engine,state,target,payload,*,family='skin_colour',operation_id=None
     if _capture(engine,state,target,**options)[0]!=fence:raise ValueError('Body skin review changed during full rendering')
     preview_id=uuid.uuid4().hex
     from .optics_candidate_identity import fingerprint
-    candidate_amount={'amount':float(payload['amount'])} if family in ('body_skin_evenness','body_face_match') else {}
+    candidate_amount={'amount':float(payload['amount'])} if family in ('body_skin_evenness','body_face_match','collarbone') else {}
     result={'kind':'preview','preview_id':preview_id,'source':source,'face_ref':ref,'before':before,'after':after,
             'overlay':overlay,'review':deepcopy(payload['review']),'runtime_quality_accepted':False,
             **tags,**candidate_amount,**reference_details}
@@ -247,7 +251,7 @@ def confirm(engine,state,target,payload,*,mark_started=lambda:None,family='skin_
             or not _matches_family(pending,family,operation)):
         raise ValueError('Body skin candidate is missing or changed; render a new comparison')
     candidate,assets=SUPPORT.retain(state,engine._people_support,ref,bank,analysis,pending['review'],**options)
-    if family in ('body_skin_evenness','body_face_match'):
+    if family in ('body_skin_evenness','body_face_match','collarbone'):
         candidate=P.set_override(candidate,'face',ref['face_instance_id'],operation,'/amount',pending['amount'])
     from .people_support_assets import check_store
     check_store(assets)
@@ -264,11 +268,13 @@ def confirm(engine,state,target,payload,*,mark_started=lambda:None,family='skin_
 def detach(engine,state,target,payload,*,family='skin_colour',operation_id=None):
     _,operation,options,reference_key,preview_key=_family(family,operation_id)
     check_action(action_name('detach',family=family),payload,target,**options);_,ref=selected(engine,state,target)
-    if family in ('body_skin_evenness','body_face_match'):
+    if family in ('body_skin_evenness','body_face_match','collarbone'):
         if family=='body_skin_evenness':
             from .body_skin_evenness_state import active
-        else:
+        elif family=='body_face_match':
             from .body_face_match_state import active
+        else:
+            from .collarbone_state import active
         from .people_resolver import resolve
         from .people_algorithms import defaults,recipes
         if active(recipes(resolve(state,ref['face_instance_id'],defaults()))[operation]):

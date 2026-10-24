@@ -44,6 +44,11 @@ def fastpath_blocker(snapshot):
             from .body_face_match_project import validate_leaf as validate_body_face_match_leaf
             try:validate_body_face_match_leaf(row['parameter_path'],row['value'])
             except ValueError:return True
+        if (row['scope']=='all_people' and row['target_id']==asset
+                and row['operation_id']==A.COLLARBONE.OP):
+            from .collarbone_project import validate_leaf as validate_collarbone_leaf
+            try:validate_collarbone_leaf(row['parameter_path'],row['value'])
+            except ValueError:return True
     defaults=A.defaults();specs=A.specifications()
     faces=[face for face in state['faces'].values() if face['asset_sha256']==asset and face['enabled']]
     if not faces and any(row['scope']=='all_people' and row['target_id']==asset and row['value']!=defaults.get(row['operation_id'],{}).get(row['parameter_path']) for row in state['overrides']):return True

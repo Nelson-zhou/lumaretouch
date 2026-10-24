@@ -518,7 +518,7 @@ class PresetController:
 
     def save(self, p):
         requested = p.get("module_scope")
-        ops = SC.check_scope([op for op in SC.transferable_ops() if op not in (OA.OP,RC.OP,SC.SPILL_REMOVAL.OP,SC.TORSO_LENGTH.OP,SC.WAIST_LENGTH.OP,SC.HEAD_SIZE.OP)] if requested is None else requested)
+        ops = SC.check_scope([op for op in SC.transferable_ops() if op not in (OA.OP,RC.OP,SC.SPILL_REMOVAL.OP,SC.TORSO_LENGTH.OP,SC.WAIST_LENGTH.OP,SC.HEAD_SIZE.OP,SC.COLLARBONE.OP)] if requested is None else requested)
         state = self.ports.capture()
         if SOURCE.record(state) is not None and set(ops) - SC.DERIVED_PARAMETER_OPS:
             raise SC.ScopeError('合成来源只能通过通用预设保存明确选择的全局参数模块')

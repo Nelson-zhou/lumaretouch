@@ -32,7 +32,7 @@ def test_gloss_does_not_add_body_authority_or_a_second_history_owner():
                     if isinstance(node, ast.Assign)
                     and any(isinstance(target, ast.Name) and target.id == 'FAMILIES'
                             for target in node.targets))
-    assert families == ('skin_colour', 'skin_finish', 'body_skin_evenness', 'body_face_match')
+    assert families == ('skin_colour', 'skin_finish', 'body_skin_evenness', 'body_face_match', 'collarbone')
     assert 'skin_gloss' not in families
     assert "LocalEffect(ref, 'skin_gloss'" not in (root / 'skin_colour_people.py').read_text()
 

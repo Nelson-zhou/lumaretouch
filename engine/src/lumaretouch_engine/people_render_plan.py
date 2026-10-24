@@ -12,16 +12,17 @@ OVERLAP_POLICY = 'stable_instance_priority_partition'
 
 
 def _assets_require_analysis(face, resolved):
-    """Only exact dormant body chromatic families may await fresh analysis.
+    """Only exact dormant reviewed body-only families may await fresh analysis.
 
     Every other asset, malformed leaf or ambiguous recipe retains its checked
     requirement. Project/descriptor ownership and recipe validation still apply.
-    Two independently retained neutral reviews must not strand each other's reset.
+    Independently retained neutral reviews must not strand each other's reset.
     """
     assets = face['local_assets']
     if not assets: return False
-    from . import body_skin_evenness_state as EVENNESS, body_face_match_state as MATCH
-    families = {'body_skin_evenness_visibility': EVENNESS, 'body_face_match_visibility': MATCH}
+    from . import body_skin_evenness_state as EVENNESS, body_face_match_state as MATCH, collarbone_state as COLLARBONE
+    families = {'body_skin_evenness_visibility': EVENNESS, 'body_face_match_visibility': MATCH,
+                'collarbone_visibility': COLLARBONE}
     if set(assets) - set(families): return True
     from .people_resolver import materialize
     for kind, asset in assets.items():

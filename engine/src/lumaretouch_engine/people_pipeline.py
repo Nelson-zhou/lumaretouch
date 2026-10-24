@@ -1,6 +1,6 @@
 """Preview/tile adapter preserving the established portrait stage order.
 
-Host calls source_effect for chroma/skin/wrinkle/lip before geometry, warp once for RGB and
+Host calls source_effect for chroma/clavicle/skin/wrinkle/lip before geometry, warp once for RGB and
 all source masks, then post_effects for eye/teeth and eye-detail. Prepared full
 source layers are cropped into tile halos, NEVER re-solved per export tile.
 """
@@ -96,9 +96,14 @@ def _merge_chroma(pipe, stage):
 
 def source_effect(pipe,stage,pixels):
     import torch
-    if stage not in ('body_face_match','body_skin_evenness','skin_evenness','skin_colour','facial_wrinkles','lip_texture','lip_makeup','hair_colour','eye_light','blush_makeup','lipstick','eyeliner','eyelash','brow_enhance','brow_makeup','iris_makeup'):raise ValueError('This effect belongs after common geometry')
-    if stage in ('body_face_match', 'body_skin_evenness', 'skin_evenness', 'brow_enhance', 'lip_texture') and not any(r.stage == stage for r in pipe.people_prepared.effects):
+    if stage not in ('body_face_match','body_skin_evenness','collarbone','skin_evenness','skin_colour','facial_wrinkles','lip_texture','lip_makeup','hair_colour','eye_light','blush_makeup','lipstick','eyeliner','eyelash','brow_enhance','brow_makeup','iris_makeup'):raise ValueError('This effect belongs after common geometry')
+    if stage in ('body_face_match', 'body_skin_evenness', 'collarbone', 'skin_evenness', 'brow_enhance', 'lip_texture') and not any(r.stage == stage for r in pipe.people_prepared.effects):
         return pixels  # Exact neutral: no new full-frame scratch or native work.
+    if stage == 'collarbone':
+        from .collarbone_composition import apply_records_t
+        return apply_records_t(pixels, pipe.people_prepared.effects,
+            pipe.people_prepared.recovery, source_shape=pipe.people_prepared.geometry.delta.shape[1:3],
+            origin=pipe.people_origin)
     if stage in ('skin_evenness', 'body_skin_evenness', 'body_face_match'):
         from .skin_evenness_composition import apply_t
         return apply_t(pixels, _merge_chroma(pipe, stage))
