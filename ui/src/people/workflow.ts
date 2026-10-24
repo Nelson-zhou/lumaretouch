@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 import {bindingKey, type ParameterPatch, type PeopleAction, type PeopleMailbox, type PeopleView} from './model';
+import {skinBodyReceiptCurrent, type SkinBodyResult} from '../skinColour/bodyReviewModel';
 
-type View = {pending: boolean; pendingAction: PeopleAction['action'] | null; uncertain: boolean; message: string};
+type View = {pending: boolean; pendingAction: PeopleAction['action'] | null; uncertain: boolean; message: string; lastBodyResult: SkinBodyResult | null};
 type Ports = {
   send: (command: PeopleAction) => Promise<unknown>;
   read: (requestId: string) => Promise<PeopleMailbox>;
@@ -13,7 +14,7 @@ export function createPeopleWorkflow(ports: Ports) {
   let pending: PeopleAction | null = null, checking: Promise<void> | null = null;
   let queued: {key: string; patches: Map<string, ParameterPatch>} | null = null;
   let waitFor: {key: string; revision: number; documentRevision: number} | null = null;
-  let view: View = {pending: false, pendingAction: null, uncertain: false, message: ''};
+  let view: View = {pending: false, pendingAction: null, uncertain: false, message: '', lastBodyResult: null};
   const listeners = new Set<() => void>();
   const publish = (patch: Partial<View>) => {view = {...view, ...patch}; listeners.forEach(listener => listener());};
   const targetKey = (value: PeopleView) => `${bindingKey(value.binding)}:${value.association_revision}:${JSON.stringify(value.editing_target)}`;
@@ -61,6 +62,8 @@ export function createPeopleWorkflow(ports: Ports) {
           try {await bounded(ports.refresh(), 10000);} catch {refreshError = '修改结果已确认，但照片状态刷新失败。请刷新查看，勿重复提交。';}
           pending = null;
           publish({pending: !!queued, pendingAction: queued ? 'patch' : null, uncertain: false,
+            lastBodyResult: skinBodyReceiptCurrent(command, result, current)
+              ? {command, result} : null,
             message: !result.success ? (result.error ?? '人物修改被拒绝，未重试。')
               : refreshError || (owns(command) ? '' : '原照片请求已确认，未将编辑范围或参数套用到当前照片。')});
           if (!result.success) throw new ConfirmedFailure(result.error ?? '人物修改被拒绝。');
@@ -83,7 +86,7 @@ export function createPeopleWorkflow(ports: Ports) {
     if (pending || queued) throw Error('上一项人物修改尚未确认，请先查询结果。');
     if (!enabled || !matches(command)) throw Error('照片或人物状态已变化，请等待刷新后再修改。');
     pending = command;
-    publish({pending: true, pendingAction: command.action, uncertain: false, message: '正在提交人物修改，等待引擎确认。'});
+    publish({pending: true, pendingAction: command.action, uncertain: false, lastBodyResult: null, message: '正在提交人物修改，等待引擎确认。'});
     try {await bounded(ports.send(command), 10000);}
     catch (error) {publish({uncertain: true, message: `${String(error)}。正在查询原请求，不重发修改。`});}
     await check();
@@ -108,8 +111,10 @@ export function createPeopleWorkflow(ports: Ports) {
     update(value: PeopleView | null, canEdit: boolean) {
       const changed = !!current && (!value || targetKey(current) !== targetKey(value));
       current = value; enabled = canEdit;
+      if (view.lastBodyResult && !skinBodyReceiptCurrent(view.lastBodyResult.command, view.lastBodyResult.result, value)) publish({lastBodyResult: null});
       if (changed) {
         queued = null; waitFor = null;
+        if (view.lastBodyResult) publish({lastBodyResult: null});
         if (!pending) publish({pending: false, pendingAction: null, message: '', uncertain: false});
       }
       flush();

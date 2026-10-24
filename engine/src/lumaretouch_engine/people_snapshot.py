@@ -4,6 +4,7 @@ import numpy as np
 from . import people_state as S
 from .people_render_runtime import verify_analysis
 from .skin_colour_support import check_analysis_fields
+from .body_skin_semantics import check_analysis_fields as check_body_fields
 
 
 def capture(state,asset_sha256,analyses):
@@ -15,13 +16,14 @@ def capture(state,asset_sha256,analyses):
         raw=analyses.get(key)
         if raw is None:continue # Render plan reports missing evidence; never substitute.
         check_analysis_fields(raw)
-        names=('landmarks','excluded','skin') + (('face_skin',) if 'face_skin' in raw else ())
+        check_body_fields(raw)
+        names=('landmarks','excluded','skin') + tuple(name for name in ('face_skin','body_skin') if name in raw)
         arrays={name:None if raw[name] is None else np.array(raw[name],copy=True) for name in names}
         for a in arrays.values():
             if a is not None:a.setflags(write=False)
         copied[key]={'face_ref':S.check_ref(raw['face_ref']),'evidence':deepcopy(raw['evidence']),**arrays}
-        if 'face_skin_observation' in raw:
-            copied[key]['face_skin_observation']=deepcopy(raw['face_skin_observation'])
+        for name in ('face_skin_observation','body_skin_observation'):
+            if name in raw:copied[key][name]=deepcopy(raw[name])
     return {'state':state,'asset_sha256':asset_sha256,'analyses':copied}
 
 
@@ -38,7 +40,7 @@ def _admit_dimensions(snapshot, shape, byte_budget):
         raise ValueError('People semantic resampling needs a nonnegative remaining byte budget')
     h,w=shape;retained=0;scratch=0
     for raw in snapshot['analyses'].values():
-        for name in ('excluded','skin','face_skin'):
+        for name in ('excluded','skin','face_skin','body_skin'):
             value=raw.get(name)
             if value is None:continue
             if type(value) is not np.ndarray or value.ndim!=2 or not value.size or value.dtype.kind not in 'uif':
@@ -59,7 +61,7 @@ def at_dimensions(snapshot,shape,*,byte_budget=None):
 
     Geometry and every source-derived effect are rebuilt at requested dimensions.
     Neither a proxy displacement nor a proxy corrected RGB image is enlarged.
-    Optional face-skin weights keep their original producer-grid observation;
+    Optional face/body-skin weights keep their original producer-grid observation;
     resampling does not claim new full-resolution semantic edge information.
     """
     state=S.check(snapshot['state']);asset=snapshot['asset_sha256'];S.digest(asset)
@@ -71,8 +73,9 @@ def at_dimensions(snapshot,shape,*,byte_budget=None):
         face=state['faces'].get(key)
         if face is None or face['asset_sha256']!=asset:raise ValueError('Snapshot contains another source face')
         check_analysis_fields(raw)
+        check_body_fields(raw)
         masks={}
-        names=('excluded','skin') + (('face_skin',) if 'face_skin' in raw else ())
+        names=('excluded','skin') + tuple(name for name in ('face_skin','body_skin') if name in raw)
         for name in names:
             value=raw[name]
             if value is not None:
@@ -84,7 +87,7 @@ def at_dimensions(snapshot,shape,*,byte_budget=None):
                 value=np.array(value,dtype=np.float32,copy=True);value.setflags(write=False)
             masks[name]=value
         row={**raw,**masks}
-        if 'face_skin_observation' in raw:
-            row['face_skin_observation']=deepcopy(raw['face_skin_observation'])
+        for name in ('face_skin_observation','body_skin_observation'):
+            if name in raw:row[name]=deepcopy(raw[name])
         verify_analysis(face,row,(h,w));out[key]=row
     return state,asset,out

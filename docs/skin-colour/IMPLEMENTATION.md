@@ -1,6 +1,12 @@
-# Face-skin temperature and tint: source-connected, partial, UNRUN
+# Skin temperature and tint: source-connected, partial, UNRUN
 
 Baseline: `6641d733988b9b66e9918a387e469a8f77d12f97`.
+
+This document describes the initial face-only slice. The later
+[reviewed body-skin extension](BODY-OWNERSHIP.md) adds explicit, manually scoped
+body coverage using independently retained BodyRef/person/source evidence.
+Legacy documents without that attachment remain face-only. Neither slice is
+automatic person-instance segmentation or runtime/photographic acceptance.
 
 ## Requirements and deliberate boundaries
 
@@ -42,4 +48,4 @@ The consumer validates budgets before raster allocation. It receives frozen repa
 
 All new numerical, geometry, native boundary, UI and integration fixtures are **AUTHORED / UNRUN**. Static AST/JSON/hash/whitespace checks are not runtime or photographic acceptance. No tests, product imports, compiler, typechecker, build, inference, download or installation ran during this slice.
 
-Full-body owner-aware selection, manual face-skin coverage review/painting, dedicated skin recovery, accurate occluder segmentation, HDR/alpha retouch and unconstrained large-image performance remain unfinished. The native API supports cancellation callbacks; this synchronous canonical skin consumer currently uses the default callback, so prompt cancellation during its solve is not established. Existing SDR/opacity refusals remain intact; no clipping/downconversion is used to claim these capabilities. Qoder/local validation still needs original/derived/PNG16 source comparisons, target-specific batch, interrupted receipt/reset flows, undo/project reopening, export pixel agreement, geometry edge/occlusion tests and real portraits across skin tones and lighting.
+Automatic full-body instance ownership, manual face-skin coverage review/painting, dedicated skin recovery, accurate occluder segmentation, HDR/alpha retouch and unconstrained large-image performance remain unfinished. The later manually reviewed body extension does not remove these limits. The native API supports cancellation callbacks; this synchronous canonical skin consumer currently uses the default callback, so prompt cancellation during its solve is not established. Existing SDR/opacity refusals remain intact; no clipping/downconversion is used to claim these capabilities. Qoder/local validation still needs original/derived/PNG16 source comparisons, target-specific batch, interrupted receipt/reset flows, undo/project reopening, export pixel agreement, geometry edge/occlusion tests and real portraits across skin tones and lighting.

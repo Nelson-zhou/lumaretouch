@@ -1,10 +1,15 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
-"""Source-owned semantic face-skin colour, not full-body instance segmentation."""
+"""One source-domain colour effect for face and explicitly reviewed body skin.
+
+The scalar recipe and Rust stage stay shared. A dedicated target-owned review
+may extend coverage, never infer a body from the selected face or borrow masks.
+"""
 import numpy as np
 from . import skin_colour_state as S, people_state as P
 
 
-def prepare(face_ref, analysis, other_analyses, source, recipe, *, byte_budget, protected_boxes=()):
+def prepare(face_ref, analysis, other_analyses, source, recipe, *, byte_budget, protected_boxes=(),
+            people_state=None, body_assets=None, body_bank=None):
     r = S.check(recipe)
     if not S.active(r):
         return []
@@ -58,9 +63,25 @@ def prepare(face_ref, analysis, other_analyses, source, recipe, *, byte_budget, 
         dy = np.maximum(np.maximum(top-yy,yy-bottom),0)
         # Protect whole pixel footprints, then feather strictly outside box.
         support[y0:y1,x0:x1] *= np.clip((np.hypot(dx,dy)-np.sqrt(.5))/feather,0,1)
+    body_facts = {'enabled': False}
+    if people_state is not None:
+        from .skin_colour_body_support import raster as body_raster
+        body_coverage, body_facts = body_raster(people_state, body_assets or {}, ref,
+            body_bank, analysis, (h,w), byte_budget=byte_budget-source.nbytes-support.nbytes)
+        if body_coverage is not None:
+            if (type(body_coverage) is not np.ndarray or body_coverage.dtype != np.float32
+                    or body_coverage.shape != (h,w) or not np.isfinite(body_coverage).all()
+                    or np.any((body_coverage < 0) | (body_coverage > 1))):
+                raise ValueError('Reviewed body skin must be finite source-domain float32 coverage')
+            # Union, not addition or a second colour pass: the same signed
+            # parameters are applied exactly once before the shared body warp.
+            np.maximum(support, body_coverage, out=support)
+            del body_coverage
+    elif body_assets is not None or body_bank is not None:
+        raise ValueError('Body skin colour needs the actual canonical people graph')
     visible = support > 0
     if np.count_nonzero(support >= .25) < 32:
-        raise ValueError('Face-skin colour has insufficient confidently visible target skin')
+        raise ValueError('Skin colour has insufficient confidently visible target-owned skin')
     ys, xs = np.nonzero(visible)
     y, x = int(ys.min()), int(xs.min())
     rh, rw = int(ys.max())-y+1, int(xs.max())-x+1
@@ -78,7 +99,11 @@ def prepare(face_ref, analysis, other_analyses, source, recipe, *, byte_budget, 
              'semantic_observation': dict(analysis['face_skin_observation']),
              'occlusion': 'six-class-and-anatomy-not-complete-hand-or-glasses-segmentation',
              'semantic_resolution': 'source-bound-model-coverage-may-be-resampled',
+             'body_extension': body_facts,
              'support_pixels': int(np.count_nonzero(visible)),
              'changed_pixels': int(np.count_nonzero(np.any(delta != 0, axis=2))),
              'native_solver': 'rust-skin-colour-v1'}
+    if body_facts.get('enabled'):
+        facts['scope'] = 'face-and-explicitly-reviewed-body-skin'
+        facts['support'] = 'source-face-skin-plus-confirmed-body-semantic-manual-coverage'
     return [LocalEffect(ref, 'skin_colour', (y,x,rh,rw), delta=delta, facts=facts)]

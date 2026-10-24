@@ -45,8 +45,9 @@ class PreparedPeople:
 
 def verify_analysis(face, analysis, shape):
     from .skin_colour_support import FIELDS, check_analysis_fields
+    from .body_skin_semantics import FIELDS as BODY_FIELDS, check_analysis_fields as check_body_fields
     required = {'face_ref', 'evidence', 'landmarks', 'excluded', 'skin'}
-    if type(analysis) is not dict or not required.issubset(analysis) or set(analysis) - required - FIELDS:
+    if type(analysis) is not dict or not required.issubset(analysis) or set(analysis) - required - FIELDS - BODY_FIELDS:
         raise ValueError('Frozen per-face analysis fields are incomplete')
     if analysis['face_ref'] != S.face_ref(face) or analysis['evidence'] != face['evidence']:
         raise ValueError('Frozen analysis owner/evidence does not match durable instance')
@@ -64,11 +65,12 @@ def verify_analysis(face, analysis, shape):
         if mask is not None and evidence['semantic_model_sha256'] is None:
             raise ValueError('Semantic support lacks actual loaded-model evidence')
     check_analysis_fields(analysis, shape)
+    check_body_fields(analysis, shape)
     return lm
 
 
 def prepare(state, asset_sha256, source, analyses, *, byte_budget, document_id=None, max_faces=32, recovery_assets=None, repaired=None,
-            creative_source=None, creative_repair_evidence=None, hair_assets=None, hair_evidence=None, hair_source_path=None, force_hair_prompted=False, eye_light_assets=None, blush_makeup_assets=None, lipstick_assets=None,eyeliner_assets=None,eyelash_assets=None,brow_makeup_assets=None,iris_makeup_assets=None):
+            creative_source=None, creative_repair_evidence=None, hair_assets=None, hair_evidence=None, hair_source_path=None, force_hair_prompted=False, eye_light_assets=None, blush_makeup_assets=None, lipstick_assets=None,eyeliner_assets=None,eyelash_assets=None,brow_makeup_assets=None,iris_makeup_assets=None,skin_colour_body_assets=None,body_bank=None):
     state = S.check(state)
     from .people_cross_owner import validate_owner
     validate_owner(state,asset_sha256,document_id)
@@ -125,6 +127,11 @@ def prepare(state, asset_sha256, source, analyses, *, byte_budget, document_id=N
             face = state['faces'][key]; analysis = analyses[key]
             for asset in face['local_assets'].values():
                 stage = asset['kind']
+                if stage=='skin_colour_body_visibility':
+                    # Dedicated colour support, never generic recovery. Resolve
+                    # it only when this recipe is active, in the consumer below;
+                    # a stale dormant review cannot block disabling the colour.
+                    continue
                 if stage=='iris_makeup_visibility':
                     from .iris_makeup_support import resolve as resolve_iris_support
                     resolve_iris_support(state,iris_makeup_assets or {},entry['face_ref'])
@@ -196,7 +203,8 @@ def prepare(state, asset_sha256, source, analyses, *, byte_budget, document_id=N
                                    for a in (record.delta,record.weights) if a is not None)
                 local.extend(prepare_skin_colour(entry['face_ref'], analysis, others, effect_source,
                     values[A.SKIN_COLOUR.OP], byte_budget=byte_budget-analysis_bytes-prior_bytes,
-                    protected_boxes=protected_boxes))
+                    protected_boxes=protected_boxes,people_state=state,
+                    body_assets=skin_colour_body_assets,body_bank=body_bank))
             from .eye_light_people import prepare as prepare_eye_light
             from .eye_light_state import OPERATION as EYE_LIGHT
             local.extend(prepare_eye_light(state,eye_light_assets or {},entry['face_ref'],analysis,effect_source,values[EYE_LIGHT],source_revision=state['revision']))

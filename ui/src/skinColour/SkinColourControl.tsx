@@ -2,6 +2,8 @@
 import {useRef, type ComponentType} from 'react';
 import {sourceLabel, targetLabel} from '../people/model';
 import type {PeopleOwner} from '../people/usePeopleWorkflow';
+import {SkinBodyPanel} from './SkinBodyPanel';
+import {skinBodyAttached} from './bodyReviewModel';
 import {SKIN_COLOUR_CONTROL_IDS, SKIN_COLOUR_KEYS, SKIN_COLOUR_LABELS, skinColourAccess, skinColourBindingKey,
   skinColourPatch, type SkinColourCapability, type SkinColourKey} from './model';
 
@@ -21,6 +23,7 @@ export function SkinColourControl({control, people, capability, blocked, faceOk,
     pending: people.state.pending, uncertain: people.state.uncertain, externalBusy: blocked, faceOk, faceWhy});
   const current = useRef({binding, access}); current.current = {binding, access};
   const {reading} = access, label = SKIN_COLOUR_LABELS[control];
+  const bodyAttached = skinBodyAttached(view);
   const ends = control === 'temperature' ? ['冷', '暖'] : ['绿', '洋红'];
   const commit = (value: number) => {
     // A stale input may not retarget an edit after selection/revision changes.
@@ -34,7 +37,7 @@ export function SkinColourControl({control, people, capability, blocked, faceOk,
   };
   const refusals = view?.refusals?.filter(refusal => refusal.face_instance_id === view.selected_face_id) ?? [];
   return <section data-control-id={SKIN_COLOUR_CONTROL_IDS[control]} aria-label={label}>
-    <p className="muted">仅调整已测得的面部皮肤，不覆盖全身皮肤。手动调色，不是 AI 美白或肤色统一；皮肤功能族仍为部分实现。</p>
+    <p className="muted">{bodyAttached === true ? view?.skin_body?.needs_review === false ? '当前人物使用面部皮肤及已审核的可见身体皮肤范围，不是自动全身选择。' : '身体范围已保留但需要核验或重新审核；当前不能声称身体效果可用。' : bodyAttached === false ? '仅调整已测得的面部皮肤，不覆盖全身皮肤。' : '面部皮肤调色；当前人物的身体扩展状态尚未取得。'}手动调色，不是 AI 美白或肤色统一；皮肤功能族仍为部分实现。</p>
     {view && <p className="muted">写入范围：{targetLabel(view)}。下方显示所选人脸的实际有效值，不代表所有人物或共享默认值。</p>}
     {reading.value !== null && <>
       <div className="prow" aria-hidden="true"><span>{ends[0]}</span><span>0 中性</span><span>{ends[1]}</span></div>
@@ -59,6 +62,7 @@ export function SkinColourControl({control, people, capability, blocked, faceOk,
     {people.state.message && <p role="status">{people.state.message}</p>}
     {people.state.uncertain && <button type="button" className="specBtn"
       onClick={() => void people.check().catch(error => note(String(error)))}>查询原请求结果（不重发修改）</button>}
-    <p className="muted">需要当前有效来源图像的真实面部皮肤语义分割及 478 点人脸分析；仅核心就绪不等于此脸可用。缺少证据会拒绝调整，不用全图肤色键替代。遮挡与分割边缘可能不准确，请对比预览。显示 -100 至 100 对应内部 -1 至 1，是本产品量程，不是手册规定。</p>
+    <p className="muted">面部范围需要当前有效来源图像的真实面部皮肤语义分割及 478 点人脸分析；仅核心就绪不等于此脸可用。缺少证据会拒绝调整，不用全图肤色键替代。遮挡与分割边缘可能不准确，请对比预览。显示 -100 至 100 对应内部 -1 至 1，是本产品量程，不是手册规定。</p>
+    {control === 'temperature' && <SkinBodyPanel people={people} blocked={blocked} coreAvailable={access.core.available}/>}
   </section>;
 }

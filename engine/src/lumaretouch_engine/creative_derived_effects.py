@@ -111,6 +111,9 @@ def _request(name, request):
         S.token(request['request_id'])
         action,payload,target = request['action'],request['payload'],context['target']
         if action == 'patch': _patches(payload)
+        elif action in ('skin_body_reference','skin_body_preview','skin_body_confirm','skin_body_detach'):
+            from .skin_colour_body_actions import check_action
+            check_action(action,payload,target)
         elif action in MAKEUP.ACTIONS:
             MAKEUP.check_action(action,payload,target)
         elif action in ('select','target','analyse_face'):
@@ -212,7 +215,7 @@ def require_graph(state, binding, *, document_id=None):
         raise ValueError('Derived portrait graph cannot inherit shared person/group inputs')
     for key,face in faces.items():
         for kind,descriptor in face['local_assets'].items():
-            if kind not in MAKEUP.SUPPORT_KINDS | {'hair_colour'} | set(TARGETS) or descriptor['kind'] != kind or descriptor['owner'] != S.face_ref(face):
+            if kind not in MAKEUP.SUPPORT_KINDS | {'hair_colour','skin_colour_body_visibility'} | set(TARGETS) or descriptor['kind'] != kind or descriptor['owner'] != S.face_ref(face):
                 raise ValueError('Derived portrait graph cannot replay unadapted support/recovery assets')
         evidence = face['evidence']
         if (evidence['source_width'],evidence['source_height']) != (owned['width'],owned['height']):

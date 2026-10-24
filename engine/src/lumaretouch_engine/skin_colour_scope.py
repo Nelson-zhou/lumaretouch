@@ -12,11 +12,12 @@ FIELD = '_skin_colour_preset'
 TARGET = '_skin_colour_preset_target'
 FIELDS = (FIELD,)
 REQUESTED = '_skin_colour_preset_requested'
+COVERAGE = '_skin_colour_preset_coverage'
 
 
 def check_params(raw):
     if type(raw) is not dict or set(raw) != {'recipe'} or raw['recipe'] is None:
-        raise ValueError('面部肤色预设只接受版本化色温与色调参数，不携带人物、蒙版或分析')
+        raise ValueError('肤色预设只接受版本化色温与色调参数，不携带人物、身体审核、蒙版或分析')
     return {'recipe': S.check(raw['recipe'])}
 
 
@@ -59,7 +60,7 @@ def capture(engine, base=None):
     """
     from . import people_state as P, people_algorithms as A, people_resolver as R
     out = engine._capture_state() if base is None else base
-    recipe = S.neutral(); ref = None; supported = False; native = False; refusal = None
+    recipe = S.neutral(); ref = None; supported = False; native = False; refusal = None; coverage = None
     if engine._people_managed():
         graph = engine._people_owner().snapshot(); source = engine._people_source()
         asset = source['sha256']
@@ -87,12 +88,17 @@ def capture(engine, base=None):
                     verify_analysis(face, analysis, shape)
                     if check_analysis_fields(analysis, shape) is None:
                         raise ValueError('面部皮肤分析缺少真实来源与模型观察记录')
+                    from .skin_colour_transfer_review import attached, describe
+                    body_bank = (engine._body_bank() if S.active(recipe) and attached(graph, ref) else None)
+                    coverage = describe(graph, getattr(engine, '_people_support', {}), ref, body_bank, analysis, recipe)
                     # The renderer owns neighbour protection: real measured
                     # landmarks when present, conservative retained boxes when
                     # not. Missing neighbour analysis is never positive skin.
                     supported = True
                 except (ValueError, TypeError, AttributeError, KeyError) as error:
                     refusal = str(error)
-    return {**out, FIELD: recipe, TARGET: ref, REQUESTED: False,
+    # Coverage is local capture context only. FIELDS/params_of serialize scalars,
+    # never this target's body review, BodyRef, support hash or manual region.
+    return {**out, FIELD: recipe, TARGET: ref, REQUESTED: False, COVERAGE: coverage,
             '_skin_colour_supported': supported, '_skin_colour_native_available': native,
             '_skin_colour_refusal': refusal}

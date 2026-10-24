@@ -22,6 +22,10 @@ export type ExplicitPeopleRequest = SelectedParameters & {
   targets: {target: PeopleEndpointProof; target_refs: FaceRef[]}[];
 };
 export type PeopleTransferRequest = SelectedParameters & {target_policy: 'confirmed_person_only'} | ExplicitPeopleRequest | AssociationRequest;
+export type SkinColourCoverage = {
+  version: 1; support_transfer: 'none';
+  targets: {face_ref: FaceRef; scope: 'face-only' | 'face-and-reviewed-body' | 'neutral-no-effect'; body_review_sha256: string | null}[];
+};
 type ReviewBase = {
   version: 1; source_document: DocumentFence; target_document: DocumentFence;
   source_ref: FaceRef; target_refs: FaceRef[];
@@ -29,6 +33,7 @@ type ReviewBase = {
   source_state_revision: number; target_state_revision: number;
   source_association_revision: number; target_association_revision: number;
   transfer_policy: 'selected_parameter_keys_replace'; excluded: string[];
+  skin_colour_coverage?: SkinColourCoverage;
 };
 export type PeopleTransferReview = ReviewBase & ({
   confirmed_person_id: string; target_policy: 'confirmed_person_only'; confirmation_revisions: [string, number][];
@@ -85,6 +90,20 @@ function uniqueRefs(refs: unknown): refs is FaceRef[] {
 }
 function sameRefs(a: FaceRef[], b: FaceRef[]) {
   return a.length === b.length && a.every(ref => b.some(other => sameFace(ref, other)));
+}
+/** Every disclosed extent belongs to an exact target, not to the source preset. */
+export function validSkinColourCoverage(value: unknown, refs: FaceRef[]): value is SkinColourCoverage {
+  if (!object(value) || !keys(value, ['version', 'support_transfer', 'targets']) || value.version !== 1
+    || value.support_transfer !== 'none' || !Array.isArray(value.targets) || value.targets.length !== refs.length) return false;
+  const seen = new Set<string>();
+  for (const row of value.targets) {
+    if (!object(row) || !keys(row, ['face_ref', 'scope', 'body_review_sha256']) || !validFaceRef(row.face_ref)
+      || seen.has(row.face_ref.face_instance_id) || !refs.some(ref => sameFace(ref, row.face_ref as FaceRef))) return false;
+    if (row.scope === 'face-and-reviewed-body' ? !digest(row.body_review_sha256)
+      : (row.scope !== 'face-only' && row.scope !== 'neutral-no-effect') || row.body_review_sha256 !== null) return false;
+    seen.add(row.face_ref.face_instance_id);
+  }
+  return seen.size === refs.length;
 }
 function validSelection(v: unknown): v is Record<string, string[]> {
   return object(v) && Object.keys(v).length > 0 && Object.entries(v).every(([op, paths]) => token(op)
@@ -161,6 +180,15 @@ export function validPeopleReview(value: unknown, request: PeopleTransferRequest
   for (const leaf of v.parameters) {
     if (!leaf || !wanted.delete(JSON.stringify([leaf.operation_id, leaf.parameter_path]))
       || !(['string', 'boolean'].includes(typeof leaf.value) || (typeof leaf.value === 'number' && Number.isFinite(leaf.value)))) return false;
+  }
+  const skinSelected = Object.prototype.hasOwnProperty.call(request.selection, 'lnx.skin_colour.v1');
+  if (skinSelected ? !validSkinColourCoverage(v.skin_colour_coverage, v.target_refs) : v.skin_colour_coverage !== undefined) return false;
+  if (skinSelected) {
+    const scalars = v.parameters.filter(leaf => leaf.operation_id === 'lnx.skin_colour.v1');
+    if (scalars.some(leaf => !['/temperature', '/tint'].includes(leaf.parameter_path)
+      || typeof leaf.value !== 'number' || leaf.value < -1 || leaf.value > 1)) return false;
+    if (scalars.some(leaf => leaf.value !== 0)
+      && v.skin_colour_coverage!.targets.some(row => row.scope === 'neutral-no-effect')) return false;
   }
   return wanted.size === 0 && JSON.stringify([...v.excluded].sort()) === JSON.stringify(['identity_links', 'landmarks', 'local_assets', 'masks']);
 }

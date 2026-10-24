@@ -47,6 +47,7 @@ def analyse(engine,state,face_ref):
     from .nose_shape_runtime import exclusion
     from .facial_wrinkle_runtime import skin_support
     from .skin_colour_support import analysis_fields as skin_colour_fields
+    from .body_skin_semantics import analysis_fields as body_skin_fields, check_analysis_fields as check_body_skin_fields
     import numpy as np
     face=state['faces'][face_ref['face_instance_id']];source=engine._people_source()
     from .creative_derived_source import analysis_rgb, stamp_precompute, verify_precompute
@@ -69,7 +70,9 @@ def analyse(engine,state,face_ref):
     out=G.reanalyse(state,source['sha256'],{face_ref['face_instance_id']:evidence},expected_revision=state['revision'],user_confirmed=True)
     ref=S.face_ref(out['faces'][face_ref['face_instance_id']]);points=np.array(points,dtype='<f4',copy=True);points.setflags(write=False)
     row={'face_ref':ref,'evidence':evidence,'landmarks':points,'excluded':exclusion(original),'skin':skin_support(original),
-         **skin_colour_fields(original, source['sha256'], (source['width'], source['height']))}
+         **skin_colour_fields(original, source['sha256'], (source['width'], source['height'])),
+         **body_skin_fields(original, source['sha256'], (source['width'], source['height']))}
+    check_body_skin_fields(row)
     engine._people_landmarks=RA.retain(engine._people_landmarks,{ref['face_instance_id']:row})
     engine._people_analyses.setdefault(source['sha256'],{})[ref['face_instance_id']]=row
     return out,ref
@@ -87,7 +90,13 @@ def apply(engine,raw,emit):
     records[request]={'success':False,'digest':digest};state,binding,target=checked(engine,p);asset=binding['asset_sha256']
     records[request]['before_fence']=engine._people_owner().fence
     action=p.get('action');payload=p.get('payload');created=None;batch_id=None
-    if action=='iris_reference':
+    if action in ('skin_body_reference','skin_body_preview'):
+        from . import skin_colour_body_host as skin_body
+        method=skin_body.reference if action=='skin_body_reference' else skin_body.preview
+        records[request]['payload']=method(engine,state,target,payload)
+        skin_body.bound_receipt_payloads(records)
+        frame=None
+    elif action=='iris_reference':
         from .iris_makeup_host import reference
         reference(engine,state,target,payload)
         frame=None
@@ -150,7 +159,12 @@ def apply(engine,raw,emit):
         # reachable while a requested face is suspended for correction.
         engine._people_sync();frame=None
     else:
-        if action=='analyse_face':
+        if action in ('skin_body_confirm','skin_body_detach'):
+            from . import skin_colour_body_host as skin_body
+            method=skin_body.confirm if action=='skin_body_confirm' else skin_body.detach
+            options={'mark_started':lambda:records[request].update(side_effects_started=True)} if action=='skin_body_confirm' else {}
+            candidate,records[request]['payload']=method(engine,state,target,payload,**options)
+        elif action=='analyse_face':
             if payload!={} or target['scope']!='face':raise ValueError('Region analysis needs an explicit face')
             records[request]['side_effects_started']=True
             candidate,ref=analyse(engine,state,target['face_ref'])
@@ -187,7 +201,15 @@ def apply(engine,raw,emit):
         shared=action in ('link','group','create_person') or target['scope'] in ('person','group')
         if action=='resolve_legacy' and any(x['asset_sha256']==asset and x['status']=='unresolved' for x in candidate['unresolved_legacy']):
             frame=engine._people_publish_pending_review(candidate)
-        else:batch_id,frame=publish(engine,state,candidate,request,shared=shared)
+        else:
+            try:batch_id,frame=publish(engine,state,candidate,request,shared=shared)
+            except Exception:
+                # A rejected preparation may leave only append-only unused
+                # support bytes. With an unchanged graph fence no pixels/recipe
+                # were published; do not manufacture an uncertain edit lock.
+                if action=='skin_body_confirm' and engine._people_owner().fence==records[request]['before_fence']:
+                    records[request]['side_effects_started']=False
+                raise
         if action=='analyse_face':select(engine,engine._people_owner().snapshot(),asset,target)
         if frame is not None:frame['doc_state']=engine.doc_state()
     if frame is not None:emit(frame)
@@ -212,12 +234,16 @@ def finish(engine,p,error,emit):
     result={'event':'people_result','protocol':1,'action':p.get('action'),'request_id':p['request_id'],'document_id':p.get('document_id'),
         'success':bool(old.get('success')) and not error,'error':error,'outcome_unknown':unknown,
         'created_id':old.get('created_id'),'batch_id':old.get('batch_id'),'frame_emitted':old.get('frame_emitted',False)}
+    if 'payload' in old:result['payload']=old['payload']
+    if old.get('payload_released'):result['payload_released']=True
     if engine._vram is not None:
         try:result['doc_state']=engine.doc_state()
         except Exception as state_error:
             result.update(success=False,outcome_unknown=True,
                 error=f"{error or 'People result state unavailable'}; {type(state_error).__name__}: {state_error}")
     records[p['request_id']]={'result':result,'digest':digest}
+    from .skin_colour_body_host import bound_receipt_payloads
+    bound_receipt_payloads(records)
     while len(records)>128:records.popitem(last=False)
     emit(result)
 

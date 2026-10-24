@@ -28,7 +28,7 @@ def people_context(engine,row):
         **{key:deepcopy(engine.__dict__.get(field,{})) for key,field in V.FIELDS.items()}})
 
 
-def identity(engine,row,candidate_state,document_id,revision,*,people_graph=None):
+def identity(engine,row,candidate_state,document_id,revision,*,people_graph=None,staged_people_context=None):
     from . import creative_derived_source as SOURCE, virtual_copy_people as V
     from .optics_candidate_identity import fingerprint
     version=engine._document_versions().version(row)
@@ -36,6 +36,17 @@ def identity(engine,row,candidate_state,document_id,revision,*,people_graph=None
     if type(document_id) is not str or not document_id or document_id not in (version.document_id,getattr(engine,'_load_id',None) if current else None) or str(version.revision)!=str(revision):
         raise ValueError('Full candidate document identity or revision changed')
     context=people_context(engine,row)
+    owner_context_sha256=fingerprint(context)
+    if staged_people_context is not None:
+        staged=V.check(staged_people_context)
+        for key in context:
+            if key not in ('people_graph','people_support_assets') and fingerprint(staged[key])!=fingerprint(context[key]):
+                raise ValueError('Staged portrait context changed an unrelated ownership bank')
+        if any(staged['people_support_assets'].get(key)!=value for key,value in context['people_support_assets'].items()):
+            raise ValueError('Staged portrait support cannot replace immutable existing assets')
+        if people_graph is None or staged['people_graph']!=people_graph:
+            raise ValueError('Staged portrait support requires its exact explicit candidate graph')
+        context=staged
     graph=context['people_graph'] if people_graph is None else people_graph
     # Preset capture can precede remembering the current document row. Compare
     # against the live immutable base, never an older parked row's baseline.
@@ -44,10 +55,11 @@ def identity(engine,row,candidate_state,document_id,revision,*,people_graph=None
     SOURCE.verify_row({**row,'state':candidate_state},proof)
     return {'document_id':document_id,'revision':str(revision),'source_proof':proof,
         'candidate_sha256':fingerprint(candidate_state),
-        'people_sha256':fingerprint({'graph':graph,'context':context})},graph,context
+        'people_sha256':fingerprint({'graph':graph,'context':context,
+            **({'owner_context_sha256':owner_context_sha256} if staged_people_context is not None else {})})},graph,context
 
 
-def render(engine,row,candidate_state,document_id,revision,*,people_graph=None,cancelled=lambda:False):
+def render(engine,row,candidate_state,document_id,revision,*,people_graph=None,staged_people_context=None,cancelled=lambda:False):
     from copy import deepcopy
     from . import local_mask_state as M
     from . import creative_derived_source as SOURCE, virtual_copy_people as V
@@ -63,7 +75,7 @@ def render(engine,row,candidate_state,document_id,revision,*,people_graph=None,c
     def checkpoint(*_):
         if cancelled():raise ValueError('Full candidate preparation cancelled')
     checkpoint()
-    proof,graph,context=identity(engine,row,candidate_state,document_id,revision,people_graph=people_graph)
+    proof,graph,context=identity(engine,row,candidate_state,document_id,revision,people_graph=people_graph,staged_people_context=staged_people_context)
     path=row['path'];stamp=M.file_stamp(path);state=deepcopy(candidate_state)
     base=from_state(state)
     available=available_estimate();limit=min(32_000_000,max(0,(available-768*1024*1024)//300))
@@ -121,6 +133,6 @@ def render(engine,row,candidate_state,document_id,revision,*,people_graph=None,c
     checkpoint()
     if rgb.ndim!=3 or rgb.shape[2]!=3 or (rgb.shape[1],rgb.shape[0])!=expected or not np.issubdtype(rgb.dtype,np.floating) or not np.isfinite(rgb).all():
         raise ValueError('Complete candidate is not finite float RGB at its exact geometry')
-    latest,_,_=identity(engine,row,candidate_state,document_id,revision,people_graph=people_graph)
+    latest,_,_=identity(engine,row,candidate_state,document_id,revision,people_graph=people_graph,staged_people_context=staged_people_context)
     if M.file_stamp(path)!=stamp or latest!=proof:raise ValueError('Target changed during complete preparation')
     return rgb,{**proof,'source_size':[w,h],'output_size':list(expected)}

@@ -59,16 +59,18 @@ export type PeopleView = {
   lipstick?: import('../lipstick/model').LipstickView | null;
   blush_makeup?: import('../blushMakeup/model').BlushView | null;
   eye_light?: import('../eyeLight/model').EyeLightView | null;
+  skin_body?: import('../skinColour/bodyReviewModel').SkinBodyReport | null;
   analysis_notice?: string; refusals?: {face_instance_id: string; reason: string}[];
 }
 export type PeopleAction = PeopleEnvelope & {
-  action: 'patch' | 'link' | 'group' | 'face_status' | 'manual_add' | 'create_person' | 'select' | 'target' | 'analyse_face' | 'resolve_legacy' | 'eye_light_reference' | 'eye_light_review' | 'blush_palette' | 'blush_reference' | 'blush_review' | 'lipstick_palette' | 'lipstick_reference' | 'lipstick_review' | 'eyeliner_palette' | 'eyeliner_reference' | 'eyeliner_review' | 'iris_reference' | 'iris_review' | 'eyelash_palette' | 'eyelash_reference' | 'eyelash_review' | 'brow_makeup_palette' | 'brow_makeup_reference' | 'brow_makeup_review';
+  action: 'patch' | 'link' | 'group' | 'face_status' | 'manual_add' | 'create_person' | 'select' | 'target' | 'analyse_face' | 'resolve_legacy' | 'eye_light_reference' | 'eye_light_review' | 'blush_palette' | 'blush_reference' | 'blush_review' | 'lipstick_palette' | 'lipstick_reference' | 'lipstick_review' | 'eyeliner_palette' | 'eyeliner_reference' | 'eyeliner_review' | 'iris_reference' | 'iris_review' | 'eyelash_palette' | 'eyelash_reference' | 'eyelash_review' | 'brow_makeup_palette' | 'brow_makeup_reference' | 'brow_makeup_review' | 'skin_body_reference' | 'skin_body_preview' | 'skin_body_confirm' | 'skin_body_detach';
   payload: Record<string, unknown>;
 }
 export type PeopleResult = {
   protocol: 1; request_id: string; action: PeopleAction['action']; document_id: string;
   success: boolean; outcome_unknown: boolean; error?: string;
   doc_state?: {people?: PeopleView};
+  payload?: unknown; payload_released?: boolean;
 }
 export type PeopleMailbox = {phase: 'pending' | 'done' | 'unavailable'; request_id: string; result?: PeopleResult; error?: string}
 export const PEOPLE_CONTROL_IDS = {

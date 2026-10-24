@@ -111,6 +111,9 @@ def preflight(engine,controller,p):
                                source_owner=source_owner,target_owner=target_owner)
             from .people_candidate_render import validate
             validate(engine,row,staged)
+            from .skin_colour_transfer_review import for_target as skin_coverage
+            coverage=skin_coverage(engine,row,staged,payload)
+            if coverage is not None:payload['skin_colour_coverage']=coverage
             SOURCE.verify_row(row,target_proof)
             if owner.fence!=fence or V.row_snapshot(engine,row)!=target_graph or document(engine,row)!=target_document:
                 raise ValueError('Target or graph changed during preparation')
