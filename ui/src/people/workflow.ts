@@ -1,9 +1,12 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 import {bindingKey, type ParameterPatch, type PeopleAction, type PeopleMailbox, type PeopleView} from './model';
-import {faceStyleEchoMatches, faceStyleReceiptCurrent, type FaceStyleReceipt} from '../faceStyle/model';
+import {faceStyleAck, faceStyleEchoMatches, faceStyleReceiptCurrent, object, sameFaceStyleAck,
+  validFaceStyleConfirmation, validFaceStyleRecipe, validFaceStyleReview,
+  type FaceStyleAliasCommit, type FaceStyleReceipt, type FaceStyleReviewV2} from '../faceStyle/model';
 import {skinBodyActionFamily, skinBodyFamilyMatches, skinBodyReceiptCurrent, type SkinBodyResult} from '../skinColour/bodyReviewModel';
 
-type View = {pending: boolean; pendingAction: PeopleAction['action'] | null; uncertain: boolean; message: string; lastBodyResult: SkinBodyResult | null; lastFaceStyleResult: FaceStyleReceipt | null};
+type View = {pending: boolean; pendingAction: PeopleAction['action'] | null; uncertain: boolean; message: string;
+  lastBodyResult: SkinBodyResult | null; lastFaceStyleResult: FaceStyleReceipt | null; lastAliasCommit: FaceStyleAliasCommit | null};
 type Ports = {
   send: (command: PeopleAction) => Promise<unknown>;
   read: (requestId: string) => Promise<PeopleMailbox>;
@@ -15,9 +18,11 @@ type Ports = {
 export function createPeopleWorkflow(ports: Ports) {
   let current: PeopleView | null = null, enabled = false;
   let pending: PeopleAction | null = null, checking: Promise<void> | null = null;
+  let aliasReview: FaceStyleReviewV2 | null = null, pendingAliasReview: FaceStyleReviewV2 | null = null;
+  let pendingPreviewView: PeopleView | null = null;
   let queued: {key: string; patches: Map<string, ParameterPatch>} | null = null;
   let waitFor: {key: string; revision: number; documentRevision: number} | null = null;
-  let view: View = {pending: false, pendingAction: null, uncertain: false, message: '', lastBodyResult: null, lastFaceStyleResult: null};
+  let view: View = {pending: false, pendingAction: null, uncertain: false, message: '', lastBodyResult: null, lastFaceStyleResult: null, lastAliasCommit: null};
   const listeners = new Set<() => void>();
   const publish = (patch: Partial<View>) => {view = {...view, ...patch}; listeners.forEach(listener => listener());};
   const targetKey = (value: PeopleView) => `${bindingKey(value.binding)}:${value.association_revision}:${JSON.stringify(value.editing_target)}`;
@@ -50,6 +55,31 @@ export function createPeopleWorkflow(ports: Ports) {
           }
           const faceStyle = command.action.startsWith('face_style_');
           if (faceStyle && !faceStyleEchoMatches(command, result)) throw Error('脸型请求回执绑定不匹配，请查询原请求，未重发。');
+          let aliasCommit: FaceStyleAliasCommit | null = null;
+          if (result.success && command.action === 'face_style_preview') {
+            aliasReview = null;
+            if (object(result.payload) && object(result.payload.review) && result.payload.review.version === 2) {
+              if (result.payload.kind !== 'face_style_preview' || !validFaceStyleRecipe(command.payload)
+                || !validFaceStyleReview(result.payload.review, pendingPreviewView, command.payload) || result.payload.review.version !== 2)
+                throw Error('共享来源完整审核与原请求不符，请查询原请求。');
+              // Navigation during a read does not turn a harmless old-document reply into an
+              // uncertain mutation. Validate the captured view, but retain only a still-current draft.
+              if (faceStyleReceiptCurrent(command, result, current)
+                && validFaceStyleReview(result.payload.review, current, command.payload)) aliasReview = structuredClone(result.payload.review);
+            }
+          }
+          if (pendingAliasReview && (result.protocol !== 1 || typeof result.success !== 'boolean'
+            || typeof result.outcome_unknown !== 'boolean' || !result.success && result.batch_id != null))
+            throw Error('共享来源失败回执不能同时声明已发布的批次，只能查询原请求。');
+          if (result.success && command.action === 'face_style_confirm') {
+            if (pendingAliasReview) {
+              if (!validFaceStyleConfirmation(pendingAliasReview, result))
+                throw Error('共享来源确认缺少完整逐成员版本证明或真实批次身份，只能查询原请求。');
+              aliasCommit = {batchId: result.batch_id!, documentEpoch: command.document_epoch, requestId: command.request_id,
+                review: structuredClone(pendingAliasReview), command: structuredClone(command), result: structuredClone(result)};
+            } else if (object(result.payload) && Object.hasOwn(result.payload, 'alias_members'))
+              throw Error('未请求的共享来源确认回执，只能查询原请求。');
+          }
           const faceStyleRead = faceStyle && command.action !== 'face_style_confirm';
           if (result.success && faceStyleRead) {
             // Read-only face-style receipts must not manufacture or publish a document mutation.
@@ -71,10 +101,14 @@ export function createPeopleWorkflow(ports: Ports) {
           let refreshError = '';
           try {await bounded(ports.refresh(), 10000);} catch {refreshError = '修改结果已确认，但照片状态刷新失败。请刷新查看，勿重复提交。';}
           pending = null;
+          pendingAliasReview = null;
+          pendingPreviewView = null;
+          if (aliasCommit) aliasReview = null;
           const bodyFamily = skinBodyActionFamily(command.action);
           const bodyPayloadInvalid = !!bodyFamily && !result.payload_released && !skinBodyFamilyMatches(result.payload, bodyFamily);
           publish({pending: !!queued, pendingAction: queued ? 'patch' : null, uncertain: false,
             lastFaceStyleResult: faceStyleReceiptCurrent(command, result, current) ? {command, result} : null,
+            ...(aliasCommit ? {lastAliasCommit: aliasCommit} : {}),
             lastBodyResult: skinBodyReceiptCurrent(command, result, current)
               ? {command, result} : null,
             message: !result.success ? (result.error ?? '人物修改被拒绝，未重试。')
@@ -99,6 +133,16 @@ export function createPeopleWorkflow(ports: Ports) {
   async function submit(command: PeopleAction): Promise<void> {
     if (pending || queued) throw Error('上一项人物修改尚未确认，请先查询结果。');
     if (!enabled || !matches(command)) throw Error('照片或人物状态已变化，请等待刷新后再修改。');
+    let captured: FaceStyleReviewV2 | null = null;
+    if (command.action === 'face_style_confirm' && object(command.payload.ack) && Object.hasOwn(command.payload.ack, 'members')) {
+      if (!aliasReview || !validFaceStyleReview(aliasReview, current, aliasReview.recipe)
+        || command.payload.token !== aliasReview.token || !sameFaceStyleAck(command.payload.ack, faceStyleAck(aliasReview)))
+        throw Error('完整共享来源审核已失效；请重新逐张预览，不会提交部分成员。');
+      captured = structuredClone(aliasReview);
+    }
+    pendingAliasReview = captured;
+    pendingPreviewView = command.action === 'face_style_preview' ? structuredClone(current) : null;
+    if (command.action === 'face_style_preview') aliasReview = null;
     pending = command;
     publish({pending: true, pendingAction: command.action, uncertain: false, lastBodyResult: null, lastFaceStyleResult: null, message: '正在提交人物修改，等待引擎确认。'});
     try {await bounded(ports.send(command), 10000);}

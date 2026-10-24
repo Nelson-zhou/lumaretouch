@@ -3760,13 +3760,15 @@
         "engine/src/lumaretouch_engine/face_style_batch_review.py",
         "docs/face-style/COHORT-REVIEW-CONTRACT.md",
         "engine/src/lumaretouch_engine/portrait_cohort_review.py",
-        "engine/src/lumaretouch_engine/people_cross_owner_workflow.py"
+        "engine/src/lumaretouch_engine/people_cross_owner_workflow.py",
+        "docs/face-style/ALIAS-REVIEW-CONTRACT.md",
+        "engine/src/lumaretouch_engine/face_style_alias_review.py"
       ],
       "verification": [],
       "remaining": [
         "All runtime, numerical, photographic and release acceptance UNRUN.",
         "Original bounded compositions over existing measured solvers, not new algorithms or proprietary numeric equivalence.",
-        "Named one-shot and persistent authoring source authored with full member image review; all acceptance UNRUN. Capsule v1 persists canonical scalar intent, not inferred named badges. All-thirty-key associations require image review on later generic update/unlink. No automatic style/person classification; single-photo alias limitation remains."
+        "Named one-shot and persistent authoring source authored with full member image review; all acceptance UNRUN. Capsule v1 persists canonical scalar intent, not inferred named badges. All-thirty-key associations require image review on later generic update/unlink. Single-photo shared-source v2 review freezes every affected active member and protected history membership; dormant affected siblings remain explicitly refused. No automatic style/person classification or unrestricted alias admission."
       ]
     },
     {
@@ -4437,13 +4439,15 @@
         "engine/src/lumaretouch_engine/face_style_batch_review.py",
         "docs/face-style/COHORT-REVIEW-CONTRACT.md",
         "engine/src/lumaretouch_engine/portrait_cohort_review.py",
-        "engine/src/lumaretouch_engine/people_cross_owner_workflow.py"
+        "engine/src/lumaretouch_engine/people_cross_owner_workflow.py",
+        "docs/face-style/ALIAS-REVIEW-CONTRACT.md",
+        "engine/src/lumaretouch_engine/face_style_alias_review.py"
       ],
       "verification": [],
       "remaining": [
         "All runtime, numerical, photographic and release acceptance UNRUN.",
         "Original bounded compositions over existing measured solvers, not new algorithms or proprietary numeric equivalence.",
-        "Named one-shot and persistent authoring source authored with full member image review; all acceptance UNRUN. Capsule v1 persists canonical scalar intent, not inferred named badges. All-thirty-key associations require image review on later generic update/unlink. No automatic style/person classification; single-photo alias limitation remains."
+        "Named one-shot and persistent authoring source authored with full member image review; all acceptance UNRUN. Capsule v1 persists canonical scalar intent, not inferred named badges. All-thirty-key associations require image review on later generic update/unlink. Single-photo shared-source v2 review freezes every affected active member and protected history membership; dormant affected siblings remain explicitly refused. No automatic style/person classification or unrestricted alias admission."
       ]
     },
     {
@@ -4465,13 +4469,15 @@
         "engine/src/lumaretouch_engine/face_style_batch_review.py",
         "docs/face-style/COHORT-REVIEW-CONTRACT.md",
         "engine/src/lumaretouch_engine/portrait_cohort_review.py",
-        "engine/src/lumaretouch_engine/people_cross_owner_workflow.py"
+        "engine/src/lumaretouch_engine/people_cross_owner_workflow.py",
+        "docs/face-style/ALIAS-REVIEW-CONTRACT.md",
+        "engine/src/lumaretouch_engine/face_style_alias_review.py"
       ],
       "verification": [],
       "remaining": [
         "All runtime, numerical, photographic and release acceptance UNRUN.",
         "Original bounded compositions over existing measured solvers, not new algorithms or proprietary numeric equivalence.",
-        "Named one-shot and persistent authoring source authored with full member image review; all acceptance UNRUN. Capsule v1 persists canonical scalar intent, not inferred named badges. All-thirty-key associations require image review on later generic update/unlink. No automatic style/person classification; single-photo alias limitation remains."
+        "Named one-shot and persistent authoring source authored with full member image review; all acceptance UNRUN. Capsule v1 persists canonical scalar intent, not inferred named badges. All-thirty-key associations require image review on later generic update/unlink. Single-photo shared-source v2 review freezes every affected active member and protected history membership; dormant affected siblings remain explicitly refused. No automatic style/person classification or unrestricted alias admission."
       ]
     },
     {
@@ -4493,13 +4499,15 @@
         "engine/src/lumaretouch_engine/face_style_batch_review.py",
         "docs/face-style/COHORT-REVIEW-CONTRACT.md",
         "engine/src/lumaretouch_engine/portrait_cohort_review.py",
-        "engine/src/lumaretouch_engine/people_cross_owner_workflow.py"
+        "engine/src/lumaretouch_engine/people_cross_owner_workflow.py",
+        "docs/face-style/ALIAS-REVIEW-CONTRACT.md",
+        "engine/src/lumaretouch_engine/face_style_alias_review.py"
       ],
       "verification": [],
       "remaining": [
         "All runtime, numerical, photographic and release acceptance UNRUN.",
         "Original bounded compositions over existing measured solvers, not new algorithms or proprietary numeric equivalence.",
-        "Named one-shot and persistent authoring source authored with full member image review; all acceptance UNRUN. Capsule v1 persists canonical scalar intent, not inferred named badges. All-thirty-key associations require image review on later generic update/unlink. No automatic style/person classification; single-photo alias limitation remains."
+        "Named one-shot and persistent authoring source authored with full member image review; all acceptance UNRUN. Capsule v1 persists canonical scalar intent, not inferred named badges. All-thirty-key associations require image review on later generic update/unlink. Single-photo shared-source v2 review freezes every affected active member and protected history membership; dormant affected siblings remain explicitly refused. No automatic style/person classification or unrestricted alias admission."
       ]
     },
     {
@@ -4521,13 +4529,15 @@
         "engine/src/lumaretouch_engine/face_style_batch_review.py",
         "docs/face-style/COHORT-REVIEW-CONTRACT.md",
         "engine/src/lumaretouch_engine/portrait_cohort_review.py",
-        "engine/src/lumaretouch_engine/people_cross_owner_workflow.py"
+        "engine/src/lumaretouch_engine/people_cross_owner_workflow.py",
+        "docs/face-style/ALIAS-REVIEW-CONTRACT.md",
+        "engine/src/lumaretouch_engine/face_style_alias_review.py"
       ],
       "verification": [],
       "remaining": [
         "All runtime, numerical, photographic and release acceptance UNRUN.",
         "Original bounded compositions over existing measured solvers, not new algorithms or proprietary numeric equivalence.",
-        "Named one-shot and persistent authoring source authored with full member image review; all acceptance UNRUN. Capsule v1 persists canonical scalar intent, not inferred named badges. All-thirty-key associations require image review on later generic update/unlink. No automatic style/person classification; single-photo alias limitation remains."
+        "Named one-shot and persistent authoring source authored with full member image review; all acceptance UNRUN. Capsule v1 persists canonical scalar intent, not inferred named badges. All-thirty-key associations require image review on later generic update/unlink. Single-photo shared-source v2 review freezes every affected active member and protected history membership; dormant affected siblings remain explicitly refused. No automatic style/person classification or unrestricted alias admission."
       ]
     },
     {
@@ -4549,13 +4559,15 @@
         "engine/src/lumaretouch_engine/face_style_batch_review.py",
         "docs/face-style/COHORT-REVIEW-CONTRACT.md",
         "engine/src/lumaretouch_engine/portrait_cohort_review.py",
-        "engine/src/lumaretouch_engine/people_cross_owner_workflow.py"
+        "engine/src/lumaretouch_engine/people_cross_owner_workflow.py",
+        "docs/face-style/ALIAS-REVIEW-CONTRACT.md",
+        "engine/src/lumaretouch_engine/face_style_alias_review.py"
       ],
       "verification": [],
       "remaining": [
         "All runtime, numerical, photographic and release acceptance UNRUN.",
         "Original bounded compositions over existing measured solvers, not new algorithms or proprietary numeric equivalence.",
-        "Named one-shot and persistent authoring source authored with full member image review; all acceptance UNRUN. Capsule v1 persists canonical scalar intent, not inferred named badges. All-thirty-key associations require image review on later generic update/unlink. No automatic style/person classification; single-photo alias limitation remains."
+        "Named one-shot and persistent authoring source authored with full member image review; all acceptance UNRUN. Capsule v1 persists canonical scalar intent, not inferred named badges. All-thirty-key associations require image review on later generic update/unlink. Single-photo shared-source v2 review freezes every affected active member and protected history membership; dormant affected siblings remain explicitly refused. No automatic style/person classification or unrestricted alias admission."
       ]
     },
     {
@@ -4577,13 +4589,15 @@
         "engine/src/lumaretouch_engine/face_style_batch_review.py",
         "docs/face-style/COHORT-REVIEW-CONTRACT.md",
         "engine/src/lumaretouch_engine/portrait_cohort_review.py",
-        "engine/src/lumaretouch_engine/people_cross_owner_workflow.py"
+        "engine/src/lumaretouch_engine/people_cross_owner_workflow.py",
+        "docs/face-style/ALIAS-REVIEW-CONTRACT.md",
+        "engine/src/lumaretouch_engine/face_style_alias_review.py"
       ],
       "verification": [],
       "remaining": [
         "All runtime, numerical, photographic and release acceptance UNRUN.",
         "Original bounded compositions over existing measured solvers, not new algorithms or proprietary numeric equivalence.",
-        "Named one-shot and persistent authoring source authored with full member image review; all acceptance UNRUN. Capsule v1 persists canonical scalar intent, not inferred named badges. All-thirty-key associations require image review on later generic update/unlink. No automatic style/person classification; single-photo alias limitation remains."
+        "Named one-shot and persistent authoring source authored with full member image review; all acceptance UNRUN. Capsule v1 persists canonical scalar intent, not inferred named badges. All-thirty-key associations require image review on later generic update/unlink. Single-photo shared-source v2 review freezes every affected active member and protected history membership; dormant affected siblings remain explicitly refused. No automatic style/person classification or unrestricted alias admission."
       ]
     },
     {
@@ -4605,13 +4619,15 @@
         "engine/src/lumaretouch_engine/face_style_batch_review.py",
         "docs/face-style/COHORT-REVIEW-CONTRACT.md",
         "engine/src/lumaretouch_engine/portrait_cohort_review.py",
-        "engine/src/lumaretouch_engine/people_cross_owner_workflow.py"
+        "engine/src/lumaretouch_engine/people_cross_owner_workflow.py",
+        "docs/face-style/ALIAS-REVIEW-CONTRACT.md",
+        "engine/src/lumaretouch_engine/face_style_alias_review.py"
       ],
       "verification": [],
       "remaining": [
         "All runtime, numerical, photographic and release acceptance UNRUN.",
         "Original bounded compositions over existing measured solvers, not new algorithms or proprietary numeric equivalence.",
-        "Named one-shot and persistent authoring source authored with full member image review; all acceptance UNRUN. Capsule v1 persists canonical scalar intent, not inferred named badges. All-thirty-key associations require image review on later generic update/unlink. No automatic style/person classification; single-photo alias limitation remains."
+        "Named one-shot and persistent authoring source authored with full member image review; all acceptance UNRUN. Capsule v1 persists canonical scalar intent, not inferred named badges. All-thirty-key associations require image review on later generic update/unlink. Single-photo shared-source v2 review freezes every affected active member and protected history membership; dormant affected siblings remain explicitly refused. No automatic style/person classification or unrestricted alias admission."
       ]
     },
     {
@@ -4633,13 +4649,15 @@
         "engine/src/lumaretouch_engine/face_style_batch_review.py",
         "docs/face-style/COHORT-REVIEW-CONTRACT.md",
         "engine/src/lumaretouch_engine/portrait_cohort_review.py",
-        "engine/src/lumaretouch_engine/people_cross_owner_workflow.py"
+        "engine/src/lumaretouch_engine/people_cross_owner_workflow.py",
+        "docs/face-style/ALIAS-REVIEW-CONTRACT.md",
+        "engine/src/lumaretouch_engine/face_style_alias_review.py"
       ],
       "verification": [],
       "remaining": [
         "All runtime, numerical, photographic and release acceptance UNRUN.",
         "Original bounded compositions over existing measured solvers, not new algorithms or proprietary numeric equivalence.",
-        "Named one-shot and persistent authoring source authored with full member image review; all acceptance UNRUN. Capsule v1 persists canonical scalar intent, not inferred named badges. All-thirty-key associations require image review on later generic update/unlink. No automatic style/person classification; single-photo alias limitation remains."
+        "Named one-shot and persistent authoring source authored with full member image review; all acceptance UNRUN. Capsule v1 persists canonical scalar intent, not inferred named badges. All-thirty-key associations require image review on later generic update/unlink. Single-photo shared-source v2 review freezes every affected active member and protected history membership; dormant affected siblings remain explicitly refused. No automatic style/person classification or unrestricted alias admission."
       ]
     },
     {

@@ -852,9 +852,16 @@ class BatchSyncController:
         冲突哪几格）：UI 要显示“同步了 3 张，2 张因为多人照片没动”这句话，只能拿
         引擎报的这份，不能自己数多选框里有几个——那是“自报了个没发成的成功”。
         """
-        items = [{"batch_id": k, "module_scope": v["ops"], "targets": len(v["targets"]),
-                  "undone": v["undone"]} for k, v in self.ledger.items()]
+        from .face_style_alias_history import status_summary
+        items = []
+        for key, entry in self.ledger.items():
+            item = {"batch_id": key, "module_scope": entry["ops"], "targets": len(entry["targets"]),
+                    "undone": entry["undone"]}
+            marker = status_summary(entry)
+            if marker is not None: item["face_style_alias_review"] = marker
+            items.append(item)
         un = [i for i in items if not i["undone"]]
-        return {"batches": items, "undoable": [i["batch_id"] for i in un],
+        return {"batches": items, "workspace_generation": self.versions.workspace,
+                "undoable": [i["batch_id"] for i in un],
                 "last": un[-1]["batch_id"] if un else None,
                 "last_result": getattr(self, "last_result", None)}

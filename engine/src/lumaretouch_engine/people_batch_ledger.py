@@ -127,7 +127,7 @@ def _publish(owner,engine,plans,targets):
     finally:engine._people_staged=None
 
 
-def commit_scoped(owner,engine,plans,*,request_id,prepare=True,prepared_targets=None):
+def commit_scoped(owner,engine,plans,*,request_id,prepare=True,prepared_targets=None,alias_history=None):
     plans={identity:plan for identity,plan in plans.items() if between(plan['before'],plan['candidate'])}
     if not plans:return None
     owner.documents.remember_current()
@@ -143,6 +143,12 @@ def commit_scoped(owner,engine,plans,*,request_id,prepare=True,prepared_targets=
     entry={'ops':[OP],'targets':targets,'at_ns':owner.monotonic(),'undone':False,
         'policy':'protected_scoped_graph','people_changes':[],
         'people_scoped_changes':scoped,'request_id':request_id}
+    if alias_history is not None:
+        # Validate before graph publication; no successful alias batch may be
+        # left in the ledger without its exact-member restore protection.
+        from .face_style_alias_history import KEY as ALIAS_KEY, check as check_alias_history
+        entry[ALIAS_KEY]=deepcopy(alias_history)
+        check_alias_history(entry)
     result={'kind':'commit','batch_id':bid,'applied':[int(k) for k in targets],'skipped':[]}
     frame=_publish(owner,engine,plans,targets)
     owner.ledger[bid]=entry;owner.last_result=result
@@ -160,6 +166,8 @@ def commit(owner,engine,before,candidate,*,request_id,prepare=True):
 def restore_scoped(engine,batch,redo):
     from .people_graph_patch import apply
     from .source_relocation_history import matches as source_path_matches
+    from .face_style_alias_history import check as check_alias_history, verify_restore as verify_alias_restore
+    alias_history=check_alias_history(batch)
     owner=engine._batch_controller();plans={};reviewed={}
     for record in batch['targets'].values():
         found=owner.versions.find(engine._docs,record['document_id'])
@@ -181,9 +189,14 @@ def restore_scoped(engine,batch,redo):
             plans[record['scope']]['reviewed_face_refs']=list({(ref['asset_sha256'],ref['face_instance_id'],ref['analysis_revision']):ref
                 for ref in reviewed[record['scope']]}.values())
     targets=_targets(owner,engine,plans)
+    if alias_history is not None:verify_alias_restore(engine,batch,plans,targets)
     # Recompute runtime paths/fences only after exact historical document/source
     # verification; a duplicate path never grants a replacement identity.
     prepare_scoped(engine,plans,targets)
+    if alias_history is not None:
+        # Preparation must not expand an explicitly reviewed alias cohort.
+        # Legacy scoped batches retain their established restoration behavior.
+        verify_alias_restore(engine,batch,plans,_targets(owner,engine,plans))
     return _publish(owner,engine,plans,targets)
 
 

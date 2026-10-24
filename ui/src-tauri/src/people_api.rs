@@ -62,6 +62,18 @@ impl ReceiptKind for PeopleKind {
                 || people["association_revision"] != request["association_revision"]
                 || binding["document_revision"].as_u64().zip(request["document_revision"].as_u64()).map_or(true, |(after, before)| after < before)
                 || people["revision"].as_u64().zip(request["state_revision"].as_u64()).map_or(true, |(after, before)| after < before) { return false; }
+            if request["payload"]["ack"].get("members").is_some() {
+                // The alias route publishes one shared graph and advances every
+                // reviewed document once through the existing batch ledger.
+                // Its thirty set_override calls each advance the graph revision.
+                // Do not accept the looser v1 current-document receipt here.
+                if binding["document_revision"].as_u64().zip(request["document_revision"].as_u64())
+                    .map_or(true, |(after, before)| before.checked_add(1) != Some(after))
+                    || people["revision"].as_u64().zip(request["state_revision"].as_u64())
+                        .map_or(true, |(after, before)| before.checked_add(30) != Some(after)) {
+                    return false;
+                }
+            }
         }
         value["outcome_unknown"] == false && binding["document_id"].as_str() == document
             && text(&binding["document_epoch"]) && revision(&binding["document_revision"])
@@ -142,3 +154,7 @@ pub(crate) fn people(state: tauri::State<'_, std::sync::Arc<crate::AppState>>, r
     }
     Ok(json!({"requested": true}))
 }
+
+#[cfg(test)]
+#[path = "face_style_alias_host_tests.rs"]
+mod face_style_alias_host_tests;

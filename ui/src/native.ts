@@ -8,6 +8,7 @@ import type {PresetReply} from './presets/presetWorkflow';
 import type {BatchReply} from './batch/batchWorkflow';
 import type {CaptureTransport,CaptureStatus} from "./colorCaptureController";
 import type {ScopeResult,ScopeStage} from "./colorScopesModel";
+import {observeFaceStyleAliasHistory} from './faceStyle/aliasHistoryRegistry';
 /** 与 Rust 命令的唯一出入口。所有跨语言类型集中在这里，避免各组件各自猜字段。 */
 import type {LevelsSpec} from "./levelsModel";
 import { invoke as tauriInvoke } from "@tauri-apps/api/core";
@@ -342,7 +343,9 @@ export interface PresetState {
 
 /** 批量同步台账（LNX-P0-BATCH / BATCH-004）：撤销要拿引擎报的那个 id。 */
 export interface SyncState {
-  batches: { batch_id: string; module_scope: string[]; targets: number; undone: boolean }[];
+  workspace_generation?: string;
+  batches: { batch_id: string; module_scope: string[]; targets: number; undone: boolean;
+    face_style_alias_review?: {version: 1; review_sha256: string; member_count: number} }[];
   undoable: string[];
   last: string | null;
   /** 上一笔 commit/undo 的事实：UI 那句“同步了几张、跳过几张为什么”只能读这里。 */
@@ -1344,7 +1347,13 @@ export const frameAcked = (seq: number, jsDrawUs: number) =>
 export const framePresented = (seq: number) => invoke("frame_presented", { seq });
 
 export const benchStats = () => invoke<Stats>("bench_stats");
-export const engineStatus = () => invoke<EngineStatus>("engine_status");
+let engineStatusRequestSequence = 0;
+export const engineStatus = async () => {
+  const observation = ++engineStatusRequestSequence;
+  const status = await invoke<EngineStatus>("engine_status");
+  observeFaceStyleAliasHistory(status.session?.sync, observation);
+  return status;
+};
 export const shutdownEngine = () => invoke("shutdown_engine");
 
 /** 导入真图。异步语义：引擎要几百毫秒到几秒，靠 engineStatus().image 轮询就绪。

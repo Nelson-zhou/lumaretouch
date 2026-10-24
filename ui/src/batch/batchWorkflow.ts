@@ -14,7 +14,8 @@ import {WAIST_TRANSFER_OP as WAIST_OP,WAIST_TRANSFER_LIMITS,waistTransferParamet
 import {HEAD_TRANSFER_OP as HEAD_OP,HEAD_TRANSFER_LIMITS,headTransferParameters,validHeadTransfer,validHeadTransferAck,sameHeadTransferAck,type HeadTransferEvidence,type HeadTransferAck} from '../headSize/transferModel.ts';
 import {bodyScalarNoWriteRejection,validBodyScalarReceiptState} from '../bodyScalar/transferModel.ts';
 import {spillRevision} from '../spillRemoval/model.ts';
-import {validFaceStyleRecipe} from '../faceStyle/model';
+import {validFaceStyleRecipe, type FaceStyleAliasCommit} from '../faceStyle/model';
+import {faceStyleAliasHistoryClass, registerFaceStyleAliasReceipt} from '../faceStyle/aliasHistoryRegistry';
 import {FACE_STYLE_BATCH_LIMIT, faceStyleSelection, sameFaceStyleRecipe, validFaceStyleBatchVisual,
   validFaceStyleBatchAck, sameFaceStyleBatchAck, verifyFaceStyleBatchRecipe, type FaceStyleBatchAck} from '../faceStyle/batchModel';
 /** Reviewed batch lifecycle. A queued command is not evidence of successful edits. */
@@ -54,7 +55,7 @@ export function createBatchWorkflow(api:BatchTransport,publish:(state:BatchUi)=>
   let context:BatchContext={docs:[],moduleScope:[],conflictPolicy:'skip_and_report',sourceDocumentId:'',enabled:false,label:''};
   let key='',generation=0,disposed=false;
   const faceStyleBatchIds=new Set<string>(),portraitCohortBatchIds=new Set<string>();
-  let pending:{id:string;action:BatchAction;generation:number;contextKey:string;token?:string;scope?:string[];policy?:string;transfer?:MaskTransferOptions;reference?:{strength:number};people?:PeopleTransferRequest;peopleProof?:PeopleTransferProof;referencePath?:string;docs?:string[];torsoAck?:TorsoTransferAck[];waistAck?:WaistTransferAck[];headAck?:HeadTransferAck[];collarboneAck?:CollarboneAck[];collarboneCohort?:boolean;faceStyleAck?:FaceStyleBatchAck[];faceStyleWrite?:boolean;portraitAck?:PortraitCohortAck[];portraitWrite?:boolean}|null=null;
+  let pending:{id:string;action:BatchAction;generation:number;contextKey:string;batchId?:string;aliasMemberCount?:number|null;token?:string;scope?:string[];policy?:string;transfer?:MaskTransferOptions;reference?:{strength:number};people?:PeopleTransferRequest;peopleProof?:PeopleTransferProof;referencePath?:string;docs?:string[];torsoAck?:TorsoTransferAck[];waistAck?:WaistTransferAck[];headAck?:HeadTransferAck[];collarboneAck?:CollarboneAck[];collarboneCohort?:boolean;faceStyleAck?:FaceStyleBatchAck[];faceStyleWrite?:boolean;portraitAck?:PortraitCohortAck[];portraitWrite?:boolean}|null=null;
   let state:BatchUi={phase:'closed',operation:'preflight',plan:null,result:null,message:'',scopeLabel:''};
   const set=(patch:Partial<BatchUi>)=>{state={...state,...patch};if(!disposed)publish(state);};
   const active=(g:number)=>!disposed&&g===generation;
@@ -275,6 +276,9 @@ export function createBatchWorkflow(api:BatchTransport,publish:(state:BatchUi)=>
           if(request.collarboneAck!==undefined&&(!validBodyScalarReceiptState(result)||!bodyScalarNoWriteRejection(result,request.token)&&(result.preflight_token!==request.token||(request.collarboneCohort?result.collarbone_cohort!==true:result.collarbone_cohort!==undefined||!result.module_scope?.includes(COLLARBONE_OP))||!sameCollarboneAck(result.collarbone_review_ack,request.collarboneAck))))throw Error('锁骨终态或逐图确认回执不匹配，只能查询原请求');
           if(result.face_style_review_ack!==undefined&&(request.action!=='commit'||request.faceStyleAck===undefined))throw Error('未请求的新版脸型逐图确认回执');
           if(request.faceStyleWrite&&!validBodyScalarReceiptState(result))throw Error('新版脸型写入缺少明确且一致的终态，只能查询原请求');
+          if(request.faceStyleWrite&&['undo','redo'].includes(request.action)
+            &&(result.success||result.batch_id!=null)&&result.batch_id!==request.batchId)
+            throw Error('新版脸型撤销/重做回执不属于原批次，只能查询原请求');
           const faceStyleNoWrite=bodyScalarNoWriteRejection(result,request.token)
             &&!['face_style_review_ack','face_style_visual','face_style'].some(field=>Object.hasOwn(result,field));
           if(request.faceStyleAck!==undefined&&!faceStyleNoWrite&&(result.preflight_token!==request.token
@@ -301,6 +305,15 @@ export function createBatchWorkflow(api:BatchTransport,publish:(state:BatchUi)=>
           if(result.outcome_unknown&&request.action!=='preflight'){set({phase:'uncertain',result,message:result.error??'执行结果未确认'});return;}
           if(result.success&&request.action==='commit')checkCommitted(result);
           if(result.success&&['undo','redo'].includes(request.action)&&(!Array.isArray(result.restored)||!Array.isArray(result.conflicts)))throw Error('撤销结果缺少逐张明细');
+          if(result.success&&request.faceStyleWrite&&['undo','redo'].includes(request.action)
+            &&(!result.restored!.every(index=>Number.isSafeInteger(index)&&index>=0)
+              ||new Set(result.restored).size!==result.restored!.length
+              ||!result.conflicts!.every(item=>object(item)&&typeof item.path==='string'&&typeof item.reason==='string'&&!!item.reason.trim())))
+            throw Error('新版脸型撤销/重做缺少有效逐张明细，只能查询原请求');
+          if(result.success&&request.aliasMemberCount!==undefined&&['undo','redo'].includes(request.action)
+            &&(JSON.stringify(result.module_scope)!==JSON.stringify(['lnx.people_graph.v1'])
+              ||result.restored!.length!==request.aliasMemberCount||result.conflicts!.length!==0))
+            throw Error('共享来源批次历史未证明完整原成员原子恢复，只能查询原请求');
           pending=null;set({phase:result.success?'done':'error',result,message:result.error??''});return;
         }
         if(response.phase!=='pending')throw Error(response.error??'批量结果暂不可查，不能据此判定未执行');
@@ -313,8 +326,9 @@ export function createBatchWorkflow(api:BatchTransport,publish:(state:BatchUi)=>
   }
   async function submit(action:BatchAction,opts:BatchOptions){
     const g=++generation,id=uuid(),deadline=now()+(options.timeoutMs??120000);
-    const request={id,action,generation:g,contextKey:key,token:opts.preflightToken,scope:opts.moduleScope?[...opts.moduleScope]:undefined,policy:opts.conflictPolicy,transfer:opts.localMaskTransfer,reference:opts.referenceColor,people:opts.peopleTransfer,peopleProof:context.peopleProof,referencePath:context.referencePath,docs:opts.docs,torsoAck:opts.torsoReviewAck?.map(ack=>({...ack})),waistAck:opts.waistReviewAck?.map(ack=>({...ack})),headAck:opts.headReviewAck?.map(ack=>({...ack})),collarboneAck:opts.collarboneReviewAck?.map(ack=>({...ack})),collarboneCohort:action==='commit'&&state.plan?.collarbone_cohort===true,
-      faceStyleAck:opts.faceStyleReviewAck?.map(ack=>({...ack})),faceStyleWrite:opts.faceStyleReviewAck!==undefined||!!opts.batchId&&faceStyleBatchIds.has(opts.batchId),
+    const aliasHistory=faceStyleAliasHistoryClass(opts.batchId);
+    const request={id,action,generation:g,contextKey:key,batchId:opts.batchId,aliasMemberCount:aliasHistory?.memberCount,token:opts.preflightToken,scope:opts.moduleScope?[...opts.moduleScope]:undefined,policy:opts.conflictPolicy,transfer:opts.localMaskTransfer,reference:opts.referenceColor,people:opts.peopleTransfer,peopleProof:context.peopleProof,referencePath:context.referencePath,docs:opts.docs,torsoAck:opts.torsoReviewAck?.map(ack=>({...ack})),waistAck:opts.waistReviewAck?.map(ack=>({...ack})),headAck:opts.headReviewAck?.map(ack=>({...ack})),collarboneAck:opts.collarboneReviewAck?.map(ack=>({...ack})),collarboneCohort:action==='commit'&&state.plan?.collarbone_cohort===true,
+      faceStyleAck:opts.faceStyleReviewAck?.map(ack=>({...ack})),faceStyleWrite:opts.faceStyleReviewAck!==undefined||!!aliasHistory||!!opts.batchId&&faceStyleBatchIds.has(opts.batchId),
       portraitAck:opts.portraitCohortAck?.map(ack=>({...ack})),portraitWrite:opts.portraitCohortAck!==undefined||!!opts.batchId&&portraitCohortBatchIds.has(opts.batchId)};pending=request;
     set({phase:action==='preflight'?'preflighting':'committing',hidden:false,queryOnly:request.faceStyleWrite||request.portraitWrite,operation:action,result:null,message:''});
     try{
@@ -440,5 +454,8 @@ export function createBatchWorkflow(api:BatchTransport,publish:(state:BatchUi)=>
     if(pending?.collarboneAck!==undefined){set({message:'锁骨同步结果尚未确定，只能查询原请求，不能释放后重复提交。'});return;}
     generation++;pending=null;set({phase:'closed',hidden:false,queryOnly:false,result:null,plan:null,message:''});
   }
-  return {updateContext,start,commit,undo,redo,query,close,acknowledgeInspection,snapshot:()=>state,dispose:()=>{disposed=true;generation++;pending=null;}};
+  function protectFaceStyleAlias(commit:FaceStyleAliasCommit){
+    return !disposed&&registerFaceStyleAliasReceipt(commit);
+  }
+  return {updateContext,start,commit,undo,redo,query,close,acknowledgeInspection,protectFaceStyleAlias,snapshot:()=>state,dispose:()=>{disposed=true;generation++;pending=null;}};
 }

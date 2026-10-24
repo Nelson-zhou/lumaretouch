@@ -75,6 +75,7 @@ export type PeopleResult = {
   success: boolean; outcome_unknown: boolean; error?: string;
   doc_state?: {people?: PeopleView};
   payload?: unknown; payload_released?: boolean;
+  batch_id?: string | null;
   face_style_request?: Omit<PeopleAction, 'request_id'>;
 }
 export type PeopleMailbox = {phase: 'pending' | 'done' | 'unavailable'; request_id: string; result?: PeopleResult; error?: string}

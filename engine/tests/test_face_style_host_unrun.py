@@ -46,7 +46,7 @@ def fixture(action='face_style_catalog', payload=None):
 @pytest.mark.parametrize('action,payload',[
     ('face_style_catalog',{}),
     ('face_style_preview',{'version':1,'style':'classic','amount':.5}),
-    ('face_style_image',{'token':'token-a','side':'before','sha256':'b'*64}),
+    ('face_style_image',{'token':'a'*32,'side':'before','sha256':'b'*64}),
 ])
 def test_exact_read_routes_do_not_admit_confirm_or_extra_fields(action,payload):
     _,_,raw=fixture(action,payload)
@@ -108,9 +108,9 @@ def test_publish_preverification_order_and_rejection_cleanup():
 
 
 def test_postpublish_failure_is_unknown_and_request_not_reapplied():
-    engine,state,raw=fixture('face_style_confirm',{'token':'token-a','ack':{
+    engine,state,raw=fixture('face_style_confirm',{'token':'a'*32,'ack':{
         'review_sha256':'b'*64,'before_sha256':'c'*64,'after_sha256':'d'*64}})
-    proof={'kind':'face_style_confirm','token':'token-a'};events=[]
+    proof={'kind':'face_style_confirm','token':'a'*32};events=[]
     def publish(*args,**kwargs):
         kwargs['before_publish']();engine._people_graph_owner.fence+=1
         return None,{'event':'image_ready'}

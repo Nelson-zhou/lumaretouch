@@ -259,7 +259,12 @@ def apply(engine,raw,emit):
         if action=='resolve_legacy' and any(x['asset_sha256']==asset and x['status']=='unresolved' for x in candidate['unresolved_legacy']):
             frame=engine._people_publish_pending_review(candidate)
         else:
-            try:batch_id,frame=publish(engine,state,candidate,request,shared=shared,before_publish=before_publish)
+            try:
+                if action=='face_style_confirm' and records[request]['payload'].get('alias_members') is not None:
+                    # The frozen complete alias set belongs to the existing
+                    # protected batch ledger, never a hidden local face write.
+                    batch_id,frame=style_review.publish_alias(engine,state,target,payload,candidate,records[request]['payload'],request_id=request)
+                else:batch_id,frame=publish(engine,state,candidate,request,shared=shared,before_publish=before_publish)
             except Exception:
                 # A rejected preparation may leave only append-only unused
                 # support bytes. With an unchanged graph fence no pixels/recipe

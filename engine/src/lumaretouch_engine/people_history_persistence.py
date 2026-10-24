@@ -66,7 +66,10 @@ def save(engine,project):
     retain_assets(histories)
     project['people_document_history']=histories
     batch=getattr(engine,'_batch_sync',None)
-    project['people_batch_history']={key:deepcopy(value) for key,value in (batch.ledger.items() if batch else []) if 'people_changes' in value}
+    batches={key:deepcopy(value) for key,value in (batch.ledger.items() if batch else []) if 'people_changes' in value}
+    from .face_style_alias_history import check as check_alias_history
+    for entry in batches.values():check_alias_history(entry)
+    project['people_batch_history']=batches
 
 
 def prepare(project,rows,limit):
@@ -148,6 +151,8 @@ def prepare(project,rows,limit):
                 raise ValueError('Saved portrait target has no graph scope')
             from .people_batch_ledger import reviewed_refs
             reviewed_refs(rec)
+        from .face_style_alias_history import check as check_alias_history
+        check_alias_history(entry)
         entries[str(key)]=entry
     return staged,entries
 

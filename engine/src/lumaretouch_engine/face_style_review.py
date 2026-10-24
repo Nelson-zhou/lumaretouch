@@ -44,14 +44,18 @@ def check_action(action,payload,target):
             raise ValueError('Face-style preview needs its exact versioned scalar recipe')
         RECIPES.patches(payload['style'],payload['amount'])
     else:
-        fields={'token','side','sha256'} if action=='face_style_image' else {'token','ack'}
-        if set(payload)!=fields or type(payload['token']) is not str or re.fullmatch('[0-9a-f]{32}',payload['token']) is None:
+        fields=({'token','side','sha256'},{'token','document_id','side','sha256'}) if action=='face_style_image' else ({'token','ack'},)
+        if set(payload) not in fields or type(payload['token']) is not str or re.fullmatch('[0-9a-f]{32}',payload['token']) is None:
             raise ValueError('Face-style review requires its exact session token')
         if action=='face_style_image':
             if payload['side'] not in ('before','after') or not _hash(payload['sha256']):raise ValueError('Invalid face-style image identity')
+            if 'document_id' in payload:S.token(payload['document_id'])
         else:
             ack=payload['ack']
-            if type(ack) is not dict or set(ack)!={'review_sha256','before_sha256','after_sha256'} or not all(_hash(v) for v in ack.values()):
+            if type(ack) is dict and set(ack)=={'review_sha256','members'}:
+                from .face_style_alias_review import check_ack
+                check_ack(ack)
+            elif type(ack) is not dict or set(ack)!={'review_sha256','before_sha256','after_sha256'} or not all(_hash(v) for v in ack.values()):
                 raise ValueError('Face-style confirmation requires the complete loaded image pair')
 
 
@@ -69,7 +73,7 @@ def _store(engine):
     return store
 
 
-def _live(engine,state,target):
+def _live(engine,state,target,*,strict=True):
     from .people_preset_plan import require_active_owner
     from .virtual_copy_people import current_row,scope_rows
     owner=require_active_owner(engine);row=current_row(engine)
@@ -85,15 +89,16 @@ def _live(engine,state,target):
             or engine._people_targets.get(proof['asset_sha256'])!=target):
         raise ValueError('Face style requires the explicitly selected current face')
     # One photograph's review must not authorize unseen same-source aliases.
-    aliases=[other for other in scope_rows(engine) if SOURCE.row_asset({**other,'state':current} if other is row else other)==proof['asset_sha256']]
-    if len(aliases)!=1 or aliases[0] is not row:
-        raise ValueError('This face is shared by multiple source-identical documents; use an independent virtual copy or reviewed cross-image transfer')
+    if strict:
+        aliases=[other for other in scope_rows(engine) if SOURCE.row_asset({**other,'state':current} if other is row else other)==proof['asset_sha256']]
+        if len(aliases)!=1 or aliases[0] is not row:
+            raise ValueError('This face is shared by multiple source-identical documents; review every affected document')
     version=engine._document_versions().version(row)
     return owner,row,current,proof,version
 
 
 def catalogue(engine,state,target,payload):
-    check_action('face_style_catalog',payload,target);_live(engine,state,target)
+    check_action('face_style_catalog',payload,target);_live(engine,state,target,strict=False)
     return {'kind':'face_style_catalog','catalogue':RECIPES.catalogue()}
 
 
@@ -115,6 +120,8 @@ def _entry(engine,token):
 
 def _verify(engine,state,target,entry):
     owner,row,current,source,version=_live(engine,state,target)
+    from .face_style_alias_review import verify_dormant
+    verify_dormant(engine,row,{source['asset_sha256']})
     review=entry['review']
     if (entry['claimed'] or owner is not entry['owner'] or owner.fence!=entry['fence']
             or row is not entry['row'] or row['path']!=entry['path'] or engine._load_id!=entry['load_id']
@@ -127,12 +134,10 @@ def _verify(engine,state,target,entry):
     return current
 
 
-def preview(engine,state,target,payload):
+def _stage(engine,state,target,payload,row,current,source,version):
+    """The established scalar composition, shared without changing v1 math."""
     from .people_edit import stage
     from .people_resolver import resolve
-    from .people_transfer_inventory import proof
-    check_action('face_style_preview',payload,target)
-    owner,row,current,source,version=_live(engine,state,target);fence=owner.fence
     patches=RECIPES.patches(payload['style'],payload['amount'])
     binding=engine._people_binding()
     command={**{key:binding[key] for key in ('document_id','document_epoch','document_revision')},
@@ -146,6 +151,17 @@ def preview(engine,state,target,payload):
         from .creative_derived_effects import require_graph
         require_graph(candidate,SOURCE.binding(current),document_id=version.document_id)
     RECIPES.validate_compatibility(A.recipes(resolve(candidate,target['target_id'],A.defaults())))
+    return patches,candidate
+
+
+def preview(engine,state,target,payload):
+    from .people_transfer_inventory import proof
+    from . import face_style_alias_review as ALIASES
+    check_action('face_style_preview',payload,target)
+    live=_live(engine,state,target,strict=False)
+    if ALIASES.has_aliases(engine,live):return ALIASES.preview(engine,state,target,payload,live)
+    owner,row,current,source,version=_live(engine,state,target);fence=owner.fence
+    patches,candidate=_stage(engine,state,target,payload,row,current,source,version)
     before_key=snapshot_key(engine,row,current,state);after_key=snapshot_key(engine,row,current,candidate)
     a,left,proof_a=render_image(engine,row,current,state,version.document_id,version.revision)
     b,right,proof_b=render_image(engine,row,current,candidate,version.document_id,version.revision)
@@ -173,7 +189,12 @@ def preview(engine,state,target,payload):
 
 
 def image(engine,state,target,payload):
-    check_action('face_style_image',payload,target);store,entry=_entry(engine,payload['token']);_verify(engine,state,target,entry)
+    check_action('face_style_image',payload,target);store,entry=_entry(engine,payload['token'])
+    if entry['review']['version']==2:
+        from .face_style_alias_review import image as alias_image
+        return alias_image(engine,state,target,payload,store,entry)
+    if 'document_id' in payload:raise ValueError('Single-document face-style images require their original exact coordinates')
+    _verify(engine,state,target,entry)
     review=entry['review'];visual=review['visual'];side=payload['side']
     if payload['sha256']!=visual[side]['sha256']:raise ValueError('Face-style image hash does not match review')
     pixels=store['images'].read(_plan(payload['token'],review),visual['document_id'],visual['revision'],side,payload['sha256'])
@@ -182,7 +203,11 @@ def image(engine,state,target,payload):
 
 
 def confirm(engine,state,target,payload):
-    check_action('face_style_confirm',payload,target);store,entry=_entry(engine,payload['token']);_verify(engine,state,target,entry)
+    check_action('face_style_confirm',payload,target);store,entry=_entry(engine,payload['token'])
+    if entry['review']['version']==2:
+        from .face_style_alias_review import confirm as alias_confirm
+        return alias_confirm(engine,state,target,payload,store,entry)
+    _verify(engine,state,target,entry)
     review=entry['review'];visual=review['visual']
     if payload['ack']!=_ack(review):raise ValueError('Confirm this exact full face-style image pair')
     for side in ('before','after'):
@@ -206,10 +231,19 @@ def verify_before_publish(engine,state,target,payload,candidate,proof):
     entry['claimed']=True
 
 
+def publish_alias(engine,state,target,payload,candidate,proof,*,request_id):
+    from .face_style_alias_review import publish
+    return publish(engine,state,target,payload,candidate,proof,request_id)
+
+
 def verify_after_publish(engine,candidate,proof):
     from .people_preset_plan import require_active_owner
     from .virtual_copy_people import current_row
-    _,entry=_entry(engine,proof['token']);owner=require_active_owner(engine);row=current_row(engine)
+    _,entry=_entry(engine,proof['token'])
+    if entry['review']['version']==2:
+        from .face_style_alias_review import verify_after_publish as alias_after
+        return alias_after(engine,candidate,proof,entry)
+    owner=require_active_owner(engine);row=current_row(engine)
     review=entry['review'];version=engine._document_versions().version(row)
     current=engine._people_preset_capture()
     if (not entry['claimed'] or owner is not entry['owner'] or owner.fence!=entry['fence']+1

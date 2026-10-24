@@ -91,3 +91,130 @@ fn frozen_review() -> (Value, Value) {
     // Owner graph and render people-context fingerprints intentionally differ.
     assert_ne!(v["owner"]["graph_sha256"],v["visual"]["before_people_sha256"]);
 }
+
+// AUTHORED / UNRUN. Same-owner alias transport only, not real rendered evidence.
+fn alias_review() -> (Value, Value) {
+    let (c, mut v) = frozen_review();
+    let current = v["visual"].clone(); let mut other = current.clone();
+    other["document_id"] = json!("alias"); other["revision"] = json!("9");
+    // Identical source bytes can have independent crop/state/render fingerprints.
+    other["before_output_size"] = json!([1024,1024]); other["after_output_size"] = json!([1024,1024]);
+    other["before"]["height"] = json!(1024); other["after"]["height"] = json!(1024);
+    other["before_state_sha256"] = json!("a".repeat(64)); other["candidate_state_sha256"] = json!("b".repeat(64));
+    v["version"] = json!(2);
+    v["members"] = json!([{"path":"/current.raw","visual":current},{"path":"/alias.raw","visual":other}]);
+    (c, v)
+}
+fn alias_ack(v: &Value) -> Value {
+    let members: Vec<Value> = v["members"].as_array().unwrap().iter().map(|member| {
+        let visual = &member["visual"];
+        json!({"document_id":visual["document_id"],"revision":visual["revision"],
+            "before_sha256":visual["before"]["sha256"],"after_sha256":visual["after"]["sha256"]})
+    }).collect();
+    json!({"review_sha256":v["review_sha256"],"members":members})
+}
+fn alias_confirm() -> Value {
+    let (_, review) = alias_review();
+    request("face_style_confirm", json!({"token":review["token"],"ack":alias_ack(&review)}))
+}
+fn alias_result(c: &Value) -> Value {
+    let mut result = result(c); result["document_id"] = c["document_id"].clone();
+    result["batch_id"] = json!("batch-001-1234");
+    result["payload"] = json!({"kind":"face_style_confirm","token":c["payload"]["token"],
+        "review_sha256":c["payload"]["ack"]["review_sha256"],"ack":c["payload"]["ack"],
+        "recipe":{"version":1,"style":"classic","amount":0.5},"patches_sha256":"8".repeat(64),
+        "alias_members":[{"document_id":"doc","expected_revision":"4","result_revision":"5"},
+            {"document_id":"alias","expected_revision":"9","result_revision":"10"}]});
+    result
+}
+#[test] fn alias_review_preserves_v1_and_requires_every_source_bound_visual() {
+    let (c, v) = alias_review(); assert!(review(&v, &c));
+    let (old_command, old_review) = frozen_review(); assert!(review(&old_review, &old_command));
+    for (path, bad) in [("/version",json!(1)),("/owner/people_scope",json!("doc")),("/members/0/visual/revision",json!("5")),
+        ("/members/1/visual/document_id",json!("doc")),("/members/1/visual/revision",json!("09")),
+        ("/members/1/visual/revision",json!("9007199254740992")),("/members/1/path",json!("bad\0path")),
+        ("/members/1/visual/source_proof/asset_sha256",json!("b".repeat(64))),
+        ("/members/1/visual/before/height",json!(1)),("/members/1/visual/before_people_sha256",Value::Null)] {
+        let mut changed = v.clone(); *changed.pointer_mut(path).unwrap() = bad;
+        assert!(!review(&changed, &c), "{path}");
+    }
+    let mut changed = v.clone(); changed["members"].as_array_mut().unwrap().reverse(); assert!(!review(&changed, &c));
+    changed = v.clone(); changed["members"].as_array_mut().unwrap().pop(); assert!(!review(&changed, &c));
+    changed = v.clone(); changed["members"][1]["visual"]["coverage_sha256"] = json!("a".repeat(64)); assert!(!review(&changed, &c));
+    changed = v; changed["members"][1]["visual"]["before"]["base64"] = json!("AAAA"); assert!(!review(&changed, &c));
+}
+#[test] fn alias_ack_is_exact_ordered_bounded_and_starts_with_the_current_document() {
+    let c = alias_confirm(); assert!(command(&c).is_ok()); assert!(!read_only(&c));
+    for (path, bad) in [("/payload/ack/members/0/document_id",json!("other")),
+        ("/payload/ack/members/0/revision",json!("5")),("/payload/ack/members/1/document_id",json!("doc")),
+        ("/payload/ack/members/1/revision",json!(9)),("/payload/ack/members/1/revision",json!("09")),
+        ("/payload/ack/members/1/before_sha256",Value::Null)] {
+        let mut changed = c.clone(); *changed.pointer_mut(path).unwrap() = bad; assert!(command(&changed).is_err(), "{path}");
+    }
+    let mut changed = c.clone(); changed["payload"]["ack"]["before_sha256"] = json!("a".repeat(64)); assert!(command(&changed).is_err());
+    changed = c.clone(); changed["payload"]["ack"]["members"].as_array_mut().unwrap().pop(); assert!(command(&changed).is_err());
+    changed = c; let members = changed["payload"]["ack"]["members"].as_array_mut().unwrap();
+    while members.len() < MAX_ALIAS_MEMBERS {
+        let mut member = members[1].clone(); member["document_id"] = json!(format!("alias-{}", members.len())); members.push(member);
+    }
+    assert!(command(&changed).is_ok()); assert!(binding(&changed).unwrap().unwrap().to_string().len() < 16 * 1024);
+    let mut extra = changed["payload"]["ack"]["members"][1].clone(); extra["document_id"] = json!("one-too-many");
+    changed["payload"]["ack"]["members"].as_array_mut().unwrap().push(extra); assert!(command(&changed).is_err());
+}
+#[test] fn alias_confirmation_requires_the_real_batch_and_every_exact_revision_advance() {
+    let c = alias_confirm(); let v = alias_result(&c); assert!(receipt(&v));
+    for (path, bad) in [("/batch_id",Value::Null),("/batch_id",json!("")),("/batch_id",json!(" ")),
+        ("/payload/alias_members/0/expected_revision",json!("3")),("/payload/alias_members/0/result_revision",json!("4")),
+        ("/payload/alias_members/1/document_id",json!("doc")),("/payload/alias_members/1/result_revision",json!("11")),
+        ("/payload/alias_members/1/result_revision",json!(10)),("/payload/alias_members/1/result_revision",json!("010"))] {
+        let mut changed = v.clone(); *changed.pointer_mut(path).unwrap() = bad; assert!(!receipt(&changed), "{path}");
+    }
+    let mut changed = v.clone(); changed["payload"]["alias_members"].as_array_mut().unwrap().reverse(); assert!(!receipt(&changed));
+    changed = v.clone(); changed["payload"]["alias_members"].as_array_mut().unwrap().pop(); assert!(!receipt(&changed));
+    changed = v.clone(); changed["payload"]["alias_members"][1]["hidden"] = json!(true); assert!(!receipt(&changed));
+    changed = v; changed["payload"].as_object_mut().unwrap().remove("alias_members"); assert!(!receipt(&changed));
+}
+#[test] fn alias_image_document_coordinate_is_bound_without_relaxing_the_old_envelope() {
+    let old = request("face_style_image",json!({"token":"b".repeat(32),"side":"before","sha256":"a".repeat(64)}));
+    assert!(command(&old).is_ok()); assert!(read_only(&old));
+    let mut c = old; c["payload"]["document_id"] = json!("alias"); assert!(command(&c).is_ok()); assert!(read_only(&c));
+    assert_eq!(binding(&c).unwrap().unwrap()["face_style_request"]["payload"]["document_id"],"alias");
+    for bad in [Value::Null,json!(""),json!("x".repeat(129))] {
+        let mut changed = c.clone(); changed["payload"]["document_id"] = bad; assert!(command(&changed).is_err());
+    }
+    c["payload"]["revision"] = json!("9"); assert!(command(&c).is_err());
+}
+#[test] fn alias_image_receipt_requires_its_document_echo_and_canonical_png_bytes() {
+    let source = json!({"asset_sha256":"a".repeat(64),"original_sha256":"a".repeat(64),"creative_source":null});
+    let pair = crate::original_shadow_transfer_protocol::tests::sample_transfer(&json!("alias"), &json!("9"), &json!({}), &source);
+    let png = &pair["before"];
+    let c = request("face_style_image", json!({"token":"b".repeat(32),"document_id":"alias","side":"before","sha256":png["sha256"]}));
+    let v = json!({"document_id":"doc","action":"face_style_image","success":true,
+        "face_style_request":binding(&c).unwrap().unwrap()["face_style_request"],
+        "payload":{"kind":"face_style_image","token":"b".repeat(32),"document_id":"alias","side":"before",
+            "sha256":png["sha256"],"review_sha256":"c".repeat(64),"image":png}});
+    assert!(receipt(&v));
+    for (path, bad) in [("/payload/document_id",json!("doc")),("/payload/image/base64",json!("AAAA")),
+        ("/payload/image/sha256",json!("e".repeat(64))),("/payload/image/width",json!(1025))] {
+        let mut changed = v.clone(); *changed.pointer_mut(path).unwrap() = bad; assert!(!receipt(&changed),"{path}");
+    }
+    let mut changed = v.clone(); changed["payload"].as_object_mut().unwrap().remove("document_id"); assert!(!receipt(&changed));
+    let mut legacy = v; legacy["face_style_request"]["payload"].as_object_mut().unwrap().remove("document_id");
+    assert!(!receipt(&legacy)); legacy["payload"].as_object_mut().unwrap().remove("document_id"); assert!(receipt(&legacy));
+}
+#[test] fn ordered_alias_ack_and_unknown_outcomes_keep_the_original_mailbox_binding() {
+    let c = alias_confirm(); let v = alias_result(&c);
+    let mut h = host(); h.begin_command([217;16], &c).unwrap();
+    let mut substituted = v.clone(); substituted["face_style_request"]["payload"]["ack"]["members"].as_array_mut().unwrap().reverse();
+    h.receive([217;16], &substituted); let retained = h.status("style-fixture")["result"].clone();
+    assert_eq!(retained["outcome_unknown"],true);
+    assert_eq!(retained["face_style_request"],v["face_style_request"]);
+    h.receive([217;16], &v); assert_eq!(h.status("style-fixture")["result"],retained);
+    assert!(h.guards_review([217;16],"style-fixture"));
+    let mut h = host(); h.begin_command([217;16], &c).unwrap();
+    let mut unknown = v; unknown["success"] = json!(false); unknown["outcome_unknown"] = json!(true);
+    unknown["error"] = json!("Publication state is uncertain"); h.receive([217;16], &unknown);
+    let retained = h.status("style-fixture")["result"].clone(); assert_eq!(retained["outcome_unknown"],true);
+    assert_eq!(retained["face_style_request"]["payload"]["ack"],c["payload"]["ack"]);
+    assert!(retained.get("batch_id").is_none()); assert!(h.guards_review([217;16],"style-fixture"));
+}

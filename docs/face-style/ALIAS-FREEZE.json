@@ -1,0 +1,265 @@
+{
+  "baseline": "75a627b6f89c7b377b4007398de3dd7206a02092",
+  "status": "FROZEN_SOURCE_ONLY_SHARED_SOURCE_FACE_STYLE_ALIAS_REVIEW_UNRUN",
+  "requirement_ids": [
+    "LNX-REF-PC-32466-C-3b31aac970",
+    "LNX-REF-PC-32466-C-6c86bf2c55",
+    "LNX-REF-PC-32466-C-7ce4146bc1",
+    "LNX-REF-PC-32466-C-e4a7970fd2",
+    "LNX-REF-PC-32466-C-7e035684d8",
+    "LNX-REF-PC-32466-C-0e3343d22a",
+    "LNX-REF-PC-32466-C-7b800a0655",
+    "LNX-REF-PC-32466-C-ae54a179f8",
+    "LNX-REF-PC-32466-C-9fc7c5a61e"
+  ],
+  "scope": "Version-2 current-face review freezes actual source-first complete shared-source alias images, exact all-member ACK and existing scoped ledger publication/history. Version-1 single-document path and numerical cores remain distinct. No new recipe or algorithm count.",
+  "files": [
+    {
+      "path": "docs/development/handbook-traceability.json",
+      "sha256": "43cabdec9ca515815af9f98270a9df5b5b50c7ff3a3b1f1f828bffc51df783b6",
+      "bytes": 470829
+    },
+    {
+      "path": "docs/face-style/ALIAS-REVIEW-CONTRACT.md",
+      "sha256": "1a77215bf60036de44aa9f86e1fe3d63e81c149d4607e7f6c40c9c20e4b6c577",
+      "bytes": 5576
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/batch_sync.py",
+      "sha256": "2fa7937b0d5250875a876bc7c170bb7f2d54dcd2c38fe74dc9f4edaa12b11829",
+      "bytes": 60679
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/face_style_alias_history.py",
+      "sha256": "9f5ce0c853c52c26cf917857c65d84be35700b75c3caef665787b679e02c41ec",
+      "bytes": 8282
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/face_style_alias_review.py",
+      "sha256": "d0978ecdc9c3c19d495ada02d344b641bd3230bc03ec8340df7f2a4b5e63a8a1",
+      "bytes": 25906
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/face_style_review.py",
+      "sha256": "10fa4314c87353c21aa8debcff833f242393c96a1977e9a6e284bcbaa4033dad",
+      "bytes": 14840
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_batch_ledger.py",
+      "sha256": "402644d26cbda918cdcb6744fc0b5b2e3518b00940233b681d4cfcb0efdb626a",
+      "bytes": 11506
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_history_persistence.py",
+      "sha256": "ea86df6cf64a1c6bda45fca4fda62668c6d9507582b596637ea948b7f896ac5d",
+      "bytes": 11527
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_host_commands.py",
+      "sha256": "051e4575961de1131c57d19c4249388efa8ef164a8eaf7d7036fac8769db3146",
+      "bytes": 24503
+    },
+    {
+      "path": "engine/tests/test_face_style_alias_history_unrun.py",
+      "sha256": "8bea8c828e8c3b2cf77c851c4c65af8c6db8304d6727820b0541fc3fe06ebeb7",
+      "bytes": 11412
+    },
+    {
+      "path": "engine/tests/test_face_style_alias_host_unrun.py",
+      "sha256": "9b871aa9ce7d061b097dc1ee9cdd6a39aa4930061683b875e51ec6313c932808",
+      "bytes": 10465
+    },
+    {
+      "path": "engine/tests/test_face_style_alias_review_unrun.py",
+      "sha256": "5a1a82628f886030bf3b764245fcc2cf4b3befad4aea172790c9d8587489e2a7",
+      "bytes": 35284
+    },
+    {
+      "path": "engine/tests/test_face_style_host_unrun.py",
+      "sha256": "c3de071725565846deb9411fa3622cfd12b6a6fc77eec8b680be742f844a80ef",
+      "bytes": 7873
+    },
+    {
+      "path": "engine/tests/test_face_style_review_unrun.py",
+      "sha256": "0b6f8118bab71ab7d1c2374318a53007045a71088de84d03a6338ae2e767ed7c",
+      "bytes": 16818
+    },
+    {
+      "path": "ui/src-tauri/src/face_style_alias_host_tests.rs",
+      "sha256": "7d94a2c1767e6d2aa7081e018b947cc50ba3365ccc4deccd1c39558c54882488",
+      "bytes": 5757
+    },
+    {
+      "path": "ui/src-tauri/src/face_style_protocol.rs",
+      "sha256": "889f93491673e0185fbc3953015696832289ee75cabbffb4feeab9b224f8e3a1",
+      "bytes": 14851
+    },
+    {
+      "path": "ui/src-tauri/src/face_style_protocol_tests.rs",
+      "sha256": "6acee5e3435f287e9990912f1743076a4df61b01166d485f57d53b3ed06d3af7",
+      "bytes": 16511
+    },
+    {
+      "path": "ui/src-tauri/src/people_api.rs",
+      "sha256": "7dab8b215f4cfa81876193dafb762d6c0110a899e484cf6d0fb6e73acaf5df0c",
+      "bytes": 10051
+    },
+    {
+      "path": "ui/src/batch/batchWorkflow.ts",
+      "sha256": "d047489f1116406ed1f19a1c45bde119a7e2a3a95357a4dd4a0766bfcdd01bda",
+      "bytes": 56395
+    },
+    {
+      "path": "ui/src/batch/completion.ts",
+      "sha256": "d0a05e8c5129d82c09913c1e2e282d2784540f009f970d8c45ccbb1aee72c7d3",
+      "bytes": 461
+    },
+    {
+      "path": "ui/src/batch/completion.unrun.test.ts",
+      "sha256": "fc5897292eb277c62b672cc5af1a67ef5c4c2d00321103984a4bfc6f22191e06",
+      "bytes": 1535
+    },
+    {
+      "path": "ui/src/batch/useBatchWorkflow.ts",
+      "sha256": "858c35f7af0e5834d6108857381851f5de964e2e6da6122752a1ecd98426bed0",
+      "bytes": 2542
+    },
+    {
+      "path": "ui/src/faceStyle/ALIAS_ACCEPTANCE_UNRUN.md",
+      "sha256": "a6e733baa0aed5a5d684e2637e6c386366d894e44829d6f8ca5ad6169baf689b",
+      "bytes": 4533
+    },
+    {
+      "path": "ui/src/faceStyle/FaceStylePanel.tsx",
+      "sha256": "b10138ff90a84fb9432d3f893f88256140edb32ce5a89d97069359e11b0bc838",
+      "bytes": 18196
+    },
+    {
+      "path": "ui/src/faceStyle/aliasHistoryRegistry.ts",
+      "sha256": "39b3cdedd21367e2c22501aee2c5a23519504681bc493da918a83cf9ea83508a",
+      "bytes": 3533
+    },
+    {
+      "path": "ui/src/faceStyle/aliasReview.unrun.test.ts",
+      "sha256": "53289fb9bb1d84981b1bfa6bab3ad5428ff57be99a17c361eed23b91a6724619",
+      "bytes": 19643
+    },
+    {
+      "path": "ui/src/faceStyle/model.ts",
+      "sha256": "f617396def5a8228aa480786626c74c30c9197136d89b8f2057394e0ee1bcc71",
+      "bytes": 19132
+    },
+    {
+      "path": "ui/src/native.ts",
+      "sha256": "99438a65605bfbb7253e71d1ac48115c63e0b9749887dd21643fb31d8da7f76e",
+      "bytes": 107890
+    },
+    {
+      "path": "ui/src/people/model.ts",
+      "sha256": "cd94465e871941fb63a5b99858f9a0dd5b62a2e15908dc95710cf4262ca7ac7a",
+      "bytes": 9765
+    },
+    {
+      "path": "ui/src/people/usePeopleWorkflow.ts",
+      "sha256": "222dbf03bb72079b67109bb0e3bed4207d98e22bd7f8bfbe9273619e9bd2f961",
+      "bytes": 5254
+    },
+    {
+      "path": "ui/src/people/workflow.ts",
+      "sha256": "3602732aa22c169344c78c4907b063927ab9a3d2cdb3dc74cbbf41d8397c9971",
+      "bytes": 14041
+    }
+  ],
+  "static_checks": {
+    "python_ast_files": 1311,
+    "changed_json_toml": "stdlib parse only",
+    "relative_ui_imports_existing": 72,
+    "git_diff_check": "clean",
+    "payload_whitespace": "clean",
+    "prior_numeric_geometry_render_and_frozen_sources_byte_identical": 256,
+    "line_caps": {
+      "ui/src/App.tsx": 2131,
+      "ui/src-tauri/src/main.rs": 2047,
+      "engine/src/lumaretouch_engine/server.py": 7007
+    },
+    "fixture_declarations_in_payload_not_executed": {
+      "python": {
+        "engine/tests/test_face_style_alias_history_unrun.py": 9,
+        "engine/tests/test_face_style_alias_host_unrun.py": 6,
+        "engine/tests/test_face_style_alias_review_unrun.py": 27,
+        "engine/tests/test_face_style_host_unrun.py": 9,
+        "engine/tests/test_face_style_review_unrun.py": 18
+      },
+      "rust": {
+        "ui/src-tauri/src/face_style_alias_host_tests.rs": 4,
+        "ui/src-tauri/src/face_style_protocol_tests.rs": 12
+      },
+      "typescript": {
+        "ui/src/batch/completion.unrun.test.ts": 2,
+        "ui/src/faceStyle/aliasReview.unrun.test.ts": 11
+      }
+    }
+  },
+  "integration_map": {
+    "exact_alias_plan_and_images": [
+      "face_style_review.py",
+      "face_style_alias_review.py",
+      "portrait_review_render.py (unchanged primitive)"
+    ],
+    "canonical_publication": [
+      "people_host_commands.py",
+      "people_batch_ledger.py (existing sole history owner, alias-specific closure validation)",
+      "batch_sync.py (validated read-only history classification)"
+    ],
+    "durable_history": [
+      "people_history_persistence.py",
+      "face_style_alias_history.py (new strict marker)"
+    ],
+    "native": [
+      "face_style_protocol.rs",
+      "people_api.rs",
+      "source-only fixture files listed in payload"
+    ],
+    "ui": [
+      "faceStyle/ (including workspace-scoped aliasHistoryRegistry)",
+      "people/model.ts",
+      "people/workflow.ts",
+      "people/usePeopleWorkflow.ts",
+      "batch/batchWorkflow.ts",
+      "batch/useBatchWorkflow.ts",
+      "batch/completion.ts",
+      "native.ts (read-only restored-history classification)"
+    ],
+    "traceability": [
+      "docs/face-style/ALIAS-REVIEW-CONTRACT.md",
+      "same nine handbook entries, no additional count"
+    ]
+  },
+  "limits": {
+    "review_members_including_current": 16,
+    "review_tokens": 8,
+    "review_ttl_seconds": 1800,
+    "display_edge": 1024,
+    "individual_png_bytes": 4194304,
+    "review_cache_raw_bytes": 134217728,
+    "review_cache_image_entries": 256,
+    "dormant_frames_total": 10000,
+    "frames_per_history_stack": 64,
+    "path_utf8_bytes": 4096
+  },
+  "limitations": [
+    "Only exact same-owner, same effective source alias sets; no fabricated face references, geometry transfer, automatic ownership migration or inferred person association.",
+    "Unreviewable affected dormant-source siblings, unavailable/trashed members and changed closure remain explicit refusals. This is not unrestricted alias freedom or consent for arbitrary unseen historic frames.",
+    "Narrow dormant-sibling safety refusal also protects existing version-1 review. Unchanged canonical alias candidates refuse before publication; version-1 no-op behavior stays separate. Real successful alias mutation uses sole existing batch history, not ordinary local undo.",
+    "Exact alias history markers restrict later undo/redo membership; legacy history behavior is not globally reinterpreted.",
+    "Per-member before/after uses complete actual source render, but PNGs are RGB8 bounded review reductions, not full-resolution numerical acceptance.",
+    "No new AI, anatomy, proprietary numerical equivalence or photographic quality claims. Unsupported alpha/HDR and measured solver limits remain fenced.",
+    "All product execution/imports, tests/build/typecheck, inference/download, native/history/export/project-reopen/numerical/photographic/performance acceptance UNRUN. Authored fixtures mock source/render boundaries."
+  ],
+  "excluded_unrelated_untracked": [
+    "docs/colour-grading/FREEZE.json",
+    "docs/eye-light/FREEZE.json",
+    "docs/iris-makeup/isolated-manifest.json"
+  ],
+  "prohibited_actions_performed": []
+}

@@ -4,19 +4,23 @@ import {peopleContext, type PeopleAction} from '../people/model';
 import type {PeopleOwner} from '../people/usePeopleWorkflow';
 import type {SpillImage} from '../spillRemoval/model';
 import {FACE_STYLES, FACE_STYLE_LABELS, faceStyleAck, faceStyleBinding, faceStyleImage, faceStyleLegacyWarning,
-  faceStyleTargetReady, isFaceStyle, object, parseFaceStyleAmount, sameFaceStyleAck, validFaceStyleReview,
+  faceStyleTargetReady, isFaceStyle, object, parseFaceStyleAmount, validFaceStyleConfirmation, validFaceStyleReview,
+  faceStyleMemberKey, faceStyleMembers, faceStyleReviewReady,
   type FaceStyle, type FaceStyleAction, type FaceStyleRecipe, type FaceStyleReview, type FaceStyleSide} from './model';
 
-type Expected = {id: string; key: string; action: FaceStyleAction; recipe?: FaceStyleRecipe; side?: FaceStyleSide; review?: FaceStyleReview};
+type Expected = {id: string; key: string; action: FaceStyleAction; recipe?: FaceStyleRecipe; side?: FaceStyleSide;
+  documentId?: string; memberKey?: string; review?: FaceStyleReview};
+type Pair<T> = Partial<Record<FaceStyleSide, T>>;
 /** Review drafts only. The established people queue owns all requests, receipts and uncertainty. */
 export function FaceStylePanel({people, blocked, faceOk}: {people: PeopleOwner; blocked: boolean; faceOk: boolean}) {
   const view = people.value, binding = faceStyleBinding(view);
   const [style, setStyle] = useState<FaceStyle | ''>(''), [amountText, setAmountText] = useState('');
   const amount = parseFaceStyleAmount(amountText), key = JSON.stringify([binding, style, amountText]);
   const [catalogue, setCatalogue] = useState(false), [review, setReview] = useState<FaceStyleReview | null>(null);
-  const [images, setImages] = useState<Partial<Record<FaceStyleSide, SpillImage>>>({});
-  const [loaded, setLoaded] = useState<Partial<Record<FaceStyleSide, boolean>>>({});
-  const [acknowledged, setAcknowledged] = useState(false), [error, setError] = useState('');
+  const [images, setImages] = useState<Record<string, Pair<SpillImage>>>({});
+  const [loaded, setLoaded] = useState<Record<string, Pair<boolean>>>({});
+  const [acknowledged, setAcknowledged] = useState<Record<string, boolean>>({}), [error, setError] = useState('');
+  const [page, setPage] = useState(0);
   const expected = useRef<Expected | null>(null), mounted = useRef(false);
   const busy = blocked || !people.enabled || people.state.pending || people.state.uncertain;
   const allowed = faceOk && faceStyleTargetReady(view);
@@ -24,7 +28,7 @@ export function FaceStylePanel({people, blocked, faceOk}: {people: PeopleOwner; 
   const legacyWarning = faceStyleLegacyWarning(view);
   const live = useRef({key, busy, allowed, review}); live.current = {key, busy, allowed, review};
   useLayoutEffect(() => {mounted.current = true; return () => {mounted.current = false; expected.current = null;};}, []);
-  function invalidate() {expected.current = null; setReview(null); setImages({}); setLoaded({}); setAcknowledged(false); setError('');}
+  function invalidate() {expected.current = null; setReview(null); setImages({}); setLoaded({}); setAcknowledged({}); setPage(0); setError('');}
   useLayoutEffect(() => {expected.current = null; setCatalogue(false); setStyle(''); setAmountText(''); invalidate();}, [binding]);
   function send(action: FaceStyleAction, payload: Record<string, unknown>, details: Partial<Expected> = {}) {
     if (!mounted.current || live.current.key !== key || live.current.busy || !live.current.allowed || expected.current) return;
@@ -54,19 +58,17 @@ export function FaceStylePanel({people, blocked, faceOk}: {people: PeopleOwner; 
         } else if (request.action === 'face_style_preview') {
           if (payload.kind !== 'face_style_preview' || !request.recipe || !validFaceStyleReview(payload.review, view, request.recipe))
             throw Error('候选与当前来源、人物或配方不匹配，请重新生成。');
-          if (stillCurrent()) {setReview(payload.review); setImages({}); setLoaded({}); setAcknowledged(false);}
+          if (stillCurrent()) {setReview(payload.review); setImages({}); setLoaded({}); setAcknowledged({}); setPage(0);}
         } else if (request.action === 'face_style_image') {
-          if (!request.review || !request.side) throw Error('审核图请求缺少绑定。');
-          const image = await faceStyleImage(payload, request.review, request.side);
+          if (!request.review || !request.side || !request.documentId || !request.memberKey) throw Error('审核图请求缺少绑定。');
+          const image = await faceStyleImage(payload, request.review, request.side, request.documentId);
           if (!image) throw Error('审核图字节、尺寸或来源校验失败，不能确认效果。');
-          if (stillCurrent()) setImages(old => ({...old, [request.side!]: image}));
+          if (stillCurrent()) setImages(old => ({...old, [request.memberKey!]: {...old[request.memberKey!], [request.side!]: image}}));
         } else {
-          if (payload.kind !== 'face_style_confirm' || !request.review || payload.token !== request.review.token
-            || payload.review_sha256 !== request.review.review_sha256 || payload.patches_sha256 !== request.review.patches_sha256
-            || !sameFaceStyleAck(payload.ack, faceStyleAck(request.review))) throw Error('确认回执不匹配，请查询原请求，不要重发。');
+          if (!request.review || !validFaceStyleConfirmation(request.review, receipt.result)) throw Error('确认回执不匹配，请查询原请求，不要重发。');
           if (stillCurrent()) invalidate();
         }
-      } catch (cause) {if (stillCurrent()) {setError(String(cause)); setAcknowledged(false);}}
+      } catch (cause) {if (stillCurrent()) {setError(String(cause)); setAcknowledged({});}}
       finally {if (stillCurrent()) expected.current = null;}
     })();
   }, [people.state.lastFaceStyleResult, view]);
@@ -75,23 +77,32 @@ export function FaceStylePanel({people, blocked, faceOk}: {people: PeopleOwner; 
       expected.current = null; setError(people.state.message);
     }
   }, [people.state]);
-  // Read each PNG through the same exact-envelope mailbox. Metadata alone never unlocks confirmation.
+  const members = review ? faceStyleMembers(review) : [], member = members[page];
+  const memberKey = review && member ? faceStyleMemberKey(review, member.visual) : '';
+  const pair = images[memberKey] ?? {}, pairLoaded = loaded[memberKey] ?? {};
+  // Each selected member pages both PNGs through the existing exact-envelope mailbox.
+  // Off-page metadata cannot acknowledge a member: it must first display and decode both images.
   useEffect(() => {
-    if (!review || busy || expected.current || error || !allowed) return;
-    const side = !images.before ? 'before' : !images.after ? 'after' : null;
-    if (side) send('face_style_image', {token: review.token, side, sha256: review.visual[side].sha256}, {review, side});
-  }, [review, images, busy, error, key]);
+    if (!review || !member || busy || expected.current || error || !allowed) return;
+    const side = !pair.before ? 'before' : !pair.after ? 'after' : null;
+    if (side) send('face_style_image', {token: review.token, side, sha256: member.visual[side].sha256,
+      ...(review.version === 2 ? {document_id: member.visual.document_id} : {})},
+      {review, side, documentId: member.visual.document_id, memberKey});
+  }, [review, images, busy, error, key, memberKey]);
   const draftMatches = !!review && !!style && amount !== null && validFaceStyleReview(review, view, {version: 1, style, amount});
-  const ready = draftMatches && !!images.before && !!images.after && loaded.before === true && loaded.after === true;
+  const pairReady = draftMatches && !!pair.before && !!pair.after && pairLoaded.before === true && pairLoaded.after === true;
+  const ready = draftMatches && !!review && faceStyleReviewReady(review, images, loaded, acknowledged);
   function imageLoaded(side: FaceStyleSide, element: HTMLImageElement) {
-    if (!mounted.current || live.current.key !== key || live.current.review !== review || !review) return;
-    const good = element.naturalWidth === review.visual[side].width && element.naturalHeight === review.visual[side].height;
-    setLoaded(old => ({...old, [side]: good})); if (!good) {setAcknowledged(false); setError('审核图实际解码尺寸不匹配。');}
+    if (!mounted.current || live.current.key !== key || live.current.review !== review || !review || !member) return;
+    const good = element.naturalWidth === member.visual[side].width && element.naturalHeight === member.visual[side].height;
+    setLoaded(old => ({...old, [memberKey]: {...old[memberKey], [side]: good}}));
+    if (!good) {setAcknowledged(old => ({...old, [memberKey]: false})); setError('审核图实际解码尺寸不匹配。');}
   }
-  return <section aria-label="新版七种脸型配方" data-face-style-version="1" data-control-id="PC-32466-C-3b31aac970">
+  const history = people.aliasHistory;
+  return <section aria-label="新版七种脸型配方" data-face-style-version={review?.version ?? 1} data-control-id="PC-32466-C-3b31aac970">
     <h4>新版脸型配方</h4>
     <p>经典、幼态、英气、少年，以及圆脸、长脸、方脸适用的七种本地配方。名称是风格提示，不会检测或决定性别、年龄，也不自动判断你应选择哪一种。</p>
-    <p className="muted">只针对当前明确选中的一张脸。读取原图或受支持的当前派生来源，先看真实渲染前后图，再确认写入现有形变参数；不是新 AI 算法，也不保证照片质量或官方同等效果。</p>
+    <p className="muted">针对当前明确选中的人脸。若多个逻辑照片共享此人脸来源，写入会影响全部共享成员，必须逐张审核并确认完整名单，不能只改当前显示的一张。读取原图或受支持的当前派生来源，先看真实渲染前后图，再确认写入现有形变参数；不是新 AI 算法，也不保证照片质量或官方同等效果。</p>
     {!catalogue && <button type="button" disabled={busy || !allowed} onClick={() => send('face_style_catalog', {})}>读取新版七种配方</button>}
     <fieldset disabled={busy || !allowed || !catalogue}>
       <legend>明确选择候选，不自动应用</legend>
@@ -106,27 +117,66 @@ export function FaceStylePanel({people, blocked, faceOk}: {people: PeopleOwner; 
     </fieldset>
     {reason && <p role="status">{reason}</p>}
     {legacyWarning && <p role="status">{legacyWarning}</p>}
-    {review && draftMatches && <div>
+    {review && draftMatches && member && <div>
       <p>本次候选：{FACE_STYLE_LABELS[review.recipe.style]}，程度 {Number((review.recipe.amount * 100).toFixed(6))}。尚未应用。</p>
-      {(['before', 'after'] as const).map(side => <figure key={`${review.token}:${side}`}>
+      {review.version === 2 && <div role="group" aria-label="全部共享来源照片审核">
+        <p role="status">此人脸参数属于共享来源，将一起影响以下全部 {members.length} 张逻辑照片（当前照片列第一）。每张保留自己的裁剪、修复和渲染；不是将当前缩略图复制给其他照片。全部逐张查看、勾选后才能整体确认，不能跳过成员。</p>
+        <ol>{members.map((item, index) => {
+          const id = faceStyleMemberKey(review, item.visual);
+          return <li key={id}><button type="button" disabled={busy} aria-current={index === page ? 'step' : undefined}
+            onClick={() => setPage(index)}>{index + 1}. {item.path}{index === 0 ? '（当前）' : ''} · {acknowledged[id] ? '已逐张确认' : '待审核'}</button>
+            <span className="muted"> 文档 {item.visual.document_id} · 版本 {item.visual.revision}</span></li>;
+        })}</ol>
+        <p>当前审核第 {page + 1} / {members.length} 张：{member.path}</p>
+      </div>}
+      {(['before', 'after'] as const).map(side => <figure key={`${memberKey}:${side}`}>
         <figcaption>{side === 'before' ? '修改前：当前真实渲染' : '修改后：本次候选真实渲染（尚未应用）'}</figcaption>
-        {images[side] ? <img alt={side === 'before' ? '当前整张照片修改前' : '当前整张照片候选修改后'}
-          src={`data:image/png;base64,${images[side]!.base64}`} style={{maxWidth: '100%', height: 'auto'}}
+        {pair[side] ? <img alt={`${review.version === 2 ? `成员 ${page + 1} ${member.path}：` : ''}${side === 'before' ? '当前整张照片修改前' : '当前整张照片候选修改后'}`}
+          src={`data:image/png;base64,${pair[side]!.base64}`} style={{maxWidth: '100%', height: 'auto'}}
           onLoad={event => imageLoaded(side, event.currentTarget)} onError={() => {
-            if (live.current.key !== key || live.current.review !== review) return;
-            setLoaded(old => ({...old, [side]: false})); setAcknowledged(false); setError('前后图未能完整显示，请重新预览。');
+            if (!mounted.current || live.current.key !== key || live.current.review !== review) return;
+            setLoaded(old => ({...old, [memberKey]: {...old[memberKey], [side]: false}}));
+            setAcknowledged(old => ({...old, [memberKey]: false})); setError('前后图未能完整显示，请重新预览。');
           }}/> : <p role="status">正在读取{side === 'before' ? '修改前' : '修改后'}图像…</p>}
       </figure>)}
       <p className="muted">这是整张实际渲染的缩略审核图，不是原尺寸质量验收。请检查此脸、邻近人物和背景；局部变形可能牵动邻近背景。</p>
-      <label><input type="checkbox" checked={acknowledged} disabled={busy || !ready} onChange={event => setAcknowledged(event.target.checked)}/>
-        我已查看两张实际前后图，接受仅对当前这张脸写入此候选参数</label>
-      <button type="button" disabled={busy || !ready || !acknowledged || !!error || !!reason}
-        onClick={() => {if (live.current.key !== key || live.current.review !== review || !ready || !acknowledged || error || reason) return;
-          send('face_style_confirm', {token: review.token, ack: faceStyleAck(review)}, {review});}}>确认此脸配方</button>
+      <label><input type="checkbox" checked={acknowledged[memberKey] === true} disabled={busy || !pairReady}
+        onChange={event => setAcknowledged(old => ({...old, [memberKey]: event.target.checked}))}/>
+        {review.version === 2 ? `我已查看第 ${page + 1} 张的两张实际前后图，接受此成员随全部共享来源成员一起修改`
+          : '我已查看两张实际前后图，接受仅对当前这张脸写入此候选参数'}</label>
+      {review.version === 2 && <p role="status">已确认 {members.filter(({visual}) => acknowledged[faceStyleMemberKey(review, visual)]).length} / {members.length} 张。
+        <button type="button" disabled={busy || page === 0} onClick={() => setPage(old => old - 1)}>上一张</button>
+        <button type="button" disabled={busy || page === members.length - 1} onClick={() => setPage(old => old + 1)}>下一张</button></p>}
+      <button type="button" disabled={busy || !ready || !!error || !!reason}
+        onClick={() => {if (live.current.key !== key || live.current.review !== review || !ready || error || reason) return;
+          send('face_style_confirm', {token: review.token, ack: faceStyleAck(review)}, {review});}}>
+        {review.version === 2 ? `确认全部 ${members.length} 张共享来源照片` : '确认此脸配方'}</button>
       <button type="button" disabled={busy} onClick={invalidate}>放弃候选，不改参数</button>
     </div>}
     {error && <p role="alert">{error}</p>}
     {people.state.uncertain && <button type="button" onClick={() => {void people.check().catch(() => {});}}>查询原请求结果（不重发）</button>}
+    {(history.receipt || history.state.phase !== 'closed') && <section aria-label="共享来源脸型批次历史">
+      <h5>共享来源修改记录</h5>
+      {history.receipt && <p role="status">引擎已确认全部 {history.receipt.review.members.length} 张成员写入，批次 {history.receipt.batchId}。
+        {history.ledger ? (history.ledger.undone ? ' 引擎台账当前标记为已撤销。' : ' 引擎台账当前标记为未撤销。')
+          : ' 当前台账尚未提供匹配的批次，暂不开放撤销或重做。'}</p>}
+      <p className="muted">这项共享修改使用引擎受保护批次历史，不进入当前照片的本地撤销栈。撤销或重做将核对全部原成员；后续编辑、来源或成员变化可能导致拒绝，不会强行覆盖。</p>
+      <button type="button" disabled={blocked || !history.canUndo} onClick={() => {void history.undo();}}>撤销此共享来源批次</button>
+      <button type="button" disabled={blocked || !history.canRedo} onClick={() => {void history.redo();}}>重做此共享来源批次</button>
+      {history.state.phase === 'committing' && <p role="status">正在等待批次{history.state.operation === 'undo' ? '撤销' : '重做'}回执，尚未确认完成。</p>}
+      {history.state.phase === 'uncertain' && <p role="alert">批次历史结果尚未确认，只能查询原请求，不能重复撤销、重做或重新应用配方。</p>}
+      {history.state.result && history.state.phase === 'done' && <div role="status">
+        <p>引擎报告本次{history.state.operation === 'undo' ? '撤销' : '重做'}恢复 {history.state.result.restored?.length ?? 0} 张，
+          冲突 {history.state.result.conflicts?.length ?? 0} 张。</p>
+        {!!history.state.result.conflicts?.length && <ul>{history.state.result.conflicts.map((conflict, index) =>
+          <li key={index}>{conflict.path}：{conflict.reason}</li>)}</ul>}
+      </div>}
+      {history.state.message && <p role="alert">{history.state.message}</p>}
+      {history.refreshError && <p role="alert">{history.refreshError}</p>}
+      {(history.refreshError || history.receipt && !history.ledger) && <button type="button"
+        disabled={history.refreshing || history.state.phase === 'uncertain' || history.state.phase === 'committing'}
+        onClick={() => {void history.refresh();}}>刷新引擎批次状态（不重发修改）</button>}
+    </section>}
     <p className="muted">每次确认会替换此脸上配方管理的 30 个参数（分属 10 个现有操作），不累加；未管理的参数保留。请在预览中检查已有自定义调整被替换后的结果。</p>
     <p className="muted">确认保存的是实际参数，不是一个持续激活的风格标签。之后手动改动参数不会被称为仍完整使用此配方。历史三种预设保留原值和原行为，请仅在下方明确打开旧版入口；不会自动转换或清除冲突。</p>
   </section>;

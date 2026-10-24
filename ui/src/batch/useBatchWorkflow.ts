@@ -1,6 +1,7 @@
 import type {PortraitCohortAck} from '../portraitCohort/model';
 import type {CollarboneAck} from '../collarbone/transferModel';
 import type {FaceStyleBatchAck} from '../faceStyle/batchModel';
+import type {FaceStyleAliasCommit} from '../faceStyle/model';
 import type {ShadowTransferAck} from '../originalShadow/transferModel';
 import type {TorsoTransferAck} from '../torsoLength/transferModel';
 import type {WaistTransferAck} from '../waistLength/transferModel';
@@ -9,6 +10,7 @@ import {useEffect,useRef,useState} from 'react';
 import type {SpillTransferAck} from '../spillRemoval/transferModel';
 import {createBatchWorkflow,type BatchContext,type BatchUi} from './batchWorkflow';
 import {runBatch,readBatchResult} from '../native';
+import {batchCompletionRequest} from './completion';
 export function useBatchWorkflow(context:BatchContext,onComplete:()=>void){
   const [ui,setUi]=useState<BatchUi>({phase:'closed',operation:'preflight',plan:null,result:null,message:'',scopeLabel:''});
   const latest=useRef({context,onComplete});latest.current={context,onComplete};
@@ -17,7 +19,8 @@ export function useBatchWorkflow(context:BatchContext,onComplete:()=>void){
     let live=true,reported="";
     const flow=createBatchWorkflow({request:runBatch,read:readBatchResult},state=>{
       if(!live)return;setUi(state);
-      if(state.result&&state.operation!=='preflight'&&reported!==state.result.request_id){reported=state.result.request_id;latest.current.onComplete();}
+      const completion=batchCompletionRequest(state,reported);
+      if(completion){reported=completion;latest.current.onComplete();}
     });
     ref.current=flow;flow.updateContext(latest.current.context);
     return()=>{live=false;ref.current=null;flow.dispose();};
@@ -26,5 +29,6 @@ export function useBatchWorkflow(context:BatchContext,onComplete:()=>void){
   useEffect(()=>{ref.current?.updateContext(context);},[contextKey]);
   const current=()=>{ref.current?.updateContext(latest.current.context);return ref.current;};
   return {ui,start:()=>current()?.start(),commit:(ack?:SpillTransferAck[],shadowAck?:ShadowTransferAck[],torsoAck?:TorsoTransferAck[],waistAck?:WaistTransferAck[],headAck?:HeadTransferAck[],collarboneAck?:CollarboneAck[],faceStyleAck?:FaceStyleBatchAck[],portraitAck?:PortraitCohortAck[])=>current()?.commit(ack,shadowAck,torsoAck,waistAck,headAck,collarboneAck,faceStyleAck,portraitAck),undo:(id:string)=>current()?.undo(id),redo:(id:string)=>current()?.redo(id),
-    query:()=>current()?.query(),acknowledgeInspection:()=>ref.current?.acknowledgeInspection(),close:()=>ref.current?.close()};
+    query:()=>current()?.query(),protectFaceStyleAlias:(commit:FaceStyleAliasCommit)=>current()?.protectFaceStyleAlias(commit)??false,
+    acknowledgeInspection:()=>ref.current?.acknowledgeInspection(),close:()=>ref.current?.close()};
 }

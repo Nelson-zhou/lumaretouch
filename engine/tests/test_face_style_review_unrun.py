@@ -52,14 +52,16 @@ def host(monkeypatch):
         context='context-0', current=current, row=row, aliases=[row], version=version,
         render_calls=[], history=[], verified=[])
     engine._people_preset_capture = lambda: deepcopy(engine.current)
+    engine._docs = engine.aliases
     engine._document_versions = lambda: SimpleNamespace(version=lambda r: engine.version)
     engine._people_binding = lambda: {'document_id': version.document_id,
         'document_epoch': 'epoch-one', 'document_revision': version.revision}
     monkeypatch.setattr(V, 'current_row', lambda e: e.row)
-    monkeypatch.setattr(V, 'scope_rows', lambda e: e.aliases)
+    monkeypatch.setattr(V, 'scope_rows', lambda e, row=None: e.aliases)
     # Retain actual require_active_owner; it must not manufacture/activate owner.
     def source_proof(r):
-        return {'asset_sha256': r.get('state', current)['source'], 'fixture': 'source-proof'}
+        asset = r.get('state', current)['source']
+        return {'asset_sha256': asset, 'original_sha256': asset, 'creative_source': None}
     monkeypatch.setattr(R.SOURCE, 'row_proof', source_proof)
     monkeypatch.setattr(R.SOURCE, 'row_asset', lambda r: r.get('asset', ASSET))
     monkeypatch.setattr(R.SOURCE, 'binding', lambda state, *args: {
@@ -117,18 +119,36 @@ def test_preview_actual_stage_has_exact_owned_leaves_before_full_render_and_no_m
     assert review['face_ref'] == h.target['face_ref']
 
 
-@pytest.mark.parametrize('mode', ('person', 'group', 'all_people', 'disabled', 'cursor', 'target', 'source', 'alias', 'owner'))
-def test_live_requires_explicit_current_face_source_and_unique_alias(host, mode):
+@pytest.mark.parametrize('mode', ('person', 'group', 'all_people', 'disabled', 'cursor', 'target', 'source', 'owner'))
+def test_live_requires_explicit_current_face_and_source(host, mode):
     h = host; target = deepcopy(h.target)
     if mode in ('person', 'group', 'all_people'): target['scope'] = mode
     elif mode == 'disabled': h.owner.state['faces'][h.face_id]['enabled'] = False
     elif mode == 'cursor': h.engine._people_cursors[ASSET] = 'another-face'
     elif mode == 'target': h.engine._people_targets[ASSET] = {'scope': 'all_people'}
     elif mode == 'source': h.engine.current['source'] = 'b' * 64
-    elif mode == 'alias': h.engine.aliases.append({**h.engine.row, 'path': '/fixture/alias.png'})
     elif mode == 'owner': h.engine._people_active_context = None
     with pytest.raises(ValueError): R.catalogue(h.engine, h.owner.snapshot(), target, {})
     assert not h.engine.render_calls and not h.engine.history
+
+
+def test_catalogue_allows_alias_discovery_without_render_or_mutation(host):
+    h = host; before = h.owner.snapshot()
+    h.engine.aliases.append({**h.engine.row, 'path': '/fixture/alias.png'})
+    result = R.catalogue(h.engine, h.owner.snapshot(), h.target, {})
+    assert result['kind'] == 'face_style_catalog'
+    assert h.owner.snapshot() == before and h.owner.fence == 9
+    assert not h.engine.render_calls and not h.engine.history
+
+
+def test_preexisting_v1_review_cannot_authorize_a_new_unseen_alias(host):
+    h = host; review = preview(h)
+    assert review['version'] == 1
+    h.engine.aliases.append({**h.engine.row, 'path': '/fixture/alias.png'})
+    with pytest.raises(ValueError):
+        R.confirm(h.engine, h.owner.snapshot(), h.target, confirmation(review))
+    assert h.owner.snapshot() == h.state and h.owner.fence == 9
+    assert h.engine.history == []
 
 
 @pytest.mark.parametrize('mode', ('source', 'repair', 'context', 'load', 'revision', 'fence', 'cursor', 'analysis', 'path'))
