@@ -56,7 +56,7 @@ def finish(engine, boundary, error=None):
         'project','session','history','virtual_copy','managed_import','source_relocation',
         'people','batch','primary_calibration','colour_editor','selective_colour','colour_grading',
         'photo_grain','photo_detail','extended_tone','shoulder_shape','leg_shape','arm_shape',
-        'waist_shape','leg_length','neck_shape','torso_length','custom_lut','semantic_colour','creative_document','common_background'):
+        'waist_shape','leg_length','neck_shape','torso_length','waist_length','custom_lut','semantic_colour','creative_document','common_background'):
         if message.get('action') not in ('state','query','status','receipt','list','context'):
             runtime.revision += 1
 

@@ -1,0 +1,418 @@
+{
+  "baseline": "4a1bbd3ba830b0da5b27c7d07d61a7d17823cf4d",
+  "status": "FROZEN_SOURCE_ONLY_UNRUN_PARTIAL_REQUIREMENT",
+  "requirement_ids": [
+    "LNX-REF-PC-32473-C-5d33f285bb"
+  ],
+  "operation_id": "lnx.waist_length.v1",
+  "scope": "Distinct manually marked waist length: four explicit visible source endpoints, current BodyRef and own-face review, original Rust local field in common one-pass geometry, direct source UI/history/project/export. No waist inferred from pose hips, no learned AI or runtime acceptance claim.",
+  "files": [
+    {
+      "path": "core/waist_length/ABI.md",
+      "sha256": "5505769a666c1f99b50d193edd68ad3e606b96d24b7a48fba27ddbe716b556ca",
+      "bytes": 4962
+    },
+    {
+      "path": "core/waist_length/Cargo.toml",
+      "sha256": "7dad0aa3a751be395390ac9a62934832f4c4f897a31aa4cfe27d606c526b942b",
+      "bytes": 171
+    },
+    {
+      "path": "core/waist_length/build.sh",
+      "sha256": "25874c7575574b9d223d85ae5a5d1f387a2880e51838d66d34b3016dacc5c84b",
+      "bytes": 457
+    },
+    {
+      "path": "core/waist_length/lib.rs",
+      "sha256": "5fb3e40cbd39d78baa764e7d4774312829e88595bd98d71fe4e24fe09c7bffaf",
+      "bytes": 22259
+    },
+    {
+      "path": "docs/development/ui-route-inventory.json",
+      "sha256": "9afa191346e2c2f63624919ee11d689121a613fd8c155ad08d4eafde53d988b8",
+      "bytes": 15994
+    },
+    {
+      "path": "docs/p0/registry-extensions.json",
+      "sha256": "8ed51b8e89f245c3ee12dd2003280184f77ad908669013436a6a425cad2fda59",
+      "bytes": 46948
+    },
+    {
+      "path": "docs/waist-length/IMPLEMENTATION.md",
+      "sha256": "16d35233ef1f3e98ec105e22c594629de3a31398b277d21dbcbca9d5f6704b28",
+      "bytes": 5792
+    },
+    {
+      "path": "docs/waist-length/INTEGRATION-UNRUN.md",
+      "sha256": "ddb73f71b522230dec10453db808758152202de1c8cff02adf400b1636b682e9",
+      "bytes": 3751
+    },
+    {
+      "path": "docs/waist-length/NUMERICAL-CONTRACT.md",
+      "sha256": "9d0065725b7da6439c0f433374181e434c7a54f0d133e9bd6c1fa209670d3ab8",
+      "bytes": 13390
+    },
+    {
+      "path": "docs/waist-length/SCALAR-TRANSFER-NEXT.md",
+      "sha256": "915fa8fe690f24bdd328152e8db105077b99a6d665d55e3d96daa320b7c2d859",
+      "bytes": 3165
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/arm_shape_registered_host.py",
+      "sha256": "6d6c95502f3e55e6d21a7ad06c29ce69ce68e8028e223a20dba495b6bec09809",
+      "bytes": 3523
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/body_pose_commands.py",
+      "sha256": "b986880022dfe98abda4a623f2ec35c67ee514c5e7199c70647ec05d020799ba",
+      "bytes": 11888
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/body_pose_families.py",
+      "sha256": "8d5dd33c03900bceb0c9960cab90fd14cd660dce4a53b6bbd7e5240450ab9ad8",
+      "bytes": 1612
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/body_pose_geometry.py",
+      "sha256": "420d099345d8d5afe19d3db28d390cfa6c910b3f7357cb7401aeb5151196c66d",
+      "bytes": 8540
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/body_pose_host.py",
+      "sha256": "d668551bf619137d7c91ff938d43e797a85a51552c4ca75718a72ff8de5ca514",
+      "bytes": 18944
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/body_pose_operations.py",
+      "sha256": "b509f8df1bf790bca083f03f84dc206bfde73cc1a05e80313721fe5ee7be2eb1",
+      "bytes": 9972
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/body_pose_render.py",
+      "sha256": "713ea55d9388d36de16dc29b60d47ee08a62f3b456a9dee080b0dbf95d2cab64",
+      "bytes": 11645
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/creative_derived_body.py",
+      "sha256": "7cafcd4bce0fefac914f42d0657cfc464ac344d13152aee570762e05e0bf725c",
+      "bytes": 8559
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/creative_document_host.py",
+      "sha256": "1baaf29cbe3b7e5c92a3f14cee9a00cf8bcd7f8a676bfbaacde44118f90e1c1e",
+      "bytes": 25473
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/history_controller.py",
+      "sha256": "b6e9236869d216babdda700f9f98bdb87b6af596837efbef06f0225ed69fe7cd",
+      "bytes": 10719
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/history_policy.py",
+      "sha256": "fb94bcd2b65cfe5ae2c3d0ba8aaaf294cf8407defa46d624b95d422b1de06ea5",
+      "bytes": 7699
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/project_recovery_runtime.py",
+      "sha256": "994bb8dbd9793d88c43d1231a9aaed3d231a99410b37e966c46da04bc4e05f82",
+      "bytes": 7082
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/server.py",
+      "sha256": "cafed7bbc57e79cc660b8733dc9c44859267e69f11a97ccbd6d95ca8282e5d69",
+      "bytes": 467068
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/waist_length_adapter.py",
+      "sha256": "7ea9452e511ce99a810a6437b33c875a8ee06325527fb5ac5a75983df97f04b3",
+      "bytes": 2814
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/waist_length_field.py",
+      "sha256": "cda4cf82d0da9ded17766685c8eafa9e2e970ad96a316a66fc239c546cc500a0",
+      "bytes": 8828
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/waist_length_host.py",
+      "sha256": "5db4d482bcf389a5f22386409ec588147b4aca422011731f6cac2dc54da73706",
+      "bytes": 14407
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/waist_length_native.py",
+      "sha256": "f9f14f5dbcbc2e94970a4a5f6f001290f86c15a7fa4e10aa0207227e906739fa",
+      "bytes": 7026
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/waist_length_project.py",
+      "sha256": "ba618763528805be8b5c6d57e5d316f38fb3836cdbcedae77f141222667ffa3a",
+      "bytes": 8225
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/waist_length_runtime.py",
+      "sha256": "6e1342bfd6fca996110b13e154d2cca38dab3ae1614a40e7fe2fad65d1f3c033",
+      "bytes": 9360
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/waist_length_state.py",
+      "sha256": "3d7121ff0e42e3104a197ca67a745a3c727e7bac78ba29fe32f979b979c70126",
+      "bytes": 10549
+    },
+    {
+      "path": "engine/tests/test_waist_length_host_unrun.py",
+      "sha256": "a94ffd41811c745270a0a3abeed65ff677578b493f813459cd2fcb85abcca2a1",
+      "bytes": 13690
+    },
+    {
+      "path": "engine/tests/test_waist_length_integration_unrun.py",
+      "sha256": "ac936a3afdeb99f801168f7a6d3ac4e3a1d6d46ff876c8053b84717ad19df125",
+      "bytes": 41125
+    },
+    {
+      "path": "engine/tests/test_waist_length_native_unrun.py",
+      "sha256": "dd9f6d8649706889c9a8e8370daad9cd86a5b32444d520728fc2d7bcc292dc01",
+      "bytes": 13499
+    },
+    {
+      "path": "engine/tests/test_waist_length_support_unrun.py",
+      "sha256": "199f2f8fd3c047b779460133e33b63c678c31c12c183704cf903305ee0dc38d1",
+      "bytes": 25829
+    },
+    {
+      "path": "packaging/build-waist-length.sh",
+      "sha256": "3d5fed6ec3f9ca9d5daea9e79be07435817bab14e50b650b9ed48370af06b6fc",
+      "bytes": 427
+    },
+    {
+      "path": "ui/src-tauri/src/capture_lifecycle.rs",
+      "sha256": "76fc196f10f8d9c95bec77cc737a03eaacc12d43eb93ec8fd67b677c147af54f",
+      "bytes": 3605
+    },
+    {
+      "path": "ui/src-tauri/src/engine.rs",
+      "sha256": "27ba8319cf4dfc0c8b9196b05c041c201336a9f33f223e645206d6623fa3c6c9",
+      "bytes": 38973
+    },
+    {
+      "path": "ui/src-tauri/src/main.rs",
+      "sha256": "89fbd6cf6779b658ce93e9b4a4b89df6fe44b7c36d6176989ae5416f942cc9bc",
+      "bytes": 101505
+    },
+    {
+      "path": "ui/src-tauri/src/native_dispatch.rs",
+      "sha256": "9518334c03102b831da46efa28ed7223264587ba19d2f962c1a724ccda8c93d8",
+      "bytes": 9877
+    },
+    {
+      "path": "ui/src-tauri/src/waist_length_api.rs",
+      "sha256": "5f59c4577adbedea4f6b7dad67a4c39e82cd6a9ed28f7b7bc1e73c450ce60aae",
+      "bytes": 35236
+    },
+    {
+      "path": "ui/src/App.tsx",
+      "sha256": "933f459e6c12a0d830f7c5384ba913b9af833b23831fb57f96975d75f82a6f70",
+      "bytes": 151317
+    },
+    {
+      "path": "ui/src/legShape/BodyShapeTools.tsx",
+      "sha256": "37e21069d96ab9033265634052138937641378325550b551fb4385aa113078c8",
+      "bytes": 14500
+    },
+    {
+      "path": "ui/src/native.ts",
+      "sha256": "5a6cb65b776ce4806045ceb0dc6927d113e4ac7fb4c7dba7dc2418edab9d5259",
+      "bytes": 103751
+    },
+    {
+      "path": "ui/src/toolRouting/coverage.ts",
+      "sha256": "f797aa2ed92b2b7734650e1083c0884be7afd06ee4b03b388808b098fa7a7f07",
+      "bytes": 4849
+    },
+    {
+      "path": "ui/src/waistLength/SOURCE-UNRUN.md",
+      "sha256": "075939f858d29ce2412a81ba6e837c702b238d6788584e60d01657a63f8574d7",
+      "bytes": 2839
+    },
+    {
+      "path": "ui/src/waistLength/WaistLengthPanel.tsx",
+      "sha256": "b438187eee7d95d6b30670940e2b2eec1cc8c160bf75cb0bedcb19a941cb9750",
+      "bytes": 6177
+    },
+    {
+      "path": "ui/src/waistLength/WaistLengthSupportEditor.tsx",
+      "sha256": "7d9d5fb2f6599a23389d76e778becef57c39b4f2e2d6df88c98d541959c3aafb",
+      "bytes": 12287
+    },
+    {
+      "path": "ui/src/waistLength/WaistLengthWorkspace.tsx",
+      "sha256": "2e8a11d2101f7c0977cedbd4e6e920e582d699034816e89373a38a0d370a0414",
+      "bytes": 2191
+    },
+    {
+      "path": "ui/src/waistLength/availability.ts",
+      "sha256": "3c5486018ce3fe34d3483b665f2f1f59d0c95c25e6d5d158840bd521ff808657",
+      "bytes": 1588
+    },
+    {
+      "path": "ui/src/waistLength/availability.unrun.test.ts",
+      "sha256": "7e1ec19f3312fb1a083ac1789c6f19852ec1759cc65129e92465998d9f57e07a",
+      "bytes": 3244
+    },
+    {
+      "path": "ui/src/waistLength/context.ts",
+      "sha256": "4d9df74e6ad7ac238930eee8a6ee30cdbcc0967f943c932bf88097125a29dd2b",
+      "bytes": 642
+    },
+    {
+      "path": "ui/src/waistLength/controller.ts",
+      "sha256": "a4208f562c9b386a7d5fb3603ca60ea49a2fb146838a757bb37772a3d23ff4c0",
+      "bytes": 6891
+    },
+    {
+      "path": "ui/src/waistLength/controller.unrun.test.ts",
+      "sha256": "c9591a0573f0204c2628f9bf1a6eb9437999e3b3a0df32d61958cb59ae597412",
+      "bytes": 6001
+    },
+    {
+      "path": "ui/src/waistLength/model.ts",
+      "sha256": "a94bb00ca7a46f4620db4d7e99198d1de4b3f9ca97abce50620ff46ef0999467",
+      "bytes": 10829
+    },
+    {
+      "path": "ui/src/waistLength/model.unrun.test.ts",
+      "sha256": "c7ceb7f5c607605e1b972565ca84d8bc81e16f35978e1d514d47ea2b8ba9f7aa",
+      "bytes": 6713
+    },
+    {
+      "path": "ui/src/waistLength/nativeTransport.ts",
+      "sha256": "da63e1f9d7672453209fadce7585067078c7024558b18c9badabec062a1d920f",
+      "bytes": 3342
+    },
+    {
+      "path": "ui/src/waistLength/receipts.ts",
+      "sha256": "d84690e004c3c3915c26a902c723f3ffe78011fac368c0ba9a2d3b438677ae68",
+      "bytes": 2054
+    },
+    {
+      "path": "ui/src/waistLength/receipts.unrun.test.ts",
+      "sha256": "2ec0fe26c013a27300c6ed26d517b7c1e92a04eea0852eac0f6528cb9e6a2078",
+      "bytes": 3301
+    },
+    {
+      "path": "ui/src/waistLength/sourcePreview.ts",
+      "sha256": "3e1882d756d6269615fb6f67e83a829b0534995764597b95308e03c1c7880fca",
+      "bytes": 2507
+    },
+    {
+      "path": "ui/src/waistLength/sourcePreview.unrun.test.ts",
+      "sha256": "e54da5cc834c05dfbe6a90010a219fc8c3bae0855a1fa830b9b1dbec478be9a9",
+      "bytes": 1912
+    },
+    {
+      "path": "ui/src/waistLength/useWaistLengthWorkflow.ts",
+      "sha256": "8086e6135d99b1aacc7a762b09ab7531814211fc81b7f9a91f6cc428630324e4",
+      "bytes": 7253
+    },
+    {
+      "path": "ui/src/waistLength/waistLength.css",
+      "sha256": "a1e5c3364cc51eb2c433e1c48acaa1822fd9e41c68815f14fe2848b1a4edfeb4",
+      "bytes": 2509
+    },
+    {
+      "path": "ui/src/waistLength/wiring.unrun.test.ts",
+      "sha256": "3f7d48961b6d7094d0d4d470c772add157874666142be9356644a983373be14c",
+      "bytes": 2371
+    }
+  ],
+  "static_checks": {
+    "python_ast_files": 1231,
+    "changed_json_toml": "standard-library parse only",
+    "git_diff_check": "clean",
+    "prior_numeric_core_ops_and_torso_sources_byte_identical": 215,
+    "prior_common_body_geometry_definitions_unchanged_except_order_selector": 4,
+    "line_caps": {
+      "ui/src/App.tsx": 2128,
+      "ui/src-tauri/src/main.rs": 2045,
+      "engine/src/lumaretouch_engine/server.py": 6995
+    },
+    "fixture_declarations_in_payload_all_unrun": {
+      "python": {
+        "engine/tests/test_waist_length_host_unrun.py": 13,
+        "engine/tests/test_waist_length_integration_unrun.py": 24,
+        "engine/tests/test_waist_length_native_unrun.py": 11,
+        "engine/tests/test_waist_length_support_unrun.py": 30
+      },
+      "rust": {
+        "core/waist_length/lib.rs": 11,
+        "ui/src-tauri/src/waist_length_api.rs": 17
+      },
+      "typescript": {
+        "ui/src/waistLength/availability.unrun.test.ts": 3,
+        "ui/src/waistLength/controller.unrun.test.ts": 6,
+        "ui/src/waistLength/model.unrun.test.ts": 6,
+        "ui/src/waistLength/receipts.unrun.test.ts": 3,
+        "ui/src/waistLength/sourcePreview.unrun.test.ts": 2,
+        "ui/src/waistLength/wiring.unrun.test.ts": 3
+      }
+    }
+  },
+  "integration_map": {
+    "numerical": [
+      "core/waist_length/lib.rs",
+      "waist_length_native.py",
+      "waist_length_field.py"
+    ],
+    "ownership": [
+      "waist_length_state.py",
+      "waist_length_runtime.py",
+      "waist_length_project.py",
+      "body_pose_operations.py"
+    ],
+    "canonical_render": [
+      "body_pose_geometry.py order8 for active waist only",
+      "body_pose_render.py",
+      "waist_length_adapter.py"
+    ],
+    "canonical_host": [
+      "waist_length_host.py",
+      "body_pose_host.py",
+      "body_pose_commands.py",
+      "body_pose_families.py"
+    ],
+    "source_history": [
+      "creative_derived_body.py",
+      "creative_document_host.py",
+      "history_policy.py",
+      "history_controller.py",
+      "project_recovery_runtime.py"
+    ],
+    "native": [
+      "waist_length_api.rs",
+      "native_dispatch.rs",
+      "engine.rs",
+      "capture_lifecycle.rs",
+      "main.rs",
+      "server.py"
+    ],
+    "ui": [
+      "waistLength source workspace/editor/model/controller/receipts",
+      "App.tsx",
+      "native.ts",
+      "legShape/BodyShapeTools.tsx",
+      "toolRouting/coverage.ts"
+    ]
+  },
+  "limitations": [
+    "All imports/product execution/tests/build/typecheck/inference and photographic/numerical acceptance remain UNRUN.",
+    "Explicit manual waist markers and contour/ownership review are required; Pose33 does not measure waist endpoints. No automatic instance segmentation or 3D body reconstruction.",
+    "Upright visible bounded poses only; hidden, cropped, strongly bent, contacting or ambiguous anatomy refuses. Human marker accuracy and background/garment quality remain unverified.",
+    "Arms crossing the marked waist follow local deformation, not a rigid-arm promise. Upper trunk/head above marked upper waist translate; lower waist/hips remain fixed.",
+    "End-user per-target waist preset/batch transfer is not registered. Private helper is not that route. Existing torso transfer is unchanged.",
+    "Existing original/derived opacity and HDR restrictions remain; no clipping/flattening to imply support."
+  ],
+  "excluded_unrelated_untracked": [
+    "docs/colour-grading/FREEZE.json",
+    "docs/eye-light/FREEZE.json",
+    "docs/iris-makeup/isolated-manifest.json"
+  ],
+  "prohibited_actions_performed": []
+}

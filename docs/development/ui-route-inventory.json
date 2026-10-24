@@ -212,6 +212,11 @@
           "path": "上身长度",
           "ui_route": "torso_length.amount via reviewed body workspace",
           "status": "PARTIAL_UNRUN; upright manually reviewed 2D source geometry; bounded unique-body scalar preset/batch with per-target full-source visual review authored; multi-body transfer and runtime/photo acceptance remain unfinished"
+        },
+        {
+          "path": "腰部长度",
+          "ui_route": "waist_length.amount via independently marked waist source workspace",
+          "status": "PARTIAL_UNRUN; explicit visible upper/lower waist endpoints, reviewed source/body/own-face ownership; direct history and canonical full-source rendering authored; target preset/batch and numerical/photo acceptance remain unfinished"
         }
       ],
       "status": "implementation_and_semantics_require_verification"

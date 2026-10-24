@@ -399,7 +399,7 @@ def guard_command(engine, name, request):
         'sky_semantic', 'local_grade_live', 'semantic_colour', 'lip_makeup',
         'brow_shape', 'nose_shape', 'eye_shape', 'mouth_shape', 'hair_colour',
         'shoulder_shape', 'leg_shape', 'arm_shape', 'waist_shape', 'leg_length',
-        'neck_shape', 'torso_length', 'sample_library',
+        'neck_shape', 'torso_length','waist_length', 'sample_library',
     }
     # Do not trust a generic action='state': legacy commands may ignore it.
     # Dedicated *_state/status commands remain available outside this set.
