@@ -161,7 +161,12 @@ class RecoveryPreview:
                 global_proof = global_context(self.engine, mutation['target']) if mutation['target'] in GLOBAL_TARGETS else None
                 stage = R.prepare_stage(self.engine, value)
                 stage.people_recovery = PEOPLE.prepare(self.engine, value, mutation['target'])
-                result = render_review(self.engine, stage)
+                full_review = None
+                if mutation['target'] == 'eye_bag_preserve':
+                    from .eye_bag_effect_recovery import render as render_full
+                    result, full_review = render_full(self.engine, stage.people_recovery)
+                else:
+                    result = render_review(self.engine, stage)
                 self._matching(p)
                 candidate_record = {'id': ident, 'proof': proof, 'value': value,
                                'target': p['mutation']['target'], 'presented': False,
@@ -169,6 +174,7 @@ class RecoveryPreview:
                                                   if stage.people_recovery is not None else None),
                                'global_context': deepcopy(global_proof),
                                'committable': not viewing}
+                if full_review is not None: candidate_record['eye_bag_full_review'] = full_review
                 assert_review(self.engine, candidate_record)
                 self.record = candidate_record
                 event.update(state='ready', success=True, result=result, target=p['mutation']['target'])
@@ -182,6 +188,9 @@ class RecoveryPreview:
                 else:
                     from .creative_derived_recovery import assert_review
                     assert_review(self.engine, record)
+                    if record['target'] == 'eye_bag_preserve':
+                        from .eye_bag_effect_recovery import verify
+                        verify(self.engine, record.get('eye_bag_full_review'))
                     record['presented'] = True
                     event.update(state='presented', success=True)
         except Exception as error:
@@ -210,6 +219,10 @@ class RecoveryPreview:
                                                     expected=record['people_context'])
         elif record['people_context'] is not None:
             raise ValueError('人物恢复处理路径在预览后改变')
+        if record['target'] == 'eye_bag_preserve':
+            from .eye_bag_effect_recovery import verify
+            verify(self.engine, record.get('eye_bag_full_review'), stage.people_recovery)
+            stage.people_recovery['full_review'] = deepcopy(record['eye_bag_full_review'])
         return deepcopy(value), stage
 
 

@@ -61,9 +61,11 @@ to publish an unverified graph. No corrupt-project recovery acceptance is claime
   actual full before/after/support images, never transfer donor masks or geometry.
 - Current single-photo positive review refuses shared-source aliases and dormant
   affected siblings. Complete affected-set review is not implemented for v2.
-- New effect-specific recovery painting is not connected. The preservation
-  brush protects only this operation's approved ridge region, not arbitrary
-  recovery or the old enhancement family.
+- Dedicated effect-recovery painting now attenuates only the independently
+  staged v2 eye-bag contribution, with separate source-owned vectors, actual
+  full-source mixed-graph review and explicit confirmation. The bounded recovery
+  capture is not the separate native eye-crop ridge editor. See
+  `EFFECT-RECOVERY.md`; numerical and workflow acceptance remains UNRUN.
 - Read-only UI cancellation now uses the existing native control lane and
   request-specific engine Events. Only original-job unwind reports stopped;
   confirmation remains query-only. Same-owner session drafts survive panel

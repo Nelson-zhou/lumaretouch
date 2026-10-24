@@ -1,6 +1,6 @@
 """Selected-face recovery editing over the canonical, all-face render bank.
 
-Only the two existing facial recovery producers are admitted. Vectors stay in
+Only explicitly registered facial recovery producers are admitted. Vectors stay in
 source coordinates and immutable storage; the normal people pipeline attenuates
 their own operator delta before its one shared geometry map. This module owns
 neither a geometry solver nor another history/association store.
@@ -99,6 +99,9 @@ def prepare(engine, recovery, target, *, expected=None):
         return None
     engine._people_sync(strict=True)
     captured = context(engine)
+    if target == 'eye_bag_preserve':
+        from .eye_bag_effect_recovery import live
+        live(engine)  # Same-document and dormant alias protection, not a bypass.
     if expected is not None and captured != expected:
         raise ValueError('人物恢复预览的确切归属已过期')
     current = value(engine)
@@ -148,7 +151,14 @@ def availability(engine):
         active = bool(not reason and ref is not None and prepared is not None and any(
             record.face_ref == ref and record.stage == target and record.delta is not None
             and bool(record.delta.any()) for record in prepared.effects))
-        result[target] = {'active': active, 'reason': reason or (None if active else
+        target_reason = reason
+        if target == 'eye_bag_preserve' and active:
+            try:
+                from .eye_bag_effect_recovery import live
+                live(engine)
+            except ValueError as error:
+                active = False; target_reason = str(error)
+        result[target] = {'active': active, 'reason': target_reason or (None if active else
             '请先启用选中人物的此功能族；恢复笔不会擦除其他人物或其他效果')}
     return result
 
@@ -157,6 +167,9 @@ def commit(engine, transaction, *, verified_source_key, recovery):
     """Use the host's canonical publication and the dispatcher's one history step."""
     from .effect_recovery_runtime import stage_key
     assert_context(engine, transaction['context'])
+    if transaction['target'] == 'eye_bag_preserve':
+        from .eye_bag_effect_recovery import verify
+        verify(engine, transaction.get('full_review'), transaction)
     if stage_key(engine, recovery) != verified_source_key:
         raise ValueError('人物恢复提交前源图改变')
     if transaction['no_change']:

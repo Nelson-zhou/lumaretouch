@@ -1,0 +1,140 @@
+{
+  "baseline": "ec2e8251c846a28b264a1a502f4d99bfefff6126",
+  "status": "FROZEN_SOURCE_ONLY_EYE_BAG_EFFECT_RECOVERY_UNRUN",
+  "requirement_ids": [
+    "LNX-REF-PC-32464-C-e5fac5fdcf"
+  ],
+  "scope": "Dedicated source-owned per-face eye_bag_preserve effect recovery using existing delta attenuation and immutable vector assets, actual full-source mixed-graph before/after, explicit confirmation and canonical history/export. Not request cancellation, automatic anatomy or new algorithm count.",
+  "files": [
+    {
+      "path": "docs/development/handbook-traceability.json",
+      "sha256": "e60684ca54230f10500d049bc5030e99318c6476b13d2a0d93586cc3a89c9331",
+      "bytes": 472040
+    },
+    {
+      "path": "docs/eye-bag-preserve/ACCEPTANCE-UNRUN.md",
+      "sha256": "d7dc70c574be4f848853cb8f883e49749e95c77b7c475bd7f73f8d1365496991",
+      "bytes": 5159
+    },
+    {
+      "path": "docs/eye-bag-preserve/EFFECT-RECOVERY.md",
+      "sha256": "5d66430e2a049e4017575d447ea7735bdfdd0742a18c56fa0ffc4372dffdaebe",
+      "bytes": 3966
+    },
+    {
+      "path": "docs/eye-bag-preserve/INTEGRATION-AND-RESIDUALS.md",
+      "sha256": "fc6fe9ca0fd143679c7597e7ccf02453fe1b68b76c524b3ba0a6da27d5fa1b43",
+      "bytes": 5221
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/effect_recovery_preview.py",
+      "sha256": "ef1e6180a36995406dec24ab9fc061fa78a993d1ed7e57e73f1f3ae245a88ceb",
+      "bytes": 12095
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/effect_recovery_runtime.py",
+      "sha256": "f9ec69eb313d4b3a945a2842eebc0c50a50def3ffde64fecd5f57621e51d2ca2",
+      "bytes": 15632
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/effect_recovery_state.py",
+      "sha256": "761d2d983def86ffd9b78f92ffa32cf93825fd49243d4f629d5b6a90c7a82291",
+      "bytes": 9651
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/eye_bag_effect_recovery.py",
+      "sha256": "a24fc8141004fff4b06470a32704420d85890b89bb312c27f3b588a0fa63f5ea",
+      "bytes": 5752
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/facial_wrinkle_recovery.py",
+      "sha256": "8c00ac6904f3d5b1000fad86f73d1f7206bb924901a3b255ac4bec564496f738",
+      "bytes": 3824
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_export.py",
+      "sha256": "a8d87290e4a7df98dc3ce1d56501b7aae5d6377cb776d3642ed70b74e33e8dbe",
+      "bytes": 8414
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_recovery.py",
+      "sha256": "f6ab7aecc4b34b4e64bc4f22e0661e068fdfcb17411aea93ba1ba6006847f5b4",
+      "bytes": 10471
+    },
+    {
+      "path": "engine/tests/test_eye_bag_effect_recovery_unrun.py",
+      "sha256": "418cccc81f2e793444f35728d8f9c10041e33da10132361f970c18de1b32530f",
+      "bytes": 7354
+    },
+    {
+      "path": "ui/src-tauri/src/effect_recovery_api.rs",
+      "sha256": "6bbb66d375e0f26c4bf176c2b3cd655581d2d88f6b50da4549c2f64711a4ba7a",
+      "bytes": 8657
+    },
+    {
+      "path": "ui/src-tauri/src/effect_recovery_host.rs",
+      "sha256": "52b34f5f9cb2879d2918a85889efed5eeece67d2713c476a492c973148652412",
+      "bytes": 13451
+    },
+    {
+      "path": "ui/src/effectRecovery/EffectRecoveryPanel.tsx",
+      "sha256": "2250d641afacbb050408cea8739871e3c9496eb17cf21b3ee1a8561eb394b290",
+      "bytes": 8921
+    },
+    {
+      "path": "ui/src/effectRecovery/eyeBagRecovery.unrun.test.ts",
+      "sha256": "609b8c3e3e2392140455c660f385365050f9ad52028f3b8af1f3def1032b49d8",
+      "bytes": 6570
+    },
+    {
+      "path": "ui/src/effectRecovery/eyeBagReviewCallbacks.unrun.test.ts",
+      "sha256": "ae6e0dc4c3f28190140e3deb246ade5182d909a67ed5c804c6c6a0c52a82b30c",
+      "bytes": 981
+    },
+    {
+      "path": "ui/src/effectRecovery/model.ts",
+      "sha256": "d126ea6f4c14a841aa0b839da5edb53392754aba643058c1311ba85756dfd1ca",
+      "bytes": 2464
+    },
+    {
+      "path": "ui/src/effectRecovery/workflow.ts",
+      "sha256": "6c5794a1ef230107bd84cd99a86e772017cd3a8fcc2267ec3316201fd86b9535",
+      "bytes": 18328
+    }
+  ],
+  "static_checks": {
+    "python_ast_files": 1331,
+    "changed_json_toml": "stdlib parse only",
+    "relative_ui_imports_existing": 14,
+    "git_diff_check": "clean",
+    "prior_numeric_solver_core_decoder_and_frozen_sources_byte_identical": 327,
+    "line_caps": {
+      "ui/src/App.tsx": 2131,
+      "ui/src-tauri/src/main.rs": 2047,
+      "engine/src/lumaretouch_engine/server.py": 7019
+    }
+  },
+  "integration_map": {
+    "target": "effect_recovery_state and facial_wrinkle_recovery target registry, availability and immutable per-face support assets",
+    "render": "existing people_effects source-frame target-only delta attenuation and common sampler unchanged; people_export dynamically strips canonical face targets from legacy global application",
+    "review": "eye_bag_effect_recovery stages append-only support into full_candidate_render; exact source/repair/graph/owner fingerprints rechecked on presented/prepare/commit",
+    "native": "effect_recovery_host requires full-source-render-srgb8 for this target; source capture, delivered/presented and one-use commit ownership retained",
+    "ui": "existing source capture painting with explicit final eye-bag review confirmation, target-specific quality validation and stale image callback guards",
+    "history": "canonical people graph vector reference and existing request receipts/history/export/project assets; no competing store or source overwrite"
+  },
+  "limitations": [
+    "Manual anatomy remains partial; no segmentation/model/AI parity claim.",
+    "Recovery painting uses bounded authenticated source capture, not native eye-crop editor; full-source before/after reduced to RGB8 display.",
+    "Existing opaque SDR and memory/codec bounds retained; no alpha/HDR clipping or broad format acceptance.",
+    "Generic recovery preview cancellation discards unpublished authority but does not immediately interrupt an in-flight full render.",
+    "Active preset/batch/cohort transfer and complete shared-alias/dormant affected-set review remain guarded.",
+    "Existing uint8 recovery coverage is retained, not advertised as floating-point mask precision.",
+    "All tests/build/typecheck/product execution/imports/inference/downloads and runtime/native/UI/history/numerical/photo acceptance UNRUN."
+  ],
+  "excluded_unrelated_untracked": [
+    "docs/colour-grading/FREEZE.json",
+    "docs/eye-light/FREEZE.json",
+    "docs/iris-makeup/isolated-manifest.json"
+  ],
+  "prohibited_actions_performed": []
+}

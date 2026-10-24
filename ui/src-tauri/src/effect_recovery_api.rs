@@ -130,7 +130,7 @@ mod tests {
     #[test]
     fn reviewed_face_mutations_use_the_same_exact_target_contract() {
         for name in ["facial_wrinkles", "lip_makeup", "eye_light", "blush_makeup",
-            "lipstick", "eyeliner", "eyelash", "brow_makeup", "iris_makeup",
+            "lipstick", "eyeliner", "eyelash", "brow_makeup", "iris_makeup", "eye_bag_preserve",
             "skin_smoothing", "fabric_fine", "background_replace", "id_background"] {
             assert!(mutation(&json!({"action":"view","target":name})).is_ok());
             assert!(mutation(&json!({"action":"clear","target":name})).is_ok());

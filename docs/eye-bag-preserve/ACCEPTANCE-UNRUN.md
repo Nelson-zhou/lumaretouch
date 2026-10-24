@@ -61,3 +61,20 @@ authorized photographs. The source implementation supplies no such evaluation.
 
 Automatic ridge identification, vendor numeric parity, complete removal and
 broader automatic AI blemish correction remain outside this bounded path.
+
+## Dedicated v2 effect-recovery acceptance, still UNRUN
+
+- Paint add/subtract/feather recovery while ridge protection, dark-circle edits,
+  color and other people remain active. Full recovery removes only the selected
+  face's v2 contribution; partial recovery preserves the existing coverage math.
+- Confirm complete original RGB16 and opaque derived-float render paths before
+  RGB8 display reduction. Compare source/export full-size geometry, not an
+  enlarged proxy mask or the preview PNG's hash against full export pixels.
+- Require explicit final-image confirmation; viewing, canceled gestures, stale
+  image loads, changed capture or changed source/repair/graph/support cannot
+  authorize a commit. Legacy recovery targets retain prior auto-save behavior.
+- Exercise no-op, undo/redo, save/reopen, package recovery and appended immutable
+  vector assets. Missing assets refuse rather than silently lose recovery.
+- Keep unknown commits query-only; never retry a potentially applied stroke.
+- Shared-source aliases and dormant affected history remain guarded until their
+  complete affected-set review is implemented. Automatic anatomy stays partial.

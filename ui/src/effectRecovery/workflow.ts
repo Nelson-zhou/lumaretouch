@@ -1,6 +1,7 @@
 import {parseCaptureFrame,type VerifiedCapture} from '../captureFrame';
 import type {CaptureDescriptor} from '../captureModel';
 import type {CloneStampCaptureStatus} from '../cloneStamp/workflow';
+import {requiresRecoveryConfirmation} from './model';
 import type {RecoveryTarget,RecoveryMutation,RecoveryImage,RecoveryRequest,RecoveryStroke} from './model';
 
 export interface RecoveryContext {enabled:boolean;canStart?:boolean;documentId:string;contextKey:string;reason?:string}
@@ -18,12 +19,12 @@ export interface RecoveryTransport {
 type Phase='idle'|'arming'|'painting'|'drawing'|'previewing'|'sending'|'waiting'|'success'|'failure'|'uncertain';
 export interface RecoveryState {
   phase:Phase;target:RecoveryTarget;frame:VerifiedCapture|null;image:RecoveryImage|null;previewId:string|null;
-  request:RecoveryRequest|null;message:string;strokeActive:boolean;ending:boolean;open:boolean;
+  request:RecoveryRequest|null;message:string;strokeActive:boolean;ending:boolean;open:boolean;awaitingConfirmation:boolean;
 }
 interface Owner {id:string;ticket:string|null;documentId:string;contextKey:string;ack:Promise<boolean>|null}
-interface Candidate {id:string;mutation:RecoveryMutation;final:boolean;serial:number}
+interface Candidate {id:string;mutation:RecoveryMutation;final:boolean;serial:number;reviewed?:boolean}
 const initial=():RecoveryState=>({phase:'idle',target:'skin_smoothing',frame:null,image:null,previewId:null,
-  request:null,message:'',strokeActive:false,ending:false,open:false});
+  request:null,message:'',strokeActive:false,ending:false,open:false,awaitingConfirmation:false});
 const object=(v:unknown):v is Record<string,unknown>=>!!v&&typeof v==='object'&&!Array.isArray(v);
 /** A valid legacy recovery preview is not consent for the separate ID stage. */
 export const recoveryTargetMatches=(value:unknown,target:RecoveryTarget):boolean=>object(value)&&value.target===target;
@@ -33,8 +34,8 @@ function bounded<T>(promise:Promise<T>,ms:number):Promise<T>{
   return Promise.race([promise,new Promise<T>((_,reject)=>{timer=setTimeout(()=>reject(Error('等待超时')),Math.max(1,ms));})])
     .finally(()=>{if(timer!==undefined)clearTimeout(timer);});
 }
-function review(value:unknown):RecoveryImage {
-  if(!object(value)||value.domain!=='production-output'||value.quality!=='proxy-render-srgb8'||
+export function recoveryReview(value:unknown,target:RecoveryTarget):RecoveryImage {
+  if(!object(value)||value.domain!=='production-output'||value.quality!==(target==='eye_bag_preserve'?'full-source-render-srgb8':'proxy-render-srgb8')||
     ![value.width,value.height].every(n=>Number.isSafeInteger(n)&&Number(n)>0&&Number(n)<=800)||
     ![value.before,value.after].every(s=>typeof s==='string'&&s.startsWith('data:image/png;base64,')&&s.length<=4*1024*1024))
     throw Error('恢复预览不是有效的全效果渲染');
@@ -69,7 +70,7 @@ export function createRecoveryWorkflow(api:RecoveryTransport,options:{refresh:()
   }
   function failed(error:unknown){
     if(pending()){publish({phase:'uncertain',message:`原操作结果待确认：${String(error)}`});return;}
-    continueDrawing=false;discard();publish({phase:'failure',frame:null,image:null,previewId:null,strokeActive:false,ending:false,message:String(error)});
+    continueDrawing=false;discard();publish({phase:'failure',frame:null,image:null,previewId:null,strokeActive:false,ending:false,awaitingConfirmation:false,message:String(error)});
   }
   async function start(target:RecoveryTarget,continuation=false){
     if(!active||owner||pending())return;
@@ -77,7 +78,7 @@ export function createRecoveryWorkflow(api:RecoveryTransport,options:{refresh:()
     options.prepare?.();
     const o:Owner={id:id(),ticket:null,documentId:context.documentId,contextKey:context.contextKey,ack:null};owner=o;
     continueDrawing=true;resumeReady=false;
-    publish({phase:'arming',target,open:true,frame:null,previewId:null,request:null,strokeActive:false,ending:false,
+    publish({phase:'arming',target,open:true,frame:null,previewId:null,request:null,strokeActive:false,ending:false,awaitingConfirmation:false,
       image:continuation?state.image:null,message:continuation?'此笔已完成，正在准备下一笔…':'正在冻结源图定位画面…'});
     const deadline=Date.now()+timeout;
     try{
@@ -115,7 +116,7 @@ export function createRecoveryWorkflow(api:RecoveryTransport,options:{refresh:()
   function schedule(mutation:RecoveryMutation,final:boolean){
     if(!owner?.ticket||pending())return;
     latest={id:id(),mutation:structuredClone(mutation),final,serial:++serial};
-    publish({phase:state.strokeActive?'drawing':'previewing',ending:final,message:final?'正在显示本笔最终效果，随后自动提交一次…':'全效果预览更新中…'});
+    publish({phase:state.strokeActive?'drawing':'previewing',ending:final,awaitingConfirmation:false,message:final?(requiresRecoveryConfirmation(state.target)?'正在生成本笔完整源图渲染，确认后才保存…':'正在显示本笔最终效果，随后自动提交一次…'):'全效果预览更新中…'});
     void pump();
   }
   async function pump(){
@@ -129,7 +130,7 @@ export function createRecoveryWorkflow(api:RecoveryTransport,options:{refresh:()
         if(!object(raw)||raw.preview_id!==candidate.id||raw.document_id!==o.documentId||raw.capture_id!==o.id||raw.ticket!==o.ticket)throw Error('恢复效果预览身份变化');
         if(raw.state==='running'){await bounded(sleep(100),deadline-Date.now());continue;}
         if(raw.state!=='ready'||raw.success!==true||!recoveryTargetMatches(raw,candidate.mutation.target))throw Error(typeof raw.error==='string'?raw.error:'恢复预览没有完成或效果目标不匹配');
-        const image=review(raw.result);
+        const image=recoveryReview(raw.result,candidate.mutation.target);
         shown=candidate;
         publish({image,previewId:candidate.id,phase:state.strokeActive?'drawing':'previewing',message:latest?'全效果预览更新中…':candidate.final?'正在显示本笔最终效果…':'左侧定位原图，右侧是真实全效果；可继续涂抹'});
         return;
@@ -152,8 +153,12 @@ export function createRecoveryWorkflow(api:RecoveryTransport,options:{refresh:()
         if(!current(o)||token!==life||shown!==candidate||latest||candidate.serial!==serial)return;
         if(!object(raw)||raw.preview_id!==candidate.id||!recoveryTargetMatches(raw,candidate.mutation.target))throw Error('恢复显示证明身份或效果目标变化');
         if(raw.state==='presented'){
-          if(candidate.final&&!state.strokeActive)await apply(candidate,o);
-          else publish({phase:'drawing',message:'左侧原图定位，右侧全效果即时反馈；松手自动保存一笔，Esc 结束'});
+          candidate.reviewed=true;
+          if(candidate.final&&!state.strokeActive){
+            if(requiresRecoveryConfirmation(candidate.mutation.target))publish({phase:'previewing',awaitingConfirmation:true,message:'本笔完整源图渲染已显示。请比较前后，确认后才保存；结束画笔可丢弃。'});
+            else await apply(candidate,o);
+          }
+          else publish({phase:'drawing',message:requiresRecoveryConfirmation(state.target)?'左侧源图捕获定位，右侧完整源图渲染；松手预览，确认后才保存':'左侧原图定位，右侧全效果即时反馈；松手自动保存一笔，Esc 结束'});
           return;
         }
         if(raw.state!=='ready')throw Error(typeof raw.error==='string'?raw.error:'恢复效果显示未确认');
@@ -195,16 +200,23 @@ export function createRecoveryWorkflow(api:RecoveryTransport,options:{refresh:()
     if(!current(o)||!o.ticket||pending()||candidate.mutation.action==='view'||!context.enabled||context.documentId!==o.documentId||context.contextKey!==o.contextKey)return;
     const request:RecoveryRequest={request_id:`recovery-${id()}`,preview_id:candidate.id,capture_id:o.id,ticket:o.ticket,document_id:o.documentId};
     submittedContext=context.contextKey;resumeReady=false;
-    publish({phase:'sending',request,strokeActive:false,message:'正在自动提交一笔恢复…'});
+    publish({phase:'sending',request,strokeActive:false,awaitingConfirmation:false,message:requiresRecoveryConfirmation(state.target)?'正在提交已确认的恢复笔迹…':'正在自动提交一笔恢复…'});
     try{await bounded(api.submit(request),timeout);}catch{/* A transport failure can follow execution. Query, never resubmit. */}
     if(active)await query(request);
   }
   return {snapshot:()=>state,subscribe:(f:(value:RecoveryState)=>void)=>{listeners.add(f);return()=>{listeners.delete(f);};},
     start,cancel,failed,sourcePresented,imagePresented,
+    async confirmReviewed(){
+      const candidate=shown,o=owner;
+      if(!state.awaitingConfirmation||!candidate?.reviewed||!candidate.final||candidate.mutation.action==='view'||
+        !requiresRecoveryConfirmation(candidate.mutation.target)||!o||!current(o)||latest||inflight||pending()||
+        state.strokeActive||candidate.serial!==serial||state.previewId!==candidate.id)return;
+      await apply(candidate,o);
+    },
     context(next:RecoveryContext){if(context.documentId!==next.documentId){continueDrawing=false;resumeReady=false;}context=next;if(owner&&!pending()&&(!next.enabled||next.documentId!==owner.documentId||next.contextKey!==owner.contextKey))cancel(next.reason||'编辑状态变化，未提交笔迹已取消');},
-    beginStroke(){if(state.phase!=='drawing'||state.ending||!state.image||pending())return false;publish({strokeActive:true});return true;},
-    stroke(stroke:RecoveryStroke,final=false){if(!state.strokeActive||pending())return;if(final)publish({strokeActive:false});schedule({action:'stroke',target:state.target,stroke},final);},
-    mutate(mutation:RecoveryMutation){if(!owner||pending()||state.strokeActive||state.ending)return;schedule(mutation,true);},
+    beginStroke(){if(state.phase!=='drawing'||state.ending||state.awaitingConfirmation||!state.image||pending())return false;publish({strokeActive:true});return true;},
+    stroke(stroke:RecoveryStroke,final=false){if(!state.strokeActive||state.awaitingConfirmation||pending())return;if(final)publish({strokeActive:false});schedule({action:'stroke',target:state.target,stroke},final);},
+    mutate(mutation:RecoveryMutation){if(!owner||pending()||state.strokeActive||state.ending||state.awaitingConfirmation)return;schedule(mutation,true);},
     gestureCancelled(message:string){if(pending())return;latest=null;shown=null;++serial;publish({strokeActive:false,ending:false,message});if(owner?.ticket)schedule({action:'view',target:state.target},false);},
     canContinue:()=>state.phase==='success'&&resumeReady&&continueDrawing&&context.enabled&&context.canStart!==false&&context.contextKey!==submittedContext,
     resume:()=>start(state.target,true),

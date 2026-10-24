@@ -20,6 +20,7 @@ def availability(engine):
     lip = getattr(pipe, 'lip_makeup_delta', None) if pipe else None
     lip_suspended = getattr(getattr(pipe, 'effect_recovery', None), 'suspended_targets', {}).get('lip_makeup') if pipe else None
     result = {
+        'eye_bag_preserve': {'active':False,'reason':'眼袋 v2 恢复需要当前确切人物已应用的独立修正'},
         'eyeliner': {'active':False,'reason':'眼线恢复需要当前人物的已应用眼线图层'},
         'eyelash': {'active':False,'reason':'睫毛恢复需要当前人物的已应用睫毛图层'},
         'iris_makeup': {'active':False,'reason':'美瞳恢复需要当前人物已应用的美瞳图层'},
@@ -86,6 +87,8 @@ def prepare_stage(engine, value):
     validate_common(engine, requested)
     from .people_recovery import global_value
     value = global_value(engine, requested)
+    from .eye_bag_effect_recovery import reject_global
+    reject_global(value)
     row = engine._docs[engine._doc_index]
     before = M.file_stamp(row['path'])
     if row.get('_local_source_stamp') != before:
@@ -195,6 +198,8 @@ def report(engine):
 
 
 def verify_snapshot(snap, path, shape=None):
+    from .eye_bag_effect_recovery import reject_global
+    reject_global(S.check(snap.get('effect_recovery')))
     from .id_background_recovery import validate_state as validate_id
     validate_id(snap,snap.get('effect_recovery'))
     from .common_background_recovery import validate_state as validate_common
@@ -230,6 +235,8 @@ def check_export_decode(snap, path, before, shape):
 
 def configure_export(spec, snap, shape, *, for_document):
     value = S.check(snap.get('effect_recovery'))
+    from .eye_bag_effect_recovery import reject_global
+    reject_global(value)
     if value['targets'] and not for_document:
         raise ValueError('恢复笔迹只能在其源照片导出，不能自动复制到其他照片')
     from .creative_derived_source import record

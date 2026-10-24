@@ -12,7 +12,7 @@ pub(crate) fn supported_target(value: &Value) -> bool {
     matches!(value.as_str(), Some(
         "skin_smoothing" | "fabric_fine" | "background_replace" | "id_background"
         | "facial_wrinkles" | "lip_makeup" | "eye_light" | "blush_makeup"
-        | "lipstick" | "eyeliner" | "eyelash" | "brow_makeup" | "iris_makeup"
+        | "lipstick" | "eyeliner" | "eyelash" | "brow_makeup" | "iris_makeup" | "eye_bag_preserve"
     ))
 }
 
@@ -91,7 +91,12 @@ impl RecoveryPreviewHost {
             || v["capture_id"] != capture.as_str() || v["ticket"] != ticket.as_str() || self.redeemed { return; }
         let valid_images = || {
             let r = &v["result"];
-            r["domain"] == "production-output" && r["quality"] == "proxy-render-srgb8"
+            // The dedicated v2 delta is reviewed after an actual full-source
+            // mixed-graph render. A legacy proxy cannot authorize this target.
+            let quality = if self.target.as_deref() == Some("eye_bag_preserve") {
+                "full-source-render-srgb8"
+            } else { "proxy-render-srgb8" };
+            r["domain"] == "production-output" && r["quality"] == quality
                 && ["width", "height"].iter().all(|k| r[*k].as_u64().is_some_and(|n| (1..=800).contains(&n)))
                 && ["before", "after"].iter().all(|k| r[*k].as_str().is_some_and(|s|
                     s.len() <= 4*1024*1024 && s.starts_with("data:image/png;base64,")))
@@ -143,15 +148,15 @@ impl RecoveryPreviewHost {
 #[cfg(test)]
 mod tests {
     use super::*;
-    const FACES: [&str; 9] = ["facial_wrinkles", "lip_makeup", "eye_light", "blush_makeup",
-        "lipstick", "eyeliner", "eyelash", "brow_makeup", "iris_makeup"];
+    const FACES: [&str; 10] = ["facial_wrinkles", "lip_makeup", "eye_light", "blush_makeup",
+        "lipstick", "eyeliner", "eyelash", "brow_makeup", "iris_makeup", "eye_bag_preserve"];
     const PREVIEW: &str = "11111111111111111111111111111111";
     const CAPTURE: &str = "22222222222222222222222222222222";
 
     fn ready(target: &str) -> Value {
         json!({"protocol":1,"state":"ready","success":true,"preview_id":PREVIEW,
             "capture_id":CAPTURE,"ticket":"3","document_id":"4","target":target,
-            "result":{"domain":"production-output","quality":"proxy-render-srgb8",
+            "result":{"domain":"production-output","quality":if target == "eye_bag_preserve" { "full-source-render-srgb8" } else { "proxy-render-srgb8" },
                 "width":8,"height":8,"before":"data:image/png;base64,fixture",
                 "after":"data:image/png;base64,fixture"}})
     }
@@ -214,5 +219,44 @@ mod tests {
         assert!(host.redeem().is_err());
         host.reset(epoch);
         assert!(host.begin(epoch, PREVIEW, CAPTURE, "3", "4", &json!("id_background_other")).is_err());
+    }
+
+    #[test]
+    fn eye_bag_recovery_requires_its_own_full_source_review() {
+        let epoch = [1; 16];
+        for wrong_target in ["eye_light", "facial_wrinkles", "eye_detail"] {
+            let mut host = RecoveryPreviewHost::default();
+            host.reset(epoch);
+            host.begin(epoch, PREVIEW, CAPTURE, "3", "4", &json!("eye_bag_preserve")).unwrap();
+            host.receive(epoch, &ready(wrong_target));
+            assert_eq!(host.status(epoch, PREVIEW)["state"], "failed");
+            assert!(host.redeem().is_err());
+        }
+        let mut host = RecoveryPreviewHost::default();
+        host.reset(epoch);
+        host.begin(epoch, PREVIEW, CAPTURE, "3", "4", &json!("eye_bag_preserve")).unwrap();
+        let mut proxy = ready("eye_bag_preserve");
+        proxy["result"]["quality"] = json!("proxy-render-srgb8");
+        host.receive(epoch, &proxy);
+        assert_eq!(host.status(epoch, PREVIEW)["state"], "failed");
+        assert!(host.allow_presented().is_err());
+        assert!(host.redeem().is_err());
+    }
+
+    #[test]
+    fn eye_bag_recovery_rejects_foreign_capture_and_engine() {
+        let epoch = [1; 16];
+        let mut host = RecoveryPreviewHost::default();
+        host.reset(epoch);
+        host.begin(epoch, PREVIEW, CAPTURE, "3", "4", &json!("eye_bag_preserve")).unwrap();
+        let mut wrong = ready("eye_bag_preserve");
+        wrong["capture_id"] = json!(PREVIEW);
+        host.receive(epoch, &wrong);
+        host.receive([2; 16], &ready("eye_bag_preserve"));
+        assert_eq!(host.status(epoch, PREVIEW)["state"], "running");
+        assert!(host.allow_presented().is_err());
+        assert!(host.redeem().is_err());
+        host.invalidate();
+        assert_eq!(host.status(epoch, PREVIEW)["state"], "stale");
     }
 }

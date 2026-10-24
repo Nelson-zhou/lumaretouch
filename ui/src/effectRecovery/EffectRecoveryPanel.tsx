@@ -1,6 +1,6 @@
 import {useEffect,useLayoutEffect,useRef,useState} from 'react';
 import {createPortal} from 'react-dom';
-import {LABELS,type BrushSettings,type RecoveryReport} from './model';
+import {LABELS,requiresRecoveryConfirmation,type BrushSettings,type RecoveryReport} from './model';
 import type {EffectRecoveryOwner} from './useEffectRecoveryWorkflow';
 import {RecoverySource} from './RecoverySource';
 import './effectRecovery.css';
@@ -12,13 +12,15 @@ function ResolveRecovery({owner}:{owner:EffectRecoveryOwner}){
 }
 
 function RenderedReview({owner}:{owner:EffectRecoveryOwner}){
-  const {state,workflow}=owner,image=state.image;
+  const {state,workflow}=owner,image=state.image,preview=state.previewId;
+  const currentReview=useRef({preview,image});currentReview.current={preview,image};
+  const isCurrent=()=>currentReview.current.preview===preview&&currentReview.current.image===image;
   const [showBefore,setShowBefore]=useState(false),[loaded,setLoaded]=useState({before:'',after:''});
   useLayoutEffect(()=>{setShowBefore(false);},[state.previewId]);
   useLayoutEffect(()=>{
     if(showBefore||!image||!state.previewId||loaded.before!==image.before||loaded.after!==image.after)return;
     let live=true,second=0;const first=requestAnimationFrame(()=>{second=requestAnimationFrame(()=>{
-      if(live)void workflow.imagePresented(state.previewId!);
+      if(live&&currentReview.current.preview===preview&&currentReview.current.image===image)void workflow.imagePresented(preview!);
     });});
     return()=>{live=false;cancelAnimationFrame(first);cancelAnimationFrame(second);};
   },[image,state.previewId,loaded,workflow,showBefore]);
@@ -30,11 +32,11 @@ function RenderedReview({owner}:{owner:EffectRecoveryOwner}){
     </div>
     <div className="recoveryActual" style={{aspectRatio:image.width/image.height}}>
       <img src={image.before} alt="本笔之前的真实全效果" className={showBefore?'':'concealed'}
-        onLoad={()=>setLoaded(v=>({...v,before:image.before}))} onError={()=>workflow.failed('本笔之前的效果图无法显示')}/>
+        onLoad={()=>{if(isCurrent())setLoaded(v=>({...v,before:image.before}));}} onError={()=>{if(isCurrent())workflow.failed('本笔之前的效果图无法显示');}}/>
       <img src={image.after} alt="本笔恢复后的真实全效果" className={showBefore?'concealed':''}
-        onLoad={()=>setLoaded(v=>({...v,after:image.after}))} onError={()=>workflow.failed('本笔恢复后的效果图无法显示')}/>
+        onLoad={()=>{if(isCurrent())setLoaded(v=>({...v,after:image.after}));}} onError={()=>{if(isCurrent())workflow.failed('本笔恢复后的效果图无法显示');}}/>
     </div>
-    <small>真实全效果代理渲染。保留手工修补、形变和其他调色，不是原图混合。全尺寸质量需另行检查。</small>
+    <small>{image.quality==='full-source-render-srgb8'?'完整源图计算后缩小的 RGB8 显示图，不是原生像素眼部裁剪；放大此图不会增加细节。':'真实全效果代理渲染，全尺寸质量需另行检查。'}保留手工修补、形变和其他调色，不是原图混合。</small>
   </>;
 }
 
@@ -43,7 +45,7 @@ export function EffectRecoveryPanel({owner,report,disabled=false}:{owner:EffectR
   const {state,workflow}=owner;
   return <section className="effectRecoveryPanel" aria-label="功能专属恢复画笔">
     <strong>效果恢复画笔 · B</strong>
-    <p><small>只擦回指定效果，其他编辑保留。每笔松手自动保存，可撤销。</small></p>
+    <p><small>只擦回指定效果，其他编辑保留。通常每笔松手自动保存；去眼袋 v2 需查看后确认，可撤销。</small></p>
     <div className="recoveryLaunchers">{report?.targets.map(item=><button key={item.target}
       disabled={disabled||owner.pending||!owner.context.enabled||(!item.active&&!item.strokes.length)}
       title={item.reason??item.label} onClick={()=>{workflow.cancel();void workflow.start(item.target);}}>
@@ -67,7 +69,8 @@ export function EffectRecoveryWorkspace({owner,report}:{owner:EffectRecoveryOwne
     <span>{state.message}</span><ResolveRecovery owner={owner}/></div>:null;
   return createPortal(<div className="recoveryWorkspace" data-readonly-scopes role="dialog" aria-modal="true" aria-label="连续效果恢复画笔">
       <header><strong>{LABELS[state.target]} · 专属恢复画笔</strong>
-        <span>松手自动提交一笔 · Esc 结束</span><button ref={focus} onClick={()=>workflow.cancel()}>结束画笔</button></header>
+        <span>{requiresRecoveryConfirmation(state.target)?'松手预览，确认后保存 · Esc 丢弃未提交笔迹':'松手自动提交一笔 · Esc 结束'}</span><button ref={focus} onClick={()=>workflow.cancel()}>结束画笔</button></header>
+      {state.target==='eye_bag_preserve'&&<p>仅恢复当前选中人物的去眼袋 v2 贡献；不会擦掉卧蚕保护笔迹、旧版去眼袋、黑眼圈或其他效果。定位使用当前源图绑定的捕获画布，不是原生眼部裁剪。</p>}
       <div className="recoveryBrushControls">
         <label>画笔大小 <input type="range" min=".5" max="25" step=".5" value={settings.size} disabled={controlsDisabled}
           onChange={e=>number('size',Number(e.target.value))}/><output>{settings.size}% 画布短边</output></label>
@@ -83,6 +86,7 @@ export function EffectRecoveryWorkspace({owner,report}:{owner:EffectRecoveryOwne
         <small>原始源图坐标，保留构图。此处线条仅表示笔迹位置，不是处理效果。形变后的实际效果见右侧。</small></section>
         <section><h3>实际全效果</h3><RenderedReview owner={owner}/></section></div>
       <footer><p role="status">{state.message}</p>
+        {state.awaitingConfirmation&&<button disabled={owner.pending||state.strokeActive} onClick={()=>void workflow.confirmReviewed()}>已比较前后，保存这笔去眼袋恢复</button>}
         <small>羽化采用原图短边 0–5% 的空间过渡；添加笔迹取最大覆盖，不以重复描画叠加强度。</small>
         {target?.strokes.length? <div className="recoveryHistoryTools">
           <button disabled={controlsDisabled||state.phase!=='drawing'} onClick={()=>workflow.mutate({action:'enable',target:state.target,enabled:!target.enabled})}>{target.enabled?'暂时停用此目标恢复':'启用此目标恢复'}</button>
