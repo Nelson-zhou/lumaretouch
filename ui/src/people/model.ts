@@ -110,6 +110,7 @@ export function operationLabel(id: string): string {
     'lnx.face_contour.v1': '太阳穴、颧骨与下颌（可见二维轮廓）',
     'lnx.slim_face.v2': '新版瘦脸（真实可见轮廓，左右独立）',
     'lnx.face_size.v1': '小脸（局部整脸整体大小）',
+    'lnx.mid_face.v1': '中庭（局部纵向长度）',
     'lnx.lower_face.v1': '下庭（局部纵向长度）',
     'lnx.facial_wrinkles.v1': '面部细纹', 'lnx.lip_makeup.v1': '唇妆',
     'lnx.brow_shape.v1': '眉形', 'lnx.nose_shape.v1': '鼻形',

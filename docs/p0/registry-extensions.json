@@ -4,6 +4,33 @@
   "scope_note": "RGB/master point recipes v1 remain compatible. Recipe v2 adds explicit linear-sRGB Y-ratio luminance, not Lab L*. Recipe v3 adds an independent Rust-owned four-region parametric stage before point curves, with split-aligned floating LUTs. Basic integrated CI/Qoder checks are recorded in docs/development/parametric-curves-verification.md; native UI acceptance remains pending. Eyedroppers and live/full-source histograms remain separate unfinished features. Original frozen registry is unchanged. Levels is a separate display-sRGB operator with explicit active-channel input clipping and reversible output endpoints; histogram and eyedroppers remain separate.",
   "entries": [
     {
+      "operation_id": "lnx.mid_face.v1",
+      "parameter_key": "recipe",
+      "type": "object",
+      "neutral": {
+        "version": 1,
+        "amount": 0
+      },
+      "range": {
+        "version": [
+          1,
+          1
+        ],
+        "amount": [
+          -1,
+          1
+        ]
+      },
+      "requirement_ids": [
+        "LNX-REF-PC-32466-C-ea67c9d99f"
+      ],
+      "scope": "Independent visual midface length from actual eye-boundary/nose proxies. Negative shortens, positive lengthens the cheek-and-nose band. Measured lower-face points translate together within the flat lateral/vertical plateau; not clinical middle-third measurement or apple-cheek segmentation.",
+      "implementation": "Original Rust monotone rise/plateau/fall map with bounded checked inverse. Runtime measures complete eye-safe upper plane, nose interval and padded lower-face plateau; one existing common sampler, no resize bitmap.",
+      "transfer": "Only version and amount; each explicit target reconstructs actual source-owned anatomy, cheek evidence, influence and foreign-face guards. Generic derived preset path remains refused.",
+      "compatibility": "Separate neutral operation, old lower-face/size/slim/contour/chin recipes and code unchanged. Outermost pullback after lower-face; first four slots and mouth slot retained.",
+      "acceptance": "Source-only UNRUN numerical/photo/UI/performance/workflow gates. Rising band also alters nose content; prior edits may enter transition, neck/background feather moves. No nose-preservation, AI/3D, complete visibility or proprietary-equivalence claim."
+    },
+    {
       "operation_id": "lnx.lower_face.v1",
       "parameter_key": "recipe",
       "type": "object",

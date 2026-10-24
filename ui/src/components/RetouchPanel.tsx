@@ -43,6 +43,7 @@ import {SkinTextureControl} from '../skinTexture/SkinTextureControl';
 import {FaceContourControl} from '../faceContour/FaceContourControl';
 import {SlimFaceControl} from '../slimFace/SlimFaceControl';
 import {FaceSizeControl} from '../faceSize/FaceSizeControl';
+import {MidFaceControl} from '../midFace/MidFaceControl';
 import {LowerFaceControl} from '../lowerFace/LowerFaceControl';
 import {ColorActionLaunch,type ColorActionControlsProps} from '../colorActions/ColorActionControls';
 import {FabricPanel} from "../fabric/FabricPanel";
@@ -379,6 +380,7 @@ const WIRED: Record<string, string> = {
   // 面部重塑 / 表情
   "PC-32466|脸型/瘦脸": "slim_face.v2",
   "PC-32466|脸型/小脸": "face_size.amount",
+  "PC-32466|脸型/中庭": "mid_face.amount",
   "PC-32466|脸型/下庭": "lower_face.amount",
   "PC-32466|脸型/太阳穴": "face_contour.temple",
   "PC-32466|脸型/颧骨": "face_contour.cheekbone",
@@ -448,6 +450,7 @@ const WIRE_LABEL: Record<string, string> = {
   "skin.radius": "磨皮半径",
   "slim_face.v2": "瘦脸（新版左右独立）",
   "face_size.amount": "小脸（局部整脸大小）",
+  "mid_face.amount": "中庭（局部纵向长度）",
   "lower_face.amount": "下庭（局部纵向长度）",
   "deform.slim_face": "旧版瘦脸（历史错误拓扑）",
   "deform.big_eye": "大眼",
@@ -769,6 +772,15 @@ export default function RetouchPanel(props: RetouchProps) {
           <p className="muted">此文档尚未提供规范人物状态，小脸暂不可用。不会改用整张图像缩放、旧版瘦脸或五官大小替代。</p>
         </section>;
         return <FaceSizeControl key={leaf.path}
+          people={props.people} capability={status?.ready_caps}
+          blocked={dim || props.hairBusy || !!props.whiteBalanceBusy || portraitRequestsBusy()
+            || !!status?.edit_queue?.in_flight || !!status?.edit_queue?.pending || !!status?.edit_queue?.closed}
+          faceOk={props.faceOk} faceWhy={props.faceWhy} note={props.note} Slider={Slider}/>;
+      case "mid_face.amount":
+        if (!doc?.people) return <section key={leaf.path} data-control-id="LNX-REF-PC-32466-C-ea67c9d99f" aria-label="中庭暂不可用">
+          <p className="muted">此文档尚未提供规范人物状态，中庭暂不可用。不会改用下庭、小脸、收下巴、下巴长短或短脸替代。</p>
+        </section>;
+        return <MidFaceControl key={leaf.path}
           people={props.people} capability={status?.ready_caps}
           blocked={dim || props.hairBusy || !!props.whiteBalanceBusy || portraitRequestsBusy()
             || !!status?.edit_queue?.in_flight || !!status?.edit_queue?.pending || !!status?.edit_queue?.closed}

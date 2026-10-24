@@ -23,9 +23,10 @@ class WorkflowPortsMixin:
         from .slim_face_scope import capture as capture_slim_face
         from .face_size_scope import capture as capture_face_size
         from .lower_face_scope import capture as capture_lower_face
+        from .mid_face_scope import capture as capture_mid_face
         state = capture_skin_finish(self,capture_skin_colour(self,capture_iris(self,capture_eyelash(self,capture_brow_makeup(self,capture_eyeliner(self,capture_lipstick(self,capture_blush(self,capture(self)))))))))
         state = capture_face_size(self,capture_slim_face(self,capture_face_contour(self,capture_skin_texture(self,capture_skin_gloss(self,state)))))
-        return capture_lower_face(self,state)
+        return capture_mid_face(self,capture_lower_face(self,state))
 
     def _people_preset_replay(self,state,**kwargs):
         from .people_scope import replay_preset

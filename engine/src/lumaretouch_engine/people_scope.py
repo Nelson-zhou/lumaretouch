@@ -36,6 +36,7 @@ def replay_preset(engine,state,**kwargs):
     from . import slim_face_scope as SLIM_FACE
     from . import face_size_scope as FACE_SIZE
     from . import lower_face_scope as LOWER_FACE
+    from . import mid_face_scope as MID_FACE
     # Even an otherwise unchanged or legacy preset must not publish success
     # after an active independent eye/tooth layer failed on its own target.
     amounts=ENHANCE.amounts_of(state)
@@ -65,6 +66,9 @@ def replay_preset(engine,state,**kwargs):
     lower_recipe=LOWER_FACE.S.check(state.get(LOWER_FACE.FIELD))
     lower_requested=state.get(LOWER_FACE.REQUESTED) is True
     if LOWER_FACE.S.active(lower_recipe):kwargs['strict_local']=True
+    mid_recipe=MID_FACE.S.check(state.get(MID_FACE.FIELD))
+    mid_requested=state.get(MID_FACE.REQUESTED) is True
+    if MID_FACE.S.active(mid_recipe):kwargs['strict_local']=True
     if not engine._people_managed():
         if skin_requested or SKIN_COLOUR.S.active(skin_recipe):
             raise ValueError('面部肤色预设需要当前明确的规范人物，不能静默丢弃为旧版全图配方')
@@ -82,6 +86,8 @@ def replay_preset(engine,state,**kwargs):
             raise ValueError('脸部大小预设需要当前明确的规范人物，不能静默丢弃或转换为瘦脸配方')
         if lower_requested or LOWER_FACE.S.active(lower_recipe):
             raise ValueError('下庭长度预设需要当前明确的规范人物，不能静默丢弃或转换为旧版小下巴配方')
+        if mid_requested or MID_FACE.S.active(mid_recipe):
+            raise ValueError('中庭长度预设需要当前明确的规范人物，不能静默丢弃或转换为下庭长度或旧版小下巴配方')
         return engine._replay_state(state,**kwargs)
     before=engine._people_owner().snapshot();asset=engine._people_source()['sha256']
     faces=[face for face in before['faces'].values() if face['asset_sha256']==asset and face['enabled']]
@@ -102,6 +108,7 @@ def replay_preset(engine,state,**kwargs):
     current=SLIM_FACE.capture(engine,current)
     current=FACE_SIZE.capture(engine,current)
     current=LOWER_FACE.capture(engine,current)
+    current=MID_FACE.capture(engine,current)
     skin_involved=(SKIN_COLOUR.FIELD in state and
                    (skin_requested or SKIN_COLOUR.S.active(skin_recipe) or skin_recipe!=current[SKIN_COLOUR.FIELD]))
     if skin_involved:
@@ -168,6 +175,15 @@ def replay_preset(engine,state,**kwargs):
         if (state.get(LOWER_FACE.TARGET)!=current[LOWER_FACE.TARGET]
                 or LOWER_FACE.owner_identity(state)!=LOWER_FACE.owner_identity(current)):
             raise ValueError('下庭长度预设的文档、人物归属、有效来源或当前人物已变化，请重新选择')
+    mid_involved=(MID_FACE.FIELD in state and
+                  (mid_requested or MID_FACE.S.active(mid_recipe) or mid_recipe!=current[MID_FACE.FIELD]))
+    if mid_involved:
+        # Portable signed length only. The complete target renderer owns the
+        # midface proxy map and composition; never reuse donor/original analysis.
+        MID_FACE.install(dict(current),{'recipe':mid_recipe})
+        if (state.get(MID_FACE.TARGET)!=current[MID_FACE.TARGET]
+                or MID_FACE.owner_identity(state)!=MID_FACE.owner_identity(current)):
+            raise ValueError('中庭长度预设的文档、人物归属、有效来源或当前人物已变化，请重新选择')
     fields=dict(zip(A.GEOMETRY,('_brow_shape','_nose_shape','_eye_shape','_mouth_shape')))
     fields[A.LIP]='_lip_makeup'
     # Ephemeral preset transport is consumed here; never a parallel render owner.
@@ -186,6 +202,7 @@ def replay_preset(engine,state,**kwargs):
     if SLIM_FACE.FIELD in state:fields[SLIM_FACE.OP]=SLIM_FACE.FIELD
     if FACE_SIZE.FIELD in state:fields[FACE_SIZE.OP]=FACE_SIZE.FIELD
     if LOWER_FACE.FIELD in state:fields[LOWER_FACE.OP]=LOWER_FACE.FIELD
+    if MID_FACE.FIELD in state:fields[MID_FACE.OP]=MID_FACE.FIELD
     for op,field in fields.items():
         validator=A.specifications()[op][1];left=A.leaves(validator(current.get(field)));right=A.leaves(validator(state.get(field)))
         patches.extend((op,path,value) for path,value in right.items() if left[path]!=value)
@@ -213,6 +230,8 @@ def replay_preset(engine,state,**kwargs):
         raise ValueError('脸部大小预设的当前人物与唯一可应用目标不一致')
     if lower_involved and current[LOWER_FACE.TARGET]!=S.face_ref(faces[0]):
         raise ValueError('下庭长度预设的当前人物与唯一可应用目标不一致')
+    if mid_involved and current[MID_FACE.TARGET]!=S.face_ref(faces[0]):
+        raise ValueError('中庭长度预设的当前人物与唯一可应用目标不一致')
     for op,path,value in patches:candidate=S.set_override(candidate,'face',key,op,path,value)
     if slim_involved or contour_involved:
         # Inspect the complete candidate, including inherited legacy strength
@@ -224,9 +243,9 @@ def replay_preset(engine,state,**kwargs):
     owner=engine._people_owner()
     try:
         owner.commit(candidate,expected_fence=owner.fence);engine._people_analysis_key=None
-        # Face size and lower-third length compose in the complete canonical
-        # renderer. Never clear/convert another geometry intent for local success.
-        if any(op in (A.ENHANCE,EYE_LIGHT,BLUSH,LIPSTICK,EYELINER,EYELASH,BROW_MAKEUP,IRIS,SKIN_COLOUR.OP,SKIN_FINISH.OP,SKIN_GLOSS.OP,SKIN_TEXTURE.OP,FACE_CONTOUR.OP,SLIM_FACE.OP,FACE_SIZE.OP,LOWER_FACE.OP) for op,_,_ in patches):kwargs['strict_local']=True
+        # Face size, lower-face and midface length compose in the complete
+        # canonical renderer. Never clear/convert other intent for local success.
+        if any(op in (A.ENHANCE,EYE_LIGHT,BLUSH,LIPSTICK,EYELINER,EYELASH,BROW_MAKEUP,IRIS,SKIN_COLOUR.OP,SKIN_FINISH.OP,SKIN_GLOSS.OP,SKIN_TEXTURE.OP,FACE_CONTOUR.OP,SLIM_FACE.OP,FACE_SIZE.OP,LOWER_FACE.OP,MID_FACE.OP) for op,_,_ in patches):kwargs['strict_local']=True
         return engine._replay_state(state,**kwargs)
     except Exception:
         before['association_revision']=owner.association_fence
