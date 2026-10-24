@@ -66,8 +66,13 @@ to publish an unverified graph. No corrupt-project recovery acceptance is claime
   `BATCH-TRANSFER.md` and `COHORT-TRANSFER.md`; missing local support still
   requires target painting. Explicit face overrides retain precedence, so a
   shared scalar change need not change every member's appearance.
-- Current single-photo positive review refuses shared-source aliases and dormant
-  affected siblings. Complete affected-set review is not implemented for v2.
+- Direct single-photo active editing now has a separate version-2 shared-source
+  alias review with every affected live document's full mixed image pair, one
+  source-geometric ridge descriptor, exact membership and protected history.
+  Current native painting crops inspect only the current document, not every
+  alias's repaired pixels. See `ALIAS-EDIT.md`. Dormant/unavailable affected
+  members remain refused. Shared-source preset application and alias effect-
+  recovery painting remain separate gaps, not implicitly admitted here.
 - Dedicated effect-recovery painting now attenuates only the independently
   staged v2 eye-bag contribution, with separate source-owned vectors, actual
   full-source mixed-graph review and explicit confirmation. The bounded recovery

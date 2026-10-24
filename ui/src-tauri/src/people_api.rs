@@ -226,3 +226,7 @@ mod face_style_alias_host_tests;
 #[cfg(test)]
 #[path = "eye_bag_cancel_native_unrun.rs"]
 mod eye_bag_cancel_tests;
+
+#[cfg(test)]
+#[path = "eye_bag_alias_host_unrun.rs"]
+mod eye_bag_alias_host_tests;

@@ -1,3 +1,5 @@
+import {eyeBagAliasHistoryClass, registerEyeBagAliasReceipt} from '../eyeBagPreserve/aliasHistoryRegistry';
+import type {EyeBagAliasCommit} from '../eyeBagPreserve/model';
 import {eyeBagCohortHistoryClass, registerEyeBagCohortReceipt} from '../eyeBagPreserve/cohortHistoryRegistry';
 import {checkEyeBagCohortReceipt, checkEyeBagCohortCommit} from '../eyeBagPreserve/cohortReceipt';
 import {validEyeBagCohort, eyeBagCohortTargets, validEyeBagCohortAck, verifyEyeBagCohortCoverage, type EyeBagCohortAck} from '../eyeBagPreserve/cohortModel';
@@ -370,7 +372,7 @@ export function createBatchWorkflow(api:BatchTransport,publish:(state:BatchUi)=>
   }
   async function submit(action:BatchAction,opts:BatchOptions){
     const g=++generation,id=uuid(),deadline=now()+(options.timeoutMs??120000);
-    const aliasHistory=faceStyleAliasHistoryClass(opts.batchId),eyeHistory=eyeBagCohortHistoryClass(opts.batchId)??eyeBagBatchHistoryClass(opts.batchId);
+    const aliasHistory=faceStyleAliasHistoryClass(opts.batchId),eyeHistory=eyeBagAliasHistoryClass(opts.batchId)??eyeBagCohortHistoryClass(opts.batchId)??eyeBagBatchHistoryClass(opts.batchId);
     const request={id,action,generation:g,contextKey:key,contextRevision,batchId:opts.batchId,aliasMemberCount:aliasHistory?.memberCount,token:opts.preflightToken,scope:opts.moduleScope?[...opts.moduleScope]:action==='commit'&&(opts.eyeBagReviewAck!==undefined||opts.eyeBagCohortAck!==undefined)?[...state.plan!.module_scope]:undefined,policy:opts.conflictPolicy,transfer:opts.localMaskTransfer,reference:opts.referenceColor,people:opts.peopleTransfer?structuredClone(opts.peopleTransfer):undefined,peopleProof:context.peopleProof?structuredClone(context.peopleProof):undefined,referencePath:context.referencePath,docs:opts.docs?[...opts.docs]:undefined,torsoAck:opts.torsoReviewAck?.map(ack=>({...ack})),waistAck:opts.waistReviewAck?.map(ack=>({...ack})),headAck:opts.headReviewAck?.map(ack=>({...ack})),collarboneAck:opts.collarboneReviewAck?.map(ack=>({...ack})),collarboneCohort:action==='commit'&&state.plan?.collarbone_cohort===true,
       faceStyleAck:opts.faceStyleReviewAck?.map(ack=>({...ack})),faceStyleWrite:opts.faceStyleReviewAck!==undefined||!!aliasHistory||!!opts.batchId&&faceStyleBatchIds.has(opts.batchId),
       portraitAck:opts.portraitCohortAck?.map(ack=>({...ack})),portraitWrite:opts.portraitCohortAck!==undefined||!!opts.batchId&&portraitCohortBatchIds.has(opts.batchId),
@@ -536,5 +538,8 @@ export function createBatchWorkflow(api:BatchTransport,publish:(state:BatchUi)=>
   function protectFaceStyleAlias(commit:FaceStyleAliasCommit){
     return !disposed&&registerFaceStyleAliasReceipt(commit);
   }
-  return {updateContext,start,commit,undo,redo,query,close,acknowledgeInspection,protectFaceStyleAlias,snapshot:()=>state,dispose:()=>{disposed=true;generation++;pending=null;}};
+  function protectEyeBagAlias(commit:EyeBagAliasCommit){
+    return !disposed&&registerEyeBagAliasReceipt(commit);
+  }
+  return {updateContext,start,commit,undo,redo,query,close,acknowledgeInspection,protectFaceStyleAlias,protectEyeBagAlias,snapshot:()=>state,dispose:()=>{disposed=true;generation++;pending=null;}};
 }

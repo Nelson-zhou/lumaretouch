@@ -37,7 +37,7 @@ Pending acceptance: native compilation; TS typecheck; all authored fixtures;
 real mixed-portrait source painting and source-switch/repair staleness;
 full/partial-core exactness at real decode and export resolutions; image decode
 failure, duplicate actions, slow/unknown receipts; undo/redo and project reopen;
-alias/dormant sibling refusal; legacy replacement and preserve0/1 quality review.
+direct alias full-member review and dormant sibling refusal; legacy replacement and preserve0/1 quality review.
 
 Native-crop acceptance still UNRUN: original PNG16/ICC and derived float inputs,
 committed-repair changes, crop-edge corner/center mapping, per-eye lazy paging,
@@ -63,3 +63,7 @@ explicit and are not a measured all-resolution/performance guarantee.
 - App/process restart draft persistence is not implemented. A lost native mailbox
   is not permission to infer a confirmation outcome or resend a write.
 - Cancellation/recovery and incomplete-draft fixtures are authored only, not run.
+
+Direct editor same-source aliases are now authored separately; see
+[ALIAS_ACCEPTANCE_UNRUN.md](ALIAS_ACCEPTANCE_UNRUN.md) for the exact boundary and
+still-UNRUN acceptance list. This does not extend preset aliases.

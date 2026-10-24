@@ -2,6 +2,8 @@
 //! The existing people receipt owner retains authority and uncertainty.
 use serde_json::{json, Value};
 use crate::original_shadow_transfer_protocol::hex;
+#[path = "eye_bag_alias_protocol.rs"]
+mod alias;
 const CONTEXT: &[&str] = &["document_id", "document_epoch", "document_revision", "state_revision", "association_revision", "target"];
 fn fields(v: &Value, names: &[&str]) -> bool {v.as_object().is_some_and(|m| m.len() == names.len() && names.iter().all(|k| m.contains_key(*k)))}
 fn text(v: &Value) -> bool {v.as_str().is_some_and(|s| !s.trim().is_empty() && s.len() <= 128 && !s.contains('\0'))}
@@ -39,8 +41,8 @@ fn eyes(v: &Value, allow_empty: bool) -> bool {
     })
 }
 pub(crate) fn action(v: &Value) -> bool {matches!(v["action"].as_str(), Some("eye_bag_reference" | "eye_bag_source_image" | "eye_bag_preview" | "eye_bag_image" | "eye_bag_confirm"))}
-fn ack(v: &Value) -> bool {fields(v, &["review_sha256", "before_sha256", "after_sha256", "support_overlay_sha256"])
-    && ["review_sha256", "before_sha256", "after_sha256", "support_overlay_sha256"].iter().all(|k| hex(&v[*k], 64))}
+fn ack(v: &Value) -> bool {(fields(v, &["review_sha256", "before_sha256", "after_sha256", "support_overlay_sha256"])
+    && ["review_sha256", "before_sha256", "after_sha256", "support_overlay_sha256"].iter().all(|k| hex(&v[*k], 64))) || alias::ack(v)}
 pub(crate) fn command(v: &Value) -> Result<(), String> {
     if !action(v) {return Ok(());}
     let mut context = json!({}); for k in CONTEXT {context[*k] = v[*k].clone();}
@@ -51,9 +53,14 @@ pub(crate) fn command(v: &Value) -> Result<(), String> {
             && matches!(p["side"].as_str(), Some("left" | "right")),
         Some("eye_bag_preview") => fields(p, &["recipe", "eyes", "replace_legacy"]) && recipe(&p["recipe"])
             && p["recipe"]["amount"].as_f64().is_some_and(|n| n > 0.0) && eyes(&p["eyes"], false) && p["replace_legacy"].is_boolean(),
-        Some("eye_bag_image") => fields(p, &["token", "side", "sha256"]) && hex(&p["token"], 32) && hex(&p["sha256"], 64)
+        Some("eye_bag_image") => (fields(p, &["token", "side", "sha256"])
+            || (fields(p, &["token", "document_id", "side", "sha256"]) && text(&p["document_id"])
+                && (p["side"] != "support" || p["document_id"] == v["document_id"])))
+            && hex(&p["token"], 32) && hex(&p["sha256"], 64)
             && matches!(p["side"].as_str(), Some("before" | "after" | "support")),
-        Some("eye_bag_confirm") => fields(p, &["token", "ack"]) && hex(&p["token"], 32) && ack(&p["ack"]),
+        Some("eye_bag_confirm") => fields(p, &["token", "ack"]) && hex(&p["token"], 32) && ack(&p["ack"])
+            && p["ack"].get("members").map_or(true, |members| members[0]["document_id"] == v["document_id"]
+                && alias::revision(&members[0]["revision"]) == v["document_revision"].as_u64()),
         _ => false,
     };
     if valid {Ok(())} else {Err("卧蚕保护请求需要当前单脸、真实源图笔迹和完整图像审核凭据".into())}
@@ -146,8 +153,13 @@ fn review(v: &Value, r: &Value) -> bool {
     let o = &v["owner"]; let visual = &v["visual"];
     let source_size = &visual["source_size"];
     let size = source_size.as_array().and_then(|a| (a.len() == 2).then_some(a)).and_then(|a| a[0].as_u64().zip(a[1].as_u64()));
-    fields(v, &["version", "token", "recipe", "owner", "face_ref", "support_sha256", "candidate_state_revision", "replace_legacy", "visual", "support_overlay", "support_source", "review_sha256"])
-        && v["version"].as_u64() == Some(1) && hex(&v["token"], 32) && same_recipe(&v["recipe"], &r["payload"]["recipe"])
+    let versioned = match v["version"].as_u64() {
+        Some(1) => fields(v, &["version", "token", "recipe", "owner", "face_ref", "support_sha256", "candidate_state_revision", "replace_legacy", "visual", "support_overlay", "support_source", "review_sha256"]),
+        Some(2) => fields(v, &["version", "token", "recipe", "owner", "face_ref", "support_sha256", "candidate_state_revision", "replace_legacy", "visual", "support_overlay", "support_source", "review_sha256", "members"])
+            && o["people_scope"] == "project" && alias::members(v),
+        _ => false,
+    };
+    versioned && hex(&v["token"], 32) && same_recipe(&v["recipe"], &r["payload"]["recipe"])
         && v["candidate_state_revision"].as_u64().zip(o["state_revision"].as_u64()).is_some_and(|(after, before)|
             after <= 9_007_199_254_740_991 && after > before && after - before <= 4)
         && v["replace_legacy"] == r["payload"]["replace_legacy"] && hex(&v["support_sha256"], 64) && hex(&v["review_sha256"], 64)
@@ -173,7 +185,12 @@ pub(crate) fn receipt(v: &Value) -> bool {
             && ["doc_state", "payload", "applied", "committed", "operation_committed", "batch_id", "requires_reload", "requires_readback", "status", "phase"]
                 .iter().all(|key| v.get(*key).is_none());
     }
-    if v["success"] != true {return true;}
+    if v["success"] != true {
+        // Prepared evidence is not publication. A proven no-write refusal
+        // cannot carry an actual alias batch identity; unknown stays guarded.
+        return !(v["action"] == "eye_bag_confirm" && r["payload"]["ack"].get("members").is_some()
+            && v["outcome_unknown"] == false && !v["batch_id"].is_null());
+    }
     let p = &v["payload"];
     match v["action"].as_str() {
         Some("eye_bag_reference") => fields(p, &["kind", "source", "face_ref", "source_preview", "source_crops", "legacy_amount", "recipe", "eyes"])
@@ -186,10 +203,16 @@ pub(crate) fn receipt(v: &Value) -> bool {
             && hex(&p["snapshot_sha256"], 64) && p["image"]["sha256"] == r["payload"]["sha256"]
             && p["image"]["width"].as_u64().zip(p["image"]["height"].as_u64())
                 .is_some_and(|(w,h)| crop_image(&p["image"], w, h).is_some()),
-        Some("eye_bag_image") => fields(p, &["kind", "token", "side", "sha256", "review_sha256", "image"])
+        Some("eye_bag_image") => (if r["payload"].get("document_id").is_some() {
+                fields(p, &["kind", "token", "document_id", "side", "sha256", "review_sha256", "image"])
+                    && p["document_id"] == r["payload"]["document_id"]
+            } else { fields(p, &["kind", "token", "side", "sha256", "review_sha256", "image"]) })
             && p["kind"] == "eye_bag_image" && p["token"] == r["payload"]["token"] && p["side"] == r["payload"]["side"]
             && p["sha256"] == r["payload"]["sha256"] && p["sha256"] == p["image"]["sha256"] && hex(&p["review_sha256"], 64) && super::face_style::image(&p["image"]),
-        Some("eye_bag_confirm") => fields(p, &["kind", "token", "review_sha256", "ack", "recipe", "support_sha256", "replace_legacy", "candidate_state_revision"])
+        Some("eye_bag_confirm") => (if r["payload"]["ack"].get("members").is_some() {
+                fields(p, &["kind", "token", "review_sha256", "ack", "recipe", "support_sha256", "replace_legacy", "candidate_state_revision", "alias_members"])
+                    && alias::confirmation(v, r)
+            } else { fields(p, &["kind", "token", "review_sha256", "ack", "recipe", "support_sha256", "replace_legacy", "candidate_state_revision"]) })
             && p["kind"] == "eye_bag_confirm" && p["token"] == r["payload"]["token"] && p["ack"] == r["payload"]["ack"]
             && p["review_sha256"] == p["ack"]["review_sha256"] && recipe(&p["recipe"]) && hex(&p["support_sha256"], 64) && p["replace_legacy"].is_boolean()
             && p["candidate_state_revision"].as_u64().zip(r["state_revision"].as_u64()).is_some_and(|(after,before)|
@@ -201,3 +224,7 @@ pub(crate) fn receipt(v: &Value) -> bool {
 #[cfg(test)]
 #[path = "eye_bag_preserve_unrun.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "eye_bag_alias_protocol_unrun.rs"]
+mod alias_tests;

@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
-"""Independent, single-document eye-bag preservation image review.
+"""Direct source-owned eye-bag preservation image review.
 
 AUTHORED / UNRUN. Manual source-space support is not anatomical detection.
 Only the established people graph, receipt and document history publish edits.
@@ -70,22 +70,28 @@ def check_action(action, payload, target):
                 raise ValueError('Eye-bag support needs independently painted add/subtract brush coverage')
     else:
         fields = {'token', 'side', 'sha256'} if action in ('eye_bag_image', 'eye_bag_source_image') else {'token', 'ack'}
-        if (set(payload) != fields or type(payload['token']) is not str
+        allowed = (fields, fields | {'document_id'}) if action == 'eye_bag_image' else (fields,)
+        if (set(payload) not in allowed or type(payload['token']) is not str
                 or re.fullmatch('[0-9a-f]{32}', payload['token']) is None):
             raise ValueError('Eye-bag review requires its exact session token')
         if action in ('eye_bag_image', 'eye_bag_source_image'):
+            if 'document_id' in payload: P.token(payload['document_id'])
             sides = ('left', 'right') if action == 'eye_bag_source_image' else ('before', 'after', 'support')
             if payload['side'] not in sides or not _hash(payload['sha256']):
                 raise ValueError('Invalid eye-bag image identity')
         else:
             ack = payload['ack']
+            if type(ack) is dict and 'members' in ack:
+                from .eye_bag_alias_review import check_ack
+                check_ack(ack)
+                return
             if (type(ack) is not dict or set(ack) != {
                     'review_sha256', 'before_sha256', 'after_sha256', 'support_overlay_sha256'}
                     or not all(_hash(value) for value in ack.values())):
                 raise ValueError('Confirm the exact loaded before, after and authoritative support images')
 
 
-def _live(engine, state, target):
+def _live(engine, state, target, *, strict=True):
     from .people_preset_plan import require_active_owner
     from .virtual_copy_people import current_row, scope_rows
     from .face_style_alias_review import verify_dormant
@@ -101,13 +107,17 @@ def _live(engine, state, target):
             or engine._people_cursors.get(source['asset_sha256']) != target['target_id']
             or engine._people_targets.get(source['asset_sha256']) != target):
         raise ValueError('Eye-bag review requires the explicitly selected face of the actual effective source')
-    # This v1 protocol does not authorize invisible source-identical siblings,
-    # including unavailable saved rows, source-switch history and named versions.
+    # The legacy v1 path does not authorize invisible source-identical siblings.
+    # V2 admits only live complete aliases; dormant/saved affected sources still
+    # refuse, including source-switch history and named versions.
     aliases = [other for other in scope_rows(engine)
         if SOURCE.row_asset({**other, 'state': current} if other is row else other) == source['asset_sha256']]
-    if len(aliases) != 1 or aliases[0] is not row:
+    if strict and (len(aliases) != 1 or aliases[0] is not row):
         raise ValueError('Eye-bag review cannot change source-identical shared documents without reviewing them all')
     verify_dormant(engine, row, {source['asset_sha256']})
+    if not strict and len(aliases) > 1:
+        from .face_style_alias_review import _eligible
+        _eligible(engine, row, current, source['asset_sha256'])
     version = engine._document_versions().version(row)
     return owner, row, current, source, version
 
@@ -122,7 +132,7 @@ def _values(state, target):
 
 def reference(engine, state, target, payload):
     check_action('eye_bag_reference', payload, target)
-    owner, row, current, source, version = _live(engine, state, target)
+    owner, row, current, source, version = _live(engine, state, target, strict=False)
     before = snapshot_key(engine, row, current, state); fence = owner.fence
     from .body_pose_commands import source_preview
     from . import eye_bag_preserve_support as SUPPORT
@@ -148,7 +158,7 @@ def reference(engine, state, target, payload):
             # project-integrity checks remain strict and may require recovery;
             # this display branch cannot authenticate a corrupted asset bank.
             eyes = {}
-    live = _live(engine, state, target)
+    live = _live(engine, state, target, strict=False)
     if (live[0] is not owner or live[1] is not row or owner.fence != fence
             or live[3] != source or live[4].document_id != version.document_id
             or live[4].revision != version.revision
@@ -187,7 +197,7 @@ def _reference(engine, state, target, live):
 def source_image(engine, state, target, payload):
     """Fetch one immutable native crop, never a new decode or mutable proxy."""
     check_action('eye_bag_source_image', payload, target)
-    shown = _reference(engine, state, target, _live(engine, state, target))
+    shown = _reference(engine, state, target, _live(engine, state, target, strict=False))
     crops = shown['source_crops']
     side = payload['side']
     if payload['token'] != crops['token'] or payload['sha256'] != crops['eyes'][side]['image']['sha256']:
@@ -310,9 +320,8 @@ def _overlay(engine, candidate, target, shown, analysis):
     return compact, {**compact, 'base64': base64.b64encode(raw).decode('ascii')}, extent
 
 
-def preview(engine, state, target, payload):
-    check_action('eye_bag_preview', payload, target)
-    live = _live(engine, state, target); shown = _reference(engine, state, target, live)
+def _stage(engine, state, target, payload, live, shown, *, strict=True):
+    """Retain source-owned vectors once; no graph, history or pixel publication."""
     owner, row, current, source, version = live; fence = owner.fence
     if (version.revision >= MAX_SAFE_REVISION or state['revision'] > MAX_SAFE_REVISION
             or state['association_revision'] > MAX_SAFE_REVISION):
@@ -324,14 +333,13 @@ def preview(engine, state, target, payload):
         raise ValueError('Legacy eye-bag correction is active; explicitly choose replacement or disable it first')
     from . import eye_bag_preserve_support as SUPPORT
     from .people_support_assets import check_store
-    from .people_transfer_inventory import proof
     from .cpu_memory_budget import available_estimate
     analysis = engine._people_analyses.get(source['asset_sha256'], {}).get(target['target_id'])
     if analysis is None: raise ValueError('Current eye-bag face analysis is unavailable')
     candidate, bank = SUPPORT.retain(state, engine._people_support, target['face_ref'], payload['eyes'],
         analysis=analysis, byte_budget=available_estimate(), cancelled=lambda: JOBS.cancelled(engine))
     check_store(bank)
-    _reference(engine, state, target, _live(engine, state, target))
+    _reference(engine, state, target, _live(engine, state, target, strict=strict))
     # Only append-only bytes become reachable here. No live graph pointer,
     # history, canonical recipe or current output changes until confirmation.
     if any(bank.get(key) != value for key, value in engine._people_support.items()):
@@ -357,6 +365,21 @@ def preview(engine, state, target, payload):
     # can reuse the source image without accepting unrelated bank mutations.
     shown['before_key'] = before_key
     after_key = snapshot_key(engine, row, current, candidate)
+    return candidate, support_key, before_key, after_key, analysis
+
+
+def preview(engine, state, target, payload):
+    from .people_transfer_inventory import proof
+    check_action('eye_bag_preview', payload, target)
+    live = _live(engine, state, target, strict=False)
+    shown = _reference(engine, state, target, live)
+    from .face_style_alias_review import has_aliases
+    if has_aliases(engine, live):
+        from .eye_bag_alias_review import preview as alias_preview
+        return alias_preview(engine, state, target, payload, live, shown)
+    owner, row, current, source, version = live; fence = owner.fence
+    recipe = S.check(payload['recipe'])
+    candidate, support_key, before_key, after_key, analysis = _stage(engine, state, target, payload, live, shown)
     a, left, proof_a = render_image(engine, row, current, state, version.document_id, version.revision, cancelled=lambda: JOBS.cancelled(engine))
     b, right, proof_b = render_image(engine, row, current, candidate, version.document_id, version.revision, cancelled=lambda: JOBS.cancelled(engine))
     if (proof_a['source_proof'] != source or proof_b['source_proof'] != source
@@ -402,6 +425,11 @@ def _pixels(store, review, side):
 
 def image(engine, state, target, payload):
     check_action('eye_bag_image', payload, target); store, entry = _entry(engine, payload['token'])
+    if entry['review']['version'] == 2:
+        from .eye_bag_alias_review import image as alias_image
+        return alias_image(engine, state, target, payload, store, entry)
+    if set(payload) != {'token', 'side', 'sha256'}:
+        raise ValueError('Single-document eye-bag images retain their original exact coordinates')
     _verify(engine, state, target, entry); review = entry['review']; side = payload['side']
     descriptor = review['support_overlay'] if side == 'support' else review['visual'][side]
     if payload['sha256'] != descriptor['sha256']: raise ValueError('Eye-bag image hash differs from this review')
@@ -417,6 +445,9 @@ def _proof(review):
 
 def confirm(engine, state, target, payload):
     check_action('eye_bag_confirm', payload, target); store, entry = _entry(engine, payload['token'])
+    if entry['review']['version'] == 2:
+        from .eye_bag_alias_review import confirm as alias_confirm
+        return alias_confirm(engine, state, target, payload, store, entry)
     _verify(engine, state, target, entry); review = entry['review']
     if payload['ack'] != _ack(review): raise ValueError('Confirm this exact complete eye-bag image review')
     for side in ('before', 'after', 'support'): _pixels(store, review, side)
@@ -425,7 +456,10 @@ def confirm(engine, state, target, payload):
 
 
 def verify_before_publish(engine, state, target, payload, candidate, proof):
-    store, entry = _entry(engine, payload['token']); _verify(engine, state, target, entry)
+    store, entry = _entry(engine, payload['token'])
+    if entry['review']['version'] != 1:
+        raise ValueError('Shared eye-bag publication requires its complete alias ledger transaction')
+    _verify(engine, state, target, entry)
     review = entry['review']
     if candidate != entry['candidate'] or proof != _proof(review) or payload['ack'] != _ack(review):
         raise ValueError('Eye-bag publication differs from the exact reviewed graph or acknowledgement')
@@ -441,9 +475,17 @@ def claimed(engine, token):
     return bool(entry and entry['claimed'])
 
 
+def publish_alias(engine, state, target, payload, candidate, proof, *, request_id):
+    from .eye_bag_alias_review import publish
+    return publish(engine, state, target, payload, candidate, proof, request_id)
+
+
 def verify_after_publish(engine, candidate, proof):
     from .virtual_copy_people import scope
     _, entry = _entry(engine, proof['token']); review = entry['review']
+    if review['version'] == 2:
+        from .eye_bag_alias_review import verify_after_publish as alias_after
+        return alias_after(engine, candidate, proof, entry)
     owner, row, current, source, version = _live(engine, candidate, entry['target'])
     if (not entry['claimed'] or owner is not entry['owner'] or owner.fence != entry['fence'] + 1
             or row is not entry['row'] or row['path'] != entry['path'] or engine._load_id != entry['load_id']

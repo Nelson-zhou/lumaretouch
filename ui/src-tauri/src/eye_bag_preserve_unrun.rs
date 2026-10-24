@@ -94,7 +94,7 @@ fn crop_metadata() -> Value {
 }
 
 /// Original transport fixture: one RGB pixel, stored zlib block, not a photo.
-fn crop_png() -> Value {
+pub(super) fn crop_png() -> Value {
     use base64::{engine::general_purpose::STANDARD, Engine as _};
     use sha2::{Digest, Sha256};
     fn chunk(bytes: &mut Vec<u8>, kind: &[u8], data: &[u8]) {

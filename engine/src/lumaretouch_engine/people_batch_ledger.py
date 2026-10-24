@@ -127,7 +127,7 @@ def _publish(owner,engine,plans,targets):
     finally:engine._people_staged=None
 
 
-def commit_scoped(owner,engine,plans,*,request_id,prepare=True,prepared_targets=None,alias_history=None,eye_bag_history=None,eye_bag_cohort_history=None):
+def commit_scoped(owner,engine,plans,*,request_id,prepare=True,prepared_targets=None,alias_history=None,eye_bag_history=None,eye_bag_cohort_history=None,eye_bag_alias_history=None):
     plans={identity:plan for identity,plan in plans.items() if between(plan['before'],plan['candidate'])}
     if not plans:return None
     owner.documents.remember_current()
@@ -157,6 +157,10 @@ def commit_scoped(owner,engine,plans,*,request_id,prepare=True,prepared_targets=
         from .eye_bag_cohort_history import KEY as COHORT_KEY, check as check_cohort_history
         entry[COHORT_KEY]=deepcopy(eye_bag_cohort_history)
         check_cohort_history(entry)
+    if eye_bag_alias_history is not None:
+        from .eye_bag_alias_history import KEY as EYE_ALIAS_KEY, check as check_eye_alias_history
+        entry[EYE_ALIAS_KEY]=deepcopy(eye_bag_alias_history)
+        check_eye_alias_history(entry)
     result={'kind':'commit','batch_id':bid,'applied':[int(k) for k in targets],'skipped':[]}
     frame=_publish(owner,engine,plans,targets)
     owner.ledger[bid]=entry;owner.last_result=result
@@ -180,8 +184,10 @@ def restore_scoped(engine,batch,redo):
     eye_history=check_eye_history(batch)
     from .eye_bag_cohort_history import check as check_cohort_history, verify_restore as verify_cohort_restore
     cohort_history=check_cohort_history(batch)
+    from .eye_bag_alias_history import check as check_eye_alias_history, verify_restore as verify_eye_alias_restore
+    eye_alias_history=check_eye_alias_history(batch)
     owner=engine._batch_controller();plans={};reviewed={}
-    if eye_history is not None or cohort_history is not None:
+    if eye_history is not None or cohort_history is not None or eye_alias_history is not None:
         # The scoped restore route bypasses the legacy undo() wrapper. Capture
         # the current document so unsaved repair/crop edits cannot hide behind
         # a parked row's older dependency digest.
@@ -209,6 +215,7 @@ def restore_scoped(engine,batch,redo):
     if alias_history is not None:verify_alias_restore(engine,batch,plans,targets)
     if eye_history is not None:verify_eye_restore(engine,batch,plans,targets)
     if cohort_history is not None:verify_cohort_restore(engine,batch,plans,targets,redo=redo)
+    if eye_alias_history is not None:verify_eye_alias_restore(engine,batch,plans,targets,redo=redo)
     # Recompute runtime paths/fences only after exact historical document/source
     # verification; a duplicate path never grants a replacement identity.
     prepare_scoped(engine,plans,targets)
@@ -218,6 +225,7 @@ def restore_scoped(engine,batch,redo):
         verify_alias_restore(engine,batch,plans,_targets(owner,engine,plans))
     if eye_history is not None:verify_eye_restore(engine,batch,plans,_targets(owner,engine,plans))
     if cohort_history is not None:verify_cohort_restore(engine,batch,plans,_targets(owner,engine,plans),redo=redo)
+    if eye_alias_history is not None:verify_eye_alias_restore(engine,batch,plans,_targets(owner,engine,plans),redo=redo)
     return _publish(owner,engine,plans,targets)
 
 

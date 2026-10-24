@@ -5,6 +5,7 @@ use serde_json::{json, Value};
 use crate::preset_api::visual::{fields, text};
 use crate::original_shadow_transfer_protocol::hex;
 const MAX_ROWS: usize = 10_000;
+const EYE_MARKERS: &[&str] = &["eye_bag_batch_review", "eye_bag_cohort_review", "eye_bag_alias_review"];
 fn action(v: &Value) -> bool { matches!(v["action"].as_str(), Some("undo" | "redo")) }
 fn index(v: &Value) -> bool { v.as_u64().is_some_and(|n| n <= 9_007_199_254_740_991) }
 pub(crate) fn command(v: &Value) -> Result<(), String> {
@@ -29,12 +30,12 @@ fn summary(v: &Value) -> bool {
 pub(crate) fn receipt(v: &Value) -> bool {
     if !action(v) { return true; }
     if !text(&v["batch_id"]) || !v["success"].is_boolean() || !v["outcome_unknown"].is_boolean() { return false; }
-    for key in ["eye_bag_batch_review", "eye_bag_cohort_review"] {
-        if let Some(marker) = v.get(key) {
-            if !summary(marker) || (key == "eye_bag_cohort_review" && marker["member_count"].as_u64().unwrap() < 2) { return false; }
+    for key in EYE_MARKERS {
+        if let Some(marker) = v.get(*key) {
+            if !summary(marker) || (*key != "eye_bag_batch_review" && marker["member_count"].as_u64().unwrap() < 2) { return false; }
         }
     }
-    if v.get("eye_bag_batch_review").is_some() && v.get("eye_bag_cohort_review").is_some() { return false; }
+    if EYE_MARKERS.iter().filter(|key| v.get(**key).is_some()).count() > 1 { return false; }
     if v["success"] != true {
         return v["error"].as_str().is_some_and(|s| !s.trim().is_empty())
             && (v["outcome_unknown"] == true || (v.get("doc_state").is_none()
@@ -51,7 +52,7 @@ pub(crate) fn receipt(v: &Value) -> bool {
             && row.get("index").map_or(true, |n| n.is_null() || index(n))) { return false; }
     // Old success envelopes remain valid. If the optional compact eye marker
     // is echoed, it cannot describe a partial or differently scoped restore.
-    ["eye_bag_batch_review", "eye_bag_cohort_review"].iter().all(|key| v.get(*key).map_or(true, |marker|
+    EYE_MARKERS.iter().all(|key| v.get(*key).map_or(true, |marker|
         marker["member_count"].as_u64() == Some(restored.len() as u64) && conflicts.is_empty()
             && v["module_scope"] == json!(["lnx.people_graph.v1"])))
 }

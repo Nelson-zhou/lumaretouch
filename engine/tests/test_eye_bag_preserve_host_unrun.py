@@ -158,6 +158,7 @@ def raw(engine, state, target, action, value, request='request-eye'):
 def test_reference_and_preview_keep_existing_owner_graph_and_current_repair(host):
     engine, owner, _, state, target = host
     review = reviewed(host)
+    assert review['version'] == 1 and 'members' not in review
     assert owner.snapshot() == state and owner.fence == 7 and engine._people_support
     assert len(engine.render_calls) == 2
     assert all(current['repair'] == 'committed-current' for current, _ in engine.render_calls)
@@ -222,7 +223,7 @@ def test_legacy_replacement_is_explicit_atomic_and_preserves_old_graph(host):
     assert owner.snapshot() == state
 
 
-def test_shared_and_unavailable_dormant_aliases_refuse(host, monkeypatch):
+def test_unestablished_shared_owner_and_unavailable_dormant_aliases_refuse(host, monkeypatch):
     from lumaretouch_engine import face_style_alias_review as ALIASES
     engine, _, row, state, target = host
     engine._docs.append({**deepcopy(row), 'document_id': 'alias'})

@@ -1,0 +1,239 @@
+{
+  "baseline": "39895b580272b4533146ad770693bab2be338b0c",
+  "status": "FROZEN_SOURCE_ONLY_EYE_BAG_DIRECT_ALIAS_EDIT_UNRUN",
+  "requirement_ids": [
+    "LNX-REF-PC-32464-C-e5fac5fdcf"
+  ],
+  "scope": "Direct active eye-bag editor shared-source alias review, one shared source-owned ridge descriptor and graph, complete current-plus-affected full mixed images and explicit support/all-member ACK, exact existing scoped ledger history. No preset alias admission, donor transfer, new algorithm or automatic anatomy claim.",
+  "files": [
+    {
+      "path": "docs/development/handbook-traceability.json",
+      "sha256": "a79455aad180d6a32506b5b50a4ab316dc410580aec6084ec158630f3db3334f",
+      "bytes": 472984
+    },
+    {
+      "path": "docs/eye-bag-preserve/ACCEPTANCE-UNRUN.md",
+      "sha256": "d71b4f39cba27215c504cee944b61b48774f243a643e56657452ec388eb1c825",
+      "bytes": 13772
+    },
+    {
+      "path": "docs/eye-bag-preserve/ALIAS-EDIT.md",
+      "sha256": "9d0fe6fe538461dbcf1019ca1009f928a1167dda82d53e124b9885517b2a2387",
+      "bytes": 4770
+    },
+    {
+      "path": "docs/eye-bag-preserve/INTEGRATION-AND-RESIDUALS.md",
+      "sha256": "2c4f223285e767df99d5ef5465145e654f6aabdadf44113ede07696d88f70163",
+      "bytes": 6142
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/batch_sync.py",
+      "sha256": "9b7f3fa09f0046fd89e4cc77da34939a4a629e6d9d6afc12e4494566bf1d52d2",
+      "bytes": 62679
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/eye_bag_alias_history.py",
+      "sha256": "4783f8ee008463fafbcb639ae72987a27c20746be3fb3a3d02927a7fd260acce",
+      "bytes": 17993
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/eye_bag_alias_review.py",
+      "sha256": "a888a60fd66b55023daf40cb1caf538f63126a688b6dc44f70618526c0bcd593",
+      "bytes": 16899
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/eye_bag_preserve_host.py",
+      "sha256": "8c4f3c0ee4213dcf14a488615b56e96b558612b2180cdc69f48a464243621e5a",
+      "bytes": 32305
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_batch_ledger.py",
+      "sha256": "8b3c4322899b1061495c53a13ebaec833e6d082e62f1f161eae7702b9554fb80",
+      "bytes": 13682
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_history_persistence.py",
+      "sha256": "5b12ce46c6ee46dbf5859678607b435f55f8677751f212902949cf2d2035d958",
+      "bytes": 12156
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_host_commands.py",
+      "sha256": "56c508fac9e48dc8d5db06c37b653eb6d75a06728cb82511e153c4568a5dd08b",
+      "bytes": 28549
+    },
+    {
+      "path": "engine/tests/test_eye_bag_alias_history_unrun.py",
+      "sha256": "fb569619146b7a604bccb555ac4d6ccd37fda0abc51065a681cadf47645fc331",
+      "bytes": 11218
+    },
+    {
+      "path": "engine/tests/test_eye_bag_alias_review_unrun.py",
+      "sha256": "b6f81d773aaafe7c34e93a7d177f8bff1ffb41ff88edc7481c333ee403ed8479",
+      "bytes": 14692
+    },
+    {
+      "path": "engine/tests/test_eye_bag_preserve_host_unrun.py",
+      "sha256": "35fe26f26f0828d945698e91962cb3e1b03c5c5b49434dc92dcdb944d2265253",
+      "bytes": 28525
+    },
+    {
+      "path": "ui/src-tauri/src/batch_history_protocol.rs",
+      "sha256": "fdc4a8ba49485e46ac7000c14036a8175f168d03f9a222f7f4015352f0e5f131",
+      "bytes": 3776
+    },
+    {
+      "path": "ui/src-tauri/src/batch_history_protocol_tests.rs",
+      "sha256": "a286c02228b7f0758af07e6ae04a786f505f143d76382198cd68dae5ca49d6cd",
+      "bytes": 7113
+    },
+    {
+      "path": "ui/src-tauri/src/eye_bag_alias_host_unrun.rs",
+      "sha256": "eb0593788b6a93cc1f6c302f688bce02d548207de2719eccd2ce85219380cace",
+      "bytes": 9312
+    },
+    {
+      "path": "ui/src-tauri/src/eye_bag_alias_protocol.rs",
+      "sha256": "5f5c7ea424d6df72359db8887c9414cbdce1286fd69c2727c400b35ea3c20486",
+      "bytes": 3196
+    },
+    {
+      "path": "ui/src-tauri/src/eye_bag_alias_protocol_unrun.rs",
+      "sha256": "ea8d03421df6a4c2166d15248e79beea4945e54d330e1d2cccffe6c3f6790bde",
+      "bytes": 10339
+    },
+    {
+      "path": "ui/src-tauri/src/eye_bag_preserve.rs",
+      "sha256": "813b3f8847a6dbdef03c23560ebf195bb505333c449d817521db63cef9063405",
+      "bytes": 19041
+    },
+    {
+      "path": "ui/src-tauri/src/eye_bag_preserve_unrun.rs",
+      "sha256": "cc3bc96b1d43cddfc3dfcc87306605a35c6cd733ffa5a92bb0b758d4a571fe8e",
+      "bytes": 9208
+    },
+    {
+      "path": "ui/src-tauri/src/people_api.rs",
+      "sha256": "3abd0a75c33030650358fee0ba0abdfee95c775a718d73cfa31fbd72aa9748ee",
+      "bytes": 15152
+    },
+    {
+      "path": "ui/src/batch/batchWorkflow.ts",
+      "sha256": "caba45b6db4e964e5f2a9a283565bcf50cde422d90ad2e6bb457b1fcd7531d3f",
+      "bytes": 67665
+    },
+    {
+      "path": "ui/src/batch/useBatchWorkflow.ts",
+      "sha256": "bb0b76c97f045ff3a2475b367a10e69e2aabdbaccb4a23d68b8ccc8c97b125e3",
+      "bytes": 2915
+    },
+    {
+      "path": "ui/src/eyeBagPreserve/ACCEPTANCE_UNRUN.md",
+      "sha256": "3fbd68d2bf585c58b5d4755becd13c35a51b300bb1f6952d54d834c086092f77",
+      "bytes": 4822
+    },
+    {
+      "path": "ui/src/eyeBagPreserve/ALIAS_ACCEPTANCE_UNRUN.md",
+      "sha256": "502b4b7f0b5768cd4e8ace5deab541ed8ace6481c67827d48e89923474408c44",
+      "bytes": 3632
+    },
+    {
+      "path": "ui/src/eyeBagPreserve/EyeBagAliasHistory.tsx",
+      "sha256": "adf06e880c179dff4dedf25937b67cda12a7d400037c8a5c0b832b508e5b8abb",
+      "bytes": 2390
+    },
+    {
+      "path": "ui/src/eyeBagPreserve/EyeBagPreservePanel.tsx",
+      "sha256": "5e81dff03fe3b83f9b642a540a04109381e8f672b61168cdc90b1f600f3f97ae",
+      "bytes": 22444
+    },
+    {
+      "path": "ui/src/eyeBagPreserve/EyeBagReviewImages.tsx",
+      "sha256": "b8d52a1d0430e7046f0727bf73b8c56558238577da2b9fa8c17c60386dd6e673",
+      "bytes": 4849
+    },
+    {
+      "path": "ui/src/eyeBagPreserve/aliasFixture.unrun.test.ts",
+      "sha256": "7e15fb286cfded778b53858117799111be0ae278c540d41223eda587b4172dbd",
+      "bytes": 5971
+    },
+    {
+      "path": "ui/src/eyeBagPreserve/aliasHistoryRegistry.ts",
+      "sha256": "b7adecbaf276ca742d53ee1089badbe7067ad9b8a8e3cff78f55298a0df1421b",
+      "bytes": 3669
+    },
+    {
+      "path": "ui/src/eyeBagPreserve/aliasReview.unrun.test.ts",
+      "sha256": "e3b54a51fb516805984883192a2645977271fea0a087d216c02654af7b63cad2",
+      "bytes": 8337
+    },
+    {
+      "path": "ui/src/eyeBagPreserve/aliasWorkflow.unrun.test.ts",
+      "sha256": "b68e9065b9784a750f2a8d01da5e075268f5ffdddca5eb7fe06a3b39857af852",
+      "bytes": 6870
+    },
+    {
+      "path": "ui/src/eyeBagPreserve/model.ts",
+      "sha256": "6fc3a926fed5901995140176a35fc397d6c1ae62227107b13a68210439df0fdf",
+      "bytes": 19611
+    },
+    {
+      "path": "ui/src/eyeBagPreserve/reviewState.ts",
+      "sha256": "b79e5c507530f3a18f6b95dcc72378515cebf87b105bf6802b82c199e7041ff8",
+      "bytes": 1211
+    },
+    {
+      "path": "ui/src/eyeBagPreserve/wiring.unrun.test.ts",
+      "sha256": "82d848eb4ec72d5e282c6857037a1b7a7db8d15b60ea98402579a219096c8fc5",
+      "bytes": 3227
+    },
+    {
+      "path": "ui/src/native.ts",
+      "sha256": "cd9bcfee3652bddb397c89398151b92e4431fe970058d65ea02ecca98913bcfd",
+      "bytes": 110518
+    },
+    {
+      "path": "ui/src/people/usePeopleWorkflow.ts",
+      "sha256": "7819b02295b0bc9c31f61e5a10528124b1a89183660e24a29d98a64cf5ef1ad1",
+      "bytes": 7751
+    },
+    {
+      "path": "ui/src/people/workflow.ts",
+      "sha256": "cbe216cd8201097a132e59499e3eb244aa39a29881dced972cc002aa178fe92c",
+      "bytes": 24569
+    }
+  ],
+  "static_checks": {
+    "python_ast_files": 1358,
+    "changed_json_toml": "stdlib parse only",
+    "relative_ui_imports_existing": 107,
+    "git_diff_check": "clean",
+    "prior_numeric_solver_core_decoder_and_frozen_sources_byte_identical": 331,
+    "line_caps": {
+      "ui/src/App.tsx": 2131,
+      "ui/src-tauri/src/main.rs": 2047,
+      "engine/src/lumaretouch_engine/server.py": 7031
+    }
+  },
+  "integration_map": {
+    "planner": "versioned eye-bag alias direct review, complete same-owner/source affected set and per-document full mixed renderer; source-owned geometric support is not copied correction pixels",
+    "ledger": "existing scoped graph ledger plus distinct eye-bag alias marker, narrow ridge-descriptor/eye-scalar/approved-legacy-zero transition, exact before/after graph and member dependencies",
+    "images": "existing immutable paged review images with member-qualified before/after and authoritative current-source support overlay, complete proof revalidation and cancellation checkpoints",
+    "protocol": "native eye alias version2 schema, exact ordered member ACK and correlated confirmation/history uncertainty, existing single-document version1 unchanged",
+    "ui": "direct editor all-member full mixed image panels and individual acknowledgment, current-only native source crop disclosure, protected alias undo/reopen classification",
+    "ownership": "pending/unavailable/dormant affected documents refused, actual source/repair/crop/owner/member fences before and after render/publication/replay"
+  },
+  "limitations": [
+    "Manual source-geometric ridge protection is not automatic anatomical detection; original requirement remains partial.",
+    "Current native painting crops are not separate repaired native inspection of every alias; each alias full mixed render and repair/context proof is independently reviewed.",
+    "Only two to sixteen available same-owner/effective-source aliases supported by opaque SDR pipeline; no donor masks, analysis or correction pixels.",
+    "Unreviewed dormant/unavailable source aliases remain refused; preset alias and effect-recovery alias routes are not implicitly enabled.",
+    "RGB8 bounded display reductions are not native-pixel appearance or HDR/alpha support.",
+    "All tests/build/typecheck/product execution/imports/inference/downloads and runtime/native/UI/history/numerical/photo acceptance UNRUN."
+  ],
+  "excluded_unrelated_untracked": [
+    "docs/colour-grading/FREEZE.json",
+    "docs/eye-light/FREEZE.json",
+    "docs/iris-makeup/isolated-manifest.json"
+  ],
+  "prohibited_actions_performed": []
+}

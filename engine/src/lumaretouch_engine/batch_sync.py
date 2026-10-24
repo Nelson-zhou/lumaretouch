@@ -875,6 +875,7 @@ class BatchSyncController:
         from .face_style_alias_history import status_summary
         from .eye_bag_batch_history import status_summary as eye_status_summary
         from .eye_bag_cohort_history import status_summary as cohort_status_summary
+        from .eye_bag_alias_history import status_summary as eye_alias_status_summary
         items = []
         for key, entry in self.ledger.items():
             item = {"batch_id": key, "module_scope": entry["ops"], "targets": len(entry["targets"]),
@@ -885,6 +886,8 @@ class BatchSyncController:
             if eye_marker is not None: item["eye_bag_batch_review"] = eye_marker
             cohort_marker = cohort_status_summary(entry)
             if cohort_marker is not None: item["eye_bag_cohort_review"] = cohort_marker
+            eye_alias_marker = eye_alias_status_summary(entry)
+            if eye_alias_marker is not None: item["eye_bag_alias_review"] = eye_alias_marker
             items.append(item)
         un = [i for i in items if not i["undone"]]
         return {"batches": items, "workspace_generation": self.versions.workspace,

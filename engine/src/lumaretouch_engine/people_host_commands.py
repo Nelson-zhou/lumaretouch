@@ -298,6 +298,8 @@ def apply(engine,raw,emit):
                     # The frozen complete alias set belongs to the existing
                     # protected batch ledger, never a hidden local face write.
                     batch_id,frame=style_review.publish_alias(engine,state,target,payload,candidate,records[request]['payload'],request_id=request)
+                elif action=='eye_bag_confirm' and records[request]['payload'].get('alias_members') is not None:
+                    batch_id,frame=eye_bag_review.publish_alias(engine,state,target,payload,candidate,records[request]['payload'],request_id=request)
                 else:batch_id,frame=publish(engine,state,candidate,request,shared=shared,before_publish=before_publish)
             except Exception:
                 # A rejected preparation may leave only append-only unused

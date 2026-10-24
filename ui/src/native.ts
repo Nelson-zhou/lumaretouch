@@ -10,6 +10,7 @@ import type {PresetReply} from './presets/presetWorkflow';
 import type {BatchReply} from './batch/batchWorkflow';
 import type {CaptureTransport,CaptureStatus} from "./colorCaptureController";
 import type {ScopeResult,ScopeStage} from "./colorScopesModel";
+import {observeEyeBagAliasHistory} from './eyeBagPreserve/aliasHistoryRegistry';
 import {observeFaceStyleAliasHistory} from './faceStyle/aliasHistoryRegistry';
 /** 与 Rust 命令的唯一出入口。所有跨语言类型集中在这里，避免各组件各自猜字段。 */
 import type {LevelsSpec} from "./levelsModel";
@@ -1356,6 +1357,7 @@ export const engineStatus = async () => {
   const observation = ++engineStatusRequestSequence;
   const status = await invoke<EngineStatus>("engine_status");
   observeFaceStyleAliasHistory(status.session?.sync, observation);
+  observeEyeBagAliasHistory(status.session?.sync, observation);
   observeEyeBagBatchHistory(status.session?.sync, observation);
   observeEyeBagCohortHistory(status.session?.sync, observation);
   return status;

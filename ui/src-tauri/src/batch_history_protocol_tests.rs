@@ -74,3 +74,20 @@ fn host(epoch: [u8;16]) -> crate::batch_host::BatchHost {
     bad = v.clone(); bad["eye_bag_batch_review"] = v["eye_bag_cohort_review"].clone(); assert!(!receipt(&bad));
     bad = v; bad["eye_bag_cohort_review"]["support"] = json!({}); assert!(!receipt(&bad));
 }
+#[test] fn reopened_eye_alias_summary_is_distinct_and_requires_the_whole_reviewed_set() {
+    let c = request(); let mut v = result(&c);
+    v["eye_bag_alias_review"] = json!({"version":1,"review_sha256":"c".repeat(64),"member_count":2});
+    assert!(receipt(&v)); let mut h = host([166;16]); h.begin_command([166;16], &c).unwrap(); h.receive([166;16], &v);
+    assert_eq!(h.status("history")["result"], v);
+    for key in ["eye_bag_alias_review", "eye_bag_batch_review", "eye_bag_cohort_review", "eye_bag_request"] {
+        let mut bad = c.clone(); bad[key] = json!({}); assert!(command(&bad).is_err());
+    }
+    for n in [0,1,3,17] { let mut bad = v.clone(); bad["eye_bag_alias_review"]["member_count"] = json!(n); assert!(!receipt(&bad)); }
+    for key in ["eye_bag_batch_review", "eye_bag_cohort_review"] {
+        let mut bad = v.clone(); bad[key] = v["eye_bag_alias_review"].clone(); assert!(!receipt(&bad));
+    }
+    let mut bad = v.clone(); bad["restored"] = json!([1]); assert!(!receipt(&bad));
+    bad = v.clone(); bad["conflicts"] = json!([{"index":2,"path":"/alias.raw","reason":"Changed"}]); assert!(!receipt(&bad));
+    bad = v.clone(); bad["module_scope"] = json!(["lnx.eye_bags.v2"]); assert!(!receipt(&bad));
+    bad = v; bad["eye_bag_alias_review"]["support"] = json!({}); assert!(!receipt(&bad));
+}

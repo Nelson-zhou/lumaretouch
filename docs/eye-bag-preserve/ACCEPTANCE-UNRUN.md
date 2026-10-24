@@ -169,3 +169,35 @@ These cases are a verification plan, not test results or photographic acceptance
   metadata for images. Existing source, memory and display limits remain explicit.
 
 No case above has been executed. Automatic ridge detection remains incomplete.
+
+## Direct shared-source alias editor (AUTHORED / UNRUN)
+
+- Review two and sixteen true same-owner/source aliases, current first, with
+  differing crop, repair and other portrait settings. Require actual complete
+  mixed before/after pairs for every member, never current pixels duplicated
+  under another document identity. Seventeen members must refuse explicitly.
+- Paint shared source-geometric support on current native crops, replace the
+  ridge descriptor and remove one reviewed eye. Verify only the intended face
+  support and eye/approved legacy scalar leaves change; old support remains for
+  history. Do not describe current repaired crops as every alias's inspection.
+- Require the authoritative shared overlay plus every member image and ordered
+  ACK. Version-1 ACK, missing or reordered members, foreign document images and
+  changed support/repair/source/context/revision must never authorize version 2.
+- Add a hidden live alias, unavailable saved alias, pending unknown import,
+  trashed member or dormant source-switch history during preparation. Complete
+  closure must refuse; no member omission or automatic graph isolation.
+- Cancel between member renders and before attaching cache pages. No graph or
+  partial review may publish. Append-only unused immutable support bytes are not
+  an applied recipe and do not themselves create an undo step.
+- Force a throw immediately after token claim and after graph publication.
+  Preserve original unknown receipt and forbid blind retry, even if the owner
+  fence has not yet advanced. A genuine success needs one owner advance and
+  every member's exact revision advance plus the marked ledger receipt.
+- Undo/redo and JSON project save/reopen must restore old/new support correctly
+  using distinct before/after context dependencies. Changed member repairs,
+  missing asset bytes, unrelated face edits or altered membership must refuse.
+  Unrelated append-only support additions must not falsely alter this proof.
+- Preserve v1 single-document behavior, ordinary neutral reset and unreviewed-eye
+  neutrality. Keep preset/batch/cohort/alias recovery gates independent.
+
+These are authored verification cases, not executed results or photo acceptance.

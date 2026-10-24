@@ -17,6 +17,7 @@ export function usePeopleWorkflow(status: EngineStatus | null, doc: DocState | n
   }), []);
   const state = useSyncExternalStore(workflow.subscribe, workflow.snapshot, workflow.snapshot);
   const [historyRefreshError, setHistoryRefreshError] = useState(''), [historyRefreshing, setHistoryRefreshing] = useState(false);
+  const [historyKind, setHistoryKind] = useState<'face_style' | 'eye_bag' | null>(null);
   async function refreshHistory() {
     setHistoryRefreshing(true);
     try {await refreshRef.current(); setHistoryRefreshError('');}
@@ -29,11 +30,13 @@ export function usePeopleWorkflow(status: EngineStatus | null, doc: DocState | n
   // This controller reuses the engine's scoped batch ledger. It stores no local undo snapshots.
   // It lives with the people queue, so collapsing a review cannot abandon an uncertain undo.
   const history = useBatchWorkflow({docs: [], moduleScope: [], conflictPolicy: 'recheck',
-    sourceDocumentId: value?.binding.document_id ?? '', enabled: false, label: '共享来源脸型受保护批次历史'}, () => {void refreshHistory();});
+    sourceDocumentId: value?.binding.document_id ?? '', enabled: false, label: '共享来源人物受保护批次历史'}, () => {void refreshHistory();});
   const historyBusy = historyRefreshing || ['preflighting', 'committing', 'uncertain'].includes(history.ui.phase);
   useLayoutEffect(() => {workflow.update(value, enabled && !historyBusy);}, [workflow, value, enabled, historyBusy]);
   const receipt = state.lastAliasCommit;
   useLayoutEffect(() => {if (receipt) history.protectFaceStyleAlias(receipt);}, [receipt]);
+  const eyeReceipt = state.lastEyeBagAliasCommit;
+  useLayoutEffect(() => {if (eyeReceipt) history.protectEyeBagAlias(eyeReceipt);}, [eyeReceipt]);
   const sameEpoch = !!receipt && receipt.documentEpoch === value?.binding.document_epoch;
   const ledger = sameEpoch && receipt ? status?.session?.sync?.batches.find(batch => batch.batch_id === receipt.batchId
     && batch.targets === receipt.review.members.length && batch.module_scope.length === 1 && batch.module_scope[0] === 'lnx.people_graph.v1') : undefined;
@@ -43,9 +46,22 @@ export function usePeopleWorkflow(status: EngineStatus | null, doc: DocState | n
     if (!receipt || !ledger || !canHistory || (action === 'undo' ? ledger.undone : !ledger.undone)
       || action === 'undo' && !status?.session?.sync?.undoable.includes(receipt.batchId)
       || !history.protectFaceStyleAlias(receipt)) return;
-    setHistoryRefreshError(''); setHistoryRefreshing(true);
+    setHistoryKind('face_style'); setHistoryRefreshError(''); setHistoryRefreshing(true);
     workflow.update(value, false);
     return action === 'undo' ? history.undo(receipt.batchId) : history.redo(receipt.batchId);
+  }
+  const eyeSameEpoch = !!eyeReceipt && eyeReceipt.documentEpoch === value?.binding.document_epoch;
+  const eyeLedger = eyeSameEpoch && eyeReceipt ? status?.session?.sync?.batches.find(batch => batch.batch_id === eyeReceipt.batchId
+    && batch.targets === eyeReceipt.review.members.length && batch.module_scope.length === 1 && batch.module_scope[0] === 'lnx.people_graph.v1') : undefined;
+  const canEyeHistory = enabled && status?.ready_caps?.batch_preflight_protocol === 1 && !!eyeLedger
+    && !state.pending && !state.uncertain && !historyBusy && !historyRefreshError && !status?.edit_queue?.in_flight && !status?.edit_queue?.pending;
+  function restoreEyeAlias(action: 'undo' | 'redo') {
+    if (!eyeReceipt || !eyeLedger || !canEyeHistory || (action === 'undo' ? eyeLedger.undone : !eyeLedger.undone)
+      || action === 'undo' && !status?.session?.sync?.undoable.includes(eyeReceipt.batchId)
+      || !history.protectEyeBagAlias(eyeReceipt)) return;
+    setHistoryKind('eye_bag'); setHistoryRefreshError(''); setHistoryRefreshing(true);
+    workflow.update(value, false);
+    return action === 'undo' ? history.undo(eyeReceipt.batchId) : history.redo(eyeReceipt.batchId);
   }
   const guard = () => {
     if (historyBusy) throw Error('共享来源批次历史仍在处理或查询中，不能重发修改。');
@@ -66,10 +82,17 @@ export function usePeopleWorkflow(status: EngineStatus | null, doc: DocState | n
     recoverEyeBagRead: workflow.recoverEyeBagRead,
     eyeBagDraft: workflow.eyeBagDraft, saveEyeBagDraft: workflow.saveEyeBagDraft,
     check: async () => {if (history.ui.phase === 'uncertain') await history.query(); else await workflow.check();},
-    aliasHistory: {receipt: sameEpoch ? receipt : null, state: history.ui, ledger, refreshError: historyRefreshError,
+    aliasHistory: {receipt: sameEpoch ? receipt : null, state: historyKind === 'face_style' ? history.ui : {...history.ui, phase: 'closed' as const, result: null}, ledger, refreshError: historyRefreshError,
       canUndo: canHistory && !ledger!.undone && !!status?.session?.sync?.undoable.includes(receipt!.batchId),
       canRedo: canHistory && !!ledger!.undone,
       undo: () => restoreAlias('undo'), redo: () => restoreAlias('redo'), query: history.query,
+      refreshing: historyRefreshing, refresh: refreshHistory},
+    eyeBagAliasHistory: {receipt: eyeSameEpoch ? eyeReceipt : null,
+      state: historyKind === 'eye_bag' ? history.ui : {...history.ui, phase: 'closed' as const, result: null},
+      ledger: eyeLedger, refreshError: historyRefreshError,
+      canUndo: canEyeHistory && !eyeLedger!.undone && !!status?.session?.sync?.undoable.includes(eyeReceipt!.batchId),
+      canRedo: canEyeHistory && !!eyeLedger!.undone,
+      undo: () => restoreEyeAlias('undo'), redo: () => restoreEyeAlias('redo'), query: history.query,
       refreshing: historyRefreshing, refresh: refreshHistory}};
 }
 export type PeopleOwner = ReturnType<typeof usePeopleWorkflow>;

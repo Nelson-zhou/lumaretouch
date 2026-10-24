@@ -13,8 +13,10 @@ test('new review is distinct from eye-light and legacy scalar routing', () => {
 });
 test('loaded actual support/before/after and explicit ACK guard application', () => {
   const panel = source('./EyeBagPreservePanel.tsx');
-  assert.match(panel, /\['support', 'before', 'after'\]/);
-  assert.match(panel, /naturalWidth === meta.width/); assert.match(panel, /!ready \|\| !accepted/);
+  assert.match(panel, /reviewReady\(review, images, loaded, accepted, supportAccepted\)/);
+  assert.match(panel, /naturalWidth === meta.width/); assert.match(panel, /!ready \|\| error/);
+  const gates = source('./reviewState.ts');
+  assert.match(gates, /loaded\[support\] === true/); assert.match(gates, /accepted\[memberKey\(review, member.visual\)\] === true/);
   assert.match(panel, /replace_legacy: replaceLegacy/); assert.match(panel, /查询原请求，不重复提交/);
 });
 test('drawing provides source-space widths, erase, true pan and a default hard core', () => {
