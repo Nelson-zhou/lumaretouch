@@ -12,6 +12,7 @@ from .batch_preflight import FrozenTarget, canonical
 from .people_resolver import resolve
 from . import collarbone_cohort_review as CLAVICLE
 from . import portrait_cohort_review as PORTRAIT
+from . import eye_bag_cohort_review as EYE
 
 MARKER = '_people_transfer'
 POLICY = 'persistent_association'
@@ -20,6 +21,7 @@ POLICY = 'persistent_association'
 def options(value, modules):
     fields = {'target_policy', 'operation', 'association_id', 'source_ref', 'selection', 'source', 'targets'}
     if type(value) is dict and 'face_style' in value:fields.add('face_style')
+    if type(value) is dict and 'eye_bag_cohort' in value:fields.add('eye_bag_cohort')
     if type(value) is not dict or set(value) != fields or value['target_policy'] != POLICY:
         raise ValueError('Persistent association requires an explicit reviewed request')
     if value['operation'] not in ('create', 'patch', 'unlink'):
@@ -58,6 +60,7 @@ def options(value, modules):
             raise ValueError('Select unique supported scalar parameter leaves')
         if any(path not in defaults[op] for path in paths):
             raise ValueError('Association may inherit only supported scalar leaves')
+    if 'eye_bag_cohort' in value:EYE.options(value['eye_bag_cohort'],value)
     return deepcopy(value)
 
 
@@ -111,8 +114,9 @@ def prepare(engine, selected, *, validate=True):
     """Rebuild the entire atomic cohort from exact current reviewed endpoints."""
     rows = engine._batch_controller().documents.rows()
     named='face_style' in selected
-    endpoints = [_endpoint(engine, rows, selected['source'], selected['source_ref'],reviewed_only=named)]
-    endpoints.extend(_endpoint(engine, rows, item['target'], item['target_refs'][0],reviewed_only=named) for item in selected['targets'])
+    reviewed=named or 'eye_bag_cohort' in selected
+    endpoints = [_endpoint(engine, rows, selected['source'], selected['source_ref'],reviewed_only=reviewed)]
+    endpoints.extend(_endpoint(engine, rows, item['target'], item['target_refs'][0],reviewed_only=reviewed) for item in selected['targets'])
     members = sorted((item['member'] for item in endpoints), key=lambda item: item['document_id'])
     if len({item['scope_id'] for item in members}) != len(members):
         raise ValueError('Persistent association requires independently owned portrait graphs')
@@ -152,25 +156,31 @@ def prepare(engine, selected, *, validate=True):
         if operation == 'create': candidate = C.create(item['before'], item['person_id'], capsule)
         elif operation == 'patch': candidate = C.update(item['before'], item['person_id'], capsule)
         else: candidate = C.unlink(item['before'], item['person_id'])
-        # Metadata/general cohort review is not the dedicated ridge-support
-        # image proof. Recheck every endpoint on both preflight and replay;
-        # unlink can reveal inherited active intent just as create/patch can.
-        from .eye_bag_preserve_project import require_unreviewed_transition
-        require_unreviewed_transition(item['before'], candidate)
+        # Only this explicit per-member planner may stage a legacy replacement.
+        # It does not mutate capsule v1 intent or transfer support/analysis.
+        if 'eye_bag_cohort' in selected:candidate=EYE.stage(candidate,item,selected,intent)
+        else:
+            from .eye_bag_preserve_project import require_unreviewed_transition
+            require_unreviewed_transition(item['before'],candidate)
         if named:
             from .face_style_recipes import validate_compatibility
             validate_compatibility(A.recipes(resolve(candidate,item['ref']['face_instance_id'],A.defaults())))
         item['candidate'] = candidate
         item['candidate_sha256'] = I.graph_digest(candidate)
-        if validate:
-            from .people_candidate_render import validate as render
-            render(engine, item['row'], candidate)
+        item['eye_bag_cohort_state'] = EYE.state(item)
+    review = {'version': 1, 'operation': operation, 'association_id': association_id,
+              'generation': capsule['generation'], 'members': members, 'intent': intent}
+    if EYE.required(endpoints,selected,review):
+        if 'eye_bag_cohort' not in selected:
+            raise ValueError('Retained or resolved eye-bag cohort content requires explicit complete before/after review and member replacement choices')
+        EYE.closure(engine,endpoints)
+    if validate:
+        from .people_candidate_render import validate as render
+        for item in endpoints:render(engine,item['row'],item['candidate'])
     # Full-resolution rendering may be expensive. It cannot bless newer owners.
     for item in endpoints:
         I.verify(engine, item['row'], V.row_snapshot(engine, item['row']), item['proof'])
         SOURCE.verify_row(item['row'], item['proof']['source_proof'])
-    review = {'version': 1, 'operation': operation, 'association_id': association_id,
-              'generation': capsule['generation'], 'members': members, 'intent': intent}
     return endpoints, review
 
 
@@ -179,7 +189,7 @@ def _public(item, *, live=False):
     return {'index': item['index'], 'path': item['row']['path'], 'live': live,
             'document_id': document['document_id'], 'revision': str(document['revision']),
             'blocked': None, 'before': {}, 'association': {'owner': item['proof'], 'ref': item['ref'],
-            'candidate_sha256': item['candidate_sha256'], 'person_id': item['person_id'], **CLAVICLE.evidence(item), **PORTRAIT.evidence(item)}}
+            'candidate_sha256': item['candidate_sha256'], 'person_id': item['person_id'], **CLAVICLE.evidence(item), **PORTRAIT.evidence(item), **EYE.evidence(item)}}
 
 
 def preflight(engine, controller, p):
@@ -191,7 +201,7 @@ def preflight(engine, controller, p):
     docs = p.get('docs')
     if type(docs) is not list or len(docs) != len(set(docs)) or set(docs) != {item['target']['document']['document_id'] for item in selected['targets']}:
         raise ValueError('Requested documents must exactly match reviewed association targets')
-    if 'face_style' in selected:
+    if 'face_style' in selected or 'eye_bag_cohort' in selected:
         from .people_preset_plan import require_active_owner
         require_active_owner(engine)
         if V.current_row(engine).get('_people_new_import'):raise ValueError('Open and review the named cohort source owner first')
@@ -205,6 +215,8 @@ def preflight(engine, controller, p):
     displays = CLAVICLE.prepare(engine, endpoints) if visual_required else None
     portrait_required=PORTRAIT.required(endpoints,selected,review)
     portrait_displays=PORTRAIT.prepare(engine,endpoints,selected,review,existing_displays=displays) if portrait_required else None
+    eye_required=EYE.required(endpoints,selected,review)
+    eye_displays=EYE.prepare(engine,endpoints,selected,existing_displays=displays or portrait_displays) if eye_required else None
     for item in endpoints:
         I.verify(engine, item['row'], V.row_snapshot(engine, item['row']), item['proof'])
         SOURCE.verify_row(item['row'], item['proof']['source_proof'])
@@ -212,9 +224,9 @@ def preflight(engine, controller, p):
     frozen = [FrozenTarget(item['proof']['document']['document_id'], item['proof']['document']['revision'],
               item['index'], item['row']['path'], None, canonical(item['proof']),
               people_json=canonical({'ref': item['ref'], 'person_id': item['person_id'],
-                                     'candidate_sha256': item['candidate_sha256'], **CLAVICLE.evidence(item), **PORTRAIT.evidence(item,private=True)})) for item in endpoints]
+                                     'candidate_sha256': item['candidate_sha256'], **CLAVICLE.evidence(item), **PORTRAIT.evidence(item,private=True), **EYE.evidence(item,private=True)})) for item in endpoints]
     params = {MARKER: {'mode': POLICY, 'options': selected, 'review': review,
-                       'collarbone_visual_required': visual_required,'portrait_cohort_required':portrait_required}}
+                       'collarbone_visual_required': visual_required,'portrait_cohort_required':portrait_required,'eye_bag_cohort_required':eye_required}}
     plan = controller.store.create(batch.versions.workspace, document['document_id'], document['revision'],
         source['row']['path'], p['module_scope'], params, 'recheck', frozen, [])
     body = {'event': 'batch_preflight', 'success': True, 'module_scope': list(plan.modules), 'source': 'current',
@@ -225,7 +237,8 @@ def preflight(engine, controller, p):
             'workspace_generation': plan.workspace, 'expires_ns': str(plan.expires_ns)}
     if visual_required:body['collarbone_cohort']=True
     if portrait_required:body['portrait_cohort']=True
-    if visual_required or portrait_required:
+    if eye_required:body['eye_bag_cohort']=True
+    if visual_required or portrait_required or eye_required:
         try:
             canonical(body,7*1024*1024)
             if visual_required:
@@ -234,28 +247,38 @@ def preflight(engine, controller, p):
             if portrait_required:
                 from .portrait_cohort_store import attach
                 attach(controller.store,plan,portrait_displays)
+            if eye_required:
+                from .eye_bag_cohort_store import attach
+                attach(controller.store,plan,eye_displays)
         except Exception:
             controller.store.pending.pop(plan.token,None)
             from .collarbone_visual_store import prune
             prune(controller.store)
             from .portrait_cohort_store import prune
             prune(controller.store)
+            from .eye_bag_cohort_store import prune
+            prune(controller.store)
             raise
     controller.emit(body); controller.emit_result(p, body)
 
 
 def commit(engine, controller, p, plan):
-    if set(p) - {'cmd','action','request_id','preflight_token','collarbone_review_ack','portrait_cohort_ack','module_scope'}:
+    if set(p) - {'cmd','action','request_id','preflight_token','collarbone_review_ack','portrait_cohort_ack','eye_bag_cohort_ack','module_scope'}:
         raise ValueError('Association commit accepts only its immutable reviewed token')
     import json
     params = plan.params()[MARKER]; selected = options(params['options'], list(plan.modules))
     visual_required = params.get('collarbone_visual_required') is True
     portrait_required=params.get('portrait_cohort_required') is True
+    eye_records=EYE.records(plan);eye_required=eye_records is not None;eye_ack=None
+    if eye_required:
+        if p.get('module_scope')!=list(plan.modules):raise ValueError('Eye-bag cohort confirmation must retain its exact frozen operation scope')
+        eye_ack=EYE.acknowledgments(p.get('eye_bag_cohort_ack'),eye_records)
+    elif 'eye_bag_cohort_ack' in p:raise ValueError('Eye-bag cohort ACK cannot authorize another frozen operation')
     portrait_ack=None
     if portrait_required:
         if p.get('module_scope')!=list(plan.modules):raise ValueError('Cohort confirmation must retain exact frozen operation scope')
         portrait_ack=PORTRAIT.acknowledgments(p.get('portrait_cohort_ack'),[json.loads(t.people_json)['portrait_visual'] for t in plan.targets])
-    elif 'portrait_cohort_ack' in p or 'module_scope' in p:raise ValueError('Portrait-cohort confirmation cannot authorize another operation')
+    elif 'portrait_cohort_ack' in p or ('module_scope' in p and not eye_required):raise ValueError('Portrait-cohort confirmation cannot authorize another operation')
     visual_ack = None
     if visual_required:
         visual_ack = CLAVICLE.R.acknowledgments(p.get('collarbone_review_ack'),
@@ -266,18 +289,23 @@ def commit(engine, controller, p, plan):
     endpoints, review = prepare(engine, selected, validate=False)
     if (review != params['review'] or len(endpoints) != len(plan.targets)
             or CLAVICLE.required(endpoints, selected, review) != visual_required
-            or PORTRAIT.required(endpoints,selected,review)!=portrait_required):
+            or PORTRAIT.required(endpoints,selected,review)!=portrait_required
+            or EYE.required(endpoints,selected,review)!=eye_required):
         raise ValueError('Reviewed association content changed')
     plans = {}
     for item, frozen in zip(endpoints, plan.targets):
         frozen_payload = json.loads(frozen.people_json)
-        expected_payload = {'ref': item['ref'], 'person_id': item['person_id'], 'candidate_sha256': item['candidate_sha256']}
+        expected_payload = {'ref': item['ref'], 'person_id': item['person_id'], 'candidate_sha256': item['candidate_sha256'],
+                            'eye_bag_cohort_state':item['eye_bag_cohort_state']}
         if visual_required:
             expected_payload.update(CLAVICLE.evidence(frozen_payload))
             CLAVICLE.verify(engine, item, frozen_payload)
         if portrait_required:
             expected_payload.update(PORTRAIT.evidence(frozen_payload,private=True))
             PORTRAIT.verify(engine,item,frozen_payload,PORTRAIT.digest(selected,review))
+        if eye_required:
+            expected_payload.update(EYE.evidence(frozen_payload,private=True))
+            EYE.verify(engine,item,frozen_payload,selected)
         if (item['proof'] != json.loads(frozen.before_json) or item['row']['path'] != frozen.path
                 or item['proof']['document']['document_id'] != frozen.document_id
                 or expected_payload != frozen_payload):
@@ -310,9 +338,18 @@ def commit(engine, controller, p, plan):
         for item,frozen in zip(endpoints,plan.targets):PORTRAIT.verify(engine,item,json.loads(frozen.people_json),PORTRAIT.digest(selected,review))
         from .portrait_cohort_store import verify_available
         verify_available(controller.store,plan)
-    controller.store.claim(plan,collarbone_review_ack=visual_ack,portrait_cohort_ack=portrait_ack,request_id=p.get('request_id'))
+    eye_history=None
+    if eye_required:
+        EYE.closure(engine,endpoints)
+        for item,frozen in zip(endpoints,plan.targets):EYE.verify(engine,item,json.loads(frozen.people_json),selected)
+        from .eye_bag_cohort_store import verify_available
+        verify_available(controller.store,plan)
+        from .eye_bag_cohort_history import prepare as prepare_eye_history
+        eye_history=prepare_eye_history(engine,plans,targets,review,eye_ack)
+    controller.store.claim(plan,collarbone_review_ack=visual_ack,portrait_cohort_ack=portrait_ack,eye_bag_cohort_ack=eye_ack,request_id=p.get('request_id'))
     try:
-        result = commit_scoped(batch, engine, plans, request_id=p.get('request_id'), prepare=False, prepared_targets=targets)
+        result = commit_scoped(batch, engine, plans, request_id=p.get('request_id'), prepare=False, prepared_targets=targets,eye_bag_cohort_history=eye_history)
+        if eye_required and result is None:raise ValueError('Reviewed eye-bag cohort unexpectedly produced no atomic ledger transaction')
         bid, frame = (None, None) if result is None else result
         outcomes = [{'index': item['index'], 'path': item['row']['path'], 'document_id': item['member']['document_id'],
                      'expected_revision': str(item['proof']['document']['revision']),
@@ -326,6 +363,7 @@ def commit(engine, controller, p, plan):
         if visual_required:
             body.update(collarbone_cohort=True, collarbone_review_ack=deepcopy(visual_ack))
         if portrait_required:body.update(portrait_cohort=True,portrait_cohort_ack=deepcopy(portrait_ack),outcome_unknown=False)
+        if eye_required:body.update(eye_bag_cohort=True,eye_bag_cohort_ack=deepcopy(eye_ack),outcome_unknown=False)
         controller.emit(body)
         if frame is not None: controller.emit(frame)
     except Exception as error:
@@ -334,4 +372,5 @@ def commit(engine, controller, p, plan):
     if visual_required:
         body.update(collarbone_cohort=True, collarbone_review_ack=deepcopy(visual_ack), module_scope=list(plan.modules))
     if portrait_required:body.update(portrait_cohort=True,portrait_cohort_ack=deepcopy(portrait_ack),module_scope=list(plan.modules))
+    if eye_required:body.update(eye_bag_cohort=True,eye_bag_cohort_ack=deepcopy(eye_ack),module_scope=list(plan.modules))
     controller.emit_result(p, controller.store.finish(plan, body))

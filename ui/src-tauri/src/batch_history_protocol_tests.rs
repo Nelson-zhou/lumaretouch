@@ -61,3 +61,16 @@ fn host(epoch: [u8;16]) -> crate::batch_host::BatchHost {
     }
     v["eye_bag_batch_review"]["targets"]=json!([]);assert!(!receipt(&v));
 }
+#[test] fn reopened_eye_cohort_summary_requires_all_members_without_new_authority() {
+    let c = request(); let mut v = result(&c);
+    v["eye_bag_cohort_review"] = json!({"version":1,"review_sha256":"b".repeat(64),"member_count":2});
+    assert!(receipt(&v)); let mut h = host([165;16]); h.begin_command([165;16], &c).unwrap(); h.receive([165;16], &v);
+    assert_eq!(h.status("history")["result"], v);
+    for key in ["eye_bag_cohort_review", "eye_bag_cohort_ack"] {
+        let mut bad = c.clone(); bad[key] = v["eye_bag_cohort_review"].clone(); assert!(command(&bad).is_err());
+    }
+    for n in [0,1,3,17] { let mut bad = v.clone(); bad["eye_bag_cohort_review"]["member_count"] = json!(n); assert!(!receipt(&bad)); }
+    let mut bad = v.clone(); bad["restored"] = json!([1]); assert!(!receipt(&bad));
+    bad = v.clone(); bad["eye_bag_batch_review"] = v["eye_bag_cohort_review"].clone(); assert!(!receipt(&bad));
+    bad = v; bad["eye_bag_cohort_review"]["support"] = json!({}); assert!(!receipt(&bad));
+}

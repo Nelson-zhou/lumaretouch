@@ -9,12 +9,15 @@ pub(crate) mod collarbone;
 pub(crate) mod face_style;
 #[path="portrait_cohort_protocol.rs"]
 pub(crate) mod portrait_cohort;
+#[path="eye_bag_cohort_protocol.rs"]
+pub(crate) mod eye_cohort;
 #[path="eye_bag_batch_protocol.rs"]
 pub(crate) mod eye_bag;
 #[path="batch_history_protocol.rs"]
 pub(crate) mod history;
 
 pub(crate) fn read_only(command:&Value)->bool {
+    if eye_cohort::routed(command) { return eye_cohort::read_only(command); }
     if command["cmd"]=="batch" && (command["action"]=="eye_bag_visual"
         || command["people_transfer"].get("eye_bag").is_some() || command.get(eye_bag::ACK).is_some()) {
         return eye_bag::read_only(command);
@@ -31,6 +34,7 @@ pub(crate) fn read_only(command:&Value)->bool {
 
 pub(crate) fn enqueue(state:&AppState,handle:&EngineHandle,command:Value)->Result<(),String>{
     history::command(&command)?;
+    eye_cohort::command(&command)?;
     eye_bag::command(&command)?;
     portrait_cohort::command(&command)?;
     face_style::command(&command)?;
@@ -50,8 +54,8 @@ pub(crate) fn enqueue(state:&AppState,handle:&EngineHandle,command:Value)->Resul
 #[tauri::command]
 pub(crate) fn batch(state:State<'_,Arc<AppState>>,action:String,docs:Option<Vec<String>>,
     module_scope:Option<Vec<String>>,conflict_policy:Option<String>,batch_id:Option<String>,
-    preflight_token:Option<String>,request_id:Option<String>,local_mask_transfer:Option<Value>,reference_color:Option<Value>,people_transfer:Option<Value>,spill_review_ack:Option<Value>,shadow_review_ack:Option<Value>,torso_review_ack:Option<Value>,waist_review_ack:Option<Value>,head_review_ack:Option<Value>,collarbone_review_ack:Option<Value>,face_style_review_ack:Option<Value>,portrait_cohort_ack:Option<Value>,eye_bag_review_ack:Option<Value>,document_id:Option<String>,revision:Option<String>,side:Option<String>,sha256:Option<String>)->Result<Value,String>{
-    if !["preflight","commit","undo","redo","state","people_targets","collarbone_visual","face_style_visual","portrait_cohort_visual","eye_bag_visual"].contains(&action.as_str()){return Err("unknown batch action".into());}
+    preflight_token:Option<String>,request_id:Option<String>,local_mask_transfer:Option<Value>,reference_color:Option<Value>,people_transfer:Option<Value>,spill_review_ack:Option<Value>,shadow_review_ack:Option<Value>,torso_review_ack:Option<Value>,waist_review_ack:Option<Value>,head_review_ack:Option<Value>,collarbone_review_ack:Option<Value>,face_style_review_ack:Option<Value>,portrait_cohort_ack:Option<Value>,eye_bag_review_ack:Option<Value>,eye_bag_cohort_ack:Option<Value>,document_id:Option<String>,revision:Option<String>,side:Option<String>,sha256:Option<String>)->Result<Value,String>{
+    if !["preflight","commit","undo","redo","state","people_targets","collarbone_visual","face_style_visual","portrait_cohort_visual","eye_bag_visual","eye_bag_cohort_visual"].contains(&action.as_str()){return Err("unknown batch action".into());}
     if request_id.is_some() && state.ready_caps.lock().map_err(|_|"capability lock poisoned")?["batch_preflight_protocol"]!=1 {
         return Err("current engine does not support reviewed batch receipts".into());
     }
@@ -74,10 +78,12 @@ pub(crate) fn batch(state:State<'_,Arc<AppState>>,action:String,docs:Option<Vec<
     if let Some(v)=face_style_review_ack{cmd["face_style_review_ack"]=v;}
     if let Some(v)=portrait_cohort_ack{cmd["portrait_cohort_ack"]=v;}
     if let Some(v)=eye_bag_review_ack{cmd["eye_bag_review_ack"]=v;}
+    if let Some(v)=eye_bag_cohort_ack{cmd["eye_bag_cohort_ack"]=v;}
     for (key,value) in [("document_id",document_id),("revision",revision),("side",side),("sha256",sha256)] {
         if let Some(v)=value{cmd[key]=json!(v);}
     }
     history::command(&cmd)?;
+    eye_cohort::command(&cmd)?;
     eye_bag::command(&cmd)?;
     portrait_cohort::command(&cmd)?;
     face_style::command(&cmd)?;

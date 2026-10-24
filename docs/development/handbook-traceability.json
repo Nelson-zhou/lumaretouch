@@ -2806,12 +2806,13 @@
         "docs/eye-bag-preserve/EFFECT-RECOVERY.md",
         "docs/eye-bag-preserve/PRESET-TRANSFER.md",
         "docs/eye-bag-preserve/BATCH-TRANSFER.md",
+        "docs/eye-bag-preserve/COHORT-TRANSFER.md",
         "ui/src/eyeBagPreserve/"
       ],
       "verification": [
         "AUTHORED / UNRUN: docs/eye-bag-preserve/ACCEPTANCE-UNRUN.md; no tests, build, inference, native, photo or export acceptance executed"
       ],
-      "scope_note": "LNX-REF-PC-32464-C-e5fac5fdcf remains PARTIAL: independently painted visible lower-lid support, preserved by default only at full coverage in the new operation. Not automatic ridge segmentation, complete ridge removal or vendor parity. New versioned recipe does not silently alter legacy eye-bag appearance. Current-photo active presets and dedicated explicit-map ordinary batches use complete mixed-render review and target-owned support, with explicit target legacy policy and exact image acknowledgment. Generic active transfer, persistent cohorts and unreviewed shared/dormant membership remain fenced. No new algorithm/work-package count."
+      "scope_note": "LNX-REF-PC-32464-C-e5fac5fdcf remains PARTIAL: independently painted visible lower-lid support, preserved by default only at full coverage in the new operation. Not automatic ridge segmentation, complete ridge removal or vendor parity. New versioned recipe does not silently alter legacy eye-bag appearance. Current-photo active presets and dedicated explicit-map ordinary batches use complete mixed-render review and target-owned support, with explicit target legacy policy and exact image acknowledgment. Dedicated persistent cohorts additionally review source plus every member with actual full mixed images, independently owned before/after protection, per-member legacy policy and exact atomic history proofs. Explicit face overrides keep precedence and capsule v1 intent is not migrated. Generic active routes without proof and unreviewed shared/dormant membership remain fenced. No new algorithm/work-package count."
     },
     {
       "id": "control:PC-32464:12",

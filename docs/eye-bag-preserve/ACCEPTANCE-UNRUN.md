@@ -137,3 +137,35 @@ broader automatic AI blemish correction remain outside this bounded path.
   detail, clipping source precision or silently truncating the target set.
 
 These cases are a verification plan, not test results or photographic acceptance.
+
+## Persistent source-plus-members cohort (AUTHORED / UNRUN)
+
+- Create, patch and unlink a source-first cohort of independent original and
+  opaque derived owners. Verify each complete mixed before/after image against
+  its canonical render, including unchanged source images and explicit face
+  overrides that mask shared scalar intent. Never copy donor support or recovery.
+- Review both active-before/neutral-after and neutral-before/active-after cases,
+  one reviewed eye, and different member ridge assets. Candidate neutrality must
+  not erase the before support proof. Missing local evidence refuses.
+- Attempt generic patch and unlink with no eye leaves selected while the capsule
+  retains eye intent or a member has active local overrides. Full eye review and
+  exact per-member policy remain mandatory; the UI's optional review route must
+  work when target inventory does not reveal that active state.
+- Require explicit member legacy policy and reject newly selected nonzero legacy
+  correction when v2 is active. Retained capsule intent must not be migrated or
+  silently deleted; approved member overrides preserve normal resolver priority.
+- Load every immutable source/member pair and ACK exact image, coverage, revision
+  and policy. Exercise eye-only, eye-plus-portrait, eye-plus-collarbone and triple
+  review. One family's ACK cannot stand in for another or reorder members.
+- Alter support, repair, owner, capsule generation, membership, policy or graph
+  after preflight. Frozen authority must not revive after false/true/false changes.
+  Closing or canceling reads cannot convert an uncertain write into a known undo.
+- Force publication failures and inspect exact receipts, rollback and query-only
+  unknown state. Undo/redo and project save/reopen must retain all member graph
+  dependencies, including persons, links, capsules and retained source assets.
+- Add a hidden shared-source alias or change dormant history before apply or
+  replay. Refuse unreviewed affected sets rather than updating invisible siblings.
+- Exercise sixteen-member paged review without dropping members or substituting
+  metadata for images. Existing source, memory and display limits remain explicit.
+
+No case above has been executed. Automatic ridge detection remains incomplete.

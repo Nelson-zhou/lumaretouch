@@ -1,3 +1,5 @@
+import {eyeBagCohortPolicy} from '../eyeBagPreserve/cohortPolicy';
+import {eyeBagIntentRequiresReview} from '../eyeBagPreserve/cohortModel';
 import {eyeBagBatchPolicy} from '../eyeBagPreserve/batchModel';
 import {OPERATION_ID as EYE_BAGS} from '../eyeBagPreserve/model';
 import {associationRequest,sourceAssociation} from './associationRequest';
@@ -42,6 +44,7 @@ export function ConfirmedPeopleTransfer({owner, targets, currentPath, enabled, o
   const [faceChoices, setFaceChoices] = useState<{requestId: string; choices: FaceChoices}>({requestId: '', choices: {}});
   const [images, setImages] = useState<{requestId: string; ready: Record<string, boolean>}>({requestId: '', ready: {}});
   const [eyeRoute, setEyeRoute] = useState<{key: string; mode: 'reviewed' | 'neutral_reset'}>({key: '', mode: 'reviewed'});
+  const [eyeCohortChoice, setEyeCohortChoice] = useState<{key: string; enabled: boolean}>({key: '', enabled: false});
   const [eyePolicies, setEyePolicies] = useState<{key: string; choices: Record<string, boolean | undefined>; revision: number}>({key: '', choices: {}, revision: 0});
   const [frozen, setFrozen] = useState<FrozenVisual | null>(null);
   const [frozenImages, setFrozenImages] = useState<{requestId: string; ready: Record<string, boolean>}>({requestId: '', ready: {}});
@@ -58,7 +61,7 @@ export function ConfirmedPeopleTransfer({owner, targets, currentPath, enabled, o
   })));
   for (const leaf of available) if (!named && chosen.includes(leaf.key)) (selection[leaf.operation] ??= []).push(leaf.path);
   const eyeSelected = !named && Object.hasOwn(selection, EYE_BAGS);
-  const eyeNeutralReset = eyeSelected && eyeRoute.key === key && eyeRoute.mode === 'neutral_reset';
+  const eyeNeutralReset = !persistent && eyeSelected && eyeRoute.key === key && eyeRoute.mode === 'neutral_reset';
   const eyeNeutralEligible = eyeSelected && selection[EYE_BAGS].includes('/amount')
     && available.some(leaf => leaf.operation === EYE_BAGS && leaf.path === '/amount' && leaf.value === 0 && !leaf.conflict);
   const selectedConflict = available.some(leaf => leaf.conflict && chosen.includes(leaf.key));
@@ -73,16 +76,22 @@ export function ConfirmedPeopleTransfer({owner, targets, currentPath, enabled, o
   const choices = listing && faceChoices.requestId === listing.request_id ? faceChoices.choices : {};
   const allImagesReady = !!listing && images.requestId === listing.request_id
     && [listing.source, ...listing.targets.filter(isAvailableEntry)].every(entry => images.ready[entry.document.document_id] === true);
-  const eyePolicyKey = JSON.stringify([inventoryKey, listing?.request_id, choices, selection]);
+  const existingAssociation=sourceAssociation(listing,source?.face_ref);
+  const eyeCohortRequired = persistent && (associationOperation !== 'unlink' && eyeSelected || eyeBagIntentRequiresReview(existingAssociation?.intent)
+    || !!source && !!resolved && sameFace(resolved.face_ref, source.face_ref)
+      && typeof resolved.operations[EYE_BAGS]?.['/amount']?.value === 'number' && Number(resolved.operations[EYE_BAGS]['/amount'].value) > 0);
+  // Target-local active effects may be absent from inventory. This opt-in always remains reachable.
+  const eyeCohortRequested = persistent && (eyeCohortRequired || eyeCohortChoice.key === inventoryKey && eyeCohortChoice.enabled);
+  const eyePolicyKey = JSON.stringify([inventoryKey, listing?.request_id, choices, selection, associationOperation, eyeCohortRequested]);
   const eyePolicyChoices = eyePolicies.key === eyePolicyKey ? eyePolicies.choices : {};
-  const eyePolicy = eyeSelected && !eyeNeutralReset ? eyeBagBatchPolicy(selected, eyePolicyChoices) : undefined;
-  const eyeRouteReady = !eyeSelected || (eyeNeutralReset ? !persistent && eyeNeutralEligible : targetPolicy === 'explicit_face_map' && !!eyePolicy);
+  const eyePolicy = !persistent && eyeSelected && !eyeNeutralReset ? eyeBagBatchPolicy(selected, eyePolicyChoices) : undefined;
+  const cohortEyePolicy = eyeCohortRequested && listing ? eyeBagCohortPolicy([listing.source.document.document_id, ...selected], eyePolicyChoices) : undefined;
+  const eyeRouteReady = persistent ? (!eyeCohortRequested || !!cohortEyePolicy) : !eyeSelected || (eyeNeutralReset ? !persistent && eyeNeutralEligible : targetPolicy === 'explicit_face_map' && !!eyePolicy);
   const explicitBase = explicitRequest(listing, selected, source?.face_ref, selection, choices);
   const explicit: ExplicitPeopleRequest | undefined = explicitBase && (!named || namedRecipe) && eyeRouteReady
     ? {...explicitBase, ...(namedRecipe ? {face_style: namedRecipe} : {}), ...(eyePolicy ? {eye_bag: eyePolicy} : {})} : undefined;
   const association=(!named||associationOperation==='unlink'||namedRecipe)
-    ?associationRequest(listing,selected,source?.face_ref,selection,choices,associationOperation,associationId,namedRecipe):undefined;
-  const existingAssociation=sourceAssociation(listing,source?.face_ref);
+    ?associationRequest(listing,selected,source?.face_ref,selection,choices,associationOperation,associationId,namedRecipe,cohortEyePolicy):undefined;
   const request: PeopleTransferRequest | undefined = !eyeRouteReady || selectedConflict ? undefined : persistent ? association : named || targetPolicy === 'explicit_face_map' ? explicit
     : source && Object.keys(selection).length ? {source_ref: source.face_ref, selection, target_policy: 'confirmed_person_only'} : undefined;
   const proof: PeopleTransferProof | undefined = manual ? (persistent?association?.source:explicit?.source)
@@ -199,7 +208,7 @@ export function ConfirmedPeopleTransfer({owner, targets, currentPath, enabled, o
         {!named && operations.map(([operation]) => {
           const leaves = available.filter(leaf => leaf.operation === operation);
           return <details key={operation}><summary>{operationLabel(operation)}</summary>
-            {operation === EYE_BAGS && <p>仅支持逐张手动指定、本次配对。只传递程度和卧蚕保留数值；每个启用目标必须已有自己的手绘卧蚕保护并完成审核。目标缺少或保护过期则拒绝，不能复制源图保护、恢复数据，也不自动识别卧蚕。共享分组、持久关联与共享来源副本仍受保护。</p>}
+            {operation === EYE_BAGS && <p>只传递程度与卧蚕保留数值。仅本次配对或明确的持久关联均须使用每个成员自己的已审核保护，不复制源图保护、恢复或分析。持久关联包括源成员，并审核修改前及修改后；缺少或过期则拒绝。普通共享分组与共享来源副本不因此开放。</p>}
             <button type="button" onClick={() => setLeaves([...chosen, ...leaves.filter(leaf => !leaf.conflict).map(leaf => leaf.key)])}>勾选本模块可迁移参数</button>
             <button type="button" onClick={() => setLeaves(chosen.filter(id => !leaves.some(leaf => leaf.key === id)))}>取消本模块</button>
             {leaves.map(leaf => <label key={leaf.key} style={{display: 'block'}}>
@@ -214,7 +223,7 @@ export function ConfirmedPeopleTransfer({owner, targets, currentPath, enabled, o
         </select></label>
       </fieldset>
       {selectedConflict && <p role="alert">所选参数含来源冲突，必须取消该项或解决冲突；不会静默丢弃已勾选的参数。</p>}
-      {eyeSelected && <fieldset disabled={disabled} aria-label="祛眼袋同步审核或中性停用">
+      {eyeSelected && !persistent && <fieldset disabled={disabled} aria-label="祛眼袋同步审核或中性停用">
         <legend>明确选择新版祛眼袋同步方式</legend>
         <label><input type="radio" name="eyeBagBatchRoute" checked={!eyeNeutralReset}
           onChange={() => {setEyeRoute({key, mode: 'reviewed'}); setEyePolicies(old => ({...old, revision: old.revision + 1}));}}/>逐目标卧蚕保护与完整前后图审核</label>
@@ -224,12 +233,19 @@ export function ConfirmedPeopleTransfer({owner, targets, currentPath, enabled, o
         {!eyeNeutralEligible && <p>中性停用仅在来源 /amount 已明确勾选、数值精确为 0 且无冲突时可用；只选择保留程度不能推断目标已停用。</p>}
         {eyeNeutralReset && <p>本次不发送卧蚕保护、旧版替换策略或祛眼袋图像确认。引擎仍逐目标验证最终新版程度为零，否则拒绝。已有保护与旧版不因本项归零而清除；其他已选参数继续应用，并保留其各自必要审核。此方式不声明任何卧蚕保护或照片质量已验收，不用于持久共享关联。</p>}
       </fieldset>}
-      {eyeSelected && !eyeNeutralReset && <fieldset disabled={disabled} aria-label="逐目标明确旧版眼袋处理策略">
+      {persistent && <fieldset disabled={disabled} aria-label="持久关联祛眼袋全成员审核选项">
+        <legend>祛眼袋：源成员及全部目标审核</legend>
+        <label><input type="checkbox" checked={eyeCohortRequested} disabled={eyeCohortRequired}
+          onChange={event => {setEyeCohortChoice({key: inventoryKey, enabled: event.currentTarget.checked}); setEyePolicies(old => ({...old, revision: old.revision + 1}));}}/>为本次关联操作读取全成员祛眼袋真实前后效果</label>
+        <p>{eyeCohortRequired ? '已选新版参数、现有共同意图或源成员启用效果要求此审核，不能关闭。' : '即使只更新其他参数或解除关联，也可在此明确启用。若任一目标仍有新版启用效果，引擎会要求此审核；不会仅凭源图或当前所选参数判断全部成员无需审核。'}</p>
+        <p>每个成员包括源图都要明确选择旧版策略。保留的启用效果在修改前后均须有自身有效卧蚕保护；完整混合图像全部显示并逐张确认后才可共同提交。已有 v1 关联只保留标量意图，不自动迁移。</p>
+      </fieldset>}
+      {(persistent ? eyeCohortRequested : eyeSelected && !eyeNeutralReset) && <fieldset disabled={disabled} aria-label="逐目标明确旧版眼袋处理策略">
         <legend>祛眼袋卧蚕保护：预检前逐张选择旧版处理策略</legend>
-        <p>每张目标都必须明确选择，不设默认值。仅当新版候选实际启用时才可能清除该目标旧版眼袋；本项归零不清除旧版或现有保护；若另行明确选择旧版参数，仍保留该选择。最终会审核本次所有所选参数的完整真实前后效果。</p>
-        {targetPolicy !== 'explicit_face_map' && <p role="alert">请选择“逐张手动指定，仅本次配对”。当前不支持把新版卧蚕保护接入已确认关联或持久共享，不会忽略本项继续同步其他参数。</p>}
-        {listing ? listing.targets.map((entry, index) => <label key={entry.document.document_id} style={{display: 'block'}}>
-          目标 {index + 1} · {entry.document.document_id}
+        <p>每个成员都必须明确选择，不设默认值。仅当新版候选实际启用时才可能清除该目标旧版眼袋；本项归零不清除旧版或现有保护；若另行明确选择旧版参数，仍保留该选择。最终会审核本次所有所选参数的完整真实前后效果。</p>
+        {!persistent && targetPolicy !== 'explicit_face_map' && <p role="alert">请选择逐张手动指定或明确维护持久人物关联，不会忽略本项继续同步其他参数。</p>}
+        {listing ? (persistent ? [listing.source, ...selected.flatMap(id => listing.targets.filter(entry => entry.document.document_id === id))] : listing.targets).map((entry, index) => <label key={entry.document.document_id} style={{display: 'block'}}>
+          {persistent && index === 0 ? '源成员' : `目标 ${persistent ? index : index + 1}`} · {entry.document.document_id}
           <select value={eyePolicyChoices[entry.document.document_id] === undefined ? '' : String(eyePolicyChoices[entry.document.document_id])}
             onChange={event => {const raw = event.currentTarget.value; const id = entry.document.document_id;
               setEyePolicies(old => ({key: eyePolicyKey, revision: old.revision + 1,
@@ -246,7 +262,7 @@ export function ConfirmedPeopleTransfer({owner, targets, currentPath, enabled, o
         onClick={() => last && (undone ? flow.redo(last.id) : flow.undo(last.id))}>{undone ? '重做上一笔有改动的人物同步' : '撤销上一笔有改动的人物同步'}</button>
       <p>源图、人脸分析、独立人物状态、目标或关联改变后必须重新预检。没有逐张明确指定或已有确认关联的目标不会被猜测补齐。</p>
     </details>
-    <BatchReview state={flow.ui} onClose={flow.close} onCommit={(spill,shadow,torso,waist,head,collarbone,faceStyle,portrait,eyeBag) => (!needsFrozen || frozenReady) && flow.commit(spill,shadow,torso,waist,head,collarbone,faceStyle,portrait,eyeBag)} onReview={start}
+    <BatchReview state={flow.ui} onClose={flow.close} onCommit={(spill,shadow,torso,waist,head,collarbone,faceStyle,portrait,eyeBag,eyeCohort) => (!needsFrozen || frozenReady) && flow.commit(spill,shadow,torso,waist,head,collarbone,faceStyle,portrait,eyeBag,eyeCohort)} onReview={start}
       onQuery={flow.query} onAcknowledge={flow.acknowledgeInspection}
       commitBlockedReason={needsFrozen && !frozenReady ? '冻结配对的实际源图尚未全部验证显示，不能提交；若预览失败，请关闭并重新读取。' : undefined}
       peoplePreview={visibleFrozen ? <div>

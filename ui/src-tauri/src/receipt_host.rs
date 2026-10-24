@@ -188,6 +188,11 @@ impl ReviewBinding {
             if bytes > 16 * 1024 { return Err("face style review identity exceeds receipt budget".into()); }
             return Ok(Some(Self { fields, bytes, read_only: crate::people_api::face_style::read_only(value), strict_failure_identity: false }));
         }
+        if let Some(fields) = crate::batch_api::eye_cohort::binding(value)? {
+            let bytes = fields.to_string().len();
+            if bytes > 32 * 1024 { return Err("eye-bag cohort review identity exceeds receipt budget".into()); }
+            return Ok(Some(Self { fields, bytes, read_only: crate::batch_api::eye_cohort::read_only(value), strict_failure_identity: true }));
+        }
         if let Some(fields) = crate::batch_api::eye_bag::binding(value)? {
             let bytes = fields.to_string().len();
             if bytes > 16 * 1024 { return Err("eye-bag batch review identity exceeds receipt budget".into()); }
@@ -259,7 +264,7 @@ impl ReviewBinding {
         let no_write = value["success"] == false && value["outcome_unknown"] == false
             && value["error"].as_str().is_some_and(|error| !error.trim().is_empty())
             && ["module_scope", "torso_review_ack", "waist_review_ack", "head_review_ack", "collarbone_review_ack", "collarbone_preset_ack", "collarbone_preset", "face_style_review_ack", "face_style", "face_style_visual",
-                "eye_bag_preset", "eye_bag_preset_ack", "eye_bag_review_ack", "eye_bag", "eye_bag_coverage", "eye_bag_visual", "portrait_cohort_ack", "portrait_cohort", "portrait_visual", "persistent_association", "association_source", "source_outcome", "collarbone_cohort",
+                "eye_bag_cohort", "eye_bag_cohort_ack", "eye_bag_cohort_visual", "eye_bag_preset", "eye_bag_preset_ack", "eye_bag_review_ack", "eye_bag", "eye_bag_coverage", "eye_bag_visual", "portrait_cohort_ack", "portrait_cohort", "portrait_visual", "persistent_association", "association_source", "source_outcome", "collarbone_cohort",
                 "torso_transfer", "waist_transfer", "head_transfer",
                 "before", "after", "doc_state", "batch_id", "applied", "committed", "operation_committed"]
                 .iter().all(|key| value.get(*key).is_none())
@@ -270,13 +275,16 @@ impl ReviewBinding {
             && value["requires_reload"] != true;
         // A second family cannot be added to a portrait acknowledgment after
         // dispatch. Both presence and the exact ordered arrays were authorized.
-        let same_families = (self.fields.get("eye_bag_review_ack").is_none()
+        let same_families = (self.fields.get("eye_bag_cohort_ack").is_none()
+            || ["portrait_cohort_ack", "portrait_cohort", "collarbone_review_ack", "collarbone_cohort"]
+                .iter().all(|key| value.get(*key) == self.fields.get(*key)))
+            && (self.fields.get("eye_bag_review_ack").is_none()
             || value.get("collarbone_review_ack") == self.fields.get("collarbone_review_ack"))
             && (self.fields.get("portrait_cohort_ack").is_none()
             || (value.get("collarbone_review_ack") == self.fields.get("collarbone_review_ack")
                 && value.get("collarbone_cohort") == self.fields.get("collarbone_cohort")));
         (no_write && !self.strict_failure_identity && self.fields.get("face_style_request").is_none()) || (same_families && self.fields.as_object().unwrap().iter().all(|(key, expected)| {
-            if key=="eye_bag_applies_sha256" {
+            if key=="eye_bag_cohort_applies_sha256" || key=="eye_bag_applies_sha256" {
                 value["applies"].is_object() && expected.as_str()==Some(crate::batch_api::collarbone::request_digest(&value["applies"]).as_str())
             } else if key=="collarbone_applies_sha256" {
                 value["applies"].is_object() && expected.as_str()==Some(crate::batch_api::collarbone::request_digest(&value["applies"]).as_str())
@@ -289,7 +297,7 @@ impl ReviewBinding {
     }
     fn decorate(&self, value: &mut Value) {
         for (key, expected) in self.fields.as_object().unwrap() {
-            if !["eye_bag_applies_sha256", "collarbone_applies_sha256", "face_style_applies_sha256", "portrait_applies_sha256"].contains(&key.as_str()) {value[key] = expected.clone();}
+            if !["eye_bag_cohort_applies_sha256", "eye_bag_applies_sha256", "collarbone_applies_sha256", "face_style_applies_sha256", "portrait_applies_sha256"].contains(&key.as_str()) {value[key] = expected.clone();}
         }
     }
 }
@@ -299,7 +307,7 @@ impl Receipt {
         self.result.as_ref().is_some_and(|result| self.review.is_none() || result["outcome_unknown"] != true
             // Only explicitly classified head/collarbone preflight or paged
             // image reads may expire; an unknown commit remains guarded.
-            || (matches!(self.action.as_str(), "preflight" | "collarbone_visual" | "eye_bag_visual" | "face_style_visual" | "portrait_cohort_visual" | "face_style_catalog" | "face_style_preview" | "face_style_image" | "eye_bag_source_image" | "eye_bag_reference" | "eye_bag_preview" | "eye_bag_image") && self.review.as_ref().is_some_and(|review| review.read_only)))
+            || (matches!(self.action.as_str(), "preflight" | "collarbone_visual" | "eye_bag_visual" | "eye_bag_cohort_visual" | "face_style_visual" | "portrait_cohort_visual" | "face_style_catalog" | "face_style_preview" | "face_style_image" | "eye_bag_source_image" | "eye_bag_reference" | "eye_bag_preview" | "eye_bag_image") && self.review.as_ref().is_some_and(|review| review.read_only)))
     }
 }
 pub(crate) struct ReceiptHost<K: ReceiptKind> {

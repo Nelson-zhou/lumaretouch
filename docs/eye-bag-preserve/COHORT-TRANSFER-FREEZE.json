@@ -1,0 +1,325 @@
+{
+  "baseline": "8be11101abd581541f71ff6eee9c827609ebc47b",
+  "status": "FROZEN_SOURCE_ONLY_EYE_BAG_PERSISTENT_COHORT_UNRUN",
+  "requirement_ids": [
+    "LNX-REF-PC-32464-C-e5fac5fdcf"
+  ],
+  "scope": "Persistent scalar association eye-bag v2 review of source plus every member, independently owned before/after protection, complete mixed image pairs and explicit per-member legacy choice. Existing capsule v1 and resolver precedence preserved; no new algorithm or automatic anatomy claim.",
+  "files": [
+    {
+      "path": "docs/development/handbook-traceability.json",
+      "sha256": "8ea81fa9c5d57990c1a7a5537bd74f0a6a5b42b8d26894086272d758bf5194ae",
+      "bytes": 472698
+    },
+    {
+      "path": "docs/eye-bag-preserve/ACCEPTANCE-UNRUN.md",
+      "sha256": "d38765f90943d82f978e8b30e57f1860b62c96c79a65488bfb4ccf739a7e613c",
+      "bytes": 11552
+    },
+    {
+      "path": "docs/eye-bag-preserve/COHORT-TRANSFER.md",
+      "sha256": "f0a56b30a224175344b887744352c52210784d6050f012b0464f7f2649da6027",
+      "bytes": 4507
+    },
+    {
+      "path": "docs/eye-bag-preserve/INTEGRATION-AND-RESIDUALS.md",
+      "sha256": "8041e8568b9435b9d477e613f0fc9f25df4b7a8afe96bbcac7211c54e25cd001",
+      "bytes": 5762
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/batch_dispatch_receipt.py",
+      "sha256": "60dfc69e9fbd6af2596c8b48e3a79116507ba6e56a0212389f9bc098c564dae0",
+      "bytes": 2388
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/batch_preflight.py",
+      "sha256": "ecae15db666ba6052574439869fe5d8e8e9081ef43350a257cb5f4ec2671f6cf",
+      "bytes": 36128
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/batch_preflight_controller.py",
+      "sha256": "1c70fc66a512dce6218c6104c81c6e9ab31d4931338bd16b3571de0b76f7ef26",
+      "bytes": 54610
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/batch_sync.py",
+      "sha256": "4ff80a30de1e7ae54df959663cb76f631e621f68341548f181646bd3fc6ff03c",
+      "bytes": 62437
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/cohort_image_cache.py",
+      "sha256": "85d11ba056888bbec49e9238ccc2dfb16e5ffd8f2a54d9fb0a019427cc599786",
+      "bytes": 2263
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/creative_transfer_host.py",
+      "sha256": "7d171b84d9cc04cf33d99bc141550c79208171a1036ea2836def5ba66cbea486",
+      "bytes": 12962
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/eye_bag_cohort_history.py",
+      "sha256": "7cc5d4eed24cecaddaef8ebc9679b6d831f9065225e44d2486e6268a4fa707de",
+      "bytes": 14407
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/eye_bag_cohort_review.py",
+      "sha256": "0f37bd577931640417a76cf128ea88096d43fa6c63a2787030f57de399cd5003",
+      "bytes": 16034
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/eye_bag_cohort_store.py",
+      "sha256": "5cdd244e9152dc22ab59d5f3eec530d329cafcd35a85ba3b8459b190b2bda892",
+      "bytes": 6413
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_batch_ledger.py",
+      "sha256": "dc449b720025addb34fa9fdb939afb173f6d89356ac650db73c8e29d62761256",
+      "bytes": 12992
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_cross_owner_workflow.py",
+      "sha256": "e66793bba5ded472ba4ab98b25fc6b470c469b0fd9e52d6f9576f6783534585b",
+      "bytes": 25864
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_history_persistence.py",
+      "sha256": "c570433c9e1d73fe44c29706ee95661cd4c70e54735012f2202e8081660664d9",
+      "bytes": 11938
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/project_recovery_runtime.py",
+      "sha256": "144bae655a000f70fe98e212aa2087ab6cbe2ab89bdf7afcf0ecb6c99dd6c5f4",
+      "bytes": 8396
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/server.py",
+      "sha256": "e0176931e61bc6c50d01bbe27ee15f2adf15de39038d7e7ffe314b92e2310ef9",
+      "bytes": 470261
+    },
+    {
+      "path": "engine/tests/test_collarbone_cohort_store_unrun.py",
+      "sha256": "4c5bf8b535c29a34c88fb886867044f29c0a1dbff56f32895a8be676ed3a73ff",
+      "bytes": 4140
+    },
+    {
+      "path": "engine/tests/test_eye_bag_cohort_routes_unrun.py",
+      "sha256": "291d9713d419c069ab34997112e0a115952f7f356f4662f403fb58c84e2df2dc",
+      "bytes": 4298
+    },
+    {
+      "path": "engine/tests/test_eye_bag_cohort_unrun.py",
+      "sha256": "c9857ff0834779dc2becd6493ebd015b0dbf4368d96a59fa0c5a17f7e5cab9e2",
+      "bytes": 25368
+    },
+    {
+      "path": "engine/tests/test_portrait_cohort_host_unrun.py",
+      "sha256": "de945c695c6ca42fffa28ad531512cd08148edce7b8bfc58dddbb8cfeec29290",
+      "bytes": 24598
+    },
+    {
+      "path": "engine/tests/test_portrait_cohort_unrun.py",
+      "sha256": "9cc44e354c55da3bd82e942faaeac961db6c25270421fb76317c377e26a12505",
+      "bytes": 20757
+    },
+    {
+      "path": "ui/src-tauri/src/batch_api.rs",
+      "sha256": "2c0e4ba68d35a8e47df13fc315ea1a11d256de91ddb8157302e757ea848f2a75",
+      "bytes": 7252
+    },
+    {
+      "path": "ui/src-tauri/src/batch_history_protocol.rs",
+      "sha256": "26f817e6e92b077e1c5f614c2884cceff6af3cbaa75a543c4357678ed6905ae5",
+      "bytes": 3762
+    },
+    {
+      "path": "ui/src-tauri/src/batch_history_protocol_tests.rs",
+      "sha256": "07abd19e2f73ba317f32dd97c460f045bf008c02bce357540688cb5ea0a86352",
+      "bytes": 5792
+    },
+    {
+      "path": "ui/src-tauri/src/batch_host.rs",
+      "sha256": "36327365a4248277d7498658be9a8ac841ef517e61678923f74b1e6568dd11ee",
+      "bytes": 39871
+    },
+    {
+      "path": "ui/src-tauri/src/collarbone_transfer_protocol.rs",
+      "sha256": "b321bf3bd076c6397e61466871dbd871f1f227feed151078ae42c179c67e82e8",
+      "bytes": 17581
+    },
+    {
+      "path": "ui/src-tauri/src/eye_bag_batch_protocol.rs",
+      "sha256": "af5bf81773f8dc538df0d52968dbda95628d333fbae66972369c841c2108815d",
+      "bytes": 25647
+    },
+    {
+      "path": "ui/src-tauri/src/eye_bag_cohort_fixtures.rs",
+      "sha256": "72a265ee86d0fac9396b12177f8c6d174ecf98f84b6d97093252f40b15a98a3e",
+      "bytes": 9517
+    },
+    {
+      "path": "ui/src-tauri/src/eye_bag_cohort_protocol.rs",
+      "sha256": "91ec2e6a34736ef9487fd2597156c02d832efe44f8e7eb10b27d06419c32d8ea",
+      "bytes": 11378
+    },
+    {
+      "path": "ui/src-tauri/src/eye_bag_cohort_protocol_tests.rs",
+      "sha256": "c51c50ca6ac4e51f31fe91f442a5b458b0f6a81e45856940a442aabc0f18fa39",
+      "bytes": 16818
+    },
+    {
+      "path": "ui/src-tauri/src/eye_bag_cohort_review.rs",
+      "sha256": "108954ee117bf974e2d5480fb1f8e7f99fbe9c0612c7f3f41bb1bded6509b116",
+      "bytes": 9490
+    },
+    {
+      "path": "ui/src-tauri/src/portrait_cohort_protocol.rs",
+      "sha256": "e78fac4e29780d969c2dc86caed4310e66be05b104ddf1a0e97367dea3b963eb",
+      "bytes": 22392
+    },
+    {
+      "path": "ui/src-tauri/src/receipt_host.rs",
+      "sha256": "05762b9d0c1d78d1fcc6e70176c09c0cc35bff8fae2c1c00a0e058a93ebd2ad8",
+      "bytes": 31366
+    },
+    {
+      "path": "ui/src/batch/BatchReview.tsx",
+      "sha256": "daca052f155f9e5966dd36bee271bede4a078087eda41df98052f4f8796dfacc",
+      "bytes": 27620
+    },
+    {
+      "path": "ui/src/batch/batchWorkflow.ts",
+      "sha256": "c49c9f76fe2b776b0cefb78fb6e7074e699572f8d76b6245784ff6f170b0bd87",
+      "bytes": 67316
+    },
+    {
+      "path": "ui/src/batch/useBatchWorkflow.ts",
+      "sha256": "82b59dba7c6f29dd8f63e52943daa1c8953561a7fcf836ce7b2f28f201651ea7",
+      "bytes": 2759
+    },
+    {
+      "path": "ui/src/eyeBagPreserve/COHORT_ACCEPTANCE_UNRUN.md",
+      "sha256": "3e4455716ffdbda89804b8f821d0e81a0aadd5fb77e7a6c564461eb2c3b9c58e",
+      "bytes": 4577
+    },
+    {
+      "path": "ui/src/eyeBagPreserve/EyeBagCohortReview.tsx",
+      "sha256": "73337a0d524644082ab64759a6be53e757f7a72c68e50a491d33cd9af157ca30",
+      "bytes": 7532
+    },
+    {
+      "path": "ui/src/eyeBagPreserve/batchWiring.unrun.test.ts",
+      "sha256": "e241a9018dbdc84853dbddf6b79c117898abd35c598794497b58025cd37b808a",
+      "bytes": 3086
+    },
+    {
+      "path": "ui/src/eyeBagPreserve/cohortFixture.unrun.test.ts",
+      "sha256": "925b1a8711839a09f997a20eb8f682cad776e477918d7363c6abfcae61e015d1",
+      "bytes": 3349
+    },
+    {
+      "path": "ui/src/eyeBagPreserve/cohortHistory.unrun.test.ts",
+      "sha256": "1f8a8b7eef8a9cf8d31c32f3a67afbe184e33719f3d915f85e02e7be199ffe60",
+      "bytes": 3625
+    },
+    {
+      "path": "ui/src/eyeBagPreserve/cohortHistoryRegistry.ts",
+      "sha256": "c4f9f25c7895348a66e45969a04e4e129be75de94ff2d28f04d2e850bec05795",
+      "bytes": 3551
+    },
+    {
+      "path": "ui/src/eyeBagPreserve/cohortModel.ts",
+      "sha256": "2e7178b44b9a266489ca42b8e81263904d2837afc9d7a13bff6b80973d24aead",
+      "bytes": 7184
+    },
+    {
+      "path": "ui/src/eyeBagPreserve/cohortModel.unrun.test.ts",
+      "sha256": "1a003dbac6de0e533094968efe6452a475758d6100b8a44146225302f6be8d81",
+      "bytes": 3990
+    },
+    {
+      "path": "ui/src/eyeBagPreserve/cohortPolicy.ts",
+      "sha256": "c5303673a188a657decf6f3fb91047a99973bd115c54f8bf5a8d7db8f8c400dc",
+      "bytes": 1778
+    },
+    {
+      "path": "ui/src/eyeBagPreserve/cohortReceipt.ts",
+      "sha256": "e183a47ec3fe1581237f33f6cf7d6bcb2f6bac757595617ea9e84a0a34a66060",
+      "bytes": 2522
+    },
+    {
+      "path": "ui/src/eyeBagPreserve/cohortTransport.ts",
+      "sha256": "8e840dc9d3df204ed7f1a2916734976d14d63043b39a6529d7f3ec2a15742a91",
+      "bytes": 4075
+    },
+    {
+      "path": "ui/src/eyeBagPreserve/cohortTransport.unrun.test.ts",
+      "sha256": "760e97dc31c89c7c06f8786fc55ace97e616d3b15f9785325f5dd76b303b3e18",
+      "bytes": 3529
+    },
+    {
+      "path": "ui/src/eyeBagPreserve/cohortWiring.unrun.test.ts",
+      "sha256": "5bd13b24782c5b8edd6184bf49740237cdd781e76b0ecd2455cec4962306a69b",
+      "bytes": 1953
+    },
+    {
+      "path": "ui/src/eyeBagPreserve/cohortWorkflow.unrun.test.ts",
+      "sha256": "1c0023372c2c270b6748defe39a72b21bcba94d2b39209c53b88108823ff91b6",
+      "bytes": 9647
+    },
+    {
+      "path": "ui/src/native.ts",
+      "sha256": "4a20ea05890e09e64e569ff50fb814197769d394231fe08e4eee48f87e23a47f",
+      "bytes": 110373
+    },
+    {
+      "path": "ui/src/people/ConfirmedPeopleTransfer.tsx",
+      "sha256": "a5da0004d557584865cbce0a663f20d91627abfcd180968ca4e940371b90ca7b",
+      "bytes": 32403
+    },
+    {
+      "path": "ui/src/people/associationProof.ts",
+      "sha256": "e526ad59aad849ca0e26a4a09cdf5773ac4af4100b57ee4a8c2d99926cb1ea5b",
+      "bytes": 9980
+    },
+    {
+      "path": "ui/src/people/associationRequest.ts",
+      "sha256": "69d3c14938c9266a267165bf689786db51e4bd539bbf7a3e469b08e889bc8055",
+      "bytes": 2927
+    }
+  ],
+  "static_checks": {
+    "python_ast_files": 1354,
+    "changed_json_toml": "stdlib parse only",
+    "relative_ui_imports_existing": 150,
+    "git_diff_check": "clean",
+    "prior_numeric_solver_core_decoder_and_frozen_sources_byte_identical": 330,
+    "line_caps": {
+      "ui/src/App.tsx": 2131,
+      "ui/src-tauri/src/main.rs": 2047,
+      "engine/src/lumaretouch_engine/server.py": 7031
+    }
+  },
+  "integration_map": {
+    "planner": "people_cross_owner_workflow and eye_bag_cohort_review resolve actual before/after member recipes; retained eye intent and active overrides require dedicated review even generic patch/unlink",
+    "ledger": "existing atomic people association ledger plus distinct cohort history marker for exact members, complete persons/links/capsules and canonical source-owned dependencies",
+    "images": "eye_bag_cohort_store and shared cohort_image_cache retain identical complete mixed image bytes across independent eye/portrait/collarbone proofs; immutable paged retrieval",
+    "protocol": "dedicated native eye_bag_cohort_protocol/review validates source-first member policy, dual support proof, image pairs, exact ACK/scope and strict failure correlation",
+    "ui": "persistent association opt-in and automatic known requirement, explicit source/member policy, complete mixed image review/ACK and protected reopened history classification",
+    "reads": "narrow server/recovery and derived transport admission after existing guards; exact read shape never grants graph mutation authority",
+    "dispatch": "known no-write only from exact unstarted server boundary; started writes retain original query-only uncertainty"
+  },
+  "limitations": [
+    "Manual member protection is not automatic anatomical detection; original requirement remains partial.",
+    "Explicit local face overrides retain precedence over shared scalar intent; visually unchanged members still receive actual before/after review.",
+    "Only independently owned supported original/derived opaque SDR members, two to sixteen including source; no donor masks, recovery, source pixels or analysis transfer.",
+    "Unreviewed source aliases and dormant affected documents remain refused; active before/after needs compatible own support and solver.",
+    "RGB8 bounded display reductions are not native-pixel appearance or HDR/alpha support.",
+    "All tests/build/typecheck/product execution/imports/inference/downloads and runtime/native/UI/history/numerical/photo acceptance UNRUN."
+  ],
+  "excluded_unrelated_untracked": [
+    "docs/colour-grading/FREEZE.json",
+    "docs/eye-light/FREEZE.json",
+    "docs/iris-makeup/isolated-manifest.json"
+  ],
+  "prohibited_actions_performed": []
+}

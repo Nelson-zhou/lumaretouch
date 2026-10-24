@@ -69,8 +69,9 @@ def save(engine,project):
     batches={key:deepcopy(value) for key,value in (batch.ledger.items() if batch else []) if 'people_changes' in value}
     from .face_style_alias_history import check as check_alias_history
     from .eye_bag_batch_history import check as check_eye_history
+    from .eye_bag_cohort_history import check as check_cohort_history
     for entry in batches.values():
-        check_alias_history(entry);check_eye_history(entry)
+        check_alias_history(entry);check_eye_history(entry);check_cohort_history(entry)
     project['people_batch_history']=batches
 
 
@@ -157,6 +158,8 @@ def prepare(project,rows,limit):
         check_alias_history(entry)
         from .eye_bag_batch_history import check as check_eye_history
         check_eye_history(entry)
+        from .eye_bag_cohort_history import check as check_cohort_history
+        check_cohort_history(entry)
         entries[str(key)]=entry
     return staged,entries
 

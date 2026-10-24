@@ -60,7 +60,8 @@ def fixture(count=2,*,named=True,operation='create',collarbone=False):
         snapshots={side:{key:'9'*64 for key in ('render_sha256','context_sha256','graph_sha256')}
                    for side in ('before','after')}
         payload={'ref':ref,'person_id':'association','candidate_sha256':'d'*64,
-                 'portrait_visual':record,'portrait_snapshots':snapshots}
+                 'portrait_visual':record,'portrait_snapshots':snapshots,
+                 'eye_bag_cohort_state':{side:{'version':2,'amount':0,'preserve':1} for side in ('before','after')}}
         if collarbone:
             payload['collarbone_visual']={key:value for key,value in record.items() if key!='cohort_sha256'}|{'coverage_sha256':'8'*64}
             collarbone_ack.append({'document_id':document,'revision':'3','before_sha256':'e'*64,
@@ -69,7 +70,7 @@ def fixture(count=2,*,named=True,operation='create',collarbone=False):
         targets.append(B.FrozenTarget(document,3,index,'/photo-'+str(index),None,
                                       B.canonical(proof),people_json=B.canonical(payload)))
     params={'_people_transfer':{'mode':'persistent_association','options':selected,'review':review,
-            'portrait_cohort_required':True,'collarbone_visual_required':collarbone}}
+            'portrait_cohort_required':True,'collarbone_visual_required':collarbone,'eye_bag_cohort_required':False}}
     store=B.PreflightStore(lambda:1)
     plan=store.create('workspace',targets[0].document_id,3,targets[0].path,
                       list(selected['selection']),params,'recheck',targets,[])

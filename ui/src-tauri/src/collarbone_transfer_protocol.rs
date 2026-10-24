@@ -46,6 +46,7 @@ pub(crate) fn acknowledgments(value: &Value) -> bool {
         && hex(&item["coverage_sha256"], 64) && seen.insert(item["document_id"].as_str().unwrap()))
 }
 pub(crate) fn command(value: &Value) -> Result<(), String> {
+    if crate::batch_api::eye_cohort::routed(value) { return crate::batch_api::eye_cohort::command(value); }
     if value["cmd"] == "batch" && (value["action"] == "eye_bag_visual"
         || value["people_transfer"].get("eye_bag").is_some()
         || value.get(crate::batch_api::eye_bag::ACK).is_some()) {
@@ -103,6 +104,7 @@ pub(crate) fn binding(value: &Value) -> Result<Option<Value>, String> {
     Ok(None)
 }
 pub(crate) fn receipt(value: &Value) -> bool {
+    if value.get(crate::batch_api::eye_cohort::ACK).is_some() { return crate::batch_api::eye_cohort::receipt(value); }
     if value.get("collarbone_cohort").is_some() && !cohort(value) {return false;}
     if value.get(crate::batch_api::eye_bag::ACK).is_some() {
         // A mixed ordinary transfer retains both independent coverage ACKs.

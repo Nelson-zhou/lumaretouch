@@ -1,3 +1,6 @@
+import {eyeBagCohortHistoryClass, registerEyeBagCohortReceipt} from '../eyeBagPreserve/cohortHistoryRegistry';
+import {checkEyeBagCohortReceipt, checkEyeBagCohortCommit} from '../eyeBagPreserve/cohortReceipt';
+import {validEyeBagCohort, eyeBagCohortTargets, validEyeBagCohortAck, verifyEyeBagCohortCoverage, type EyeBagCohortAck} from '../eyeBagPreserve/cohortModel';
 import {eyeBagBatchHistoryClass, registerEyeBagBatchReceipt} from '../eyeBagPreserve/batchHistoryRegistry';
 import {EYE_BAG_BATCH_OP, EYE_BAG_BATCH_LIMIT, validEyeBagBatchReview, validEyeBagBatchAck, sameEyeBagBatchAck, verifyEyeBagBatchCoverage, type EyeBagBatchAck} from '../eyeBagPreserve/batchModel';
 import {validPortraitCohort,portraitCohortTargets,validPortraitCohortAck,samePortraitCohortAck,type PortraitCohortAck} from '../portraitCohort/model';
@@ -22,12 +25,12 @@ import {FACE_STYLE_BATCH_LIMIT, faceStyleSelection, sameFaceStyleRecipe, validFa
   validFaceStyleBatchAck, sameFaceStyleBatchAck, verifyFaceStyleBatchRecipe, type FaceStyleBatchAck} from '../faceStyle/batchModel';
 /** Reviewed batch lifecycle. A queued command is not evidence of successful edits. */
 export type BatchAction='preflight'|'commit'|'undo'|'redo';
-export type BatchOptions={docs?:string[];moduleScope?:string[];conflictPolicy?:string;batchId?:string;preflightToken?:string;requestId?:string;localMaskTransfer?:MaskTransferOptions;referenceColor?:{strength:number};peopleTransfer?:PeopleTransferRequest;spillReviewAck?:SpillTransferAck[];shadowReviewAck?:ShadowTransferAck[];torsoReviewAck?:TorsoTransferAck[];waistReviewAck?:WaistTransferAck[];headReviewAck?:HeadTransferAck[];collarboneReviewAck?:CollarboneAck[];faceStyleReviewAck?:FaceStyleBatchAck[];portraitCohortAck?:PortraitCohortAck[];eyeBagReviewAck?:EyeBagBatchAck[]};
+export type BatchOptions={docs?:string[];moduleScope?:string[];conflictPolicy?:string;batchId?:string;preflightToken?:string;requestId?:string;localMaskTransfer?:MaskTransferOptions;referenceColor?:{strength:number};peopleTransfer?:PeopleTransferRequest;spillReviewAck?:SpillTransferAck[];shadowReviewAck?:ShadowTransferAck[];torsoReviewAck?:TorsoTransferAck[];waistReviewAck?:WaistTransferAck[];headReviewAck?:HeadTransferAck[];collarboneReviewAck?:CollarboneAck[];faceStyleReviewAck?:FaceStyleBatchAck[];portraitCohortAck?:PortraitCohortAck[];eyeBagReviewAck?:EyeBagBatchAck[];eyeBagCohortAck?:EyeBagCohortAck[]};
 export type BatchTarget={index:number|null;reviewed_index?:number;path:string;document_id:string;revision?:string;blocked?:string|null;
   source_proof?:unknown;expected_revision?:string;current_revision?:string|null;result_revision?:string|null;outcome?:string;before?:unknown;spill_transfer?:SpillTransferEvidence;shadow_transfer?:ShadowTransferEvidence;torso_transfer?:TorsoTransferEvidence;waist_transfer?:WaistTransferEvidence;head_transfer?:HeadTransferEvidence;crop_transfer?:CropReview;local_mask_transfer?:MaskTransferEvidence;optical_transfer?:OpticalTargetReview;reference_color?:ReferenceReview;people_transfer?:PeopleTransferReview|null;association?:AssociationTarget['association']};
 type BatchSource={document_id:string;revision:string;path:string;source_proof?:unknown};
 export type BatchReply={batch_id?:string|null;request_id:string;action:BatchAction;success:boolean;error?:string;outcome_unknown?:boolean;
-  eye_bag_review_ack?:EyeBagBatchAck[];
+  eye_bag_review_ack?:EyeBagBatchAck[];eye_bag_cohort?:boolean;eye_bag_cohort_ack?:EyeBagCohortAck[];
   torso_review_ack?:TorsoTransferAck[];
   waist_review_ack?:WaistTransferAck[];
   head_review_ack?:HeadTransferAck[];collarbone_review_ack?:CollarboneAck[];collarbone_cohort?:boolean;
@@ -58,7 +61,7 @@ export function createBatchWorkflow(api:BatchTransport,publish:(state:BatchUi)=>
   let context:BatchContext={docs:[],moduleScope:[],conflictPolicy:'skip_and_report',sourceDocumentId:'',enabled:false,label:''};
   let key='',generation=0,contextRevision=0,disposed=false;
   const faceStyleBatchIds=new Set<string>(),portraitCohortBatchIds=new Set<string>(),eyeBagBatchIds=new Map<string,number>();
-  let pending:{id:string;action:BatchAction;generation:number;contextKey:string;contextRevision:number;batchId?:string;aliasMemberCount?:number|null;token?:string;scope?:string[];policy?:string;transfer?:MaskTransferOptions;reference?:{strength:number};people?:PeopleTransferRequest;peopleProof?:PeopleTransferProof;referencePath?:string;docs?:string[];torsoAck?:TorsoTransferAck[];waistAck?:WaistTransferAck[];headAck?:HeadTransferAck[];collarboneAck?:CollarboneAck[];collarboneCohort?:boolean;faceStyleAck?:FaceStyleBatchAck[];faceStyleWrite?:boolean;portraitAck?:PortraitCohortAck[];portraitWrite?:boolean;eyeBagAck?:EyeBagBatchAck[];eyeBagWrite?:boolean;eyeBagMemberCount?:number|null}|null=null;
+  let pending:{id:string;action:BatchAction;generation:number;contextKey:string;contextRevision:number;batchId?:string;aliasMemberCount?:number|null;token?:string;scope?:string[];policy?:string;transfer?:MaskTransferOptions;reference?:{strength:number};people?:PeopleTransferRequest;peopleProof?:PeopleTransferProof;referencePath?:string;docs?:string[];torsoAck?:TorsoTransferAck[];waistAck?:WaistTransferAck[];headAck?:HeadTransferAck[];collarboneAck?:CollarboneAck[];collarboneCohort?:boolean;faceStyleAck?:FaceStyleBatchAck[];faceStyleWrite?:boolean;portraitAck?:PortraitCohortAck[];portraitWrite?:boolean;eyeBagAck?:EyeBagBatchAck[];eyeBagCohortAck?:EyeBagCohortAck[];eyeBagWrite?:boolean;eyeBagMemberCount?:number|null}|null=null;
   let state:BatchUi={phase:'closed',operation:'preflight',plan:null,result:null,message:'',scopeLabel:''};
   const set=(patch:Partial<BatchUi>)=>{state={...state,...patch};if(!disposed)publish(state);};
   const active=(g:number)=>!disposed&&g===generation;
@@ -86,7 +89,7 @@ export function createBatchWorkflow(api:BatchTransport,publish:(state:BatchUi)=>
       ||(!people&&Object.keys(result.applies).sort().join('|')!==[...scope].sort().join('|')))throw Error('预检回执不完整，未允许提交');
     const eyeBag=people?.target_policy==='explicit_face_map'&&people.eye_bag!==undefined;
     if(eyeBag&&(transfer!==undefined||reference!==undefined||result.targets.length>EYE_BAG_BATCH_LIMIT||!scope.includes(EYE_BAG_BATCH_OP)))throw Error('祛眼袋审核必须使用明确的独立目标、标量选择和逐目标旧版策略，每批最多 16 张。');
-    if(result.eye_bag_review_ack!==undefined)throw Error('预检不能携带祛眼袋提交确认。');
+    if(result.eye_bag_review_ack!==undefined||result.eye_bag_cohort_ack!==undefined)throw Error('预检不能携带祛眼袋提交确认。');
     const collarbone=scope.includes(COLLARBONE_OP);
     const faceStyle=people?.target_policy==='explicit_face_map'&&people.face_style!==undefined;
     if(faceStyle&&(transfer!==undefined||reference!==undefined||result.targets.length>FACE_STYLE_BATCH_LIMIT
@@ -118,7 +121,7 @@ export function createBatchWorkflow(api:BatchTransport,publish:(state:BatchUi)=>
     if(people&&(!peopleProof||result.people_transfer!==true||!samePeopleRequest(result.applies,people)
       ||result.source_snapshot.document_id!==peopleProofDocument(peopleProof).document_id
       ||result.source_snapshot.revision!==String(peopleProofDocument(peopleProof).revision)))throw Error('人物迁移源图、关联或参数选择与请求不符');
-    if(people?.target_policy!=='persistent_association'&&(result.persistent_association||result.association_source||result.collarbone_cohort!==undefined||result.portrait_cohort!==undefined||result.portrait_cohort_ack!==undefined))throw Error('未请求的持久关联回执');
+    if(people?.target_policy!=='persistent_association'&&(result.persistent_association||result.association_source||result.collarbone_cohort!==undefined||result.portrait_cohort!==undefined||result.portrait_cohort_ack!==undefined||result.eye_bag_cohort!==undefined||result.eye_bag_cohort_ack!==undefined))throw Error('未请求的持久关联回执');
     if(!people&&result.people_transfer)throw Error('未请求的人物迁移回执');
     if(reference&&(result.applies?.['lnx.reference_color.v1'] as {strength?:number})?.strength!==reference.strength)throw Error('参考统一程度与请求不同');
     if(referencePath&&result.source_snapshot.path!==referencePath)throw Error('源图与冻结请求不同');
@@ -202,7 +205,8 @@ export function createBatchWorkflow(api:BatchTransport,publish:(state:BatchUi)=>
       ||!validAssociationReview(result.persistent_association,people,result.association_source,result.targets as BatchTarget[])))throw Error('持久人物关联缺少完整的源图、成员及共享参数审核');
     if(people?.target_policy==='persistent_association'&&!validCollarboneCohort(result as BatchPlan,people))throw Error('持久关联锁骨审核必须包含源成员与全部目标的真实图像及独立范围；不能用继承元数据代替。');
     if(people?.target_policy==='persistent_association'&&!validPortraitCohort(result as BatchPlan,people))throw Error('完整脸型共同参数必须包含源成员与全部目标的真实前后审核，不接受省略成员或推断命名配方。');
-    if(result.portrait_cohort===true&&(result.association_source?.document_id!==result.source_snapshot.document_id
+    if(people?.target_policy==='persistent_association'&&!validEyeBagCohort(result as BatchPlan,people))throw Error('祛眼袋关联需要源成员及所有目标各自的修改前后保护、明确旧版策略和完整真实图像。');
+    if((result.portrait_cohort===true||result.eye_bag_cohort===true)&&(result.association_source?.document_id!==result.source_snapshot.document_id
       ||result.association_source?.revision!==result.source_snapshot.revision||result.association_source?.path!==result.source_snapshot.path))throw Error('完整脸型关联源成员与冻结源照片不一致。');
     if(result.portrait_cohort_ack!==undefined)throw Error('预检不能携带提交确认。');
     if(blocked!==result.blocked)throw Error('预检受阻数量不一致');
@@ -213,6 +217,7 @@ export function createBatchWorkflow(api:BatchTransport,publish:(state:BatchUi)=>
     if(!plan||!Array.isArray(result.target_outcomes)||result.target_outcomes.length!==plan.targets.length
       ||result.source_snapshot?.document_id!==plan.source_snapshot.document_id
       ||result.source_snapshot?.revision!==plan.source_snapshot.revision||result.source_snapshot?.path!==plan.source_snapshot.path)throw Error('提交结果缺少冻结源图或目标明细');
+    checkEyeBagCohortCommit(result,plan);
     const eyeBag=plan.applies.target_policy==='explicit_face_map'&&Object.hasOwn(plan.applies,'eye_bag');
     if(eyeBag&&result.batch_id!==null&&(typeof result.batch_id!=='string'||!result.batch_id.trim()||result.batch_id.length>128||/[\u0000-\u001f\u007f]/.test(result.batch_id)))throw Error('祛眼袋提交缺少可追溯批次或明确无改动结果。');
     const head=plan.module_scope.includes(HEAD_OP);
@@ -263,6 +268,10 @@ export function createBatchWorkflow(api:BatchTransport,publish:(state:BatchUi)=>
       const source=(plan.applies as unknown as import('../people/transferProof').ExplicitPeopleRequest).source;
       registerEyeBagBatchReceipt(source.document.epoch,result.batch_id,members);
     }
+    if(plan.eye_bag_cohort&&result.batch_id){
+      const members=plan.targets.length+1;eyeBagBatchIds.set(result.batch_id,members);
+      registerEyeBagCohortReceipt(plan.association_source!.association!.owner.document.epoch,result.batch_id,members);
+    }
     if(head&&JSON.stringify(result.targets)!==JSON.stringify(result.target_outcomes.filter(target=>target.outcome==='applied').map(target=>target.index)))throw Error('小头实际应用行清单与逐图终态不一致');
     if(faceStyle&&result.batch_id)faceStyleBatchIds.add(result.batch_id);
     if(plan.portrait_cohort&&result.batch_id)portraitCohortBatchIds.add(result.batch_id);
@@ -293,6 +302,7 @@ export function createBatchWorkflow(api:BatchTransport,publish:(state:BatchUi)=>
           if(request.action==='commit'&&request.headAck!==undefined&&!bodyScalarNoWriteRejection(result,request.token)
             &&(result.module_scope?.length!==1||result.module_scope[0]!==HEAD_OP||result.preflight_token!==request.token
               ||!sameHeadTransferAck(result.head_review_ack,request.headAck)))throw Error('小头提交回执与原请求、冻结令牌或有序 PNG 对确认不一致');
+          checkEyeBagCohortReceipt(result,request);
           if(result.eye_bag_review_ack!==undefined&&(request.action!=='commit'||request.eyeBagAck===undefined))throw Error('未请求的祛眼袋逐目标确认回执。');
           if(request.eyeBagWrite&&!validBodyScalarReceiptState(result))throw Error('祛眼袋写入缺少明确且一致的终态，只能查询原请求。');
           if(request.eyeBagWrite&&['undo','redo'].includes(request.action)&&(result.success||result.batch_id!=null)&&result.batch_id!==request.batchId)throw Error('祛眼袋撤销/重做回执不属于原批次，只能查询原请求。');
@@ -360,11 +370,11 @@ export function createBatchWorkflow(api:BatchTransport,publish:(state:BatchUi)=>
   }
   async function submit(action:BatchAction,opts:BatchOptions){
     const g=++generation,id=uuid(),deadline=now()+(options.timeoutMs??120000);
-    const aliasHistory=faceStyleAliasHistoryClass(opts.batchId),eyeHistory=eyeBagBatchHistoryClass(opts.batchId);
-    const request={id,action,generation:g,contextKey:key,contextRevision,batchId:opts.batchId,aliasMemberCount:aliasHistory?.memberCount,token:opts.preflightToken,scope:opts.moduleScope?[...opts.moduleScope]:action==='commit'&&opts.eyeBagReviewAck!==undefined?[...state.plan!.module_scope]:undefined,policy:opts.conflictPolicy,transfer:opts.localMaskTransfer,reference:opts.referenceColor,people:opts.peopleTransfer?structuredClone(opts.peopleTransfer):undefined,peopleProof:context.peopleProof?structuredClone(context.peopleProof):undefined,referencePath:context.referencePath,docs:opts.docs?[...opts.docs]:undefined,torsoAck:opts.torsoReviewAck?.map(ack=>({...ack})),waistAck:opts.waistReviewAck?.map(ack=>({...ack})),headAck:opts.headReviewAck?.map(ack=>({...ack})),collarboneAck:opts.collarboneReviewAck?.map(ack=>({...ack})),collarboneCohort:action==='commit'&&state.plan?.collarbone_cohort===true,
+    const aliasHistory=faceStyleAliasHistoryClass(opts.batchId),eyeHistory=eyeBagCohortHistoryClass(opts.batchId)??eyeBagBatchHistoryClass(opts.batchId);
+    const request={id,action,generation:g,contextKey:key,contextRevision,batchId:opts.batchId,aliasMemberCount:aliasHistory?.memberCount,token:opts.preflightToken,scope:opts.moduleScope?[...opts.moduleScope]:action==='commit'&&(opts.eyeBagReviewAck!==undefined||opts.eyeBagCohortAck!==undefined)?[...state.plan!.module_scope]:undefined,policy:opts.conflictPolicy,transfer:opts.localMaskTransfer,reference:opts.referenceColor,people:opts.peopleTransfer?structuredClone(opts.peopleTransfer):undefined,peopleProof:context.peopleProof?structuredClone(context.peopleProof):undefined,referencePath:context.referencePath,docs:opts.docs?[...opts.docs]:undefined,torsoAck:opts.torsoReviewAck?.map(ack=>({...ack})),waistAck:opts.waistReviewAck?.map(ack=>({...ack})),headAck:opts.headReviewAck?.map(ack=>({...ack})),collarboneAck:opts.collarboneReviewAck?.map(ack=>({...ack})),collarboneCohort:action==='commit'&&state.plan?.collarbone_cohort===true,
       faceStyleAck:opts.faceStyleReviewAck?.map(ack=>({...ack})),faceStyleWrite:opts.faceStyleReviewAck!==undefined||!!aliasHistory||!!opts.batchId&&faceStyleBatchIds.has(opts.batchId),
       portraitAck:opts.portraitCohortAck?.map(ack=>({...ack})),portraitWrite:opts.portraitCohortAck!==undefined||!!opts.batchId&&portraitCohortBatchIds.has(opts.batchId),
-      eyeBagAck:opts.eyeBagReviewAck?.map(ack=>({...ack})),eyeBagWrite:opts.eyeBagReviewAck!==undefined||!!eyeHistory||!!opts.batchId&&eyeBagBatchIds.has(opts.batchId),
+      eyeBagAck:opts.eyeBagReviewAck?.map(ack=>({...ack})),eyeBagCohortAck:opts.eyeBagCohortAck?.map(ack=>({...ack})),eyeBagWrite:opts.eyeBagReviewAck!==undefined||opts.eyeBagCohortAck!==undefined||!!eyeHistory||!!opts.batchId&&eyeBagBatchIds.has(opts.batchId),
       eyeBagMemberCount:eyeHistory?eyeHistory.memberCount:opts.batchId?eyeBagBatchIds.get(opts.batchId):undefined};pending=request;
     set({phase:action==='preflight'?'preflighting':'committing',hidden:false,queryOnly:request.faceStyleWrite||request.portraitWrite||request.eyeBagWrite,operation:action,result:null,message:''});
     try{
@@ -380,6 +390,11 @@ export function createBatchWorkflow(api:BatchTransport,publish:(state:BatchUi)=>
     if(state.phase==='uncertain'){set({hidden:false});return;}
     if(disposed||['committing','preflighting'].includes(state.phase))return;
     if(!context.enabled||!context.docs.length||(!context.moduleScope.length&&!(context.peopleTransfer?.target_policy==='persistent_association'&&context.peopleTransfer.operation==='unlink'))){set({phase:'error',plan:null,result:null,message:'请选择照片与作用范围，并使用支持批量预检的配套引擎'});return;}
+    if(context.peopleTransfer?.target_policy==='persistent_association'&&Object.hasOwn(context.peopleTransfer,'eye_bag_cohort')
+      &&(!samePeopleRequest(context.peopleTransfer,context.peopleTransfer)||context.docs.length>15||context.conflictPolicy!=='recheck'
+        ||context.referenceColor!==undefined||context.localMaskTransfer!==undefined)){
+      set({phase:'error',plan:null,result:null,message:'祛眼袋关联需要包含源图的准确全成员策略，不传递保护、分析或恢复数据。'});return;
+    }
     if(context.peopleTransfer?.target_policy==='explicit_face_map'&&context.peopleTransfer.eye_bag!==undefined
       &&(!samePeopleRequest(context.peopleTransfer,context.peopleTransfer)||context.docs.length>EYE_BAG_BATCH_LIMIT
         ||!context.moduleScope.includes(EYE_BAG_BATCH_OP)||context.referenceColor!==undefined||context.localMaskTransfer!==undefined)){
@@ -407,8 +422,9 @@ export function createBatchWorkflow(api:BatchTransport,publish:(state:BatchUi)=>
     set({plan:null,result:null,scopeLabel:context.label});
     await submit('preflight',{docs:[...context.docs],moduleScope:[...context.moduleScope],conflictPolicy:context.conflictPolicy,localMaskTransfer:context.moduleScope.includes(LOCAL_GRADE_OP)?context.localMaskTransfer:undefined,referenceColor:context.referenceColor,peopleTransfer:context.peopleTransfer});
   }
-  async function commit(spillReviewAck?:SpillTransferAck[],shadowReviewAck?:ShadowTransferAck[],torsoReviewAck?:TorsoTransferAck[],waistReviewAck?:WaistTransferAck[],headReviewAck?:HeadTransferAck[],collarboneReviewAck?:CollarboneAck[],faceStyleReviewAck?:FaceStyleBatchAck[],portraitCohortReviewAck?:PortraitCohortAck[],eyeBagReviewAck?:EyeBagBatchAck[]){
+  async function commit(spillReviewAck?:SpillTransferAck[],shadowReviewAck?:ShadowTransferAck[],torsoReviewAck?:TorsoTransferAck[],waistReviewAck?:WaistTransferAck[],headReviewAck?:HeadTransferAck[],collarboneReviewAck?:CollarboneAck[],faceStyleReviewAck?:FaceStyleBatchAck[],portraitCohortReviewAck?:PortraitCohortAck[],eyeBagReviewAck?:EyeBagBatchAck[],eyeBagCohortReviewAck?:EyeBagCohortAck[]){
     if(state.phase!=='review'||!state.plan||state.plan.ok<1)return;
+    const eyeBagCohortAckSnapshot=eyeBagCohortReviewAck?.map(ack=>({...ack}));
     const faceStyleAckSnapshot=faceStyleReviewAck?.map(ack=>({...ack})),portraitAckSnapshot=portraitCohortReviewAck?.map(ack=>({...ack})),eyeBagAckSnapshot=eyeBagReviewAck?.map(ack=>({...ack})),collarboneAckSnapshot=collarboneReviewAck?.map(ack=>({...ack}));
     if(state.plan.policy==='recheck'&&state.plan.blocked>0){set({message:'有受阻目标，请重新预检或修改选择'});return;}
     const collarbone=state.plan.collarbone_cohort===true||state.plan.module_scope.includes(COLLARBONE_OP);
@@ -417,6 +433,16 @@ export function createBatchWorkflow(api:BatchTransport,publish:(state:BatchUi)=>
     const namedRecipe=state.plan.applies.face_style,faceStyle=state.plan.applies.target_policy==='explicit_face_map'&&validFaceStyleRecipe(namedRecipe);
     const portrait=state.plan.portrait_cohort===true,portraitTargets=portraitCohortTargets(state.plan);
     const eyeBag=state.plan.applies.target_policy==='explicit_face_map'&&Object.hasOwn(state.plan.applies,'eye_bag');
+    const eyeCohort=state.plan.eye_bag_cohort===true;
+    if(eyeCohort){
+      const plan=state.plan,reviewContext=key,reviewRevision=contextRevision,cohortTargets=eyeBagCohortTargets(plan);
+      if(plan.applies.target_policy!=='persistent_association'||!validEyeBagCohort(plan,plan.applies as unknown as import('../people/associationProof').AssociationRequest)
+        ||cohortTargets.length!==targets.length+1||[spillReviewAck,shadowReviewAck,torsoReviewAck,waistReviewAck,headReviewAck,faceStyleReviewAck,eyeBagReviewAck].some(ack=>ack!==undefined)
+        ||!validEyeBagCohortAck(eyeBagCohortAckSnapshot,cohortTargets)){set({message:'请逐张读取并确认源成员和全部目标的前后效果、双方本地卧蚕保护与各自旧版策略。'});return;}
+      const verified=await Promise.all(cohortTargets.map(row=>verifyEyeBagCohortCoverage(row.visual,row.coverage)));
+      if(disposed||state.phase!=='review'||state.plan!==plan||key!==reviewContext||contextRevision!==reviewRevision)return;
+      if(!verified.every(Boolean)){set({message:'成员修改前后保护摘要不匹配，请重新预检；未发送修改。'});return;}
+    }else if(eyeBagCohortReviewAck!==undefined){set({message:'祛眼袋全成员确认不属于当前冻结关联。'});return;}
     if(eyeBag){
       const plan=state.plan,reviewContext=key;
       const people=plan.applies as unknown as import('../people/transferProof').ExplicitPeopleRequest;
@@ -481,7 +507,7 @@ export function createBatchWorkflow(api:BatchTransport,publish:(state:BatchUi)=>
       set({message:'请先逐张查看并确认所有可同步目标身体及本人面部的小头前后效果，不接受上身长度或源图确认。'});return;
     }
     if(!head&&headReviewAck!==undefined){set({message:'小头确认不属于当前冻结范围。'});return;}
-    await submit('commit',{preflightToken:state.plan.preflight_token,...(spill?{spillReviewAck:spillReviewAck!.map(ack=>({...ack}))}:{}),...(shadow?{shadowReviewAck:shadowReviewAck!.map(ack=>({...ack}))}:{}),...(torso?{torsoReviewAck:torsoReviewAck!.map(ack=>({...ack}))}:{}),...(waist?{waistReviewAck:waistReviewAck!.map(ack=>({...ack}))}:{}),...(head?{headReviewAck:headReviewAck!.map(ack=>({...ack}))}:{}),...(collarbone?{collarboneReviewAck:collarboneAckSnapshot!}:{}),...(eyeBag?{eyeBagReviewAck:eyeBagAckSnapshot!}:{}),...(faceStyle?{faceStyleReviewAck:faceStyleAckSnapshot!}:{}),...(portrait?{portraitCohortAck:portraitAckSnapshot!,moduleScope:[...state.plan.module_scope]}:{})});
+    await submit('commit',{preflightToken:state.plan.preflight_token,...(spill?{spillReviewAck:spillReviewAck!.map(ack=>({...ack}))}:{}),...(shadow?{shadowReviewAck:shadowReviewAck!.map(ack=>({...ack}))}:{}),...(torso?{torsoReviewAck:torsoReviewAck!.map(ack=>({...ack}))}:{}),...(waist?{waistReviewAck:waistReviewAck!.map(ack=>({...ack}))}:{}),...(head?{headReviewAck:headReviewAck!.map(ack=>({...ack}))}:{}),...(collarbone?{collarboneReviewAck:collarboneAckSnapshot!}:{}),...(eyeBag?{eyeBagReviewAck:eyeBagAckSnapshot!}:{}),...(eyeCohort?{eyeBagCohortAck:eyeBagCohortAckSnapshot!,moduleScope:[...state.plan.module_scope]}:{}),...(faceStyle?{faceStyleReviewAck:faceStyleAckSnapshot!}:{}),...(portrait?{portraitCohortAck:portraitAckSnapshot!,moduleScope:[...state.plan.module_scope]}:{})});
   }
   async function undo(batchId:string){
     if(state.phase==='uncertain'){set({hidden:false});return;}

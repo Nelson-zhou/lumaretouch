@@ -6742,6 +6742,9 @@ class Engine(FringeRepairHostMixin, PresetOrganisationHostMixin, HairColourHostM
             from .people_host_commands import face_style_read_only
             if face_style_read_only(msg):
                 fn(msg); return  # Exact private face-style reads retain all earlier pending/recovery guards.
+            from .eye_bag_cohort_store import read_only as eye_bag_cohort_read_only
+            if eye_bag_cohort_read_only(msg):
+                fn(msg); return  # Exact all-member review retains prior guards and cannot publish association edits.
             from .eye_bag_batch_store import read_only as eye_bag_batch_read_only
             if eye_bag_batch_read_only(msg):
                 fn(msg); return  # Frozen target review is read-only; retain earlier ownership and receipt guards.

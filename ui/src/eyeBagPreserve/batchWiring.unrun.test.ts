@@ -10,7 +10,7 @@ test('selector preserves selected effects and requires exact explicit per-target
   assert.match(s, /revision: old.revision \+ 1/);
   assert.match(s, /!eyeRouteReady \|\| selectedConflict \? undefined/);
   assert.doesNotMatch(s, /operations\.filter\(\(\[operation\]\) => operation !== EYE_BAGS\)/);
-  assert.match(s, /flow\.commit\(spill,shadow,torso,waist,head,collarbone,faceStyle,portrait,eyeBag\)/);
+  assert.match(s, /flow\.commit\(spill,shadow,torso,waist,head,collarbone,faceStyle,portrait,eyeBag,eyeCohort\)/);
 });
 test('neutral stop is explicit, requires selected numeric zero, and sends no eye envelope or ACK', () => {
   const s = source('../people/ConfirmedPeopleTransfer.tsx');

@@ -45,6 +45,8 @@ def finish(engine, boundary, error=None):
     if face_style_image_read_only(message):return  # Cached display failure is not a failed graph mutation.
     if face_style_preflight_read_only(message):return  # Named review may sync committed row snapshots, never publish edits.
     if portrait_cohort_image_read_only(message) or portrait_cohort_preflight_read_only(message):return
+    from .eye_bag_cohort_store import read_only as eye_bag_cohort_read_only
+    if eye_bag_cohort_read_only(message):return  # Source-plus-members review is not an association write.
     from .eye_bag_batch_store import read_only as eye_bag_batch_read_only
     if eye_bag_batch_read_only(message):return  # Exact target review cannot publish or taint committed state.
     from .eye_bag_preset_store import read_only as eye_bag_preset_read_only

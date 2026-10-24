@@ -20,7 +20,7 @@ fn token(v: &Value) -> bool {
 }
 fn index(v: &Value) -> bool { v.as_u64().is_some_and(|n| n <= 9_007_199_254_740_991) }
 fn path(v: &Value) -> bool { bounded(v, 512) && v.as_str().unwrap().starts_with('/') }
-fn scope(v: &Value) -> bool {
+pub(crate) fn scope(v: &Value) -> bool {
     v.as_array().is_some_and(|ops| ops.len() <= 256 && ops.iter().all(token)
         && ops.iter().enumerate().all(|(i, op)| !ops[..i].contains(op)))
 }
@@ -39,11 +39,13 @@ fn selection(v: &Value, unlink: bool) -> bool {
 pub(crate) fn request(v: &Value) -> bool {
     let mut names = vec!["target_policy", "operation", "association_id", "source_ref", "selection", "source", "targets"];
     if v.get("face_style").is_some() { names.push("face_style"); }
+    if v.get("eye_bag_cohort").is_some() { names.push("eye_bag_cohort"); }
     if !fields(v, &names) || v["target_policy"] != "persistent_association"
         || !matches!(v["operation"].as_str(), Some("create" | "patch" | "unlink"))
         || !token(&v["association_id"]) || !face_style::endpoint(&v["source"])
         || !face_style::face(&v["source_ref"], &v["source"]["source_proof"]["asset_sha256"])
         || !selection(&v["selection"], v["operation"] == "unlink") { return false; }
+    if v.get("eye_bag_cohort").is_some() && !crate::batch_api::eye_cohort::policy(v) { return false; }
     if let Some(recipe) = v.get("face_style") {
         if v["operation"] == "unlink" || !face_style::recipe(recipe) || !face_style::selection(&v["selection"]) { return false; }
     }
@@ -60,7 +62,7 @@ pub(crate) fn request(v: &Value) -> bool {
             && scopes.insert(owner["people_scope"].as_str().unwrap())
     })
 }
-fn request_scope(ops: &Value, applies: &Value) -> bool {
+pub(crate) fn request_scope(ops: &Value, applies: &Value) -> bool {
     if !scope(ops) { return false; }
     if applies.get("face_style").is_some() { return ops == &json!(face_style::OPS); }
     let (Some(ops), Some(selected)) = (ops.as_array(), applies["selection"].as_object()) else { return false; };
@@ -103,6 +105,7 @@ fn image_request(v: &Value) -> bool {
         && matches!(v["side"].as_str(), Some("before" | "after")) && hex(&v["sha256"], 64)
 }
 pub(crate) fn command(v: &Value) -> Result<(), String> {
+    if crate::batch_api::eye_cohort::routed(v) { return crate::batch_api::eye_cohort::command(v); }
     if v["action"] == "portrait_cohort_visual" {
         return if image_request(v) { Ok(()) } else { Err("Portrait cohort image read needs exact frozen coordinates".into()) };
     }
@@ -147,7 +150,7 @@ pub(crate) fn complete_intent(v: &Value) -> bool {
     v.as_array().is_some_and(|leaves| face_style::LEAVES.iter().all(|(op, paths)| paths.iter().all(|path|
         leaves.iter().any(|leaf| leaf["op"] == *op && leaf["path"] == *path))))
 }
-fn review(v: &Value) -> bool {
+pub(crate) fn review(v: &Value) -> bool {
     if !fields(v, &["version", "operation", "association_id", "generation", "members", "intent"])
         || v["version"].as_u64() != Some(1) || !token(&v["association_id"]) || !hex(&v["generation"], 64)
         || !matches!(v["operation"].as_str(), Some("create" | "patch" | "unlink")) { return false; }
@@ -197,6 +200,7 @@ fn preflight(v: &Value) -> bool {
         let association = &row["association"];
         let mut names = vec!["owner", "ref", "candidate_sha256", "person_id", "portrait_visual"];
         if v["collarbone_cohort"] == true { names.extend(["collarbone_coverage", "collarbone_visual"]); }
+        if v["eye_bag_cohort"] == true { names.extend(["eye_bag_cohort", "eye_bag_cohort_visual"]); }
         if !fields(association, &names) || &association["owner"] != owner || &association["ref"] != reference
             || !hex(&association["candidate_sha256"], 64) || !token(&association["person_id"])
             || row["document_id"] != owner["document"]["document_id"]
@@ -269,6 +273,10 @@ fn commit(v: &Value) -> bool {
     true
 }
 pub(crate) fn receipt(v: &Value) -> bool {
+    // A dedicated cohort failure still needs its exact echoed identity.
+    if crate::batch_api::eye_cohort::evidence(v) && v["success"] != true {
+        return crate::batch_api::eye_cohort::receipt(v);
+    }
     if v["action"] == "portrait_cohort_visual" { return image_receipt(v); }
     let evidence = v["association_source"]["association"].get("portrait_visual").is_some()
         || v["targets"].as_array().is_some_and(|rows| rows.iter().any(|row| row["association"].get("portrait_visual").is_some()));

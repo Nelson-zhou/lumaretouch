@@ -57,6 +57,8 @@ class FrozenBatchController:
         prune_eye_bag(self.store)
         from .portrait_cohort_store import prune as prune_portrait_cohort
         prune_portrait_cohort(self.store)
+        from .eye_bag_cohort_store import prune as prune_eye_cohort
+        prune_eye_cohort(self.store)
         self._scalar_targets={token:rows for token,rows in self._scalar_targets.items()
                               if token in self.store.pending}
 
@@ -77,16 +79,23 @@ class FrozenBatchController:
 
     def replay_completed(self,p):
         self._prune_scalar_targets()
-        if set(p)-{'cmd','action','preflight_token','request_id','spill_review_ack','shadow_review_ack','torso_review_ack','waist_review_ack','head_review_ack','collarbone_review_ack','face_style_review_ack','eye_bag_review_ack','portrait_cohort_ack','module_scope'}:
+        if set(p)-{'cmd','action','preflight_token','request_id','spill_review_ack','shadow_review_ack','torso_review_ack','waist_review_ack','head_review_ack','collarbone_review_ack','face_style_review_ack','eye_bag_review_ack','eye_bag_cohort_ack','portrait_cohort_ack','module_scope'}:
             raise SC.ScopeError('token commit cannot change reviewed options')
         cached=self.store.completed(p.get('preflight_token'),self.versions.workspace)
         if cached is None:return False
+        if 'eye_bag_cohort_ack' in cached:
+            if (cached.get('eye_bag_cohort') is not True or type(p.get('eye_bag_cohort_ack')) is not list
+                    or canonical(p['eye_bag_cohort_ack'])!=canonical(cached['eye_bag_cohort_ack'])
+                    or type(p.get('module_scope')) is not list or p['module_scope']!=cached.get('module_scope')):
+                raise SC.ScopeError('Eye-bag cohort replay requires exact source-first acknowledgment, replacement choices and scope')
+        elif 'eye_bag_cohort_ack' in p:
+            raise SC.ScopeError('Eye-bag cohort acknowledgment cannot accompany another token')
         if 'portrait_cohort_ack' in cached:
             if (cached.get('portrait_cohort') is not True or type(p.get('portrait_cohort_ack')) is not list
                     or canonical(p['portrait_cohort_ack'])!=canonical(cached['portrait_cohort_ack'])
                     or type(p.get('module_scope')) is not list or p['module_scope']!=cached.get('module_scope')):
                 raise SC.ScopeError('Portrait cohort token replay requires its exact original acknowledgment and scope')
-        elif 'portrait_cohort_ack' in p or 'module_scope' in p:
+        elif 'portrait_cohort_ack' in p or ('module_scope' in p and 'eye_bag_cohort_ack' not in cached):
             raise SC.ScopeError('Portrait cohort acknowledgment and commit scope cannot accompany another token')
         if 'spill_review_ack' in cached:
             if type(p.get('spill_review_ack')) is not list or canonical(p['spill_review_ack'])!=canonical(cached['spill_review_ack']):
@@ -124,7 +133,7 @@ class FrozenBatchController:
         return True
 
     def handle(self,p):
-        plan=None;resolved=[];commit_started=False;spill_ack=None;shadow_ack=None;scalar_ack=None;family=None
+        plan=None;delegated_plan=None;resolved=[];commit_started=False;spill_ack=None;shadow_ack=None;scalar_ack=None;family=None
         try:
             self._prune_scalar_targets()
             if p['action']!='commit' and 'spill_review_ack' in p:
@@ -139,6 +148,8 @@ class FrozenBatchController:
                 raise SC.ScopeError('Eye-bag visual acknowledgment is accepted only for a frozen commit')
             if p['action']!='commit' and 'face_style_review_ack' in p:
                 raise SC.ScopeError('Face-style visual acknowledgment is accepted only for a frozen commit')
+            if p['action']!='commit' and 'eye_bag_cohort_ack' in p:
+                raise SC.ScopeError('Eye-bag cohort acknowledgment is accepted only for a frozen commit')
             if p['action']!='commit' and 'portrait_cohort_ack' in p:
                 raise SC.ScopeError('Portrait cohort acknowledgment is accepted only for a frozen commit')
             if p['action']=='preflight' and p.get('people_transfer') is not None:
@@ -147,14 +158,23 @@ class FrozenBatchController:
             if p['action']=='commit':
                 if self.replay_completed(p):return
                 reviewed=self.store.get(p.get('preflight_token'),self.versions.workspace)
+                from .eye_bag_cohort_review import records as eye_cohort_records, acknowledgments as cohort_acknowledgments
+                cohort_records=eye_cohort_records(reviewed)
+                if cohort_records is not None:
+                    if (set(p)-{'cmd','action','request_id','preflight_token','module_scope','eye_bag_cohort_ack','portrait_cohort_ack','collarbone_review_ack'}
+                            or type(p.get('module_scope')) is not list or p['module_scope']!=list(reviewed.modules)):
+                        raise SC.ScopeError('Eye-bag cohort commit requires exact frozen scope and complete member image acknowledgments')
+                    cohort_acknowledgments(p.get('eye_bag_cohort_ack'),cohort_records)
+                elif 'eye_bag_cohort_ack' in p:
+                    raise SC.ScopeError('Eye-bag cohort acknowledgment requires actual complete persistent review')
                 portrait_records=portrait_cohort_records(reviewed)
                 if portrait_records is not None:
                     from .portrait_cohort_review import acknowledgments
-                    if (set(p)-{'cmd','action','request_id','preflight_token','module_scope','portrait_cohort_ack','collarbone_review_ack'}
+                    if (set(p)-{'cmd','action','request_id','preflight_token','module_scope','portrait_cohort_ack','collarbone_review_ack','eye_bag_cohort_ack'}
                             or type(p.get('module_scope')) is not list or p['module_scope']!=list(reviewed.modules)):
                         raise SC.ScopeError('Portrait cohort commit requires only its exact frozen scope and image acknowledgments')
                     acknowledgments(p.get('portrait_cohort_ack'),portrait_records)
-                elif 'portrait_cohort_ack' in p or 'module_scope' in p:
+                elif 'portrait_cohort_ack' in p or ('module_scope' in p and cohort_records is None):
                     raise SC.ScopeError('Portrait cohort acknowledgment and commit scope require actual complete persistent intent')
                 if 'collarbone_review_ack' in p and not collarbone_required(reviewed):
                     raise SC.ScopeError('Collarbone acknowledgment requires its frozen people-transfer scope')
@@ -210,6 +230,7 @@ class FrozenBatchController:
                 if '_semantic_colour_transfer' in reviewed.params():raise SC.ScopeError(SC.SEMANTIC.REASON)
                 if '_people_transfer' in reviewed.params():
                     if self.ports.people_transfer is None:raise ValueError('People transfer adapter unavailable')
+                    delegated_plan=reviewed
                     self.ports.people_transfer(self,p,reviewed);return
             if p['action']=='preflight' and SC.SEMANTIC.OP in (p.get('module_scope') or []):
                 raise SC.ScopeError(SC.SEMANTIC.REASON)
@@ -407,7 +428,7 @@ class FrozenBatchController:
                     self.store.pending.pop(plan.token,None)
                     raise
                 self.emit(body);self.emit_result(p,body);return
-            if set(p)-{'cmd','action','preflight_token','request_id','spill_review_ack','shadow_review_ack','torso_review_ack','waist_review_ack','head_review_ack','collarbone_review_ack','face_style_review_ack','eye_bag_review_ack','portrait_cohort_ack','module_scope'}:
+            if set(p)-{'cmd','action','preflight_token','request_id','spill_review_ack','shadow_review_ack','torso_review_ack','waist_review_ack','head_review_ack','collarbone_review_ack','face_style_review_ack','eye_bag_review_ack','eye_bag_cohort_ack','portrait_cohort_ack','module_scope'}:
                 raise SC.ScopeError('token commit cannot change source, targets, modules or policy; preflight again')
             token=p.get('preflight_token')
             if self.replay_completed(p):return
@@ -568,12 +589,25 @@ class FrozenBatchController:
             if scalar_ack is not None:result['module_scope']=list(plan.modules)
             result=self.store.finish(plan,result);self.emit_result(p,result)
         except Exception as error:
+            # Delegated people commits own claim/publication internally. Once
+            # claimed, an encoding or emit error must not become a false no-write
+            # receipt from this outer adapter, nor re-open the consumed token.
+            if delegated_plan is not None:
+                retained=self.store.completed(delegated_plan.token,self.versions.workspace)
+                if retained is not None:
+                    self.emit({'event':'error','error':'batch delegated receipt failed: '+str(error)[:2000]})
+                    self.emit_result(p,{**retained,'replayed':True})
+                    return
+                if self.store.pending.get(delegated_plan.token) is not delegated_plan:
+                    commit_started=True
             result={'success':False,'error':str(error)[:2000],'requires_preflight':True,'request_id':p.get('request_id'),
                     'outcome_unknown':commit_started,
                     'target_outcomes':[{**{k:v for k,v in r.items() if not k.startswith('_')},'outcome':'conflict' if r['blocked'] else ('unknown' if commit_started else 'not_applied')} for r in resolved],
                     'preflight_token':p.get('preflight_token'),'workspace_generation':self.versions.workspace}
             from .eye_bag_batch_store import failure_context
             result.update(failure_context(p))
+            from .eye_bag_cohort_store import failure_context as cohort_failure_context
+            result.update(cohort_failure_context(p))
             if spill_ack is not None:result['spill_review_ack']=spill_ack
             if shadow_ack is not None:result['shadow_review_ack']=shadow_ack
             if scalar_ack is not None:result[family.ack_key]=scalar_ack

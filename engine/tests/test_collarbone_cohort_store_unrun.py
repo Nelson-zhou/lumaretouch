@@ -6,6 +6,14 @@ from lumaretouch_engine import people_cross_owner as ASSOCIATION
 from test_collarbone_visual_store_unrun import fixture
 
 
+@pytest.fixture(autouse=True)
+def unrelated_eye_family_admission(monkeypatch):
+    # This legacy cache fixture supplies synthetic collarbone-only plans rather
+    # than complete association owner graphs; explicitly mock unrelated admission.
+    from lumaretouch_engine import eye_bag_cohort_review
+    monkeypatch.setattr(eye_bag_cohort_review, 'records', lambda plan: None)
+
+
 def cohort(count=2):
     values = fixture(count)
     plan = values[1]; plan.source_id = 'document-0'; plan.modules = []

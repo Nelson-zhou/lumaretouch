@@ -16,8 +16,8 @@ from . import spill_transfer_review as SR
 from . import original_shadow_transfer_review as SHR
 from .body_scalar_transfer_review import select as body_family
 
-ACTIONS = ("preflight", "commit", "undo", "redo", "state", "people_targets", "collarbone_visual", "face_style_visual", "eye_bag_visual", "portrait_cohort_visual")
-KEYS = {"cmd", "action", "docs", "module_scope", "conflict_policy", "batch_id", "preflight_token", "request_id", "local_mask_transfer", "reference_color", "people_transfer", "spill_review_ack", "shadow_review_ack", "torso_review_ack", "waist_review_ack", "head_review_ack", "collarbone_review_ack", "face_style_review_ack", "eye_bag_review_ack", "portrait_cohort_ack", "document_id", "revision", "side", "sha256"}
+ACTIONS = ("preflight", "commit", "undo", "redo", "state", "people_targets", "collarbone_visual", "face_style_visual", "eye_bag_visual", "eye_bag_cohort_visual", "portrait_cohort_visual")
+KEYS = {"cmd", "action", "docs", "module_scope", "conflict_policy", "batch_id", "preflight_token", "request_id", "local_mask_transfer", "reference_color", "people_transfer", "spill_review_ack", "shadow_review_ack", "torso_review_ack", "waist_review_ack", "head_review_ack", "collarbone_review_ack", "face_style_review_ack", "eye_bag_review_ack", "eye_bag_cohort_ack", "portrait_cohort_ack", "document_id", "revision", "side", "sha256"}
 POLICIES = ("skip_and_report", "recheck")
 
 
@@ -186,7 +186,8 @@ class BatchSyncController:
         self.emit({"event":"error","error":message})
         if isinstance(p.get("request_id"),str) and 1<=len(p["request_id"])<=128:
             from .eye_bag_batch_store import failure_context
-            self.preflight.emit_result(p,{"success":False,"outcome_unknown":not no_write,"error":message,"requires_preflight":True,**failure_context(p)})
+            from .eye_bag_cohort_store import failure_context as cohort_failure_context
+            self.preflight.emit_result(p,{"success":False,"outcome_unknown":not no_write,"error":message,"requires_preflight":True,**failure_context(p),**cohort_failure_context(p)})
 
     def handle_command(self, p: dict):
         """批量同步（LNX-P0-BATCH / BATCH-001…4）。
@@ -227,8 +228,17 @@ class BatchSyncController:
         if 'face_style_review_ack' in p and (action!='commit' or p.get('preflight_token') is None):
             self._reject(p,'Face-style visual acknowledgment is accepted only for a frozen commit',no_write=True)
             return
+        if 'eye_bag_cohort_ack' in p and (action!='commit' or p.get('preflight_token') is None):
+            self._reject(p,'Eye-bag cohort acknowledgment is accepted only for a frozen commit',no_write=True)
+            return
         if 'portrait_cohort_ack' in p and (action!='commit' or p.get('preflight_token') is None):
             self._reject(p,'Portrait cohort acknowledgment is accepted only for a frozen commit',no_write=True)
+            return
+        if action == "eye_bag_cohort_visual":
+            try:
+                from .eye_bag_cohort_store import retrieve
+                self.preflight.emit_result(p,retrieve(self.preflight,p))
+            except Exception as error:self._reject(p,str(error),no_write=True)
             return
         if action == "portrait_cohort_visual":
             try:
@@ -864,6 +874,7 @@ class BatchSyncController:
         """
         from .face_style_alias_history import status_summary
         from .eye_bag_batch_history import status_summary as eye_status_summary
+        from .eye_bag_cohort_history import status_summary as cohort_status_summary
         items = []
         for key, entry in self.ledger.items():
             item = {"batch_id": key, "module_scope": entry["ops"], "targets": len(entry["targets"]),
@@ -872,6 +883,8 @@ class BatchSyncController:
             if marker is not None: item["face_style_alias_review"] = marker
             eye_marker = eye_status_summary(entry)
             if eye_marker is not None: item["eye_bag_batch_review"] = eye_marker
+            cohort_marker = cohort_status_summary(entry)
+            if cohort_marker is not None: item["eye_bag_cohort_review"] = cohort_marker
             items.append(item)
         un = [i for i in items if not i["undone"]]
         return {"batches": items, "workspace_generation": self.versions.workspace,

@@ -296,6 +296,9 @@ def cache_fixture(monkeypatch, *, portrait=True, collarbone=True):
     store.get = get
     owner = SimpleNamespace(store=store, versions=SimpleNamespace(workspace='fixture-workspace'))
     monkeypatch.setattr(PREFLIGHT, 'portrait_cohort_records', lambda value: deepcopy(records) if portrait else None)
+    from lumaretouch_engine import eye_bag_cohort_review
+    # This fixture explicitly mocks frozen-plan admission for independent cache tests.
+    monkeypatch.setattr(eye_bag_cohort_review, 'records', lambda value: None)
     read = {'cmd': 'batch', 'action': 'portrait_cohort_visual', 'request_id': 'read-source',
             'preflight_token': plan.token, 'document_id': 'source', 'revision': '4',
             'side': 'before', 'sha256': records[0]['before']['sha256']}
@@ -314,7 +317,7 @@ def test_dual_families_share_one_cache_and_exact_member_pairs(monkeypatch):
     altered = json.loads(plan.targets[0].people_json)
     altered['collarbone_visual']['candidate_people_sha256'] = '1' * 64
     plan.targets[0].people_json = json.dumps(altered)
-    with pytest.raises(ValueError, match='same source and image pair'): CACHE.records(plan)
+    with pytest.raises(ValueError, match='same complete source and image pair'): CACHE.records(plan)
     with pytest.raises(ValueError): STORE.retrieve(owner, read)
 
 

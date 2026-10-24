@@ -1,3 +1,5 @@
+import {eyeBagCohortTargets, eyeBagCohortReviewKey, eyeBagCohortImagesReady, eyeBagCohortAck, type EyeBagCohortAck} from '../eyeBagPreserve/cohortModel';
+import {EyeBagCohortReview} from '../eyeBagPreserve/EyeBagCohortReview';
 import {eyeBagBatchReviewKey, eyeBagBatchImagesReady, eyeBagBatchAck, type EyeBagBatchAck} from '../eyeBagPreserve/batchModel';
 import {EyeBagBatchReview} from '../eyeBagPreserve/EyeBagBatchReview';
 import {portraitCohortTargets,portraitCohortReviewKey,portraitCohortImagesReady,portraitCohortAck,type PortraitCohortAck} from '../portraitCohort/model';
@@ -38,7 +40,7 @@ function reason(text:string|null|undefined){
     'target parameters changed outside the reviewed snapshot':'参数与预检快照不同，已保护',
   };return known[text]??text;
 }
-export function BatchReview({state,onCommit,onReview,onQuery,onAcknowledge,onClose,peoplePreview,commitBlockedReason}:{state:BatchUi;onCommit:(spillReviewAck?:SpillTransferAck[],shadowReviewAck?:ShadowTransferAck[],torsoReviewAck?:TorsoTransferAck[],waistReviewAck?:WaistTransferAck[],headReviewAck?:HeadTransferAck[],collarboneReviewAck?:CollarboneAck[],faceStyleReviewAck?:FaceStyleBatchAck[],portraitCohortReviewAck?:PortraitCohortAck[],eyeBagReviewAck?:EyeBagBatchAck[])=>unknown;
+export function BatchReview({state,onCommit,onReview,onQuery,onAcknowledge,onClose,peoplePreview,commitBlockedReason}:{state:BatchUi;onCommit:(spillReviewAck?:SpillTransferAck[],shadowReviewAck?:ShadowTransferAck[],torsoReviewAck?:TorsoTransferAck[],waistReviewAck?:WaistTransferAck[],headReviewAck?:HeadTransferAck[],collarboneReviewAck?:CollarboneAck[],faceStyleReviewAck?:FaceStyleBatchAck[],portraitCohortReviewAck?:PortraitCohortAck[],eyeBagReviewAck?:EyeBagBatchAck[],eyeBagCohortReviewAck?:EyeBagCohortAck[])=>unknown;
   onReview:()=>unknown;onQuery:()=>unknown;onAcknowledge:()=>void;onClose:()=>void;peoplePreview?:ReactNode;commitBlockedReason?:string}){
   const [cropImages,setCropImages]=useState<Record<string,boolean>>({});
   const [spillImages,setSpillImages]=useState<Record<string,boolean>>({});
@@ -48,12 +50,13 @@ export function BatchReview({state,onCommit,onReview,onQuery,onAcknowledge,onClo
   const [collarboneImages,setCollarboneImages]=useState<Record<string,boolean>>({});
   const [headImages,setHeadImages]=useState<Record<string,boolean>>({});
   const [faceStyleImages,setFaceStyleImages]=useState<Record<string,boolean>>({});
+  const [eyeCohortImages,setEyeCohortImages]=useState<Record<string,boolean>>({});
   const [eyeBagImages,setEyeBagImages]=useState<Record<string,boolean>>({});
   const [portraitImages,setPortraitImages]=useState<Record<string,boolean>>({});
   const dialog=useRef<HTMLElement>(null),close=useRef(onClose);close.current=onClose;
   useEffect(()=>setCropImages({}),[state.plan?.preflight_token]);
   const open=state.phase!=='closed'&&!state.hidden,busy=state.phase==='committing';
-  useEffect(()=>{setSpillImages({});setShadowImages({});setTorsoImages({});setWaistImages({});setHeadImages({});setCollarboneImages({});setFaceStyleImages({});setPortraitImages({});setEyeBagImages({});},[state.plan?.preflight_token,state.plan?.request_id,open]);
+  useEffect(()=>{setSpillImages({});setShadowImages({});setTorsoImages({});setWaistImages({});setHeadImages({});setCollarboneImages({});setFaceStyleImages({});setPortraitImages({});setEyeBagImages({});setEyeCohortImages({});},[state.plan?.preflight_token,state.plan?.request_id,open]);
   useEffect(()=>{
     if(!open)return;
     const previous=document.activeElement as HTMLElement|null;dialog.current?.focus();
@@ -105,7 +108,9 @@ export function BatchReview({state,onCommit,onReview,onQuery,onAcknowledge,onClo
   const eyeBagReviews=eyeBagTargets.flatMap(target=>target.people_transfer?[target.people_transfer]:[]);
   const eyeBagToken=`${plan?.preflight_token??''}:${plan?.request_id??''}`;
   const eyeBagReady=eyeBagReviews.length===eyeBagTargets.length&&eyeBagBatchImagesReady(eyeBagToken,eyeBagReviews,eyeBagImages);
-  const blockedReason=commitBlockedReason||(!eyeBagReady?'请逐张读取并查看、勾选目标自己的卧蚕保护、旧版策略和完整混合参数的真实前后效果。':!portraitReady?'请读取并逐张查看、勾选源成员及所有目标的真实前后效果。':!cropReady?'请等待每张目标的实际裁剪预览通过显示校验，再确认同步。':!spillReady?'请逐张查看并勾选所有可同步目标的祛反光前后效果。':!shadowReady?'请逐张查看并勾选所有可同步目标的原图阴影前后效果。':!torsoReady?'请逐张查看并勾选所有可同步目标身体及本人面部的上身长度前后效果。':!waistReady?'请逐张查看并勾选所有可同步目标身体及本人面部的腰长前后效果。':!headReady?'请逐张查看并勾选所有可同步目标完整头发、头部及本人面部的小头前后效果。':!collarboneReady?'请逐张查看并勾选所有可同步目标的锁骨真实前后效果。':!faceStyleReady?'请逐张查看并勾选所有可应用目标的新版脸型真实前后效果，包括 0 程度。':undefined);
+  const eyeCohortSelected=plan?.eye_bag_cohort===true,eyeCohortTargets=plan?eyeBagCohortTargets(plan):[];
+  const eyeCohortReady=!eyeCohortSelected||eyeCohortTargets.length===plan!.targets.length+1&&eyeBagCohortImagesReady(eyeBagToken,eyeCohortTargets,eyeCohortImages);
+  const blockedReason=commitBlockedReason||(!eyeCohortReady?'请逐张读取并确认源成员和所有目标修改前后各自的卧蚕保护、旧版策略及完整混合效果。':!eyeBagReady?'请逐张读取并查看、勾选目标自己的卧蚕保护、旧版策略和完整混合参数的真实前后效果。':!portraitReady?'请读取并逐张查看、勾选源成员及所有目标的真实前后效果。':!cropReady?'请等待每张目标的实际裁剪预览通过显示校验，再确认同步。':!spillReady?'请逐张查看并勾选所有可同步目标的祛反光前后效果。':!shadowReady?'请逐张查看并勾选所有可同步目标的原图阴影前后效果。':!torsoReady?'请逐张查看并勾选所有可同步目标身体及本人面部的上身长度前后效果。':!waistReady?'请逐张查看并勾选所有可同步目标身体及本人面部的腰长前后效果。':!headReady?'请逐张查看并勾选所有可同步目标完整头发、头部及本人面部的小头前后效果。':!collarboneReady?'请逐张查看并勾选所有可同步目标的锁骨真实前后效果。':!faceStyleReady?'请逐张查看并勾选所有可应用目标的新版脸型真实前后效果，包括 0 程度。':undefined);
   const title=state.operation==='redo'?'重做批量同步':state.operation==='undo'?'撤销批量同步':'批量同步预检';
   return <div className="batchReviewBackdrop">
     <section ref={dialog} tabIndex={-1} className="batchReview" role="dialog" aria-modal="true" aria-labelledby="batchReviewTitle">
@@ -152,6 +157,15 @@ export function BatchReview({state,onCommit,onReview,onQuery,onAcknowledge,onClo
             onReady={(key,ready)=>setPortraitImages(old=>old[key]===ready?old:{...old,[key]:ready})}/>
         </div>)}
       </section>}
+      {plan&&eyeCohortSelected&&<section aria-label="祛眼袋持久关联源成员及全部目标真实图像审核">
+        <p>源成员和所有目标共同提交。普通参数更新、归零及解除关联也必须检查保留的启用效果，不能只看当前所选标签。前图和后图各自使用本成员自己的有效保护，不复制任何源图局部数据；其他必要审核仍需独立完成。</p>
+        {eyeCohortTargets.map((target,index)=><div key={target.document_id}>
+          <h3>{target.source?'源成员':'目标成员'} {index+1} / {eyeCohortTargets.length}：{file(target.path)}</h3>
+          <EyeBagCohortReview preflightToken={plan.preflight_token} value={target.visual} coverage={target.coverage}
+            reviewKey={eyeBagCohortReviewKey(eyeBagToken,target)} disabled={busy||state.phase!=='review'}
+            onReady={(key,ready)=>setEyeCohortImages(old=>old[key]===ready?old:{...old,[key]:ready})}/>
+        </div>)}
+      </section>}
       {plan&&eyeBagSelected&&<section aria-label="逐目标祛眼袋完整真实图像审核">
         <p>每个启用目标必须使用自己的已有卧蚕保护。所有所选参数共同组成候选，不会仅渲染眼袋而忽略其他效果；混合锁骨选择仍需完成其独立审核。策略改变后不得沿用此令牌或确认。</p>
         {eyeBagTargets.map((target,index)=>target.people_transfer?.eye_bag_visual&&target.people_transfer.eye_bag_coverage&&target.people_transfer.eye_bag&&<div key={target.document_id}>
@@ -187,9 +201,9 @@ export function BatchReview({state,onCommit,onReview,onQuery,onAcknowledge,onClo
       {!!result?.conflicts?.length&&<ul>{result.conflicts.map((r,i)=><li key={i}>{file(r.path)}：{r.reason}</li>)}</ul>}
       <footer>
         {state.phase==='review'&&blockedReason&&<p role="status">{blockedReason}</p>}
-        {state.phase==='review'&&<button className="tb primary" disabled={!!blockedReason||!plan?.ok||(plan.policy==='recheck'&&plan.blocked>0)} onClick={()=>{if(!blockedReason)onCommit(plan?.module_scope.includes(SPILL_TRANSFER_OP)?spillTransferAck(spillTargets.map(t=>t.spill_transfer!)):undefined,plan?.module_scope.includes(SHADOW_TRANSFER_OP)?shadowTransferAck(shadowTargets.map(t=>t.shadow_transfer!)):undefined,plan?.module_scope.includes(TORSO_TRANSFER_OP)?torsoTransferAck(torsoTargets.map(t=>t.torso_transfer!)):undefined,plan?.module_scope.includes(WAIST_TRANSFER_OP)?waistTransferAck(waistTargets.map(t=>t.waist_transfer!)):undefined,plan?.module_scope.includes(HEAD_TRANSFER_OP)?headTransferAck(headTargets.map(t=>t.head_transfer!)):undefined,collarboneSelected?collarboneAck(collarboneTargets.map(t=>t.visual)):undefined,faceStyleRecipe?faceStyleBatchAck(faceStyleTargets.map(t=>t.people_transfer!.face_style_visual!)):undefined,portraitSelected?portraitCohortAck(portraitTargets.map(t=>t.visual)):undefined,eyeBagSelected?eyeBagBatchAck(eyeBagReviews):undefined);}}>{faceStyleRecipe?'确认所选新版脸型并仅应用到指定目标':plan?.persistent_association?'确认全部成员与持久关联操作':plan?.applies.target_policy==='explicit_face_map'?'仅确认本次人脸配对与参数并同步':'确认本次配方并同步'}</button>}
+        {state.phase==='review'&&<button className="tb primary" disabled={!!blockedReason||!plan?.ok||(plan.policy==='recheck'&&plan.blocked>0)} onClick={()=>{if(!blockedReason)onCommit(plan?.module_scope.includes(SPILL_TRANSFER_OP)?spillTransferAck(spillTargets.map(t=>t.spill_transfer!)):undefined,plan?.module_scope.includes(SHADOW_TRANSFER_OP)?shadowTransferAck(shadowTargets.map(t=>t.shadow_transfer!)):undefined,plan?.module_scope.includes(TORSO_TRANSFER_OP)?torsoTransferAck(torsoTargets.map(t=>t.torso_transfer!)):undefined,plan?.module_scope.includes(WAIST_TRANSFER_OP)?waistTransferAck(waistTargets.map(t=>t.waist_transfer!)):undefined,plan?.module_scope.includes(HEAD_TRANSFER_OP)?headTransferAck(headTargets.map(t=>t.head_transfer!)):undefined,collarboneSelected?collarboneAck(collarboneTargets.map(t=>t.visual)):undefined,faceStyleRecipe?faceStyleBatchAck(faceStyleTargets.map(t=>t.people_transfer!.face_style_visual!)):undefined,portraitSelected?portraitCohortAck(portraitTargets.map(t=>t.visual)):undefined,eyeBagSelected?eyeBagBatchAck(eyeBagReviews):undefined,eyeCohortSelected?eyeBagCohortAck(eyeCohortTargets):undefined);}}>{faceStyleRecipe?'确认所选新版脸型并仅应用到指定目标':plan?.persistent_association?'确认全部成员与持久关联操作':plan?.applies.target_policy==='explicit_face_map'?'仅确认本次人脸配对与参数并同步':'确认本次配方并同步'}</button>}
         {['review','error','done'].includes(state.phase)&&!['undo','redo'].includes(state.operation)&&<button className="tb" onClick={onReview}>重新预检</button>}
-        {state.phase==='uncertain'&&<>{!state.queryOnly&&!eyeBagSelected&&!faceStyleRecipe&&!portraitSelected&&!collarboneSelected&&!plan?.module_scope.includes(WAIST_TRANSFER_OP)&&!plan?.module_scope.includes(HEAD_TRANSFER_OP)&&<button className="tb" onClick={onAcknowledge}>我已检查照片，结束本次跟踪</button>}<button className="tb primary" onClick={onQuery}>再次查询这次任务</button></>}
+        {state.phase==='uncertain'&&<>{!state.queryOnly&&!eyeCohortSelected&&!eyeBagSelected&&!faceStyleRecipe&&!portraitSelected&&!collarboneSelected&&!plan?.module_scope.includes(WAIST_TRANSFER_OP)&&!plan?.module_scope.includes(HEAD_TRANSFER_OP)&&<button className="tb" onClick={onAcknowledge}>我已检查照片，结束本次跟踪</button>}<button className="tb primary" onClick={onQuery}>再次查询这次任务</button></>}
       </footer>
     </section>
   </div>;

@@ -60,9 +60,12 @@ to publish an unverified graph. No corrupt-project recovery acceptance is claime
   donor support or recovery vectors transfer; legacy replacement is explicit.
   Dedicated explicit-map ordinary batch transfer adds per-target policy, complete
   aggregate image review and target-local support without copying donor vectors.
-  Generic active batch and persistent-cohort application remain refused. See
-  `PRESET-TRANSFER.md` and `BATCH-TRANSFER.md`; missing local support still
-  requires target painting.
+  Persistent associations now have a separate source-plus-all-members mixed-image
+  review, dual before/after local support and per-member legacy policies; generic
+  active routes without that proof remain refused. See `PRESET-TRANSFER.md`,
+  `BATCH-TRANSFER.md` and `COHORT-TRANSFER.md`; missing local support still
+  requires target painting. Explicit face overrides retain precedence, so a
+  shared scalar change need not change every member's appearance.
 - Current single-photo positive review refuses shared-source aliases and dormant
   affected siblings. Complete affected-set review is not implemented for v2.
 - Dedicated effect-recovery painting now attenuates only the independently

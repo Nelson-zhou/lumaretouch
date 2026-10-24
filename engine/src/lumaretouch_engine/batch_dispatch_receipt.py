@@ -31,9 +31,15 @@ def rejected(request, error, boundary, emit):
     eye_commit = (action == 'commit' and 'eye_bag_review_ack' in request
         and set(request) in ({'cmd', 'action', 'request_id', 'preflight_token', 'eye_bag_review_ack'},
             {'cmd', 'action', 'request_id', 'preflight_token', 'eye_bag_review_ack', 'collarbone_review_ack'}))
-    if not (history or eye_commit or read_only(request)):
+    from .eye_bag_cohort_store import read_only as cohort_read_only, failure_context as cohort_failure_context
+    cohort_fields = {'cmd', 'action', 'request_id', 'preflight_token', 'module_scope', 'eye_bag_cohort_ack'}
+    cohort_commit = (action == 'commit' and set(request) in (cohort_fields,
+        cohort_fields | {'portrait_cohort_ack'}, cohort_fields | {'collarbone_review_ack'},
+        cohort_fields | {'portrait_cohort_ack', 'collarbone_review_ack'}))
+    cohort_read = cohort_read_only(request)
+    if not (history or eye_commit or read_only(request) or cohort_commit or cohort_read):
         return
-    context = failure_context(request)
+    context = cohort_failure_context(request) if cohort_commit or cohort_read else failure_context(request)
     if not context:
         return
     emit({'event': 'batch_result', 'action': action, 'request_id': identity,

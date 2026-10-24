@@ -12,7 +12,7 @@ pub(crate) const ACK: &str = "eye_bag_review_ack";
 pub(crate) const MAX_TARGETS: usize = 16;
 const FOREIGN: &[&str] = &["eye_bag_preset_ack", "eye_bag_preset", "face_style_review_ack",
     "portrait_cohort_ack", "portrait_cohort", "collarbone_cohort", "persistent_association",
-    "association_source", "torso_review_ack", "waist_review_ack", "head_review_ack",
+    "association_source", "eye_bag_cohort", "eye_bag_cohort_ack", "torso_review_ack", "waist_review_ack", "head_review_ack",
     "spill_review_ack", "shadow_review_ack"];
 fn index(v: &Value) -> bool { v.as_u64().is_some_and(|n| n <= 9_007_199_254_740_991) }
 fn token(v: &Value) -> bool {
@@ -169,7 +169,7 @@ fn coverage(v: &Value, refs: &Value) -> bool {
         }
     })
 }
-fn collarbone_coverage(v: &Value, refs: &Value) -> bool {
+pub(crate) fn collarbone_coverage(v: &Value, refs: &Value) -> bool {
     if !fields(v, &["version", "support_transfer", "targets"]) || v["version"].as_u64() != Some(1)
         || v["support_transfer"] != "none" { return false; }
     let (Some(rows), Some(refs)) = (v["targets"].as_array(), refs.as_array()) else { return false; };

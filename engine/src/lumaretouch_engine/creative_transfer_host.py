@@ -152,6 +152,10 @@ def require_route(name,request):
         raise ValueError('Invalid reviewed transfer request')
     action=request.get('action')
     if name=='batch':
+        if action=='eye_bag_cohort_visual':
+            from .eye_bag_cohort_store import image_read_only
+            if not image_read_only(request):raise ValueError('Eye-bag cohort image requires its exact frozen member identity')
+            return  # Display reads cannot authorize a partial cohort or substitute source identity.
         if action=='eye_bag_visual':
             from .eye_bag_batch_store import image_read_only
             if not image_read_only(request):raise ValueError('Eye-bag batch image requires its exact bounded identity')
@@ -176,8 +180,11 @@ def require_route(name,request):
         if action=='commit':
             required={'cmd','action','request_id','preflight_token'}
             portrait=required|{'module_scope','portrait_cohort_ack'}
+            eye_cohort=required|{'module_scope','eye_bag_cohort_ack'}
             if set(request) not in (required,required|{'head_review_ack'},required|{'face_style_review_ack'},
                                     required|{'eye_bag_review_ack'},required|{'eye_bag_review_ack','collarbone_review_ack'},
+                                    eye_cohort,eye_cohort|{'portrait_cohort_ack'},eye_cohort|{'collarbone_review_ack'},
+                                    eye_cohort|{'portrait_cohort_ack','collarbone_review_ack'},
                                     portrait,portrait|{'collarbone_review_ack'}):
                 raise ValueError('Derived transfer accepts only its frozen token; no unreviewed commit')
         elif action in ('undo','redo'):
