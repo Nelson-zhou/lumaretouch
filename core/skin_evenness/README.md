@@ -1,4 +1,4 @@
-# Original same-face chromatic evenness
+# Original source-owned chromatic evenness
 
 **AUTHORED / UNRUN.** Original dependency-free Rust source, strict Python ABI and
 recipe state, build hook, header and fixtures only. No product import, compiler,
@@ -11,7 +11,9 @@ Exact partial reference: `LNX-REF-PC-32465-C-60b7c0e3d1`, AI肤色统一（脸�
 a dedicated deterministic face-skin chromatic-evenness operation, not an alias for
 `skin.broad` frequency smoothing. Old recipes are unchanged. It does not reproduce
 or claim equivalence to a proprietary AI, blemish detector, learned classifier,
-physical illumination/material separation, body correction or multi-person match.
+physical illumination/material separation or multi-person match. The legacy
+same-face operation itself does not perform body correction. The distinct optional
+body-to-own-face extension below does not change its behavior or old recipe values.
 
 Preparation uses reliable statistical log-chroma from this same face only, an
 original coverage-normalized luminance-guided low-frequency chroma construction,
@@ -38,6 +40,40 @@ reconstruction, ABI, resource accounting and authored/unrun acceptance coverage.
 The offline hook is `sh packaging/build-skin-evenness.sh`; it has not been run.
 The runtime library is `engine/src/lumaretouch_engine/bin/liblrt_skin_evenness.so`.
 No binary, external assets/models, vendored implementation or Cargo lock is added.
+
+## Optional body-to-own-face preparation, still ABI1
+
+Requirement `LNX-REF-PC-32465-C-d8b09012a9`, recipe `lnx.body_face_match.v1`,
+exactly `{version:1, amount:0..1}`. This separate original deterministic operation
+measures a robust reference from the SAME person's permitted source face skin,
+then uses the existing body-source guided chroma solve to reduce body/face colour
+difference and within-body unevenness. It never matches body luminance to the
+face, selects another person, borrows a body-self-reference target or claims AI
+parity. Source/person identity and actual support are authenticated by the host.
+
+- New optional symbol `lrt_body_face_match_prepare_v1` has two actual ROI grids,
+  body RGB/coverage and face RGB/coverage, each with its own dimensions. There is
+  no fabricated body-sized face image. Output remains body-grid HWC2.
+- Python `body_face_match_native.prepare(body_rgb, body_coverage, face_rgb,
+  face_coverage, amount, *, radius, cancelled)` returns a new read-only field.
+  Active body and face each need64 reliable samples; body needs valid guided
+  context. Insufficient evidence refuses, not a neutral success.
+- `memory_estimate(body_shape, face_shape)` admits aggregate body+face<=32M pixels
+  and both grids' snapshots/reference/solve resources; all four input buffers are
+  validated even at neutral. All nonzero native results preserve output.
+- Capability requires the actual NEW symbol plus the existing ABI1 entrypoints.
+  An old ABI1 library can retain old functionality but cannot enable matching.
+  Missing code never falls back to within-body evenness or current-stage edits.
+- Existing `lrt_skin_evenness_prepare_v1` retains its own-reference validation;
+  its guided solve was extracted without arithmetic or loop-order changes.
+  Existing corrected/apply implementation remains byte-identical. Source-text
+  parity was checked, but compiled/runtime parity is **UNRUN**. A test-only
+  pre-refactor oracle and numerical parity fixtures are authored, not executed.
+
+See the [body-face numerical contract](../../docs/body-face-match/NUMERICAL-CONTRACT.md)
+for separate-ROI ownership, exact resource accounting, extension ABI and remaining
+acceptance gates. Neither this source nor static checks establish working-product
+quality, new native installation or completion of the full reference feature.
 
 ## License and conceptual provenance
 

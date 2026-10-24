@@ -13,7 +13,7 @@ from . import creative_derived_hair as HAIR
 OPERATIONS = frozenset((
     'lnx.deform.v1', 'lnx.enhance.v1', 'lnx.facial_wrinkles.v1', 'lnx.skin_colour.v1', 'lnx.skin_finish.v1',
     'lnx.skin_gloss.v1',
-    'lnx.body_skin_evenness.v1', 'lnx.skin_evenness.v1', 'lnx.skin_texture.v1', 'lnx.face_contour.v1', 'lnx.slim_face.v2', 'lnx.face_size.v1', 'lnx.lower_face.v1', 'lnx.mid_face.v1', 'lnx.chin_shape.v1', 'lnx.chin_length.v1', 'lnx.philtrum.v1', 'lnx.eye_symmetry.v1', 'lnx.brow_enhance.v1', 'lnx.lip_texture.v1',
+    'lnx.body_face_match.v1', 'lnx.body_skin_evenness.v1', 'lnx.skin_evenness.v1', 'lnx.skin_texture.v1', 'lnx.face_contour.v1', 'lnx.slim_face.v2', 'lnx.face_size.v1', 'lnx.lower_face.v1', 'lnx.mid_face.v1', 'lnx.chin_shape.v1', 'lnx.chin_length.v1', 'lnx.philtrum.v1', 'lnx.eye_symmetry.v1', 'lnx.brow_enhance.v1', 'lnx.lip_texture.v1',
     'lnx.brow_shape.v1', 'lnx.nose_shape.v1', 'lnx.eye_shape.v1',
     'lnx.mouth_shape.v1', 'lnx.lip_makeup.v1', 'lnx.eye_light.v1',
 )) | MAKEUP.OPERATIONS | {HAIR.OPERATION}
@@ -123,6 +123,9 @@ def _request(name, request):
         S.token(request['request_id'])
         action,payload,target = request['action'],request['payload'],context['target']
         if action == 'patch': _patches(payload)
+        elif action in ('body_face_match_reference','body_face_match_preview','body_face_match_confirm','body_face_match_detach'):
+            from .skin_colour_body_actions import check_action
+            check_action(action,payload,target,family='body_face_match',operation_id='lnx.body_face_match.v1')
         elif action in ('body_skin_evenness_reference','body_skin_evenness_preview','body_skin_evenness_confirm','body_skin_evenness_detach'):
             from .skin_colour_body_actions import check_action
             check_action(action,payload,target,family='body_skin_evenness',operation_id='lnx.body_skin_evenness.v1')
@@ -233,7 +236,7 @@ def require_graph(state, binding, *, document_id=None):
         raise ValueError('Derived portrait graph cannot inherit shared person/group inputs')
     for key,face in faces.items():
         for kind,descriptor in face['local_assets'].items():
-            if kind not in MAKEUP.SUPPORT_KINDS | {'hair_colour','skin_colour_body_visibility','skin_finish_body_visibility','body_skin_evenness_visibility'} | set(TARGETS) or descriptor['kind'] != kind or descriptor['owner'] != S.face_ref(face):
+            if kind not in MAKEUP.SUPPORT_KINDS | {'hair_colour','skin_colour_body_visibility','skin_finish_body_visibility','body_skin_evenness_visibility','body_face_match_visibility'} | set(TARGETS) or descriptor['kind'] != kind or descriptor['owner'] != S.face_ref(face):
                 raise ValueError('Derived portrait graph cannot replay unadapted support/recovery assets')
         evidence = face['evidence']
         if (evidence['source_width'],evidence['source_height']) != (owned['width'],owned['height']):

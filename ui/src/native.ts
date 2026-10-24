@@ -992,6 +992,8 @@ export interface EngineStatus {
     skin_evenness_reason?: string | null;
     body_skin_evenness_available?: boolean;
     body_skin_evenness_reason?: string | null;
+    body_face_match_available?: boolean;
+    body_face_match_reason?: string | null;
     face_contour_available?: boolean;
     face_contour_reason?: string | null;
     face_size_available?: boolean;

@@ -19,7 +19,7 @@ def _family(family,operation_id):
     # none borrows another family's review, receipt or support descriptor.
     options={} if family=='skin_colour' else {'family':family,'operation_id':operation}
     prefix={'skin_colour':'_skin_body','skin_finish':'_skin_finish_body',
-            'body_skin_evenness':'_body_skin_evenness'}[family]
+            'body_skin_evenness':'_body_skin_evenness','body_face_match':'_body_face_match'}[family]
     return kind,operation,options,prefix+'_reference',prefix+'_preview'
 
 
@@ -58,9 +58,15 @@ def _capture(engine,state,target,*,family='skin_colour',operation_id=None):
     proof,graph,context=identity(engine,row,snapshot,version.document_id,str(version.revision))
     if graph!=state:raise ValueError('Body skin owner changed during capture')
     bank=engine._body_bank()
+    reference_proof={}
+    if family=='body_face_match':
+        from hashlib import sha256
+        pixels,stage,_=_reference_source(engine,source)
+        reference_proof={'reference_source_stage':stage,'reference_source_shape':list(pixels.shape),
+                         'reference_source_sha256':sha256(memoryview(pixels).cast('B')).hexdigest()}
     fence=fingerprint({'family':family,'operation_id':operation,
                        'proof':proof,'target':target,'binding':engine._people_binding(),
-                       'body':bank,'analysis':analysis,'graph':state})
+                       'body':bank,'analysis':analysis,'graph':state,**reference_proof})
     return fence,source,ref,row,snapshot,context,bank,analysis,version
 
 
@@ -84,6 +90,64 @@ def _png(rgb,*,source=None):
     image.close();return result
 
 
+def _reference_source(engine,source,*,source_rgb=None):
+    """Actual pre-portrait source-stage reference, including existing repairs.
+
+    Match people_engine_runtime.prepare_preview's tensor extraction. Never
+    substitute raw analysis RGB for a repair base or use later retouched RGB.
+    """
+    from . import creative_derived_source as SOURCE
+    from .cpu_memory_budget import available_estimate
+    import numpy as np
+    import torch
+    pipe=getattr(engine,'_vram',None)
+    tensor=getattr(pipe,'src_f32',None)
+    if tensor is None:raise ValueError('Body/face reference needs the actual current immutable pipeline source')
+    shape=tuple(tensor.shape)
+    if len(shape)!=4 or shape[0]!=1 or shape[1]!=3 or min(shape[2:])<2:
+        raise ValueError('Body/face reference pipeline source has an invalid RGB grid')
+    budget=available_estimate();reserved=shape[2]*shape[3]*24
+    if reserved+64*1024**2>budget:
+        raise ValueError('Body/face source review exceeds memory budget before extraction')
+    rgb=np.array(tensor[0].permute(1,2,0).to('cpu',torch.float32).numpy(),dtype=np.float32,copy=True)
+    SOURCE.verify(source,engine)
+    if SOURCE.record(engine) is not None:
+        if source_rgb is None:source_rgb=SOURCE.analysis_rgb(engine)
+        if (type(source_rgb) is not np.ndarray or source_rgb.dtype!=np.uint8
+                or source_rgb.shape!=rgb.shape
+                or not np.allclose(rgb,source_rgb.astype(np.float32)/255.,rtol=0,atol=np.finfo(np.float32).eps)):
+            raise ValueError('Body/face source reference differs from its owned derived analysis proxy')
+        from .creative_derived_repair_runtime import verify_pipeline
+        verify_pipeline(pipe,source)
+    repaired=getattr(pipe,'repair_base',None)
+    if repaired is None:
+        working=rgb;stage='immutable-source'
+    else:
+        if tuple(repaired.shape)!=shape:raise ValueError('Body/face reference repair changed source dimensions')
+        working=np.array(repaired[0].permute(1,2,0).to('cpu',torch.float32).numpy(),dtype=np.float32,copy=True)
+        stage='verified-repair-base'
+    working.setflags(write=False)
+    if not np.isfinite(working).all() or np.any((working<0)|(working>1)):
+        raise ValueError('Body/face sampled source stage is not finite SDR RGB')
+    return working,stage,budget-reserved
+
+
+def _own_face(engine,state,ref,analysis,*,source_rgb=None):
+    from .body_face_match_layer import reference_support
+    working,stage,budget=_reference_source(engine,engine._people_source(),source_rgb=source_rgb)
+    coverage,facts=reference_support(ref,analysis,working,people_state=state,
+        byte_budget=budget)
+    identity=SUPPORT.reference_identity(ref,analysis['evidence'],facts['face_skin_observation'])
+    return working,coverage,facts,identity,stage
+
+
+def _tint_reference(source_rgb,coverage):
+    import numpy as np
+    # Magenta denotes measured source reference only, never pixels being edited.
+    alpha=coverage[...,None]*np.float32(.55)
+    return source_rgb*(1-alpha)+np.array([1.,0.,1.],np.float32)*alpha
+
+
 def reference(engine,state,target,payload,*,family='skin_colour',operation_id=None):
     kind,operation,options,reference_key,preview_key=_family(family,operation_id)
     check_action(action_name('reference',family=family),payload,target,**options)
@@ -92,12 +156,18 @@ def reference(engine,state,target,payload,*,family='skin_colour',operation_id=No
     from .body_pose_commands import source_preview
     preview=source_preview(engine)
     if len(preview['base64'])>2*1024*1024:raise ValueError('Body skin source reference exceeds its budget')
+    reference_details={}
+    if family=='body_face_match':
+        working,coverage,facts,identity,stage=_own_face(engine,state,ref,analysis)
+        reference_details={'reference_overlay':_png(_tint_reference(working,coverage),source=source),
+                           'reference_support':facts,'own_face_reference':identity,'reference_source_stage':stage}
     if _capture(engine,state,target,**options)[0]!=fence:raise ValueError('Body skin reference changed while preparing')
     tags=_tags(family,operation)
     setattr(engine,preview_key,None)
     setattr(engine,reference_key,{'fence':fence,'source':deepcopy(source),'face_ref':ref,**tags})
     return {'kind':'reference','source':source,'face_ref':ref,'source_preview':preview,
-            'bodies':choices,'attached':kind in state['faces'][ref['face_instance_id']]['local_assets'],**tags}
+            'bodies':choices,'attached':kind in state['faces'][ref['face_instance_id']]['local_assets'],
+            **tags,**reference_details}
 
 
 def preview(engine,state,target,payload,*,family='skin_colour',operation_id=None):
@@ -109,7 +179,7 @@ def preview(engine,state,target,payload,*,family='skin_colour',operation_id=None
         raise ValueError('Read the current body skin source reference again')
     setattr(engine,preview_key,None)
     candidate,assets=SUPPORT.retain(state,engine._people_support,ref,bank,analysis,payload['review'],**options)
-    if family=='body_skin_evenness':
+    if family in ('body_skin_evenness','body_face_match'):
         # First use must not persist an unsupported active body-only amount.
         # The explicit local amount and support are one private comparison;
         # confirmation publishes their exact face-scoped candidate together.
@@ -120,14 +190,16 @@ def preview(engine,state,target,payload,*,family='skin_colour',operation_id=None
         from .skin_colour_state import OP, active
     elif family=='skin_finish':
         from .skin_finish_state import OP, active
-    else:
+    elif family=='body_skin_evenness':
         from .body_skin_evenness_state import OP, active
+    else:
+        from .body_face_match_state import OP, active
     from .people_resolver import resolve
     from .people_algorithms import defaults,recipes
     if not active(recipes(resolve(candidate,ref['face_instance_id'],defaults()))[OP]):
         label={'skin_colour':'skin-colour','skin_finish':'skin-finish',
-               'body_skin_evenness':'body-skin-evenness'}[family]
-        suffix=' region' if family=='body_skin_evenness' else ' extension'
+               'body_skin_evenness':'body-skin-evenness','body_face_match':'body/own-face-matching'}[family]
+        suffix=' region' if family in ('body_skin_evenness','body_face_match') else ' extension'
         raise ValueError('Set a nonzero '+label+' amount before reviewing its visible body'+suffix)
     staged=deepcopy(context);staged['people_graph']=candidate;staged['people_support_assets']=assets
     from .full_candidate_render import render
@@ -145,13 +217,21 @@ def preview(engine,state,target,payload,*,family='skin_colour',operation_id=None
     # Cyan tint displays the real semantic/vector intersection, not an invented
     # skin area. This is explicitly a source-space overlay, not rendered crop.
     tint=np.array([0.,1.,1.],np.float32);alpha=np.asarray(coverage,np.float32)[...,None]*.55
-    overlay=_png(source_rgb.astype(np.float32)/255.*(1-alpha)+tint*alpha,source=source)
+    reference_details={}
+    if family=='body_face_match':
+        _,_,face_facts,identity,stage=_own_face(engine,candidate,ref,analysis,source_rgb=source_rgb)
+        reference_details={'reference_support':face_facts,'own_face_reference':identity,'reference_source_stage':stage}
+    # Body painting always displays the explicitly unretouched effective source.
+    # The separately displayed reference_overlay shows actual sampled pixels.
+    working=source_rgb.astype(np.float32)/255.
+    overlay=_png(working*(1-alpha)+tint*alpha,source=source)
     if _capture(engine,state,target,**options)[0]!=fence:raise ValueError('Body skin review changed during full rendering')
     preview_id=uuid.uuid4().hex
     from .optics_candidate_identity import fingerprint
-    candidate_amount={'amount':float(payload['amount'])} if family=='body_skin_evenness' else {}
+    candidate_amount={'amount':float(payload['amount'])} if family in ('body_skin_evenness','body_face_match') else {}
     result={'kind':'preview','preview_id':preview_id,'source':source,'face_ref':ref,'before':before,'after':after,
-            'overlay':overlay,'review':deepcopy(payload['review']),'runtime_quality_accepted':False,**tags,**candidate_amount}
+            'overlay':overlay,'review':deepcopy(payload['review']),'runtime_quality_accepted':False,
+            **tags,**candidate_amount,**reference_details}
     setattr(engine,preview_key,{'id':preview_id,'fence':fence,'candidate':candidate,'assets':assets,
         'review':deepcopy(payload['review']),'candidate_sha256':fingerprint({'state':candidate,'assets':assets}),
         'before_proof':before_proof,'after_proof':after_proof,**tags,**candidate_amount})
@@ -167,7 +247,7 @@ def confirm(engine,state,target,payload,*,mark_started=lambda:None,family='skin_
             or not _matches_family(pending,family,operation)):
         raise ValueError('Body skin candidate is missing or changed; render a new comparison')
     candidate,assets=SUPPORT.retain(state,engine._people_support,ref,bank,analysis,pending['review'],**options)
-    if family=='body_skin_evenness':
+    if family in ('body_skin_evenness','body_face_match'):
         candidate=P.set_override(candidate,'face',ref['face_instance_id'],operation,'/amount',pending['amount'])
     from .people_support_assets import check_store
     check_store(assets)
@@ -184,12 +264,15 @@ def confirm(engine,state,target,payload,*,mark_started=lambda:None,family='skin_
 def detach(engine,state,target,payload,*,family='skin_colour',operation_id=None):
     _,operation,options,reference_key,preview_key=_family(family,operation_id)
     check_action(action_name('detach',family=family),payload,target,**options);_,ref=selected(engine,state,target)
-    if family=='body_skin_evenness':
-        from .body_skin_evenness_state import active
+    if family in ('body_skin_evenness','body_face_match'):
+        if family=='body_skin_evenness':
+            from .body_skin_evenness_state import active
+        else:
+            from .body_face_match_state import active
         from .people_resolver import resolve
         from .people_algorithms import defaults,recipes
         if active(recipes(resolve(state,ref['face_instance_id'],defaults()))[operation]):
-            raise ValueError('Reset the body-skin-evenness amount to zero before detaching its support')
+            raise ValueError('Reset the '+family+' amount to zero before detaching its support')
     candidate=SUPPORT.detach(state,ref,**options)
     setattr(engine,preview_key,None);setattr(engine,reference_key,None)
     return candidate,{'kind':'detached','attached':False,**_tags(family,operation)}
@@ -202,10 +285,15 @@ def report(engine,state,source,selected_id,*,family='skin_colour',operation_id=N
     ref=P.face_ref(face);attached=kind in face['local_assets']
     result={'attached':attached,'face_ref':ref,'source':deepcopy(source),'needs_review':False,'reason':None,
             **_tags(family,operation)}
+    if family=='body_face_match':result['own_face_reference']=None
     if attached:
         try:
             analysis=engine._people_analyses.get(source['sha256'],{}).get(selected_id)
-            SUPPORT.resolve(state,engine._people_support,ref,engine._body_bank(),analysis,**options)
+            resolved=SUPPORT.resolve(state,engine._people_support,ref,engine._body_bank(),analysis,**options)
+            if family=='body_face_match' and resolved is not None:
+                record,_=resolved
+                result['own_face_reference']=SUPPORT.reference_identity(ref,record['row']['face_evidence'],
+                    record['row']['face_skin_observation'])
         except (ValueError,KeyError,TypeError) as error:
             result.update(needs_review=True,reason=str(error))
     return result

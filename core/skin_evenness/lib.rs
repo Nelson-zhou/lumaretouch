@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-//! Original same-face source-owned chromatic evenness. AUTHORED / UNRUN.
+//! Original source-owned chromatic evenness. AUTHORED / UNRUN.
+//! ABI1 legacy same-face preparation plus optional body-to-own-face preparation.
 //! Preparation measures immutable source; application preserves actual CURRENT
 //! linear luminance. No detector, learned target, intrinsic decomposition or blur
 //! of the current photograph. No external implementation is incorporated.
@@ -12,6 +13,10 @@ pub const MAX_RADIUS: usize = 256;
 pub const MIN_REFERENCE_SAMPLES: usize = 64;
 pub const NATIVE_PREPARE_SCRATCH_BYTES_PER_PIXEL: usize = 88;
 pub const NATIVE_PREPARE_TOTAL_BYTES_PER_PIXEL: usize = 112;
+// Optional body-to-own-face prepare: conservative sum of body solve peak and
+// face reference scratch, although those scratch phases do not coexist.
+pub const BODY_FACE_NATIVE_BODY_BYTES_PER_PIXEL: usize = 112;
+pub const BODY_FACE_NATIVE_FACE_BYTES_PER_PIXEL: usize = 24;
 pub const NATIVE_APPLY_TOTAL_BYTES_PER_PIXEL: usize = 44;
 pub const MAX_WORKING_BYTES: usize = 4 * 1024 * 1024 * 1024;
 pub const POLL_PIXELS: usize = 256;
@@ -42,6 +47,17 @@ fn admit(width: usize, height: usize, bytes_per_pixel: usize) -> Result<usize, i
     let bytes = n.checked_mul(bytes_per_pixel).ok_or(RESOURCE_ERROR)?;
     if n > MAX_PIXELS || bytes > MAX_WORKING_BYTES { return Err(RESOURCE_ERROR); }
     Ok(n)
+}
+fn admit_body_face(body_width: usize, body_height: usize,
+    face_width: usize, face_height: usize) -> Result<(usize, usize), i32> {
+    let body = admit(body_width, body_height, BODY_FACE_NATIVE_BODY_BYTES_PER_PIXEL)?;
+    let face = admit(face_width, face_height, BODY_FACE_NATIVE_FACE_BYTES_PER_PIXEL)?;
+    let pixels = body.checked_add(face).ok_or(RESOURCE_ERROR)?;
+    let bytes = body.checked_mul(BODY_FACE_NATIVE_BODY_BYTES_PER_PIXEL)
+        .and_then(|v| face.checked_mul(BODY_FACE_NATIVE_FACE_BYTES_PER_PIXEL)
+                  .and_then(|f| v.checked_add(f))).ok_or(RESOURCE_ERROR)?;
+    if pixels > MAX_PIXELS || bytes > MAX_WORKING_BYTES { return Err(RESOURCE_ERROR); }
+    Ok((body, face))
 }
 fn decode(v: f64) -> f64 {
     if v <= 0.04045 { v / 12.92 } else { ((v + 0.055) / 1.055).powf(2.4) }
@@ -237,6 +253,16 @@ pub fn prepare_into<F: FnMut() -> bool>(source: &[f32], coverage: &[f32],
         return Ok(());
     }
     let target = reference(source, coverage, &mut cancelled)?;
+    prepare_guided_into(source, coverage, width, height, amount, radius, target, output, &mut cancelled)
+}
+/// Shared source-guided solve, extracted without arithmetic/loop-order changes.
+/// Legacy prepare selects its own reference; optional body-face prepare supplies
+/// an independently measured same-person FACE reference. Admission is the caller's
+/// job. Source always denotes the destination source grid, never face pixels.
+fn prepare_guided_into<F: FnMut() -> bool>(source: &[f32], coverage: &[f32],
+    width: usize, height: usize, amount: f32, radius: usize, target: [f64; 2],
+    output: &mut [f32], mut cancelled: F) -> Result<(), i32> {
+    let n = width*height;
     // Store local mass/mean/variance first, then overwrite in-place with two
     // weighted slope/intercept pairs and valid coefficient-domain weight.
     let mut coefficients = filled(n, [0.0_f64; 5], &mut cancelled)?;
@@ -303,6 +329,43 @@ pub fn prepare_into<F: FnMut() -> bool>(source: &[f32], coverage: &[f32],
     // Final publication is one non-cancellable copy after all fallible work.
     output.copy_from_slice(&result);
     Ok(())
+}
+/// Optional separate-grid body-to-own-face chromatic preparation. Both grids
+/// belong to the same immutable effective source and person, authenticated by
+/// the host. Body reliable support/context and face reliable reference are all
+/// mandatory when active. This function never matches body/face luminance.
+pub fn body_face_prepare_into<F: FnMut() -> bool>(body_source: &[f32], body_coverage: &[f32],
+    body_width: usize, body_height: usize, face_source: &[f32], face_coverage: &[f32],
+    face_width: usize, face_height: usize, amount: f32, radius: usize,
+    output: &mut [f32], mut cancelled: F) -> Result<(), i32> {
+    let (body_n, face_n) = admit_body_face(body_width, body_height, face_width, face_height)?;
+    if body_source.len() != body_n*3 || body_coverage.len() != body_n
+        || face_source.len() != face_n*3 || face_coverage.len() != face_n
+        || output.len() != body_n*2 { return Err(ABI_ERROR); }
+    if !unit(amount) || !(MIN_RADIUS..=MAX_RADIUS).contains(&radius) { return Err(SETTINGS_ERROR); }
+    for (source, coverage) in [(body_source, body_coverage), (face_source, face_coverage)] {
+        for i in 0..coverage.len() {
+            if i % POLL_PIXELS == 0 { poll(&mut cancelled)?; }
+            if !unit(coverage[i]) || !source[3*i..3*i+3].iter().copied().all(unit) {
+                return Err(PIXEL_ERROR);
+            }
+        }
+    }
+    if amount == 0.0 {
+        poll(&mut cancelled)?;
+        output.fill(0.0);
+        return Ok(());
+    }
+    // Count reliable BODY observations, but do not select a body-median target.
+    let mut body_samples = 0;
+    for i in 0..body_n {
+        if i % POLL_PIXELS == 0 { poll(&mut cancelled)?; }
+        if source_sample(body_source, body_coverage, i)[3] >= 0.75 { body_samples += 1; }
+    }
+    if body_samples < MIN_REFERENCE_SAMPLES { return Err(REFERENCE_ERROR); }
+    let target = reference(face_source, face_coverage, &mut cancelled)?;
+    prepare_guided_into(body_source, body_coverage, body_width, body_height,
+        amount, radius, target, output, &mut cancelled)
 }
 fn corrected(current: [f32; 3], shift: [f32; 2]) -> Result<[f32; 3], i32> {
     if shift == [0.0; 2] || current.iter().all(|&v| v == 0.0)
@@ -386,6 +449,37 @@ pub unsafe extern "C" fn lrt_skin_evenness_prepare_v1(source: *const f32, source
         disjoint(output, output_len, source, source_len, coverage, coverage_len)?;
         prepare_into(slice::from_raw_parts(source, source_len), slice::from_raw_parts(coverage, coverage_len),
             width, height, amount, radius, slice::from_raw_parts_mut(output, output_len),
+            || cancel.map_or(false, |function| function(context) != 0))
+    })))
+}
+/// # Safety
+/// Same lifetime, alignment, callback and atomic-refusal contract as legacy
+/// prepare. Four immutable input buffers may overlap each other, but none may
+/// overlap output. Separate dimensions are actual source ROIs, not resampled
+/// body-sized face placeholders. The caller authenticates source/person identity.
+/// ABI remains 1: callers must check this optional symbol, not infer capability
+/// from lrt_skin_evenness_abi alone. Old prepare/apply signatures are unchanged.
+#[no_mangle]
+pub unsafe extern "C" fn lrt_body_face_match_prepare_v1(
+    body_source: *const f32, body_source_len: usize,
+    body_coverage: *const f32, body_coverage_len: usize, body_width: usize, body_height: usize,
+    face_source: *const f32, face_source_len: usize,
+    face_coverage: *const f32, face_coverage_len: usize, face_width: usize, face_height: usize,
+    amount: f32, radius: usize, output: *mut f32, output_len: usize,
+    cancel: Cancel, context: *mut c_void) -> i32 {
+    status(panic::catch_unwind(panic::AssertUnwindSafe(|| -> Result<(), i32> {
+        let (body_n, face_n) = admit_body_face(body_width, body_height, face_width, face_height)?;
+        if body_source_len != body_n*3 || body_coverage_len != body_n
+            || face_source_len != face_n*3 || face_coverage_len != face_n
+            || output_len != body_n*2 { return Err(ABI_ERROR); }
+        if !unit(amount) || !(MIN_RADIUS..=MAX_RADIUS).contains(&radius) { return Err(SETTINGS_ERROR); }
+        disjoint(output, output_len, body_source, body_source_len, body_coverage, body_coverage_len)?;
+        disjoint(output, output_len, face_source, face_source_len, face_coverage, face_coverage_len)?;
+        body_face_prepare_into(slice::from_raw_parts(body_source, body_source_len),
+            slice::from_raw_parts(body_coverage, body_coverage_len), body_width, body_height,
+            slice::from_raw_parts(face_source, face_source_len),
+            slice::from_raw_parts(face_coverage, face_coverage_len), face_width, face_height,
+            amount, radius, slice::from_raw_parts_mut(output, output_len),
             || cancel.map_or(false, |function| function(context) != 0))
     })))
 }

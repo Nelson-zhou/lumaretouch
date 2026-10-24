@@ -8,7 +8,7 @@ import numpy as np
 
 
 def apply_records_np(current, records, recovery=None, *, stage='skin_evenness'):
-    if stage not in ('skin_evenness', 'body_skin_evenness'):
+    if stage not in ('skin_evenness', 'body_skin_evenness', 'body_face_match'):
         raise ValueError('Unknown chromatic evenness stage')
     from . import skin_evenness_native as native
     selected = sorted((r for r in records if r.stage == stage),

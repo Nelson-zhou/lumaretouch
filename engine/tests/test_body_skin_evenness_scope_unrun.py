@@ -480,7 +480,7 @@ def test_batch_commit_rechecks_frozen_body_coverage_before_staging_any_plan(monk
     engine = SimpleNamespace(_docs=rows, _batch_controller=lambda: batch, _people_owner=lambda: owner,
         _document_versions=lambda: versions, _people_export_snapshot=snapshot)
     monkeypatch.setattr(BT.V, 'row_snapshot', lambda actual, row: deepcopy(states[row['document_id']]))
-    monkeypatch.setattr(I, 'proof', lambda actual, row, graph: endpoint(graph, row['document_id']))
+    monkeypatch.setattr(I, 'proof', lambda actual, row, graph, *, source_row=None: endpoint(graph, row['document_id']))
     monkeypatch.setattr(BT.SOURCE, 'row_proof', lambda row: endpoint(states[row['document_id']], row['document_id'])['source_proof'])
     def verify_source(row, expected):
         assert expected == BT.SOURCE.row_proof(row); return expected

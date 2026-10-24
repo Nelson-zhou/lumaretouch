@@ -12,23 +12,27 @@ OVERLAP_POLICY = 'stable_instance_priority_partition'
 
 
 def _assets_require_analysis(face, resolved):
-    """Only exact dormant body-evenness consent may await fresh analysis.
+    """Only exact dormant body chromatic families may await fresh analysis.
 
-    Do not strand neutral recovery on stale body evidence. Every other asset,
-    malformed leaf or ambiguous recipe retains the prior checked requirement.
-    Project/descriptor ownership and normal recipe validation still apply.
+    Every other asset, malformed leaf or ambiguous recipe retains its checked
+    requirement. Project/descriptor ownership and recipe validation still apply.
+    Two independently retained neutral reviews must not strand each other's reset.
     """
     assets = face['local_assets']
     if not assets: return False
-    kind = 'body_skin_evenness_visibility'
-    if set(assets) != {kind} or assets[kind]['kind'] != kind: return True
-    from . import body_skin_evenness_state as BODY
+    from . import body_skin_evenness_state as EVENNESS, body_face_match_state as MATCH
+    families = {'body_skin_evenness_visibility': EVENNESS, 'body_face_match_visibility': MATCH}
+    if set(assets) - set(families): return True
     from .people_resolver import materialize
-    try:
-        recipe = materialize(resolved, BODY.OP, BODY.neutral(), BODY.check)
-    except (ValueError, TypeError, KeyError):
-        return True
-    return BODY.active(recipe)
+    for kind, asset in assets.items():
+        if asset['kind'] != kind: return True
+        state = families[kind]
+        try:
+            recipe = materialize(resolved, state.OP, state.neutral(), state.check)
+        except (ValueError, TypeError, KeyError):
+            return True
+        if state.active(recipe): return True
+    return False
 
 
 def build(state, asset_sha256, defaults, *, max_faces, per_face_cost, total_budget,

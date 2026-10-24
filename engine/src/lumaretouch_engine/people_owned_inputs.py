@@ -43,6 +43,7 @@ def preview(engine, state=None, *, body_bank=_MISSING, body_source=None, support
                 'skin_colour_body_assets':support_bank,
                 'skin_finish_body_assets':support_bank,
                 'body_skin_evenness_assets':support_bank,
+                'body_face_match_assets':support_bank,
                 'body_bank':body,'body_source':owned,'body_source_pixels':body_pixels}
     from .hair_colour_project import preview_kwargs
     return {'document_id':document_id,**preview_kwargs(engine, state),
@@ -56,6 +57,7 @@ def preview(engine, state=None, *, body_bank=_MISSING, body_source=None, support
             'skin_colour_body_assets': support_bank,
             'skin_finish_body_assets': support_bank,
             'body_skin_evenness_assets': support_bank,
+            'body_face_match_assets': support_bank,
             'body_bank': engine._body_bank() if body_bank is _MISSING else body_bank,
             'body_source': engine._people_source() if body_source is None else body_source,
             'body_source_path': engine._doc_path}

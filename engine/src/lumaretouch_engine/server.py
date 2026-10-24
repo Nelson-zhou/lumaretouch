@@ -442,6 +442,7 @@ class Engine(FringeRepairHostMixin, PresetOrganisationHostMixin, HairColourHostM
         from .philtrum_state import capability as philtrum_capability
         from .eye_symmetry_state import capability as eye_symmetry_capability
         from .brow_enhance_state import capability as brow_enhance_capability
+        from .body_face_match_state import capability as body_face_match_capability
         from .body_skin_evenness_state import capability as body_skin_evenness_capability
         from .skin_evenness_state import capability as skin_evenness_capability
         from .lip_texture_state import capability as lip_texture_capability
@@ -450,7 +451,7 @@ class Engine(FringeRepairHostMixin, PresetOrganisationHostMixin, HairColourHostM
               # packaging/VERSION 同步下来的 __version__。发布校验把两者对起来——分叉时
               # 装机 UI 上显示的版本与真正在跑的引擎版本就是两句话。
               # 协议号不动（加键属兼容扩展，宿主只读不判）。
-              "version": __version__, **skin_colour_capability(), **skin_finish_capability(), **skin_gloss_capability(), **skin_texture_capability(), **face_contour_capability(),**face_size_capability(), **lower_face_capability(), **mid_face_capability(), **chin_shape_capability(), **chin_length_capability(), **philtrum_capability(), **eye_symmetry_capability(), **brow_enhance_capability(), **lip_texture_capability(), **skin_evenness_capability(), **body_skin_evenness_capability(),
+              "version": __version__, **skin_colour_capability(), **skin_finish_capability(), **skin_gloss_capability(), **skin_texture_capability(), **face_contour_capability(),**face_size_capability(), **lower_face_capability(), **mid_face_capability(), **chin_shape_capability(), **chin_length_capability(), **philtrum_capability(), **eye_symmetry_capability(), **brow_enhance_capability(), **lip_texture_capability(), **skin_evenness_capability(), **body_skin_evenness_capability(), **body_face_match_capability(),
               "runtime": runtime_report(),
               "privacy": policy_status(),
               # 内置预设清单（M3-b）：按钮上写什么字、按哪个名提交，全部由引擎说。

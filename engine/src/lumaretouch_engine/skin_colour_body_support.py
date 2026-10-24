@@ -2,7 +2,7 @@
 """Reviewed body-skin coverage in the ONE canonical people support bank.
 
 Each descriptor is explicit, nonportable support for exactly one allowlisted
-scalar family. Skin-colour, skin-finish and body-skin-evenness reviews never
+scalar family. Skin-colour, skin-finish, body-evenness and body/face reviews never
 authorize one another. This is not a second recipe owner, pose operation or
 instance segmenter. Body evenness is body-region colour unevenness only, not
 body-to-face colour matching or a learned correction model.
@@ -30,7 +30,9 @@ FINISH_KIND = 'skin_finish_body_visibility'
 FINISH_OPERATION = 'lnx.skin_finish.v1'
 EVENNESS_KIND = 'body_skin_evenness_visibility'
 EVENNESS_OPERATION = 'lnx.body_skin_evenness.v1'
-FAMILIES = ('skin_colour', 'skin_finish', 'body_skin_evenness')
+FACE_MATCH_KIND = 'body_face_match_visibility'
+FACE_MATCH_OPERATION = 'lnx.body_face_match.v1'
+FAMILIES = ('skin_colour', 'skin_finish', 'body_skin_evenness', 'body_face_match')
 FLAGS = ('visible', 'unoccluded', 'ownership_confirmed')
 MAX_RECORD_BYTES = 4 * 1024 * 1024
 
@@ -41,7 +43,8 @@ def family_spec(family='skin_colour', operation_id=None):
         raise ValueError('Unknown body-skin scalar family')
     kind, operation = {'skin_colour': (KIND, OPERATION),
                        'skin_finish': (FINISH_KIND, FINISH_OPERATION),
-                       'body_skin_evenness': (EVENNESS_KIND, EVENNESS_OPERATION)}[family]
+                       'body_skin_evenness': (EVENNESS_KIND, EVENNESS_OPERATION),
+                       'body_face_match': (FACE_MATCH_KIND, FACE_MATCH_OPERATION)}[family]
     if operation_id is not None and (type(operation_id) is not str or operation_id != operation):
         raise ValueError('Body-skin family cannot authorize another operation')
     return kind, operation
@@ -64,6 +67,39 @@ def _review(value):
     return {**deepcopy(value), 'recipe': recipe}
 
 
+def _face_observation(value, ref, evidence):
+    """Historical own-face reference identity, never donor pixels or a mask."""
+    from .skin_colour_support import CONTRACT
+    keys = {'contract', 'source_sha256', 'semantic_model_sha256', 'producer_width', 'producer_height'}
+    if (type(value) is not dict or set(value) != keys or value['contract'] != CONTRACT
+            or value['source_sha256'] != ref['asset_sha256']
+            or value['semantic_model_sha256'] != evidence['semantic_model_sha256']):
+        raise ValueError('Body/face reference needs the exact own-face semantic source/model observation')
+    S.digest(value['semantic_model_sha256'])
+    if any(type(value[k]) is not int or not 1 <= value[k] <= 1000000
+           for k in ('producer_width', 'producer_height')):
+        raise ValueError('Body/face reference observation extent is invalid')
+    return deepcopy(value)
+
+
+def _reference_observation(face, analysis):
+    from .skin_colour_support import check_analysis_fields
+    observation = check_analysis_fields(analysis)
+    if observation is None:
+        raise ValueError('Body/face matching requires actual own face_skin observation; no merged/donor fallback')
+    return _face_observation(observation, S.face_ref(face), face['evidence'])
+
+
+def reference_identity(face_ref, face_evidence, face_skin_observation):
+    """Own-source metadata identity only; not raster/sample observability proof."""
+    ref = S.check_ref(face_ref); evidence = S.check_evidence(face_evidence)
+    if evidence['status'] != 'verified' or evidence['backend'] != 'mediapipe':
+        raise ValueError('Body/face reference identity requires the verified selected face')
+    return {'face_ref': ref, 'face_skin_observation': _face_observation(face_skin_observation, ref, evidence),
+            'landmark_digest': evidence['landmark_digest'],
+            'reference_method': 'effective-source-stage-own-face-robust-log-chroma'}
+
+
 def check_record(record, *, family='skin_colour', operation_id=None):
     """Validate immutable JSON only; never resolve history against a live bank."""
     kind, operation = family_spec(family, operation_id)
@@ -80,6 +116,8 @@ def check_record(record, *, family='skin_colour', operation_id=None):
     keys = {'target', 'operation_id', 'face_evidence', 'body_record_sha256',
             'body_association_revision', 'people_association_revision',
             'body_link', 'face_link', 'observation', 'review'}
+    if family == 'body_face_match':
+        keys.add('face_skin_observation')
     if (type(row) is not dict or set(row) != keys or row['target'] != kind
             or row['operation_id'] != operation):
         raise ValueError('Body-skin support cannot authorize another operation')
@@ -110,6 +148,8 @@ def check_record(record, *, family='skin_colour', operation_id=None):
     if S.revision(face_link['confirmation_revision']) > row['people_association_revision']:
         raise ValueError('Body-skin face confirmation is from the future')
     SEM.check_observation(row['observation'], ref, evidence)
+    if family == 'body_face_match':
+        _face_observation(row['face_skin_observation'], ref, evidence)
     return deepcopy(record)
 
 
@@ -163,6 +203,8 @@ def choices(state, body_bank, face_ref, analysis, *, family='skin_colour', opera
     family_spec(family, operation_id)
     state = S.check(state); body_bank = B.check(body_bank); ref, face = _face(state, face_ref)
     _analysis(face, analysis)
+    if family == 'body_face_match':
+        _reference_observation(face, analysis)
     result = []
     for body in body_bank['bodies'].values():
         body_ref = body['record']['body_ref']
@@ -191,7 +233,9 @@ def retain(state, assets, face_ref, body_bank, analysis, review, *, family='skin
             'body_association_revision': body_bank['association_revision'],
             'people_association_revision': out['association_revision'],
             'body_link': deepcopy(body['association']), 'face_link': deepcopy(face_link),
-            'observation': observation, 'review': review}}, family=family, operation_id=operation)
+            'observation': observation, 'review': review,
+            **({'face_skin_observation': _reference_observation(face, analysis)}
+               if family == 'body_face_match' else {})}}, family=family, operation_id=operation)
     if type(assets) is not dict or len(assets) > 4096:
         raise ValueError('Invalid body-skin project support bank')
     key = content_digest(record); bank = deepcopy(assets)
@@ -241,6 +285,9 @@ def resolve(state, assets, face_ref, body_bank, analysis, *, family='skin_colour
             or row['body_link'] != body['association'] or row['face_link'] != face_link
             or row['observation'] != _analysis(face, analysis)):
         raise ValueError('Body-skin review is stale; source/model/body/person evidence must be reviewed again')
+    if (family == 'body_face_match'
+            and row['face_skin_observation'] != _reference_observation(face, analysis)):
+        raise ValueError('Body/face own-face reference observation changed; review again')
     return record, key
 
 
@@ -301,14 +348,14 @@ def raster(state, assets, face_ref, body_bank, analysis, shape, *, byte_budget=N
     E.whole_source_shape({**record['source'], 'orientation': E.ORIENTATION}, shape)
     SEM.check_analysis_fields(analysis, shape)
     excluded = None
-    if family == 'body_skin_evenness':
+    if family in ('body_skin_evenness', 'body_face_match'):
         # One admission field for both the real solver and the review overlay.
         # This is known-occluder protection, not complete instance segmentation.
         excluded = analysis.get('excluded')
         if (type(excluded) is not np.ndarray or excluded.dtype != np.float32
                 or excluded.shape != shape or not np.isfinite(excluded).all()
                 or np.any(excluded < 0) or np.any(excluded > 1)):
-            raise ValueError('Body-skin-evenness needs actual finite float32 known-occluder support')
+            raise ValueError('Body chroma correction needs actual finite float32 known-occluder support')
     others = []
     for face in state['faces'].values():
         ref = S.face_ref(face)

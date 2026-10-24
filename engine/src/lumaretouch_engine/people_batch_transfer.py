@@ -118,6 +118,8 @@ def preflight(engine,controller,p):
             if finish_coverage is not None:payload['skin_finish_coverage']=finish_coverage
             body_evenness_coverage=skin_coverage(engine,row,staged,payload,family='body_skin_evenness')
             if body_evenness_coverage is not None:payload['body_skin_evenness_coverage']=body_evenness_coverage
+            body_face_match_coverage=skin_coverage(engine,row,staged,payload,family='body_face_match')
+            if body_face_match_coverage is not None:payload['body_face_match_coverage']=body_face_match_coverage
             SOURCE.verify_row(row,target_proof)
             if owner.fence!=fence or V.row_snapshot(engine,row)!=target_graph or document(engine,row)!=target_document:
                 raise ValueError('Target or graph changed during preparation')
@@ -183,16 +185,20 @@ def commit(engine,controller,p,plan):
                 for leaf in payload['parameters']:
                     candidate=S.set_override(candidate,'face',ref['face_instance_id'],leaf['operation_id'],leaf['parameter_path'],leaf['value'])
             from .body_skin_evenness_state import OP as BODY_SKIN_EVENNESS
-            if any(leaf['operation_id']==BODY_SKIN_EVENNESS for leaf in payload['parameters']):
+            from .body_face_match_state import OP as BODY_FACE_MATCH
+            body_families=[family for operation,family in ((BODY_SKIN_EVENNESS,'body_skin_evenness'),
+                (BODY_FACE_MATCH,'body_face_match')) if any(leaf['operation_id']==operation for leaf in payload['parameters'])]
+            if body_families:
                 # Frozen scalar leaves do not authorize another body review.
                 # Validate the actual target again, then compare its exact local
                 # review receipt before this candidate enters a publishable plan.
                 from .people_candidate_render import validate
                 from .skin_colour_transfer_review import for_target as skin_coverage
                 validate(engine,row,candidate)
-                coverage=skin_coverage(engine,row,candidate,payload,family='body_skin_evenness')
-                if coverage!=payload.get('body_skin_evenness_coverage'):
-                    raise ValueError('Body-skin-evenness target coverage changed after review')
+                for family in body_families:
+                    coverage=skin_coverage(engine,row,candidate,payload,family=family)
+                    if coverage!=payload.get(family+'_coverage'):
+                        raise ValueError('Body-skin target coverage or own-face reference changed after review')
             # A per-target validation/budget failure must not leave a partial
             # candidate that skip_and_report could accidentally publish.
             plans[identity]={'row':row if scoped is None else scoped['row'],
@@ -210,6 +216,22 @@ def commit(engine,controller,p,plan):
     from .people_batch_ledger import prepare_scoped,_targets,_verify
     targets=_targets(batch,engine,plans)
     prepare_scoped(engine,plans,targets)
+    # Full aggregate preparation may acquire fresher target observations. Do
+    # not publish a previously frozen face-reference receipt against those new
+    # observations, even when the document/graph counters did not change.
+    for result in resolved:
+        if result['blocked']:continue
+        frozen=next(item for item in plan.targets if item.document_id==result['document_id'] and not item.blocked)
+        payload=json.loads(frozen.people_json)
+        from .body_face_match_state import OP as BODY_FACE_MATCH
+        if not any(leaf['operation_id']==BODY_FACE_MATCH for leaf in payload['parameters']):continue
+        found=batch.versions.find(batch.documents.rows(),result['document_id'])
+        if found is None:raise ValueError('Body/face target disappeared during final preparation')
+        row=found[1];scoped=plans.get(V.scope(row))
+        if scoped is None:raise ValueError('Body/face target owner changed during final preparation')
+        from .skin_colour_transfer_review import for_target as skin_coverage
+        if skin_coverage(engine,row,scoped['candidate'],payload,family='body_face_match')!=payload.get('body_face_match_coverage'):
+            raise ValueError('Body/face target review or own-face reference changed during final preparation; no graph was published')
     _verify(batch,engine,plans,targets)
     # Expensive effective-source preparation cannot authorize a newer graph.
     if V.row_snapshot(engine,source[1])!=graph:raise ValueError('People graph changed during final preparation')

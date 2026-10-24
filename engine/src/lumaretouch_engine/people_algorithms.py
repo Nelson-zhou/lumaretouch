@@ -13,6 +13,7 @@ from . import chin_length_state as CHIN_LENGTH
 from . import philtrum_state as PHILTRUM
 from . import eye_symmetry_state as EYE_SYMMETRY
 from . import brow_enhance_state as BROW_ENHANCE
+from . import body_face_match_state as BODY_FACE_MATCH
 from . import body_skin_evenness_state as BODY_SKIN_EVENNESS
 from . import skin_evenness_state as SKIN_EVENNESS
 from . import lip_texture_state as LIP_TEXTURE
@@ -36,7 +37,8 @@ def check_enhance(value):
 
 
 def specifications():
-    return {BODY_SKIN_EVENNESS.OP: (BODY_SKIN_EVENNESS.neutral(), BODY_SKIN_EVENNESS.check),
+    return {BODY_FACE_MATCH.OP: (BODY_FACE_MATCH.neutral(), BODY_FACE_MATCH.check),
+            BODY_SKIN_EVENNESS.OP: (BODY_SKIN_EVENNESS.neutral(), BODY_SKIN_EVENNESS.check),
             SKIN_EVENNESS.OP: (SKIN_EVENNESS.neutral(), SKIN_EVENNESS.check),
             LIP_TEXTURE.OP: (LIP_TEXTURE.neutral(), LIP_TEXTURE.check),
             BROW_ENHANCE.OP: (BROW_ENHANCE.neutral(), BROW_ENHANCE.check),

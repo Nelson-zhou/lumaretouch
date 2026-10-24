@@ -97,7 +97,7 @@ test('unrelated transfers do not acquire unexplained finish coverage', () => {
 test('finish disclosure is visible and explicitly separates body authorization from colour', () => {
   // Source contract only, not a rendered UI/screenshot acceptance claim.
   const source = readFileSync(new URL('./transferReview.tsx', import.meta.url), 'utf8');
-  assert.ok(source.includes('open={explicit || !!value.skin_colour_coverage || !!value.skin_finish_coverage || !!value.body_skin_evenness_coverage}'));
+  assert.ok(source.includes('open={explicit || !!value.skin_colour_coverage || !!value.skin_finish_coverage || !!value.body_skin_evenness_coverage || !!value.body_face_match_coverage}'));
   assert.ok(source.includes('aria-label="目标美白红润覆盖范围"'));
   assert.ok(source.includes('不改色温或色调'));
   assert.ok(source.includes('旧肤色色温/色调审核不能授权美白红润'));

@@ -34,6 +34,7 @@ def replay_preset(engine,state,**kwargs):
     from . import skin_texture_scope as SKIN_TEXTURE
     from . import skin_evenness_scope as SKIN_EVENNESS
     from . import body_skin_evenness_scope as BODY_SKIN_EVENNESS
+    from . import body_face_match_scope as BODY_FACE_MATCH
     from . import face_contour_scope as FACE_CONTOUR
     from . import slim_face_scope as SLIM_FACE
     from . import face_size_scope as FACE_SIZE
@@ -68,6 +69,9 @@ def replay_preset(engine,state,**kwargs):
     body_evenness_recipe=BODY_SKIN_EVENNESS.S.check(state.get(BODY_SKIN_EVENNESS.FIELD))
     body_evenness_requested=state.get(BODY_SKIN_EVENNESS.REQUESTED) is True
     if BODY_SKIN_EVENNESS.S.active(body_evenness_recipe):kwargs['strict_local']=True
+    body_face_match_recipe=BODY_FACE_MATCH.S.check(state.get(BODY_FACE_MATCH.FIELD))
+    body_face_match_requested=state.get(BODY_FACE_MATCH.REQUESTED) is True
+    if BODY_FACE_MATCH.S.active(body_face_match_recipe):kwargs['strict_local']=True
     contour_recipe=FACE_CONTOUR.S.check(state.get(FACE_CONTOUR.FIELD))
     contour_requested=state.get(FACE_CONTOUR.REQUESTED) is True
     if FACE_CONTOUR.S.active(contour_recipe):kwargs['strict_local']=True
@@ -114,6 +118,8 @@ def replay_preset(engine,state,**kwargs):
             raise ValueError('面部肤色均匀预设需要当前明确的规范人物，不能静默丢弃或转换为旧版磨皮或全图色调配方')
         if body_evenness_requested or BODY_SKIN_EVENNESS.S.active(body_evenness_recipe):
             raise ValueError('身体肤色均匀预设需要当前明确的规范人物，不能静默丢弃或转换为面部肤色均匀、旧版磨皮或全图色调配方')
+        if body_face_match_requested or BODY_FACE_MATCH.S.active(body_face_match_recipe):
+            raise ValueError('身体与本人面部肤色匹配预设需要当前明确的规范人物，不能静默丢弃或转换为身体均匀、亮度匹配或其他肤色配方')
         if contour_requested or FACE_CONTOUR.S.active(contour_recipe):
             raise ValueError('面部轮廓预设需要当前明确的规范人物，不能静默丢弃为旧版全图配方')
         if slim_requested or SLIM_FACE.S.active(slim_recipe):
@@ -158,6 +164,7 @@ def replay_preset(engine,state,**kwargs):
     current=SKIN_TEXTURE.capture(engine,current)
     current=SKIN_EVENNESS.capture(engine,current)
     current=BODY_SKIN_EVENNESS.capture(engine,current)
+    current=BODY_FACE_MATCH.capture(engine,current)
     current=FACE_CONTOUR.capture(engine,current)
     current=SLIM_FACE.capture(engine,current)
     current=FACE_SIZE.capture(engine,current)
@@ -222,6 +229,17 @@ def replay_preset(engine,state,**kwargs):
         if (state.get(BODY_SKIN_EVENNESS.TARGET)!=current[BODY_SKIN_EVENNESS.TARGET]
                 or BODY_SKIN_EVENNESS.owner_identity(state)!=BODY_SKIN_EVENNESS.owner_identity(current)):
             raise ValueError('身体肤色均匀预设的文档、人物归属、有效来源或当前人物已变化，请重新选择')
+    body_face_match_involved=(BODY_FACE_MATCH.FIELD in state and
+                             (body_face_match_requested or BODY_FACE_MATCH.S.active(body_face_match_recipe)
+                              or body_face_match_recipe!=current[BODY_FACE_MATCH.FIELD]))
+    if body_face_match_involved:
+        # Both the independently reviewed body and actual own-face observation
+        # must still belong to this exact target and immutable effective source.
+        # Only amount is staged; strict rendering measures both supports anew.
+        BODY_FACE_MATCH.install(dict(current),{'recipe':body_face_match_recipe})
+        if (state.get(BODY_FACE_MATCH.TARGET)!=current[BODY_FACE_MATCH.TARGET]
+                or BODY_FACE_MATCH.owner_identity(state)!=BODY_FACE_MATCH.owner_identity(current)):
+            raise ValueError('身体与本人面部肤色匹配预设的文档、人物归属、有效来源或当前人物已变化，请重新选择')
     contour_involved=(FACE_CONTOUR.FIELD in state and
                       (contour_requested or FACE_CONTOUR.S.active(contour_recipe) or contour_recipe!=current[FACE_CONTOUR.FIELD]))
     if contour_involved:
@@ -344,6 +362,7 @@ def replay_preset(engine,state,**kwargs):
     if SKIN_TEXTURE.FIELD in state:fields[SKIN_TEXTURE.OP]=SKIN_TEXTURE.FIELD
     if SKIN_EVENNESS.FIELD in state:fields[SKIN_EVENNESS.OP]=SKIN_EVENNESS.FIELD
     if BODY_SKIN_EVENNESS.FIELD in state:fields[BODY_SKIN_EVENNESS.OP]=BODY_SKIN_EVENNESS.FIELD
+    if BODY_FACE_MATCH.FIELD in state:fields[BODY_FACE_MATCH.OP]=BODY_FACE_MATCH.FIELD
     if FACE_CONTOUR.FIELD in state:fields[FACE_CONTOUR.OP]=FACE_CONTOUR.FIELD
     if SLIM_FACE.FIELD in state:fields[SLIM_FACE.OP]=SLIM_FACE.FIELD
     if FACE_SIZE.FIELD in state:fields[FACE_SIZE.OP]=FACE_SIZE.FIELD
@@ -384,6 +403,8 @@ def replay_preset(engine,state,**kwargs):
         raise ValueError('面部肤色均匀预设的当前人物与唯一可应用目标不一致')
     if body_evenness_involved and current[BODY_SKIN_EVENNESS.TARGET]!=S.face_ref(faces[0]):
         raise ValueError('身体肤色均匀预设的当前人物与唯一可应用目标不一致')
+    if body_face_match_involved and current[BODY_FACE_MATCH.TARGET]!=S.face_ref(faces[0]):
+        raise ValueError('身体与本人面部肤色匹配预设的当前人物与唯一可应用目标不一致')
     if contour_involved and current[FACE_CONTOUR.TARGET]!=S.face_ref(faces[0]):
         raise ValueError('面部轮廓预设的当前人物与唯一可应用目标不一致')
     if slim_involved and current[SLIM_FACE.TARGET]!=S.face_ref(faces[0]):
@@ -437,7 +458,7 @@ def replay_preset(engine,state,**kwargs):
         # All selected portrait layers, including source-measured lip furrows
         # and separately added lip/brow makeup, compose in the complete renderer.
         # Never clear/convert other intent for local success.
-        if any(op in (A.ENHANCE,EYE_LIGHT,BLUSH,LIPSTICK,EYELINER,EYELASH,BROW_MAKEUP,IRIS,SKIN_COLOUR.OP,SKIN_FINISH.OP,SKIN_GLOSS.OP,SKIN_TEXTURE.OP,SKIN_EVENNESS.OP,BODY_SKIN_EVENNESS.OP,FACE_CONTOUR.OP,SLIM_FACE.OP,FACE_SIZE.OP,LOWER_FACE.OP,MID_FACE.OP,CHIN_SHAPE.OP,CHIN_LENGTH.OP,PHILTRUM.OP,EYE_SYMMETRY.OP,BROW_ENHANCE.OP,LIP_TEXTURE.OP) for op,_,_ in patches):kwargs['strict_local']=True
+        if any(op in (A.ENHANCE,EYE_LIGHT,BLUSH,LIPSTICK,EYELINER,EYELASH,BROW_MAKEUP,IRIS,SKIN_COLOUR.OP,SKIN_FINISH.OP,SKIN_GLOSS.OP,SKIN_TEXTURE.OP,SKIN_EVENNESS.OP,BODY_SKIN_EVENNESS.OP,BODY_FACE_MATCH.OP,FACE_CONTOUR.OP,SLIM_FACE.OP,FACE_SIZE.OP,LOWER_FACE.OP,MID_FACE.OP,CHIN_SHAPE.OP,CHIN_LENGTH.OP,PHILTRUM.OP,EYE_SYMMETRY.OP,BROW_ENHANCE.OP,LIP_TEXTURE.OP) for op,_,_ in patches):kwargs['strict_local']=True
         return engine._replay_state(state,**kwargs)
     except Exception:
         before['association_revision']=owner.association_fence

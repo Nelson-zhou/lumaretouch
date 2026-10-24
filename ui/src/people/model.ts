@@ -62,10 +62,11 @@ export type PeopleView = {
   skin_body?: import('../skinColour/bodyReviewModel').SkinBodyReport | null;
   skin_finish_body?: import('../skinColour/bodyReviewModel').SkinBodyReport | null;
   body_skin_evenness?: import('../skinColour/bodyReviewModel').SkinBodyReport | null;
+  body_face_match?: import('../skinColour/bodyReviewModel').SkinBodyReport | null;
   analysis_notice?: string; refusals?: {face_instance_id: string; reason: string}[];
 }
 export type PeopleAction = PeopleEnvelope & {
-  action: 'patch' | 'link' | 'group' | 'face_status' | 'manual_add' | 'create_person' | 'select' | 'target' | 'analyse_face' | 'resolve_legacy' | 'eye_light_reference' | 'eye_light_review' | 'blush_palette' | 'blush_reference' | 'blush_review' | 'lipstick_palette' | 'lipstick_reference' | 'lipstick_review' | 'eyeliner_palette' | 'eyeliner_reference' | 'eyeliner_review' | 'iris_reference' | 'iris_review' | 'eyelash_palette' | 'eyelash_reference' | 'eyelash_review' | 'brow_makeup_palette' | 'brow_makeup_reference' | 'brow_makeup_review' | 'skin_body_reference' | 'skin_body_preview' | 'skin_body_confirm' | 'skin_body_detach' | 'skin_finish_body_reference' | 'skin_finish_body_preview' | 'skin_finish_body_confirm' | 'skin_finish_body_detach' | 'body_skin_evenness_reference' | 'body_skin_evenness_preview' | 'body_skin_evenness_confirm' | 'body_skin_evenness_detach';
+  action: 'patch' | 'link' | 'group' | 'face_status' | 'manual_add' | 'create_person' | 'select' | 'target' | 'analyse_face' | 'resolve_legacy' | 'eye_light_reference' | 'eye_light_review' | 'blush_palette' | 'blush_reference' | 'blush_review' | 'lipstick_palette' | 'lipstick_reference' | 'lipstick_review' | 'eyeliner_palette' | 'eyeliner_reference' | 'eyeliner_review' | 'iris_reference' | 'iris_review' | 'eyelash_palette' | 'eyelash_reference' | 'eyelash_review' | 'brow_makeup_palette' | 'brow_makeup_reference' | 'brow_makeup_review' | 'skin_body_reference' | 'skin_body_preview' | 'skin_body_confirm' | 'skin_body_detach' | 'skin_finish_body_reference' | 'skin_finish_body_preview' | 'skin_finish_body_confirm' | 'skin_finish_body_detach' | 'body_skin_evenness_reference' | 'body_skin_evenness_preview' | 'body_skin_evenness_confirm' | 'body_skin_evenness_detach' | 'body_face_match_reference' | 'body_face_match_preview' | 'body_face_match_confirm' | 'body_face_match_detach';
   payload: Record<string, unknown>;
 }
 export type PeopleResult = {
@@ -111,6 +112,7 @@ export function operationLabel(id: string): string {
     'lnx.lip_texture.v1': '唇纹修整（仅淡化已测得的窄暗纹）',
     'lnx.skin_evenness.v1': '脸部色度均匀（原片自参考）',
     'lnx.body_skin_evenness.v1': '身体色度均匀（手绘审核、自身参考）',
+    'lnx.body_face_match.v1': '身体向本人脸部色度匹配（手绘审核）',
     'lnx.face_contour.v1': '太阳穴、颧骨与下颌（可见二维轮廓）',
     'lnx.slim_face.v2': '新版瘦脸（真实可见轮廓，左右独立）',
     'lnx.face_size.v1': '小脸（局部整脸整体大小）',

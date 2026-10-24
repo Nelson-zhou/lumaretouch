@@ -3,8 +3,10 @@ import type {FaceRef, PeopleAction, PeopleResult, PeopleView} from '../people/mo
 import type {BodyRef} from '../legShape/model';
 import type {SourcePreview} from '../legShape/sourcePreview';
 import type {MaskObject} from '../localMasks/model';
+import {validOwnFaceReference, validOwnFaceReferenceSupport, validReferenceSourceStage, type OwnFaceReference, type OwnFaceReferenceSupport, type ReferenceSourceStage} from '../bodyFaceMatch/reference';
+import {matchesSource, previewImage} from '../legShape/sourcePreview';
 
-export type SkinBodyFamily = 'skin_colour' | 'skin_finish' | 'body_skin_evenness';
+export type SkinBodyFamily = 'skin_colour' | 'skin_finish' | 'body_skin_evenness' | 'body_face_match';
 export const SKIN_BODY_FAMILIES = {
   skin_colour: {operation: 'lnx.skin_colour.v1', report: 'skin_body', actions: {
     reference: 'skin_body_reference', preview: 'skin_body_preview', confirm: 'skin_body_confirm', detach: 'skin_body_detach',
@@ -15,11 +17,14 @@ export const SKIN_BODY_FAMILIES = {
   body_skin_evenness: {operation: 'lnx.body_skin_evenness.v1', report: 'body_skin_evenness', actions: {
     reference: 'body_skin_evenness_reference', preview: 'body_skin_evenness_preview', confirm: 'body_skin_evenness_confirm', detach: 'body_skin_evenness_detach',
   }},
+  body_face_match: {operation: 'lnx.body_face_match.v1', report: 'body_face_match', actions: {
+    reference: 'body_face_match_reference', preview: 'body_face_match_preview', confirm: 'body_face_match_confirm', detach: 'body_face_match_detach',
+  }},
 } as const;
 export type SkinBodyAction = typeof SKIN_BODY_FAMILIES[SkinBodyFamily]['actions'][keyof typeof SKIN_BODY_FAMILIES.skin_colour.actions];
-type SkinBodyIdentity = {family?: SkinBodyFamily; operation_id?: 'lnx.skin_colour.v1' | 'lnx.skin_finish.v1' | 'lnx.body_skin_evenness.v1'};
+type SkinBodyIdentity = {family?: SkinBodyFamily; operation_id?: 'lnx.skin_colour.v1' | 'lnx.skin_finish.v1' | 'lnx.body_skin_evenness.v1' | 'lnx.body_face_match.v1'};
 export function skinBodyActionFamily(action: PeopleAction['action']): SkinBodyFamily | null {
-  for (const family of ['skin_colour', 'skin_finish', 'body_skin_evenness'] as const) {
+  for (const family of ['skin_colour', 'skin_finish', 'body_skin_evenness', 'body_face_match'] as const) {
     if ((Object.values(SKIN_BODY_FAMILIES[family].actions) as string[]).includes(action)) return family;
   }
   return null;
@@ -36,15 +41,21 @@ export type SkinBodySource = {sha256: string; width: number; height: number};
 export type SkinBodyMask = {version: 1; domain: 'source-normalized'; objects: Extract<MaskObject, {kind: 'brush'}>[]};
 export type SkinBodyChoice = {body_ref: BodyRef; points_sha256: string};
 export type SkinBodyReview = SkinBodyChoice & {recipe: SkinBodyMask; visible: true; unoccluded: true; ownership_confirmed: true};
-export type SkinBodyReport = SkinBodyIdentity & {attached: boolean; face_ref: FaceRef; source: SkinBodySource; needs_review?: boolean; reason?: string | null};
-export type SkinBodyReference = SkinBodyReport & {kind: 'reference'; source_preview: SourcePreview; bodies: SkinBodyChoice[]};
+export type SkinBodyReport = SkinBodyIdentity & {attached: boolean; face_ref: FaceRef; source: SkinBodySource; needs_review?: boolean; reason?: string | null;
+  /** New family only; current retained identity does not prove current render observability. */
+  own_face_reference?: OwnFaceReference | null};
+export type SkinBodyReference = SkinBodyReport & {kind: 'reference'; source_preview: SourcePreview; bodies: SkinBodyChoice[];
+  reference_overlay?: SourcePreview; reference_support?: OwnFaceReferenceSupport; reference_source_stage?: ReferenceSourceStage};
 export type SkinBodyRendered = {mime: 'image/png'; base64: string; width: number; height: number; mapping: 'rendered_result'};
 export type SkinBodyPreview = SkinBodyIdentity & {
   kind: 'preview'; preview_id: string; source: SkinBodySource; face_ref: FaceRef;
   before: SkinBodyRendered; after: SkinBodyRendered; overlay: SourcePreview;
   review: SkinBodyReview; runtime_quality_accepted: false;
-  /** Body-evenness only: explicit preview candidate, atomically accepted with its own support. */
+  /** Independent body-only families: explicit positive candidate, atomically accepted with its own support. */
   amount?: number;
+  reference_support?: OwnFaceReferenceSupport;
+  own_face_reference?: OwnFaceReference;
+  reference_source_stage?: ReferenceSourceStage;
 };
 export type SkinBodyPayload = SkinBodyReference | SkinBodyPreview | (SkinBodyIdentity & {kind: 'confirmed' | 'detached'; attached: boolean});
 export type SkinBodyResult = {command: PeopleAction; result: PeopleResult};
@@ -117,7 +128,23 @@ export function referenceMatches(reference: SkinBodyReference, view: PeopleView,
     && digest(source?.sha256) && source.sha256 === view.binding.asset_sha256 && extent(source.width) && extent(source.height)
     && Array.isArray(reference.bodies) && reference.bodies.every(body => digest(body.points_sha256)
       && body.body_ref.asset_sha256 === source.sha256 && token(body.body_ref.body_instance_id) && revision(body.body_ref.analysis_revision))
-    && new Set(reference.bodies.map(body => bodyRefKey(body.body_ref))).size === reference.bodies.length;
+    && new Set(reference.bodies.map(body => bodyRefKey(body.body_ref))).size === reference.bodies.length
+    && (family !== 'body_face_match' || ownFaceReferenceMatches(reference));
+}
+/** Only actual same-person source measurements, disclosed with their real full-frame reference overlay. */
+export function ownFaceReferenceMatches(reference: SkinBodyReference): boolean {
+  const png = (value?: SourcePreview | null) => !!value && typeof value.base64 === 'string'
+    && value.base64.length > 0 && value.base64.length <= 8 * 1024 * 1024 && /^[A-Za-z0-9+/]+={0,2}$/.test(value.base64);
+  if (!png(reference.source_preview) || !png(reference.reference_overlay)) return false;
+  const image = previewImage(reference.source_preview), overlay = previewImage(reference.reference_overlay ?? null);
+  return !!image && matchesSource(image, {...reference.source, orientation: 'exif_normalized_once'})
+    && matchesSource(overlay, {...reference.source, orientation: 'exif_normalized_once'})
+    && image.decodedWidth === overlay.decodedWidth && image.decodedHeight === overlay.decodedHeight
+    && validReferenceSourceStage(reference.reference_source_stage)
+    && validOwnFaceReference(reference.own_face_reference, reference.face_ref)
+    && bodyReviewKey(reference.own_face_reference.face_skin_observation) === bodyReviewKey(reference.reference_support?.face_skin_observation)
+    && validOwnFaceReferenceSupport(reference.reference_support, reference.face_ref, reference.source,
+      {width: image.decodedWidth, height: image.decodedHeight});
 }
 export function bodyReview(choice: SkinBodyChoice, recipe: SkinBodyMask, confirmations: {visible: boolean; unoccluded: boolean; ownership_confirmed: boolean}): SkinBodyReview {
   if (!confirmations.visible || !confirmations.unoccluded || !confirmations.ownership_confirmed) throw Error('请确认所画身体皮肤可见、无遮挡并属于当前人物。');
@@ -144,7 +171,11 @@ export function renderedSkinImage(value: SkinBodyRendered | null | undefined): s
 }
 export function previewMatches(preview: SkinBodyPreview, reference: SkinBodyReference, review: SkinBodyReview, family: SkinBodyFamily = 'skin_colour', amount?: number): boolean {
   return preview.kind === 'preview' && skinBodyFamilyMatches(preview, family) && skinBodyFamilyMatches(reference, family)
-    && (family !== 'body_skin_evenness' || (typeof amount === 'number' && Number.isFinite(amount) && amount > 0 && amount <= 1 && preview.amount === amount))
+    && (!['body_skin_evenness', 'body_face_match'].includes(family) || (typeof amount === 'number' && Number.isFinite(amount) && amount > 0 && amount <= 1 && preview.amount === amount))
+    && (family !== 'body_face_match' || (ownFaceReferenceMatches(reference)
+      && preview.reference_source_stage === reference.reference_source_stage
+      && bodyReviewKey(preview.own_face_reference) === bodyReviewKey(reference.own_face_reference)
+      && bodyReviewKey(preview.reference_support) === bodyReviewKey(reference.reference_support)))
     && token(preview.preview_id) && sameSkinFace(preview.face_ref, reference.face_ref)
     && sameSkinSource(preview.source, reference.source) && preview.runtime_quality_accepted === false
     && bodyReviewKey(preview.review) === bodyReviewKey(review)

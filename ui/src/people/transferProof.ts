@@ -1,5 +1,6 @@
 import {sameAssociationRequest, type AssociationRequest} from './associationProof';
 import type {FaceRef, ParameterValue} from './model';
+import {validOwnFaceReference, type OwnFaceReference} from '../bodyFaceMatch/reference';
 
 export type DocumentFence = {document_id: string; epoch: string; revision: number};
 export type EffectiveSourceProof = {
@@ -33,6 +34,12 @@ export type BodySkinEvennessCoverage = {
   version: 1; support_transfer: 'none';
   targets: {face_ref: FaceRef; scope: 'reviewed-body-only' | 'neutral-no-effect'; body_review_sha256: string | null}[];
 };
+/** Every target keeps its own reviewed body and measured same-face source identity. */
+export type BodyFaceMatchCoverage = {
+  version: 1; support_transfer: 'none';
+  targets: {face_ref: FaceRef; scope: 'reviewed-body-own-face' | 'neutral-no-effect'; body_review_sha256: string | null;
+    own_face_reference: OwnFaceReference | null}[];
+};
 type ReviewBase = {
   version: 1; source_document: DocumentFence; target_document: DocumentFence;
   source_ref: FaceRef; target_refs: FaceRef[];
@@ -43,6 +50,7 @@ type ReviewBase = {
   skin_colour_coverage?: SkinColourCoverage;
   skin_finish_coverage?: SkinFinishCoverage;
   body_skin_evenness_coverage?: BodySkinEvennessCoverage;
+  body_face_match_coverage?: BodyFaceMatchCoverage;
 };
 export type PeopleTransferReview = ReviewBase & ({
   confirmed_person_id: string; target_policy: 'confirmed_person_only'; confirmation_revisions: [string, number][];
@@ -126,6 +134,19 @@ export function validBodySkinEvennessCoverage(value: unknown, refs: FaceRef[]): 
       || seen.has(row.face_ref.face_instance_id) || !refs.some(ref => sameFace(ref, row.face_ref as FaceRef))) return false;
     if (row.scope === 'reviewed-body-only' ? !digest(row.body_review_sha256)
       : row.scope !== 'neutral-no-effect' || row.body_review_sha256 !== null) return false;
+    seen.add(row.face_ref.face_instance_id);
+  }
+  return seen.size === refs.length;
+}
+export function validBodyFaceMatchCoverage(value: unknown, refs: FaceRef[]): value is BodyFaceMatchCoverage {
+  if (!object(value) || !keys(value, ['version', 'support_transfer', 'targets']) || value.version !== 1
+    || value.support_transfer !== 'none' || !Array.isArray(value.targets) || value.targets.length !== refs.length) return false;
+  const seen = new Set<string>();
+  for (const row of value.targets) {
+    if (!object(row) || !keys(row, ['face_ref', 'scope', 'body_review_sha256', 'own_face_reference']) || !validFaceRef(row.face_ref)
+      || seen.has(row.face_ref.face_instance_id) || !refs.some(ref => sameFace(ref, row.face_ref as FaceRef))) return false;
+    if (row.scope === 'reviewed-body-own-face' ? !digest(row.body_review_sha256) || !validOwnFaceReference(row.own_face_reference, row.face_ref)
+      : row.scope !== 'neutral-no-effect' || row.body_review_sha256 !== null || row.own_face_reference !== null) return false;
     seen.add(row.face_ref.face_instance_id);
   }
   return seen.size === refs.length;
@@ -233,6 +254,16 @@ export function validPeopleReview(value: unknown, request: PeopleTransferRequest
       || typeof scalars[0].value !== 'number' || scalars[0].value < 0 || scalars[0].value > 1) return false;
     const neutral = scalars[0].value === 0;
     if (v.body_skin_evenness_coverage!.targets.some(row => (row.scope === 'neutral-no-effect') !== neutral)) return false;
+  }
+  const bodyFaceMatchSelected = Object.prototype.hasOwnProperty.call(request.selection, 'lnx.body_face_match.v1');
+  if (bodyFaceMatchSelected ? !validBodyFaceMatchCoverage(v.body_face_match_coverage, v.target_refs)
+    : v.body_face_match_coverage !== undefined) return false;
+  if (bodyFaceMatchSelected) {
+    const scalars = v.parameters.filter(leaf => leaf.operation_id === 'lnx.body_face_match.v1');
+    if (scalars.length !== 1 || scalars[0].parameter_path !== '/amount'
+      || typeof scalars[0].value !== 'number' || scalars[0].value < 0 || scalars[0].value > 1) return false;
+    const neutral = scalars[0].value === 0;
+    if (v.body_face_match_coverage!.targets.some(row => (row.scope === 'neutral-no-effect') !== neutral)) return false;
   }
   return wanted.size === 0 && JSON.stringify([...v.excluded].sort()) === JSON.stringify(['identity_links', 'landmarks', 'local_assets', 'masks']);
 }

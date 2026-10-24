@@ -34,7 +34,7 @@ test('face-evenness, legacy and neighbouring skin routes remain distinct', () =>
     'onChange={value => commitSkin({ broad: value })}', 'onReset={() => commitSkin({ broad: 0 })}']) assert.ok(panel.includes(existing));
   assert.ok(review.includes('`${family}:${skinColourBindingKey(view)}`'));
   assert.ok(review.includes('previewMatches(payload, reference, request.review, family)'));
-  assert.ok(review.includes('evenness ? {review, amount} : {review}'));
+  assert.ok(review.includes('stagedBody ? {review, amount} : {review}'));
   assert.ok(body.includes('identity.family === undefined && identity.operation_id === undefined'));
   assert.ok(body.includes("skin_finish: {operation: 'lnx.skin_finish.v1', report: 'skin_finish_body'"));
 });
@@ -81,7 +81,7 @@ test('independent body review stages explicit amount and confirms one atomic can
   }
   for (const text of ['parseBodyReviewAmount(amountText)', "setAmountText('')", 'amount: candidateAmount',
     'previewMatches(payload, reference, request.review, family, request.amount)', 'preview.amount === amount',
-    'evenness ? {review, amount} : {review}', '本次候选身体强度', '确认审核前不写入效果',
+    'stagedBody ? {review, amount} : {review}', '本次候选身体强度', '确认审核前不写入效果',
     'preview_id: preview.preview_id, reviewed: true', 'comparisonLoaded', 'draftMatches',
     'naturalWidth === image.width', 'naturalHeight === image.height', '独立接受{operationLabel}',
     '确认此身体范围，并将此人物独立强度设为', '不写入分组、关联人物或全部默认',
@@ -96,7 +96,7 @@ test('neutral recovery stays independent of core/support and detach requires aut
   assert.ok(reset.includes('current.current.access.resetDisabled'));
   for (const forbidden of ['changeDisabled', 'reading.value', 'reviewed', 'core.available', 'faceOk']) assert.equal(reset.includes(forbidden), false);
   for (const text of ['return [bodySkinEvennessPatch(0)]', "parameter_path: '/amount', unset: false, value"]) assert.ok(model.includes(text));
-  assert.ok(review.includes('(!evenness || detachNeutral)'));
+  assert.ok(review.includes('(!stagedBody || detachNeutral)'));
   assert.ok(review.includes('须先归零'));
   assert.ok(review.includes('不会偷偷清除或恢复共享范围强度'));
   assert.ok(control.includes('不恢复继承，不移除审核范围，不清除其他范围或其他效果'));

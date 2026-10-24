@@ -52,7 +52,8 @@ def preview_payload(review, family=FAMILY):
 
 
 def test_exact_third_family_preserves_old_public_defaults():
-    assert S.FAMILIES == FAMILIES
+    assert S.FAMILIES[:3] == FAMILIES
+    assert S.FAMILIES == (*FAMILIES, 'body_face_match')
     assert S.family_spec() == ('skin_colour_body_visibility', 'lnx.skin_colour.v1')
     assert S.family_spec('skin_finish') == ('skin_finish_body_visibility', 'lnx.skin_finish.v1')
     assert S.family_spec(**EVENNESS) == ('body_skin_evenness_visibility', 'lnx.body_skin_evenness.v1')

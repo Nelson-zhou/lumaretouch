@@ -48,6 +48,7 @@ from . import skin_gloss_scope as SKIN_GLOSS
 from . import skin_texture_scope as SKIN_TEXTURE
 from . import skin_evenness_scope as SKIN_EVENNESS
 from . import body_skin_evenness_scope as BODY_SKIN_EVENNESS
+from . import body_face_match_scope as BODY_FACE_MATCH
 from . import face_contour_scope as FACE_CONTOUR
 from . import slim_face_scope as SLIM_FACE
 from . import face_size_scope as FACE_SIZE
@@ -201,6 +202,10 @@ MODULES: dict[str, dict] = {
                      "transferable": True, "cmd": "people", "label": "身体肤色均匀（独立审核范围，部分非 AI 调整）",
                      "read": BODY_SKIN_EVENNESS.params_of, "write": BODY_SKIN_EVENNESS.install,
                      "why_not": "仅 0..1 强度；目标须独立审核身体肤色均匀范围及 BodyRef/人物归属，以自己的真实身体皮肤观察和有效来源重算身体区域参考肤色，不复制手绘配方、审核、蒙版、参考样本或色度位移；不是身体与面部肤色匹配，不转换面部肤色均匀或旧版 skin.broad"},
+    BODY_FACE_MATCH.OP: {"params": ("recipe",), "state_fields": BODY_FACE_MATCH.FIELDS, "single_face": True,
+                     "transferable": True, "cmd": "people", "label": "身体与本人面部肤色匹配（独立审核范围，部分非 AI 调整）",
+                     "read": BODY_FACE_MATCH.params_of, "write": BODY_FACE_MATCH.install,
+                     "why_not": "仅 0..1 强度；目标须单独审核 BodyRef/同一人物/手绘身体范围，并从自己的不可变有效来源重建真实身体与本人面部皮肤参考；不复制审核、手绘配方、蒙版、像素或参考样本，不借用身体均匀、色温色调或美白红润审核；仅色度匹配并保留当前亮度，不承诺匹配后续修正的脸部或学习式 AI"},
     FACE_CONTOUR.OP: {"params": ("recipe",), "state_fields": FACE_CONTOUR.FIELDS, "single_face": True,
                       "transferable": True, "cmd": "people", "label": "面部轮廓（独立左右二维参数）",
                       "read": FACE_CONTOUR.params_of, "write": FACE_CONTOUR.install,
@@ -517,6 +522,9 @@ def check_params(op: str, params: dict) -> dict:
         except ValueError as error: raise ScopeError(str(error)) from error
     if op == BODY_SKIN_EVENNESS.OP:
         try: return BODY_SKIN_EVENNESS.check_params(params)
+        except ValueError as error: raise ScopeError(str(error)) from error
+    if op == BODY_FACE_MATCH.OP:
+        try: return BODY_FACE_MATCH.check_params(params)
         except ValueError as error: raise ScopeError(str(error)) from error
     if op == FACE_CONTOUR.OP:
         try: return FACE_CONTOUR.check_params(params)
