@@ -71,7 +71,13 @@ def stage(command, state, *, document_id, document_epoch, document_revision,
     # as a successful ready render because preparation must refuse the conflict.
     for key in out['faces']:
         resolved = resolve(out,key,A.defaults())
-        if not resolved['conflicts']: A.recipes(resolved)
+        if not resolved['conflicts']:
+            values = A.recipes(resolved)
+            # Dormant disabled/other-source intent remains readable/recoverable.
+            # Compatibility matches the actual render set, not unrelated faces.
+            face = out['faces'][key]
+            if face['enabled'] and face['asset_sha256'] == asset_sha256:
+                A.validate_compatibility(values)
     prepared = prepare(out) if prepare is not None else None
     return {'state':out,'prepared':prepared,'created_id':created,
             'request_id':command['request_id'],'previous_revision':state['revision']}

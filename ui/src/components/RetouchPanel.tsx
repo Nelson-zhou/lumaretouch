@@ -45,6 +45,7 @@ import {SlimFaceControl} from '../slimFace/SlimFaceControl';
 import {FaceSizeControl} from '../faceSize/FaceSizeControl';
 import {MidFaceControl} from '../midFace/MidFaceControl';
 import {LowerFaceControl} from '../lowerFace/LowerFaceControl';
+import {ChinLengthControl, LegacySmallChinControl} from '../chinLength/ChinLengthControl';
 import {ChinShapeControl} from '../chinShape/ChinShapeControl';
 import {ColorActionLaunch,type ColorActionControlsProps} from '../colorActions/ColorActionControls';
 import {FabricPanel} from "../fabric/FabricPanel";
@@ -383,6 +384,7 @@ const WIRED: Record<string, string> = {
   "PC-32466|脸型/小脸": "face_size.amount",
   "PC-32466|脸型/中庭": "mid_face.amount",
   "PC-32466|脸型/下庭": "lower_face.amount",
+  "PC-32466|脸型/下巴长短": "chin_length.amount",
   "PC-32466|脸型/尖下巴": "chin_shape.v1",
   "PC-32466|脸型/太阳穴": "face_contour.temple",
   "PC-32466|脸型/颧骨": "face_contour.cheekbone",
@@ -454,6 +456,7 @@ const WIRE_LABEL: Record<string, string> = {
   "face_size.amount": "小脸（局部整脸大小）",
   "mid_face.amount": "中庭（局部纵向长度）",
   "lower_face.amount": "下庭（局部纵向长度）",
+  "chin_length.amount": "下巴长短（唇下局部纵向长度）",
   "chin_shape.v1": "尖下巴（局部横向收尖，左右独立）",
   "deform.slim_face": "旧版瘦脸（历史错误拓扑）",
   "deform.big_eye": "大眼",
@@ -697,7 +700,7 @@ export default function RetouchPanel(props: RetouchProps) {
       const preset = kind.split(":")[1];
       return (
         <button key={leaf.path} type="button" className="specBtn"
-          title={`历史脸型预设：${name}。保留旧版数值及错误拓扑，不是新版瘦脸；与新版非零效果冲突时引擎会拒绝，不会自动替换。`}
+          title={`历史脸型预设：${name}。保留旧版瘦脸、小下巴数值及错误拓扑；与新版瘦脸或新版下巴长短的非零效果冲突时引擎会拒绝整个请求，不会自动替换。`}
           disabled={dim || !props.faceOk}
           onClick={() => {
             setOpenSeen((s) => ({ ...s, [preset]: true }));
@@ -806,6 +809,15 @@ export default function RetouchPanel(props: RetouchProps) {
           blocked={dim || props.hairBusy || !!props.whiteBalanceBusy || portraitRequestsBusy()
             || !!status?.edit_queue?.in_flight || !!status?.edit_queue?.pending || !!status?.edit_queue?.closed}
           faceOk={props.faceOk} faceWhy={props.faceWhy} note={props.note} Slider={Slider}/>;
+      case "chin_length.amount":
+        if (!doc?.people) return <section key={leaf.path} data-control-id="LNX-REF-PC-32466-C-44a42baef4" aria-label="下巴长短暂不可用">
+          <p className="muted">此文档尚未提供规范人物状态，下巴长短暂不可用。不会改用旧版小下巴、收下巴、下庭、中庭或尖下巴替代；旧效果保留不变。</p>
+        </section>;
+        return <ChinLengthControl key={leaf.path}
+          people={props.people} capability={status?.ready_caps}
+          blocked={dim || props.hairBusy || !!props.whiteBalanceBusy || portraitRequestsBusy()
+            || !!status?.edit_queue?.in_flight || !!status?.edit_queue?.pending || !!status?.edit_queue?.closed}
+          faceOk={props.faceOk} faceWhy={props.faceWhy} note={props.note} Slider={Slider}/>;
       case "face_contour.temple":
       case "face_contour.cheekbone":
       case "face_contour.jaw":
@@ -833,8 +845,31 @@ export default function RetouchPanel(props: RetouchProps) {
           blocked={dim || props.hairBusy || !!props.whiteBalanceBusy || portraitRequestsBusy()
             || !!status?.edit_queue?.in_flight || !!status?.edit_queue?.pending || !!status?.edit_queue?.closed}
           faceOk={props.faceOk} faceWhy={props.faceWhy} note={props.note} Slider={Slider}/>;
-      case "deform.big_eye":
       case "deform.small_chin":
+        if (doc?.people) return <LegacySmallChinControl key={leaf.path}
+          people={props.people} capability={status?.ready_caps}
+          blocked={dim || props.hairBusy || !!props.whiteBalanceBusy || portraitRequestsBusy()
+            || !!status?.edit_queue?.in_flight || !!status?.edit_queue?.pending || !!status?.edit_queue?.closed}
+          faceOk={props.faceOk} faceWhy={props.faceWhy} note={props.note} Slider={Slider}/>;
+        return <section key={leaf.path} aria-label="旧版小下巴兼容编辑">
+          <p className="muted">这里只编辑保存的旧版小下巴，历史错误拓扑与原数值保留；不会自动换算成新版下巴长短。</p>
+          {Number.isFinite(amounts.small_chin) && amounts.small_chin >= 0 && amounts.small_chin <= 1
+            ? <Slider label={label} value={amounts.small_chin * 100} min={0} max={100}
+                disabled={dim || !props.faceOk || props.hairBusy || !!props.whiteBalanceBusy || portraitRequestsBusy()
+                  || !!status?.edit_queue?.in_flight || !!status?.edit_queue?.pending || !!status?.edit_queue?.closed}
+                title={props.faceOk ? '保留旧版小下巴数值与原行为。' : props.faceWhy}
+                onChange={value => commitDeform({small_chin: value / 100})} onReset={() => commitDeform({small_chin: 0})}/>
+            : Number.isFinite(amounts.small_chin) && amounts.small_chin >= -1 && amounts.small_chin < 0
+              ? <>
+                  <p className="muted">已保存的旧版小下巴实际值：{Number((amounts.small_chin * 100).toFixed(6))}。此负值保持原样，不夹到原有 0 至 100 滑杆的范围内，也不换算成新版。</p>
+                  <button type="button" className="specBtn"
+                    disabled={dim || !props.faceOk || props.hairBusy || !!props.whiteBalanceBusy || portraitRequestsBusy()
+                      || !!status?.edit_queue?.in_flight || !!status?.edit_queue?.pending || !!status?.edit_queue?.closed}
+                    onClick={() => commitDeform({small_chin: 0})}>仅归零保存的旧版小下巴</button>
+                </>
+              : <p className="muted">引擎尚未提供有效的旧版小下巴读数，不以 0 代替。</p>}
+        </section>;
+      case "deform.big_eye":
       case "deform.smile": {
         const key = kind.slice("deform.".length);
         return (

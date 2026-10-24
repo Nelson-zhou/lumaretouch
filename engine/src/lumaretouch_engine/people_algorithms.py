@@ -9,6 +9,7 @@ from . import face_size_state as FACE_SIZE
 from . import lower_face_state as LOWER_FACE
 from . import mid_face_state as MID_FACE
 from . import chin_shape_state as CHIN_SHAPE
+from . import chin_length_state as CHIN_LENGTH
 from . import brow_shape_state as B, nose_shape_state as N, eye_shape_state as E, mouth_shape_state as M
 from . import lip_makeup_state as L, facial_wrinkle_state as W, hair_colour_state as HAIR
 from .ops import deform as D, enhance as H
@@ -29,7 +30,8 @@ def check_enhance(value):
 
 
 def specifications():
-    return {CHIN_SHAPE.OP: (CHIN_SHAPE.neutral(), CHIN_SHAPE.check),
+    return {CHIN_LENGTH.OP: (CHIN_LENGTH.neutral(), CHIN_LENGTH.check),
+            CHIN_SHAPE.OP: (CHIN_SHAPE.neutral(), CHIN_SHAPE.check),
             MID_FACE.OP: (MID_FACE.neutral(), MID_FACE.check),
             LOWER_FACE.OP: (LOWER_FACE.neutral(), LOWER_FACE.check),
             FACE_SIZE.OP: (FACE_SIZE.neutral(), FACE_SIZE.check),
@@ -68,6 +70,13 @@ def recipes(resolved):
     unknown = set(resolved['operations']) - set(specs)
     if unknown: raise ValueError('Unsupported people operations: ' + ', '.join(sorted(unknown)))
     return {op: R.materialize(resolved, op, neutral, validator) for op, (neutral, validator) in specs.items()}
+
+
+def validate_compatibility(values):
+    # Keep intent readable for conflict disclosure and neutral recovery. Enforce
+    # compatibility on the complete staged candidate and before rendering, not
+    # while capturing intent or after the first leaf of an atomic replacement.
+    CHIN_LENGTH.check_coexistence(values[CHIN_LENGTH.OP], values[DEFORM]['small_chin'])
 
 
 def build_geometry(face_id, landmarks, values, source, excluded, *, backend):

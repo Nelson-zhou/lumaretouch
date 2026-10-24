@@ -113,6 +113,7 @@ export function operationLabel(id: string): string {
     'lnx.mid_face.v1': '中庭（局部纵向长度）',
     'lnx.lower_face.v1': '下庭（局部纵向长度）',
     'lnx.chin_shape.v1': '尖下巴（局部横向收尖，左右独立）',
+    'lnx.chin_length.v1': '下巴长短（唇下局部纵向长度）',
     'lnx.facial_wrinkles.v1': '面部细纹', 'lnx.lip_makeup.v1': '唇妆',
     'lnx.brow_shape.v1': '眉形', 'lnx.nose_shape.v1': '鼻形',
     'lnx.eye_shape.v1': '眼形', 'lnx.mouth_shape.v1': '嘴形',

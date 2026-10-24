@@ -38,6 +38,7 @@ def replay_preset(engine,state,**kwargs):
     from . import lower_face_scope as LOWER_FACE
     from . import mid_face_scope as MID_FACE
     from . import chin_shape_scope as CHIN_SHAPE
+    from . import chin_length_scope as CHIN_LENGTH
     # Even an otherwise unchanged or legacy preset must not publish success
     # after an active independent eye/tooth layer failed on its own target.
     amounts=ENHANCE.amounts_of(state)
@@ -73,6 +74,9 @@ def replay_preset(engine,state,**kwargs):
     chin_recipe=CHIN_SHAPE.S.check(state.get(CHIN_SHAPE.FIELD))
     chin_requested=state.get(CHIN_SHAPE.REQUESTED) is True
     if CHIN_SHAPE.S.active(chin_recipe):kwargs['strict_local']=True
+    chin_length_recipe=CHIN_LENGTH.S.check(state.get(CHIN_LENGTH.FIELD))
+    chin_length_requested=state.get(CHIN_LENGTH.REQUESTED) is True
+    if CHIN_LENGTH.S.active(chin_length_recipe):kwargs['strict_local']=True
     if not engine._people_managed():
         if skin_requested or SKIN_COLOUR.S.active(skin_recipe):
             raise ValueError('面部肤色预设需要当前明确的规范人物，不能静默丢弃为旧版全图配方')
@@ -94,6 +98,8 @@ def replay_preset(engine,state,**kwargs):
             raise ValueError('中庭长度预设需要当前明确的规范人物，不能静默丢弃或转换为下庭长度或旧版小下巴配方')
         if chin_requested or CHIN_SHAPE.S.active(chin_recipe):
             raise ValueError('新版尖下巴预设需要当前明确的规范人物，不能静默丢弃或转换为旧版小下巴、长度或瘦脸配方')
+        if chin_length_requested or CHIN_LENGTH.S.active(chin_length_recipe):
+            raise ValueError('新版下巴长度预设需要当前明确的规范人物，不能静默丢弃或转换为旧版小下巴、尖下巴或其他长度配方')
         return engine._replay_state(state,**kwargs)
     before=engine._people_owner().snapshot();asset=engine._people_source()['sha256']
     faces=[face for face in before['faces'].values() if face['asset_sha256']==asset and face['enabled']]
@@ -116,6 +122,7 @@ def replay_preset(engine,state,**kwargs):
     current=LOWER_FACE.capture(engine,current)
     current=MID_FACE.capture(engine,current)
     current=CHIN_SHAPE.capture(engine,current)
+    current=CHIN_LENGTH.capture(engine,current)
     skin_involved=(SKIN_COLOUR.FIELD in state and
                    (skin_requested or SKIN_COLOUR.S.active(skin_recipe) or skin_recipe!=current[SKIN_COLOUR.FIELD]))
     if skin_involved:
@@ -200,6 +207,15 @@ def replay_preset(engine,state,**kwargs):
         if (state.get(CHIN_SHAPE.TARGET)!=current[CHIN_SHAPE.TARGET]
                 or CHIN_SHAPE.owner_identity(state)!=CHIN_SHAPE.owner_identity(current)):
             raise ValueError('新版尖下巴预设的文档、人物归属、有效来源或当前人物已变化，请重新选择')
+    chin_length_involved=(CHIN_LENGTH.FIELD in state and
+                         (chin_length_requested or CHIN_LENGTH.S.active(chin_length_recipe) or chin_length_recipe!=current[CHIN_LENGTH.FIELD]))
+    if chin_length_involved:
+        # Identity admission is re-read from the live target. Its lip-plane/chin
+        # support is rebuilt by the complete renderer, never imported or cached.
+        CHIN_LENGTH.install(dict(current),{'recipe':chin_length_recipe})
+        if (state.get(CHIN_LENGTH.TARGET)!=current[CHIN_LENGTH.TARGET]
+                or CHIN_LENGTH.owner_identity(state)!=CHIN_LENGTH.owner_identity(current)):
+            raise ValueError('新版下巴长度预设的文档、人物归属、有效来源或当前人物已变化，请重新选择')
     fields=dict(zip(A.GEOMETRY,('_brow_shape','_nose_shape','_eye_shape','_mouth_shape')))
     fields[A.LIP]='_lip_makeup'
     # Ephemeral preset transport is consumed here; never a parallel render owner.
@@ -220,6 +236,7 @@ def replay_preset(engine,state,**kwargs):
     if LOWER_FACE.FIELD in state:fields[LOWER_FACE.OP]=LOWER_FACE.FIELD
     if MID_FACE.FIELD in state:fields[MID_FACE.OP]=MID_FACE.FIELD
     if CHIN_SHAPE.FIELD in state:fields[CHIN_SHAPE.OP]=CHIN_SHAPE.FIELD
+    if CHIN_LENGTH.FIELD in state:fields[CHIN_LENGTH.OP]=CHIN_LENGTH.FIELD
     for op,field in fields.items():
         validator=A.specifications()[op][1];left=A.leaves(validator(current.get(field)));right=A.leaves(validator(state.get(field)))
         patches.extend((op,path,value) for path,value in right.items() if left[path]!=value)
@@ -228,7 +245,13 @@ def replay_preset(engine,state,**kwargs):
     patches.extend((A.ENHANCE,path,value) for path,value in right.items() if left[path]!=value)
     left=W.check((current.get('_enhance') or {}).get('amounts',{}));right=W.check((state.get('_enhance') or {}).get('amounts',{}))
     patches.extend((A.WRINKLES,path,value) for path,value in A.leaves(right).items() if A.leaves(left)[path]!=value)
-    if not patches:return engine._replay_state(state,**kwargs)
+    if not patches:
+        if chin_length_involved:
+            # Unchanged active intent still cannot bypass the legacy conflict.
+            from .people_resolver import resolve
+            values=A.recipes(resolve(candidate,current[CHIN_LENGTH.TARGET]['face_instance_id'],A.defaults()))
+            CHIN_LENGTH.S.check_coexistence(values[CHIN_LENGTH.OP],values[A.DEFORM]['small_chin'])
+        return engine._replay_state(state,**kwargs)
     if len(faces)!=1:raise ValueError('A legacy portrait preset requires one explicit unambiguous enabled face; use people parameter review for multiple faces')
     key=faces[0]['face_instance_id']
     if skin_involved and current[SKIN_COLOUR.TARGET]!=S.face_ref(faces[0]):
@@ -251,7 +274,16 @@ def replay_preset(engine,state,**kwargs):
         raise ValueError('中庭长度预设的当前人物与唯一可应用目标不一致')
     if chin_involved and current[CHIN_SHAPE.TARGET]!=S.face_ref(faces[0]):
         raise ValueError('新版尖下巴预设的当前人物与唯一可应用目标不一致')
+    if chin_length_involved and current[CHIN_LENGTH.TARGET]!=S.face_ref(faces[0]):
+        raise ValueError('新版下巴长度预设的当前人物与唯一可应用目标不一致')
     for op,path,value in patches:candidate=S.set_override(candidate,'face',key,op,path,value)
+    if chin_length_involved:
+        # Resolve inheritance only after all selected modules have been staged.
+        # Scalar preset install never inserts an old-small_chin reset or converts
+        # its numeric value. A conflict rejects the whole transaction unchanged.
+        from .people_resolver import resolve
+        values=A.recipes(resolve(candidate,key,A.defaults()))
+        CHIN_LENGTH.S.check_coexistence(values[CHIN_LENGTH.OP],values[A.DEFORM]['small_chin'])
     if chin_involved:
         # Linked equality belongs to the complete recipe, not intermediate
         # sparse writes. Validate the fully staged candidate before publication.
@@ -269,7 +301,7 @@ def replay_preset(engine,state,**kwargs):
         owner.commit(candidate,expected_fence=owner.fence);engine._people_analysis_key=None
         # Face size, face lengths and chin shape compose in the complete
         # canonical renderer. Never clear/convert other intent for local success.
-        if any(op in (A.ENHANCE,EYE_LIGHT,BLUSH,LIPSTICK,EYELINER,EYELASH,BROW_MAKEUP,IRIS,SKIN_COLOUR.OP,SKIN_FINISH.OP,SKIN_GLOSS.OP,SKIN_TEXTURE.OP,FACE_CONTOUR.OP,SLIM_FACE.OP,FACE_SIZE.OP,LOWER_FACE.OP,MID_FACE.OP,CHIN_SHAPE.OP) for op,_,_ in patches):kwargs['strict_local']=True
+        if any(op in (A.ENHANCE,EYE_LIGHT,BLUSH,LIPSTICK,EYELINER,EYELASH,BROW_MAKEUP,IRIS,SKIN_COLOUR.OP,SKIN_FINISH.OP,SKIN_GLOSS.OP,SKIN_TEXTURE.OP,FACE_CONTOUR.OP,SLIM_FACE.OP,FACE_SIZE.OP,LOWER_FACE.OP,MID_FACE.OP,CHIN_SHAPE.OP,CHIN_LENGTH.OP) for op,_,_ in patches):kwargs['strict_local']=True
         return engine._replay_state(state,**kwargs)
     except Exception:
         before['association_revision']=owner.association_fence

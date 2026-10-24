@@ -4,6 +4,19 @@
   "scope_note": "RGB/master point recipes v1 remain compatible. Recipe v2 adds explicit linear-sRGB Y-ratio luminance, not Lab L*. Recipe v3 adds an independent Rust-owned four-region parametric stage before point curves, with split-aligned floating LUTs. Basic integrated CI/Qoder checks are recorded in docs/development/parametric-curves-verification.md; native UI acceptance remains pending. Eyedroppers and live/full-source histograms remain separate unfinished features. Original frozen registry is unchanged. Levels is a separate display-sRGB operator with explicit active-channel input clipping and reversible output endpoints; histogram and eyedroppers remain separate.",
   "entries": [
     {
+      "operation_id": "lnx.chin_length.v1",
+      "parameter_key": "recipe",
+      "type": "object",
+      "neutral": {"version": 1, "amount": 0},
+      "range": {"version": [1, 1], "amount": [-1, 1]},
+      "requirement_ids": ["LNX-REF-PC-32466-C-44a42baef4"],
+      "scope": "Distinct measured below-all-lips chin length. Negative shortens, positive lengthens; not the larger nose-to-chin lower-face interval or bilateral horizontal chin taper.",
+      "implementation": "New source-owned anatomy/evidence and canonical pullback reuse the unchanged original Rust lower_face anatomy-agnostic inverse primitive. No new solver or sampler is claimed.",
+      "transfer": "Version and chosen amount only; each explicit target rebuilds its own actual source support. Active new intent refuses effective nonzero legacy small_chin. Presets never silently clear or reinterpret it.",
+      "compatibility": "Saved lnx.deform.v1 small_chin code and appearance remain unchanged. Opt-in replacement is one explicit transaction setting its effective local leaf to zero and a separately chosen new amount; undo retains the original intent. Neutral new operation leaves legacy untouched.",
+      "acceptance": "AUTHORED / UNRUN. Existing measured mesh, skin/RGB and exclusion evidence are not complete visibility or clinical anatomy. Neck/background feather moves, prior composition may relocate features, and numerical/photographic acceptance remains pending."
+    },
+    {
       "operation_id": "lnx.chin_shape.v1",
       "parameter_key": "recipe",
       "type": "object",

@@ -1,0 +1,212 @@
+{
+  "baseline": "40f7ba1752daf7d97cdc9ee5519943f2d7845ca1",
+  "status": "FROZEN_SOURCE_ONLY_UNRUN",
+  "scope": "Versioned below-lip chin length with genuine measured support, explicit old-small_chin replacement and preserved saved legacy behavior. Reuses unchanged original Rust lower_face scalar inverse; canonical original/derived preview/export/history, UI and target-recomputed scalar presets. No numerical or photographic acceptance.",
+  "requirement_ids": [
+    "LNX-REF-PC-32466-C-44a42baef4"
+  ],
+  "files": [
+    {
+      "path": "docs/chin-length/IMPLEMENTATION.md",
+      "sha256": "e40ee5eaad90a86a8d665d082c2503064fe7fe6ee99024bf969bdc178f42d076",
+      "bytes": 9042
+    },
+    {
+      "path": "docs/chin-length/NUMERICAL-CONTRACT.md",
+      "sha256": "be852bbe685ad97b804a24e5aad473b475fe7878d9571bc82424af6b2eb7ed96",
+      "bytes": 12639
+    },
+    {
+      "path": "docs/development/ui-route-inventory.json",
+      "sha256": "b93d7ffeb2fd5b9f95f2a94668eff904723d13407463da405e56622e3a3e6f5d",
+      "bytes": 13974
+    },
+    {
+      "path": "docs/p0/registry-extensions.json",
+      "sha256": "63ca7e9de8571e69ce084637e23d4fa0740e0fc5dd8421f2caaf215d45c14d61",
+      "bytes": 36874
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/chin_length_native.py",
+      "sha256": "93cb3738e8f6a1dc03204aa8ebf9aa946f98a52792df5759686f7408586d2787",
+      "bytes": 3420
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/chin_length_people.py",
+      "sha256": "ce5530a90ddfa3fe512d46f946d3e34bc397d70046a821711cd9b9da8fd149e6",
+      "bytes": 5461
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/chin_length_runtime.py",
+      "sha256": "ee12d9f6670fd88893777ee786642ea2ddfba45590f6a23cd45e72cafe09e193",
+      "bytes": 23652
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/chin_length_scope.py",
+      "sha256": "dbd09ae3efb903ef8257a8e4e96c9cb2071274641bf0af71e0f9a7e8abc6e7b7",
+      "bytes": 6603
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/chin_length_state.py",
+      "sha256": "772bcd6ca1c56b7bd65e877c140ae611bb1a2afe3191844dfc542801fc4ca8c8",
+      "bytes": 2513
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/creative_derived_effects.py",
+      "sha256": "ad46999bf68d1d8dfc37d57c8009fb4a3036976401fa6b05e547c7b5656055ea",
+      "bytes": 14785
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_algorithms.py",
+      "sha256": "a6c98e30d8f655f0d01886e2edd42411f0ffef1523cde2e378b707c9df50243f",
+      "bytes": 5277
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_edit.py",
+      "sha256": "96853236416c7731874b2269c3602ba4595831b7377ac2afca718cb5dee4ceff",
+      "bytes": 6034
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_render_runtime.py",
+      "sha256": "1ad11cc086d694c4679827ef4554a3f0b2ff5e1c256646dc0905713f8468ec91",
+      "bytes": 21563
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_scope.py",
+      "sha256": "87ddf8d267c2cf00cfba2974f3ec461b98df7fff29c4514e2e733a64671734f2",
+      "bytes": 22587
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/scope.py",
+      "sha256": "2a9d4b100159ec40133998f7be2dfa944850d02b7838791450ce15d4d9c9d854",
+      "bytes": 54394
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/server.py",
+      "sha256": "78837647894ecb4fbcf51d42784ac95b09be0f235020b59d8193a2af696757d6",
+      "bytes": 465482
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/workflow_ports.py",
+      "sha256": "974b63636d560bd0131d8c499c35eff331891b39ccdcc697c469b4ae17fbf9fd",
+      "bytes": 8523
+    },
+    {
+      "path": "engine/tests/test_chin_length_geometry_unrun.py",
+      "sha256": "066fc96290b94cb02bf4fedc35e4f782628d80f5a7976b138711be53dcbace49",
+      "bytes": 27536
+    },
+    {
+      "path": "engine/tests/test_chin_length_integration_unrun.py",
+      "sha256": "e0b600be7d7099ec80cd269167f08b71c51bcdf87ef6231d818ad6b99a7d9c4a",
+      "bytes": 68791
+    },
+    {
+      "path": "engine/tests/test_chin_length_native_unrun.py",
+      "sha256": "be5add4e09d68ff87962bcda43bd6a6d222919019a6dcf78f46bf2c987d80ceb",
+      "bytes": 16319
+    },
+    {
+      "path": "engine/tests/test_chin_length_scope_unrun.py",
+      "sha256": "f91610ba8e3f359137a09ba5cbf4760e1dc651a476f9c6106b3feffc5dad19ba",
+      "bytes": 47420
+    },
+    {
+      "path": "ui/src/chinLength/ACCEPTANCE_UNRUN.md",
+      "sha256": "f96481a265565b0f26ad4050807cd225bd637a893300ad918d414551644be757",
+      "bytes": 7697
+    },
+    {
+      "path": "ui/src/chinLength/ChinLengthControl.tsx",
+      "sha256": "c90825e2166ed69733184e74d1ecdde2b219fdad1f90af0c8ab035dcc9c079f4",
+      "bytes": 15375
+    },
+    {
+      "path": "ui/src/chinLength/model.ts",
+      "sha256": "1e5cd29bd3505cf236b18d65f826b1db589a160151864a48c6c6d75c8f1ed70d",
+      "bytes": 12313
+    },
+    {
+      "path": "ui/src/chinLength/model.unrun.test.ts",
+      "sha256": "16e3e3d354cc1034d875a714bcf4e8270677602fd610118bcd3b0eaa3d9bc199",
+      "bytes": 18516
+    },
+    {
+      "path": "ui/src/chinLength/wiring.unrun.test.ts",
+      "sha256": "23bf0a5c482699f14afc44e27d0a571f6059022e6686f7cf2af11a918b5618e5",
+      "bytes": 10428
+    },
+    {
+      "path": "ui/src/components/RetouchPanel.tsx",
+      "sha256": "c9663049ac1e23632ebebf58bd4834a167c302e22881eaa689c69565bb8fdb9f",
+      "bytes": 77021
+    },
+    {
+      "path": "ui/src/native.ts",
+      "sha256": "2e4a3e9ff4a77d2e801a2e3b438a87472e85fa6b252f2ecaa36a8b54900db31d",
+      "bytes": 101189
+    },
+    {
+      "path": "ui/src/people/model.ts",
+      "sha256": "d6b0f9101930989dce48375e44bc17e66e796d4d8b3b0b6235e4fdf2ea091fb0",
+      "bytes": 8374
+    },
+    {
+      "path": "ui/src/presets/presetModel.ts",
+      "sha256": "a07bd50c1500c82e5bb8fa6c1d081e21615ca842d72447925c36116542bb907f",
+      "bytes": 5357
+    }
+  ],
+  "static_checks": {
+    "python_ast_files": 1136,
+    "changed_json": "parsed",
+    "git_diff_check": "clean",
+    "payload_trailing_whitespace": "none; pre-existing workflow_ports.py blank EOF unchanged",
+    "line_caps": {
+      "ui/src/App.tsx": 2122,
+      "ui/src-tauri/src/main.rs": 2042,
+      "engine/src/lumaretouch_engine/server.py": 6984
+    },
+    "unchanged_baseline_source_hashes": 70,
+    "authored_unrun_new_fixture_functions": {
+      "python": 120,
+      "ui": 26,
+      "rust": 0
+    },
+    "rust_reuse": "Existing core/lower_face, native boundary and packaging remain unchanged. No new Rust solver or binary claimed. Existing Rust fixtures not run.",
+    "independent_source_review": "Source review found and corrected disabled/other-source compatibility recovery blocker; exact applied readback confirmed. Geometry, inverse bridge, parameters, source support and atomic publication appear source-consistent, not numerical/runtime acceptance."
+  },
+  "integration_map": {
+    "state_and_shared_native": "chin_length_state.py / chin_length_native.py; strict version1 scalar, explicit coexistence helper and fixed-tail bridge to already-packaged original Rust inverse",
+    "source_geometry": "chin_length_runtime.py / chin_length_people.py; actual below-all-40-lips interval and full lower oval, source-owned evidence and protected prefix pullback",
+    "canonical_owner": "people_algorithms.py / people_render_runtime.py; separate operation after chin shape, original first four slots and common sampler preserved",
+    "safe_replacement": "people_edit.py and new UI; complete atomic old-zero plus independently chosen new amount, source/scope/history fences, no automatic reinterpretation",
+    "conflict_recovery": "A.recipes remains readable; validate_compatibility checks enabled current-source candidate faces and every admitted render entry. Disabled/foreign dormant intent does not block local recovery. Shared affected parked sources still validate through complete rendering.",
+    "ui": "ui/src/chinLength / exact RetouchPanel leaf / native capability / people labels; truthful signed legacy readings and explicit old-only/new-only reset",
+    "presets": "chin_length_scope.py / people_scope.py / scope.py / workflow_ports.py / presetModel.ts; target-owned scalar reconstruction, legacy conflicts refuse without reset",
+    "requirements": "IMPLEMENTATION.md / NUMERICAL-CONTRACT.md / registry extensions / historical partial route inventory"
+  },
+  "unrun": [
+    "product imports/execution",
+    "tests and test collection",
+    "Rust compilation/build",
+    "typecheck",
+    "inference",
+    "numerical/photographic/performance acceptance",
+    "real UI/history/preview/export/batch acceptance"
+  ],
+  "limitations": [
+    "Original below-lip visual length interpretation, not clinical anatomy, complete segmentation, AI/3D or proprietary equivalence.",
+    "Existing wrong legacy small_chin topology remains byte-identical; its larger historical 收下巴 behavior is not silently declared corrected. Explicit new choice is required for replacement.",
+    "Adjacent neck/background moves; source lip pinning is not global invariance after prior composed geometry. Conservative evidence/neighbor guards can refuse.",
+    "Shared bounded f64 inverse retains underflow/stagnation and coordinate-roundoff limits; small accepted deltas can disappear in subtraction or downstream float32 map.",
+    "An externally restored invalid graph with multiple conflicting enabled faces on one source still needs a separate explicit multi-face recovery facility. No partially compatible render is published.",
+    "Generic derived presets remain guarded; explicit reviewed people transfer rebuilds each target source and refuses conflicts without silently zeroing legacy intent.",
+    "Broader alpha/HDR and remaining facial-family requirements, clinical/curvature claims and photographic acceptance remain unfinished."
+  ],
+  "excluded_unrelated_untracked": [
+    "docs/colour-grading/FREEZE.json",
+    "docs/eye-light/FREEZE.json",
+    "docs/iris-makeup/isolated-manifest.json"
+  ]
+}

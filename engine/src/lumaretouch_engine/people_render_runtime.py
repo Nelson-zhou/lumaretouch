@@ -123,6 +123,7 @@ def prepare(state, asset_sha256, source, analyses, *, byte_budget, document_id=N
         try:
             if entry['status'] != 'ready': raise ValueError(', '.join(entry['reasons']))
             values = A.recipes(entry['resolved'])
+            A.validate_compatibility(values)
             if not entry['requires_analysis']: continue
             face = state['faces'][key]; analysis = analyses[key]
             for asset in face['local_assets'].values():
@@ -187,6 +188,9 @@ def prepare(state, asset_sha256, source, analyses, *, byte_budget, document_id=N
             field, mid_facts = append_mid(field, state, entry['face_ref'], analysis, source, values[A.MID_FACE.OP])
             from .chin_shape_people import append as append_chin
             field, chin_facts = append_chin(field, state, entry['face_ref'], analysis, source, values[A.CHIN_SHAPE.OP])
+            from .chin_length_people import append as append_chin_length
+            field, chin_length_facts = append_chin_length(field, state, entry['face_ref'], analysis, source,
+                values[A.CHIN_LENGTH.OP], legacy_amount=values[A.DEFORM]['small_chin'])
             blush_review=lipstick_review=None
             from .lipstick_support import raster as lipstick_raster
             lipstick_review=lipstick_raster(state,lipstick_assets or {},entry['face_ref'],(h,w)) if A.LIPSTICK.active(values[A.LIPSTICK.OP]) else None
@@ -261,6 +265,7 @@ def prepare(state, asset_sha256, source, analyses, *, byte_budget, document_id=N
             if lower_facts is not None: facts[key]['lower_face'] = lower_facts
             if mid_facts is not None: facts[key]['mid_face'] = mid_facts
             if chin_facts is not None: facts[key]['chin_shape'] = chin_facts
+            if chin_length_facts is not None: facts[key]['chin_length'] = chin_length_facts
             if contour_facts is not None: facts[key]['face_contour'] = contour_facts
             liner_facts=[record.facts for record in local if record.stage=='eyeliner']
             if liner_facts:facts[key]['eyeliner']={'eyes':liner_facts,'stage':'source-working-srgb'}
