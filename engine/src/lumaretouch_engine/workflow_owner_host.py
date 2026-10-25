@@ -185,7 +185,9 @@ class WorkflowOwner:
         if completed is not None:
             if document != completed['document'] or identity['input_occurrence_id'] != completed['identity']['input_occurrence_id']:
                 raise ValueError('Preset-result chain does not match this exact occurrence')
-            original = {**document, 'receipt_id': completed['import_document']['receipt_id']}
+            # The original durable import proves origin, not the new applied
+            # revision. The completed row stamp separately proves the saved edit.
+            original = deepcopy(completed['import_document'])
             row = self._document(owner, lease, identity, original)
             if self._row_stamp(row) != completed['row_stamp']:
                 raise ValueError('Saved reviewed preset target changed after its verified return')
@@ -238,7 +240,12 @@ class WorkflowOwner:
     def _encoded_recipe(self, row):
         from . import project as PJ, white_balance_recipe as WB
         dropped = []
-        encoded = PJ.encode(WB.normalize_state(row['state']), deepcopy(self.engine._project['assets']), dropped, 'recipe')
+        state = row['state']
+        # Match _scoped_project / normal save: runtime inference buffers are
+        # not persisted recipe leaves. Review separately fences their contents.
+        if state.get('_precompute') is not None:
+            state = {**state, '_precompute': None}
+        encoded = PJ.encode(WB.normalize_state(state), deepcopy(self.engine._project['assets']), dropped, 'recipe')
         if dropped: raise ValueError('Workflow recipe cannot be retained losslessly')
         return encoded
 

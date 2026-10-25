@@ -3,7 +3,7 @@ import {useEffect} from 'react';
 import type {WorkflowController, WorkflowViewState} from './controller';
 import {reviewKey, type ReviewSide} from './presetReview';
 
-const PHASES = {awaiting_open: '等待打开目标照片', reviewing: '等待逐图审核', authorized: '批准已保留，等待核心核对',
+const PHASES = {awaiting_open: '等待打开目标照片', awaiting_preparation: '等待确认逐图分析与皮肤作用域', reviewing: '等待逐图审核', authorized: '批准已保留，等待核心核对',
   awaiting_save: '预设已应用，等待保存工程', awaiting_return: '等待返回原目标', unknown: '实际结果未知，只读核对'};
 export function PresetHandoffPanel({controller, state}: {controller: WorkflowController; state: WorkflowViewState}) {
   const run = state.active_run, handoff = run?.handoff;
@@ -20,7 +20,7 @@ export function PresetHandoffPanel({controller, state}: {controller: WorkflowCon
   if (!run || !handoff) return null;
   const report = handoff.review, images = state.review_images;
   const ready = !!images && !images.loading && !images.error && images.displayed.before && images.displayed.after;
-  const preApply = handoff.phase === 'awaiting_open' || handoff.phase === 'reviewing';
+  const preApply = handoff.phase === 'awaiting_open' || handoff.phase === 'awaiting_preparation' || handoff.phase === 'reviewing';
   return <section className="local-workflow-warning local-workflow-handoff" aria-label="预设逐图审核交接">
     <h4>{PHASES[handoff.phase]}</h4>
     <p>{handoff.message}</p>
@@ -30,6 +30,12 @@ export function PresetHandoffPanel({controller, state}: {controller: WorkflowCon
     {handoff.phase === 'awaiting_open' && <>
       <p>下一步会明确切换到这张保留的目标照片并准备完整前后对比，不会应用预设。</p>
       <button type="button" disabled={!controller.canReviewStep('open_target')} onClick={() => void controller.reviewStep('open_target')}>打开目标并准备审核</button>
+    </>}
+    {handoff.phase === 'awaiting_preparation' && <>
+      <p>仅支持未编辑的原图。此操作会对当前照片运行真实人脸分析，并明确选择仅使用本图皮肤掩膜，不会复用另一张照片的脸或掩膜。零脸、多人、模型缺失及检测达到上限都会拒绝。</p>
+      <p>准备阶段磨皮强度仍为 0；分析不是预设批准。完成后仍须查看完整前后图并逐图批准。若分析已保留但审核失败，下方按钮只重试审核，不重复分析。</p>
+      <button type="button" disabled={!controller.canReviewStep('prepare_skin')} onClick={() => void controller.reviewStep('prepare_skin')}>确认仅皮肤作用域并准备审核</button>
+      <small>批准前取消会核对并恢复这次准备前的中性状态；状态已变化或无法确认恢复时会停在结果未知，不覆盖后续修改。</small>
     </>}
     {handoff.phase === 'reviewing' && report && <>
       <p>目标版本 {report.target.revision} · 模块 {report.module_ids.join('、')} · 原图 {report.source_size.join(' × ')} · 完整输出 {report.output_size.join(' × ')}</p>

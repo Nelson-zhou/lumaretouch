@@ -147,7 +147,7 @@ def test_builtin_warm_uses_existing_complete_candidate_and_preserves_unselected_
     assert f.engine.state == before
     assert review['before']['sha256'] != review['after']['sha256']
     assert review['approval_only'] is True and review['runtime_verified'] is False
-    assert review['module_ids'] == sorted(R.SUPPORTED_MODULES)
+    assert review['module_ids'] == sorted(preset['modules'])
     assert f.owner._reviews[review['review_id']]['approval'] is None
     assert not {'before_state', 'candidate_state', 'history', 'people_graph'} & set(review)
 
@@ -155,7 +155,7 @@ def test_builtin_warm_uses_existing_complete_candidate_and_preserves_unselected_
 def test_all_unsupported_modules_reject_the_whole_saved_preset(fixture, monkeypatch):
     f = fixture
     preset = C.resolve('color-warm', f.preset_hash)
-    preset['modules']['lnx.skin.v1'] = {'strength': 0.0}
+    preset['modules']['lnx.blemish.v1'] = {'strength': 0.0}
     monkeypatch.setattr(C, 'resolve', lambda *_: preset)
     with pytest.raises(ValueError, match='complete saved preset is rejected'):
         prepare(f)

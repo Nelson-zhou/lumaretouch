@@ -19,7 +19,7 @@ import uuid
 
 SCHEMA = 'lrt.workflow-preset-review.v1'
 APPROVAL_SCHEMA = 'lrt.workflow-preset-approval.v1'
-SUPPORTED_MODULES = frozenset(('lnx.exposure.v1', 'lnx.white_balance.v1'))
+SUPPORTED_MODULES = frozenset(('lnx.exposure.v1', 'lnx.white_balance.v1', 'lnx.skin.v1'))
 TTL = 15 * 60
 MAX_REVIEWS = 64
 MAX_ACTIVE_REVIEWS = 8
@@ -65,6 +65,8 @@ def support_reason(preset):
         return 'invalid_preset_modules'
     if 'xmp_import' in preset:
         return 'xmp_requires_dedicated_review'
+    # Recipe admission is not target readiness. Skin must pass the explicit
+    # retained-target preparation and canonical people-plan proof before review.
     if set(preset['modules']) - SUPPORTED_MODULES:
         return 'unsupported_workflow_preset_module'
     return None
@@ -78,6 +80,14 @@ def _preset(preset_id, preset_sha256):
     if reason is not None:
         raise ValueError(reason + ': the complete saved preset is rejected; no module was omitted')
     return preset
+
+
+def _require_portrait_target(engine, row, before, preset):
+    """Read the already prepared canonical owner; never infer inside review."""
+    if 'lnx.skin.v1' not in preset['modules']:
+        return
+    from .workflow_preset_retained_skin import require_target
+    require_target(engine, row, before)
 
 
 def _candidate(before, preset):
@@ -233,7 +243,11 @@ class WorkflowPresetReviews:
                     'import_origin', '_local_source_stamp')})}
         owned = ownership()
         before = self.engine._people_preset_capture()
+        _require_portrait_target(self.engine, row, before, preset)
         after = _candidate(before, preset)
+        if 'lnx.skin.v1' in preset['modules']:
+            from .workflow_preset_retained_skin import require_candidate
+            require_candidate(self.engine, row, before, after)
         left, graph = _proof(self.engine, row, before, target)
         right, candidate_graph = _proof(self.engine, row, after, target)
         if (left['render']['source_proof'] != right['render']['source_proof']

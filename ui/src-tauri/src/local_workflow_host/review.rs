@@ -32,9 +32,9 @@ pub fn report(value: &Value) -> bool {
         && value["before"]["height"] == value["after"]["height"] && value["page_bytes"] == 65536
         && value["ttl_seconds"] == 900 && value["approval_only"] == true && value["runtime_verified"] == false
         && ["before_state_sha256", "candidate_state_sha256", "people_sha256", "repair_sha256", "before_render_sha256", "candidate_render_sha256"].iter().all(|key| hash(&value[*key]))
-        && value["module_ids"].as_array().is_some_and(|ids| !ids.is_empty() && ids.len() <= 2
-            && ids.iter().all(|id| matches!(id.as_str(), Some("lnx.exposure.v1" | "lnx.white_balance.v1")))
-            && (ids.len() != 2 || ids[0] != ids[1]))
+        && value["module_ids"].as_array().is_some_and(|ids| !ids.is_empty() && ids.len() <= 3
+            && ids.iter().all(|id| matches!(id.as_str(), Some("lnx.exposure.v1" | "lnx.white_balance.v1" | "lnx.skin.v1")))
+            && ids.iter().enumerate().all(|(index, id)| !ids[..index].contains(id)))
         && ["source_size", "output_size"].iter().all(|key| value[*key].as_array().is_some_and(|size| size.len() == 2
             && size.iter().all(|n| n.as_u64().is_some_and(|n| n > 0 && n <= 32_000_000))
             && size[0].as_u64().unwrap() * size[1].as_u64().unwrap() <= 32_000_000))
@@ -49,7 +49,7 @@ pub fn handoff(value: &Value, command: &Command) -> bool {
     exact(value, &["version", "operation_id", "document_id", "preset_id", "preset_sha256", "phase", "review", "message"])
         && value["version"] == 1 && value["operation_id"] == command.identity.operation_id
         && value["document_id"] == document.document_id && value["preset_id"] == *preset_id && value["preset_sha256"] == *preset_sha256
-        && matches!(value["phase"].as_str(), Some("awaiting_open" | "reviewing" | "authorized" | "awaiting_save" | "awaiting_return" | "unknown"))
+        && matches!(value["phase"].as_str(), Some("awaiting_open" | "awaiting_preparation" | "reviewing" | "authorized" | "awaiting_save" | "awaiting_return" | "unknown"))
         && bounded(&value["message"], 8192)
         && (value["review"].is_null() || (report(&value["review"]) && value["review"]["target"]["document_id"] == document.document_id
             && value["review"]["preset_id"] == *preset_id && value["review"]["preset_sha256"] == *preset_sha256))
@@ -58,8 +58,9 @@ pub fn handoff(value: &Value, command: &Command) -> bool {
 pub fn step_allowed(handoff: &Value, step: &str, payload: &Value) -> bool {
     match step {
         "open_target" => handoff["phase"] == "awaiting_open" && exact(payload, &[]),
+        "prepare_skin" => handoff["phase"] == "awaiting_preparation" && exact(payload, &[]),
         "save_project" => handoff["phase"] == "awaiting_save" && exact(payload, &[]),
-        "return_target" => matches!(handoff["phase"].as_str(), Some("awaiting_open" | "reviewing" | "awaiting_return")) && exact(payload, &[]),
+        "return_target" => matches!(handoff["phase"].as_str(), Some("awaiting_open" | "awaiting_preparation" | "reviewing" | "awaiting_return")) && exact(payload, &[]),
         "approve" => {
             let review = &handoff["review"];
             handoff["phase"] == "reviewing" && report(review)

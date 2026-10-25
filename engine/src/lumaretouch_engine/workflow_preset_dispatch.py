@@ -20,7 +20,8 @@ def permits(engine, name, payload):
 def dispatch(engine, payload, recheck):
     if _CURRENT.get() is not None:
         raise ValueError('Nested workflow handoff dispatch is not permitted')
-    if payload.get('cmd') not in ('load_image', 'preset'):
+    if (payload.get('cmd') not in ('load_image', 'preset')
+            and payload != {'cmd': 'precompute', 'backend': 'mediapipe', 'channel': 'skin'}):
         raise ValueError('Workflow handoff cannot dispatch an unrelated command')
     if not callable(recheck):
         raise ValueError('Workflow handoff requires its retained owner proof')

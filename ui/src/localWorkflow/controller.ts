@@ -264,8 +264,9 @@ export class WorkflowController {
     if (!this.host || this.disposed || !this.value.ready || !this.value.capabilities?.available || !this.value.capabilities.can_open_review || this.value.busy || this.value.pending.length || !run || !handoff || !checkedHandoff(handoff)) return false;
     if (run.diagnostics.some(item => item.code === 'owner_outcome_unknown' || item.code === 'native_host_fence')) return false;
     if (step === 'open_target') return handoff.phase === 'awaiting_open';
+    if (step === 'prepare_skin') return handoff.phase === 'awaiting_preparation';
     if (step === 'save_project') return handoff.phase === 'awaiting_save';
-    if (step === 'return_target') return ['awaiting_open', 'reviewing', 'awaiting_return'].includes(handoff.phase);
+    if (step === 'return_target') return ['awaiting_open', 'awaiting_preparation', 'reviewing', 'awaiting_return'].includes(handoff.phase);
     const images = this.value.review_images;
     return handoff.phase === 'reviewing' && !!handoff.review && !!images && images.key === reviewKey(run.run_id, handoff) &&
       !images.loading && !images.error && !!images.before && !!images.after && images.displayed.before && images.displayed.after && images.acknowledged;
@@ -349,7 +350,7 @@ export class WorkflowController {
         (original?.kind === 'stop' && result.run.run_id !== original.run_id))) {
         this.patch({error: '运行回执不属于原操作。原请求仍保留。'}); return;
       }
-      if (result.kind === 'review_step' && (!result.run_id || !result.operation_id || !['open_target', 'approve', 'save_project', 'return_target'].includes(result.step) ||
+      if (result.kind === 'review_step' && (!result.run_id || !result.operation_id || !['open_target', 'prepare_skin', 'approve', 'save_project', 'return_target'].includes(result.step) ||
         (original?.kind === 'review_step' && (result.run_id !== original.run_id || result.operation_id !== original.operation_id || result.step !== original.step)))) {
         this.patch({error: '交接步骤回执与原请求不匹配；继续保留并查询原请求。'}); return;
       }

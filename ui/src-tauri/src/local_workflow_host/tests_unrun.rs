@@ -104,8 +104,14 @@ fn exact_handoff_binds_command_and_stops_unknown_actions() {
     assert!(super::review::step_allowed(&handoff, "return_target", &json!({})));
     assert!(!super::review::step_allowed(&handoff, "approve", &json!({"accepted":true})));
     assert!(!super::review::step_allowed(&handoff, "open_target", &json!({"auto_ack":true})));
+    handoff["phase"] = json!("awaiting_preparation");
+    assert!(super::review::handoff(&handoff, &command));
+    assert!(super::review::step_allowed(&handoff, "prepare_skin", &json!({})));
+    assert!(super::review::step_allowed(&handoff, "return_target", &json!({})));
+    assert!(!super::review::step_allowed(&handoff, "prepare_skin", &json!({"backend":"auto"})));
+    assert!(!super::review::step_allowed(&handoff, "approve", &json!({"accepted":true})));
     handoff["phase"] = json!("unknown");
-    for step in ["open_target", "approve", "save_project", "return_target"] {
+    for step in ["open_target", "prepare_skin", "approve", "save_project", "return_target"] {
         assert!(!super::review::step_allowed(&handoff, step, &json!({})));
     }
     handoff["document_id"] = json!("different-document");
@@ -117,4 +123,38 @@ fn preset_review_required_receipt_remains_nonterminal_until_owner_approval() {
     let receipt = Receipt {schema_version:1, identity:identity(), result:ReceiptResult::PresetPreflight {assessment:PresetAssessment {
         report_id:"review".into(), report_sha256:"a".repeat(64), document_revision:"1".into(), preset_sha256:"b".repeat(64), requires_review:true, review:None}}};
     assert!(!validation::terminal(&receipt));
+}
+
+// Authored UNRUN: wire admission only, not evidence of inference/render/quality.
+fn scalar_review_fixture() -> serde_json::Value {
+    let hash = "a".repeat(64);
+    let image = json!({"mime":"image/png","width":1,"height":1,"sha256":hash,
+        "byte_length":33,"page_count":1});
+    json!({"schema":"lrt.workflow-preset-review.v1","review_id":"review-fixture",
+        "target":{"document_id":"target","load_id":"load","revision":"1"},
+        "preset_id":"skin-color","preset_sha256":hash,
+        "module_ids":["lnx.skin.v1","lnx.exposure.v1","lnx.white_balance.v1"],
+        "before":image,"after":image,"source_proof":{},"source_size":[1,1],"output_size":[1,1],
+        "before_state_sha256":hash,"candidate_state_sha256":hash,"people_sha256":hash,
+        "repair_sha256":hash,"before_render_sha256":hash,"candidate_render_sha256":hash,
+        "page_bytes":65536,"ttl_seconds":900,"approval_only":true,"runtime_verified":false,
+        "review_sha256":hash})
+}
+
+#[test]
+fn native_review_accepts_exact_skin_color_scope_but_no_duplicates_or_extra_modules() {
+    let mut review = scalar_review_fixture();
+    assert!(super::review::report(&review));
+    review["module_ids"] = json!(["lnx.skin.v1"]);
+    assert!(super::review::report(&review));
+    for ids in [json!([]), json!(["lnx.skin.v1", "lnx.skin.v1"]),
+        json!(["lnx.skin.v1", "lnx.exposure.v1", "lnx.skin.v1"]),
+        json!(["lnx.skin.v1", "lnx.blemish.v1"]),
+        json!(["lnx.skin.v1", "lnx.exposure.v1", "lnx.white_balance.v1", "lnx.unknown.v1"])] {
+        review["module_ids"] = ids;
+        assert!(!super::review::report(&review));
+    }
+    review = scalar_review_fixture();
+    review["runtime_verified"] = json!(true);
+    assert!(!super::review::report(&review));
 }

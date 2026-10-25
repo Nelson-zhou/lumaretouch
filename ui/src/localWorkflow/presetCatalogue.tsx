@@ -26,10 +26,12 @@ export function WorkflowPresetPicker({catalogue, operation, onChange}: {catalogu
       onChange={event => {const row = catalogue?.presets.find(item => `${item.id}:${item.preset_sha256}` === event.currentTarget.value);
         if (row?.workflow_supported && catalogue?.complete) onChange({...operation, preset_id: row.id, preset_sha256: row.preset_sha256});}}>
       <option value="">{operation.preset_id ? '原预设已变化或不可用，请重新选择' : '选择内置或已保存的预设'}</option>
-      {catalogue?.presets.map(row => <option key={row.id} value={`${row.id}:${row.preset_sha256}`} disabled={!row.workflow_supported}>{row.name} · {row.builtin ? '内置' : '我的预设'}{!row.workflow_supported ? ' · 工作流暂不支持' : ''}</option>)}
+      {catalogue?.presets.map(row => <option key={row.id} value={`${row.id}:${row.preset_sha256}`} disabled={!row.workflow_supported}>{row.name} · {row.builtin ? '内置' : '我的预设'}{!row.workflow_supported ? (row.support_reason === 'skin_requires_retained_target_preparation' ? ' · 逐图人像准备尚未接通' : ' · 工作流暂不支持') : ''}</option>)}
     </select></label>
     <small>原定义：{operation.preset_id || '未选择'} · {operation.preset_sha256 || '尚无内容指纹'}。目录选择不是逐图应用授权；仍需实际目标检测与审核。</small>
-    {selected && <small>{selected.workflow_supported ? '此预设配方可进入逐图审核，不表示已获应用授权。' : `整份预设不可执行：${selected.support_reason}。不会丢弃不支持的模块后继续。`}</small>}
+    {selected && <small>{selected.workflow_supported ? '此预设配方可进入逐图审核，不表示已获应用授权。' : selected.support_reason === 'skin_requires_retained_target_preparation'
+      ? '磨皮预设暂不可在此工作流执行：逐图分析、皮肤作用域及人物状态的审核与取消尚未接通。不会只应用其中的调色模块，也不会启动分析。'
+      : `整份预设不可执行：${selected.support_reason}。不会丢弃不支持的模块后继续。`}</small>}
     {!catalogue && <p>真实预设目录尚未读取。不能手填指纹作为授权。</p>}
     {catalogue && !catalogue.complete && <p role="alert">目录读取不完整，保留原选择但不接受新的选择。</p>}
     {catalogue?.errors.map((row, index) => <p role="alert" key={`${row.code}:${index}`}>{row.file ?? '预设目录'}: {row.message}</p>)}

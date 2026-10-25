@@ -358,6 +358,6 @@ test('handoff target changes and panel dismissal revoke prior display acknowledg
   h.controller.acknowledgeReview(key, true); h.controller.clearReviewPresentation(key);
   assert.equal(h.controller.canReviewStep('approve'), false);
   h.setRun({...run('paused', 3), handoff: {...handoff, phase: 'unknown'}}); await h.controller.tick();
-  for (const step of ['open_target', 'approve', 'save_project', 'return_target'] as const) assert.equal(h.controller.canReviewStep(step), false);
+  for (const step of ['open_target', 'prepare_skin', 'approve', 'save_project', 'return_target'] as const) assert.equal(h.controller.canReviewStep(step), false);
   assert.equal(h.submits.length, 0);
 });

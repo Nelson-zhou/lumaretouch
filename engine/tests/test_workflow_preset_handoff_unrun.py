@@ -18,6 +18,37 @@ from lumaretouch_engine import preset_store as PS, preset_organisation_store as 
 from lumaretouch_engine import optics_candidate_identity as ID
 
 
+def test_applied_chain_reuses_original_import_revision_not_applied_revision():
+    from lumaretouch_engine.workflow_owner_host import WorkflowOwner
+    origin = {'receipt_id': 'import', 'document_revision': '1', 'document_id': 'target'}
+    applied = {**origin, 'receipt_id': 'applied', 'document_revision': '4'}
+    row, seen = {}, []
+    host = WorkflowOwner.__new__(WorkflowOwner)
+    host.presets = SimpleNamespace(completed={'applied': {'document': applied, 'import_document': origin,
+        'identity': {'input_occurrence_id': 'occurrence'}, 'row_stamp': 'saved-applied-proof'}})
+    host._document = lambda owner, lease, identity, document: (seen.append(document), row)[1]
+    host._row_stamp = lambda actual: 'saved-applied-proof'
+    assert WorkflowOwner._document(host, object(), {}, {'input_occurrence_id': 'occurrence'}, applied) is row
+    assert seen == [origin] and seen[0] is not origin
+    host._row_stamp = lambda actual: 'later-edit'
+    with pytest.raises(ValueError, match='changed after'):
+        WorkflowOwner._document(host, object(), {}, {'input_occurrence_id': 'occurrence'}, applied)
+
+
+def test_persisted_recipe_omits_runtime_analysis_without_mutating_live_state(monkeypatch):
+    from lumaretouch_engine.workflow_owner_host import WorkflowOwner
+    from lumaretouch_engine import white_balance_recipe as WB
+    analysis = object()
+    state = {'_precompute': analysis, '_precompute_backend': 'mediapipe', '_channel': 'skin'}
+    host = WorkflowOwner.__new__(WorkflowOwner)
+    host.engine = SimpleNamespace(_project={'assets': {}})
+    monkeypatch.setattr(WB, 'normalize_state', lambda value: value)
+    monkeypatch.setattr(PJ, 'encode', lambda value, *_: dict(value))
+    encoded = host._encoded_recipe({'state': state})
+    assert encoded == {**state, '_precompute': None}
+    assert state['_precompute'] is analysis
+
+
 def fingerprint(path, data=b'original-managed-bytes'):
     digest = sha256(data).hexdigest()
     return {'path': str(path), 'bytes': len(data), 'sha256': digest,

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 /** Exact workflow handoff DTOs. None of these helpers dispatch ordinary preset commands. */
 export type ReviewSide = 'before' | 'after';
-export type ReviewStep = 'open_target' | 'approve' | 'save_project' | 'return_target';
+export type ReviewStep = 'open_target' | 'prepare_skin' | 'approve' | 'save_project' | 'return_target';
 export interface PresetTarget {document_id: string; load_id: string; revision: string}
 export interface PresetImage {mime: 'image/png'; width: number; height: number; sha256: string; byte_length: number; page_count: number}
 export interface WorkflowPresetReview {
@@ -14,7 +14,7 @@ export interface WorkflowPresetReview {
 }
 export interface WorkflowPresetHandoff {
   version: 1; operation_id: string; document_id: string; preset_id: string; preset_sha256: string;
-  phase: 'awaiting_open' | 'reviewing' | 'authorized' | 'awaiting_save' | 'awaiting_return' | 'unknown';
+  phase: 'awaiting_open' | 'awaiting_preparation' | 'reviewing' | 'authorized' | 'awaiting_save' | 'awaiting_return' | 'unknown';
   review: WorkflowPresetReview | null; message: string;
 }
 export interface ReviewImageInput {port_version: 1; run_id: string; operation_id: string; review_id: string; review_sha256: string; side: ReviewSide; sha256: string; page: number}
@@ -56,8 +56,8 @@ export function checkedReview(value: unknown): WorkflowPresetReview | null {
     !['preset_sha256', 'review_sha256', 'before_state_sha256', 'candidate_state_sha256', 'people_sha256', 'repair_sha256', 'before_render_sha256', 'candidate_render_sha256'].every(key => hash(value[key])) ||
     !image(value.before) || !image(value.after) || value.before.width !== value.after.width || value.before.height !== value.after.height ||
     !dimensions(value.source_size) || !dimensions(value.output_size) || !object(value.source_proof) ||
-    !Array.isArray(value.module_ids) || !value.module_ids.length || value.module_ids.length > 2 || new Set(value.module_ids).size !== value.module_ids.length ||
-    !value.module_ids.every(id => id === 'lnx.exposure.v1' || id === 'lnx.white_balance.v1') ||
+    !Array.isArray(value.module_ids) || !value.module_ids.length || value.module_ids.length > 3 || new Set(value.module_ids).size !== value.module_ids.length ||
+    !value.module_ids.every(id => id === 'lnx.exposure.v1' || id === 'lnx.white_balance.v1' || id === 'lnx.skin.v1') ||
     value.page_bytes !== 65536 || value.ttl_seconds !== 900 || value.approval_only !== true || value.runtime_verified !== false ||
     new TextEncoder().encode(JSON.stringify(value)).length > 256 * 1024) return null;
   return structuredClone(value) as unknown as WorkflowPresetReview;
@@ -65,7 +65,7 @@ export function checkedReview(value: unknown): WorkflowPresetReview | null {
 export function checkedHandoff(value: unknown): WorkflowPresetHandoff | null {
   if (!exact(value, ['version', 'operation_id', 'document_id', 'preset_id', 'preset_sha256', 'phase', 'review', 'message']) ||
     value.version !== 1 || !hash(value.operation_id) || !token(value.document_id) || !token(value.preset_id) || !hash(value.preset_sha256) ||
-    !['awaiting_open', 'reviewing', 'authorized', 'awaiting_save', 'awaiting_return', 'unknown'].includes(String(value.phase)) ||
+    !['awaiting_open', 'awaiting_preparation', 'reviewing', 'authorized', 'awaiting_save', 'awaiting_return', 'unknown'].includes(String(value.phase)) ||
     typeof value.message !== 'string' || value.message.length > 8192 || /[\u0000-\u001f\u007f]/.test(value.message)) return null;
   const review = value.review === null ? null : checkedReview(value.review);
   if ((value.review !== null && !review) || (value.phase === 'reviewing' && !review) ||

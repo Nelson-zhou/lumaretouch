@@ -6,6 +6,11 @@ import {checkedHandoff, checkedReview, fetchReviewImage, reviewAck, reviewKey} f
 import {handoffFixture, reviewFixture, pageFixture, png} from './presetReviewFixture.unrun.test.ts';
 import {checkedCatalogue} from './presetCatalogue.tsx';
 const image = () => reviewFixture().before;
+test('explicit preparation is a distinct unapproved phase with no review image authority', () => {
+  const handoff = {...handoffFixture(), phase: 'awaiting_preparation', review: null};
+  assert.ok(checkedHandoff(handoff));
+  assert.equal(checkedHandoff({...handoff, phase: 'reviewing'}), null);
+});
 test('exact review rejects unsupported modules, partial image metadata and another handoff target', () => {
   const handoff = handoffFixture();
   assert.ok(checkedHandoff(handoff));

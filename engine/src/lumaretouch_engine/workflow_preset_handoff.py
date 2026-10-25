@@ -30,7 +30,7 @@ def _source_file(row, document):
     return proof
 
 
-def _scoped_project(saved, row):
+def _scoped_project(saved, row, *, engine=None, people_baseline=None, expected_context=None):
     """Use the existing codec on one row, retaining every other saved record.
 
     A full _project_build rewrites version timestamps and may compact inactive
@@ -55,14 +55,21 @@ def _scoped_project(saved, row):
                                    'root_document_id', 'copy_number', 'recipe_version_id')})
     save_row(project, row, stored, PJ)
     stored['budget'] = row.get('budget')
+    allowed = {'docs', 'assets'}
+    if people_baseline is not None:
+        from .workflow_preset_people_save import stage, PEOPLE_PROJECT_FIELDS
+        project = stage(engine, saved, project, row, people_baseline, expected_context)
+        allowed |= PEOPLE_PROJECT_FIELDS
+    elif expected_context is not None:
+        raise ValueError('Portrait save context has no original preparation owner')
     if project.get('dropped', []) != dropped:
         raise ValueError('Scoped preset recipe cannot be saved without data loss')
     old_others = [doc for doc in saved['docs'] if doc.get('document_id') != target]
     new_others = [doc for doc in project['docs'] if doc.get('document_id') != target]
     if old_others != new_others or project.get('source_assets') != saved.get('source_assets'):
         raise ValueError('Scoped preset save changed another document or source registration')
-    if {key: value for key, value in project.items() if key not in ('docs', 'assets')} != {
-            key: value for key, value in saved.items() if key not in ('docs', 'assets')}:
+    if {key: value for key, value in project.items() if key not in allowed} != {
+            key: value for key, value in saved.items() if key not in allowed}:
         raise ValueError('Scoped preset save changed unrelated project data')
     if any(project['assets'].get(key) != value for key, value in saved['assets'].items()):
         raise ValueError('Scoped preset save replaced an existing immutable project asset')
@@ -162,6 +169,7 @@ class PresetHandoff:
             'source': deepcopy({key: row.get(key) for key in ('path', 'source_asset_id', 'fingerprint', 'managed_import', 'import_origin')}),
             'source_file': source_file, 'saved_project': saved,
             'preflight': record, 'apply': None, 'approval': None,
+            'needs_skin': 'lnx.skin.v1' in preset['modules'], 'preparation': None,
             'initial_document': deepcopy(operation['document']), 'step_effect_started': False}
         record['receipt'] = self.owner._receipt(record['command'], {'status': 'pending',
             'owner_receipt_id': record['command']['identity']['operation_id']})
@@ -185,6 +193,53 @@ class PresetHandoff:
         self._check(target_loaded=True)
         if self.engine._project_dirty:
             raise ValueError('Opening this target changed the saved recipe; no silent review rebase is allowed')
+        if entry['needs_skin']:
+            entry.update(phase='awaiting_preparation', message='Choose target-local analysis and skin-only scope explicitly; no analysis or preset has run')
+            return
+        self._review()
+
+    def _prepare_skin(self):
+        entry = self.active
+        if entry['phase'] != 'awaiting_preparation' or not entry['needs_skin']:
+            raise ValueError('No explicit skin preparation is awaiting this action')
+        _, row = self._check(target_loaded=True)
+        preparation = entry['preparation']
+        if preparation is None:
+            from .workflow_preset_preparation import SkinPreparation
+            from .workflow_preset_people_save import capture
+            baseline = capture(self.engine, row, entry['saved_project'])
+            preparation = SkinPreparation(self.engine, row, self._check)
+            entry.update(preparation=preparation, people_save_baseline=baseline)
+            entry['step_effect_started'] = True
+            try:
+                preparation.analyse()
+            except Exception:
+                # Only exact observed own effects may be cancelled. A failed
+                # rollback propagates with the effect flag set and locks Unknown.
+                if preparation.started:
+                    if preparation.expected is None:
+                        raise  # Preserve the actual source/recovery uncertainty.
+                    preparation.restore()
+                entry['target']['revision'] = self._version(row)
+                self._check(target_loaded=True)
+                entry.update(preparation=None, review=None, step_effect_started=False,
+                    message='Target analysis was refused and its original neutral state restored; no preset was applied')
+                raise
+            entry['target']['revision'] = self._version(row)
+            self._check(target_loaded=True)
+        preparation.assert_current()
+        try:
+            self._review()
+        except Exception as error:
+            # A read-only render failure is not permission to repeat inference.
+            # Retain the prepared owner and offer review retry or exact cancel.
+            preparation.assert_current()
+            if entry.get('review') is not None:
+                raise  # A partially published review must be reconciled.
+            entry.update(phase='awaiting_preparation', message='Analysis retained; review failed: ' + str(error)[:1800] + '. Retry prepares review only, or cancel to restore the original target.')
+
+    def _review(self):
+        entry = self.active
         review = self.reviews.prepare(entry['preset_id'], entry['preset_sha256'], entry['target'])
         self._check(target_loaded=True)
         self._verify_review_source(review['source_proof'])
@@ -247,6 +302,9 @@ class PresetHandoff:
         row = entry['row']
         entry['target']['revision'] = self._version(row)
         self._verify_applied()
+        if entry.get('people_save_baseline') is not None:
+            from .workflow_preset_people_save import context
+            entry['applied_people_context'] = context(self.engine, row)
         entry['applied_recipe'] = self.owner._encoded_recipe(row)
         entry['preset_result'] = result
         entry.update(phase='awaiting_save', message='Preset applied in normal history; explicitly save this exact project before export can continue')
@@ -293,7 +351,8 @@ class PresetHandoff:
             if self.owner._encoded_recipe(row) != entry['applied_recipe']:
                 raise ValueError('Applied target recipe changed before the explicit save')
         self.engine._remember_current()
-        project = _scoped_project(entry['saved_project'], row)
+        project = _scoped_project(entry['saved_project'], row, engine=self.engine,
+            people_baseline=entry.get('people_save_baseline'), expected_context=entry.get('applied_people_context'))
         from .workflow_preset_save import persist
         outcome = persist(project, entry['binding']['path'], entry['binding']['disk_sha256'], check)
         if outcome['status'] != 'succeeded':
@@ -313,12 +372,17 @@ class PresetHandoff:
 
     def _return(self):
         entry = self.active
-        if entry['phase'] not in ('awaiting_open', 'reviewing', 'awaiting_return'):
+        if entry['phase'] not in ('awaiting_open', 'awaiting_preparation', 'reviewing', 'awaiting_return'):
             raise ValueError('Return is not safe before the original apply/save outcome is settled')
         cancelled = entry['phase'] != 'awaiting_return'
         lease, row = self._check(target_loaded=entry['phase'] != 'awaiting_open')
         if self.engine._project_dirty:
             raise ValueError('Uncommitted target state cannot be discarded by returning')
+        if cancelled and entry.get('preparation') is not None:
+            entry['step_effect_started'] = True
+            entry['preparation'].restore()
+            entry['target']['revision'] = self._version(row)
+            self._check(target_loaded=True)
         original = entry['original']
         if self._row(original['document_id']) is not original:
             raise ValueError('Original editor document was replaced')
@@ -343,7 +407,7 @@ class PresetHandoff:
         if cancelled:
             record['receipt'] = self.owner._receipt(record['command'], {'status': 'failed',
                 'code': 'user_declined_preset', 'message': 'User returned without applying this preset',
-                'retained_document': deepcopy(entry['initial_document'])})
+                'retained_document': {**entry['initial_document'], 'document_revision': self._version(row)}})
         else:
             document = {**entry['initial_document'], 'document_revision': self._version(row),
                         'receipt_id': record['command']['identity']['operation_id']}
@@ -375,15 +439,15 @@ class PresetHandoff:
         try:
             if request['step'] != 'approve' and request['payload'] != {}:
                 raise ValueError('Unexpected arguments for this exact handoff step')
-            allowed = {'open_target': ('awaiting_open',), 'approve': ('reviewing',),
+            allowed = {'open_target': ('awaiting_open',), 'prepare_skin': ('awaiting_preparation',), 'approve': ('reviewing',),
                        'save_project': ('awaiting_save',),
-                       'return_target': ('awaiting_open', 'reviewing', 'awaiting_return')}
+                       'return_target': ('awaiting_open', 'awaiting_preparation', 'reviewing', 'awaiting_return')}
             if entry['phase'] not in allowed[request['step']]:
                 raise ValueError('This action is stale or unavailable in the retained handoff phase')
             self._check()
             started = True
             entry['step_effect_started'] = False
-            {'open_target': self._open, 'approve': lambda: self._approve(request['payload']),
+            {'open_target': self._open, 'prepare_skin': self._prepare_skin, 'approve': lambda: self._approve(request['payload']),
              'save_project': self._save, 'return_target': self._return}[request['step']]()
             prior['result'].update(status='succeeded', handoff=self.public())
         except Exception as error:

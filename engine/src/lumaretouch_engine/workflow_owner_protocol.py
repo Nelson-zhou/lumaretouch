@@ -95,7 +95,7 @@ def envelope(value):
     if action in ('query', 'open_review', 'review_step', 'review_image'): I.digest(value['operation_id'])
     if action == 'open_review': text(value['review_id'], 256)
     if action == 'review_step':
-        if value['step'] not in ('open_target', 'approve', 'save_project', 'return_target') or type(value['payload']) is not dict:
+        if value['step'] not in ('open_target', 'prepare_skin', 'approve', 'save_project', 'return_target') or type(value['payload']) is not dict:
             raise ValueError('Unknown preset handoff step')
     if action == 'review_image':
         text(value['review_id'], 256); I.digest(value['review_sha256']); I.digest(value['sha256'])
