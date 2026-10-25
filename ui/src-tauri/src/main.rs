@@ -72,6 +72,10 @@ mod preset_api;
 mod preset_organisation_api;
 mod source_relocation_api;
 mod managed_import_api;
+mod ingest_session_api;
+mod ingest_receipt_validation;
+mod tether_host;
+mod local_workflow_host;
 mod project_package_api;
 mod project_recovery_api;
 mod project_recovery_fence;
@@ -1720,60 +1724,6 @@ fn engine_status(state: State<'_, Arc<AppState>>) -> Value {
            "engine_runtime": state.engine_runtime.lock().unwrap().clone()})
 }
 
-#[tauri::command]
-fn shutdown_engine(state: State<'_, Arc<AppState>>) -> Value {
-    state.common_background_preview.lock().unwrap().invalidate();
-    state.fringe_repair_preview.lock().unwrap().invalidate();
-    state.source_patch_capture.lock().unwrap().invalidate();
-    state.recovery_preview.lock().unwrap().invalidate(); state.liquify_preview.lock().unwrap().invalidate(); state.studio_background_preview.lock().unwrap().invalidate(); state.optics_preview.lock().unwrap().invalidate(); state.sky_preview.lock().unwrap().invalidate();
-    state.sky_semantic.lock().unwrap().invalidate();
-    state.white_balance_capture.lock().unwrap().invalidate();
-    state.color_picker_capture.lock().unwrap().invalidate();
-    state.color_capture.lock().unwrap().invalidate();
-    state.inspection.lock().unwrap().invalidate();
-    state.color_scopes.lock().unwrap().invalidate();
-    let h = state.engine.lock().unwrap().clone();
-    // 引擎停了，它报过的 image_ready / precompute_ready 也随之作废；留着会让下一次
-    // 自动流程拿陈尺寸与陈掩膜状态起跑
-    *state.image.lock().unwrap() = None;
-    *state.precompute.lock().unwrap() = None;
-    *state.face.lock().unwrap() = None;
-    *state.inpaint.lock().unwrap() = None;
-    *state.light.lock().unwrap() = None;
-    *state.deform.lock().unwrap() = None;
-    *state.lut.lock().unwrap() = None;
-    *state.grade.lock().unwrap() = None;
-    *state.background.lock().unwrap() = None;   // 换底层也随会话走：进程没了就没有层
-    *state.presets.lock().unwrap() = Vec::new();   // 引擎没了，它报过的清单也就没了
-    *state.grade_limits.lock().unwrap() = Vec::new();
-    *state.export.lock().unwrap() = None;
-    *state.export_progress.lock().unwrap() = None;
-    *state.export_caps.lock().unwrap() = Value::Null;
-    *state.raw_backends.lock().unwrap() = Value::Null;    // 能力是引擎报的，不是永久的
-    *state.matting_backends.lock().unwrap() = Value::Null; // 同上（M6）
-    *state.image_exts.lock().unwrap() = Value::Null;
-    *state.export_bits.lock().unwrap() = Value::Null;  // 同上
-    *state.last_error.lock().unwrap() = None;          // 同上
-    *state.session.lock().unwrap() = None;
-    state.thumbs.lock().unwrap().clear();
-    *state.session_rev.lock().unwrap() += 1;
-    *state.history.lock().unwrap() = None;
-    *state.history_rev.lock().unwrap() += 1;
-    {
-        let mut report = state.doc_report.lock().unwrap();
-        *report = None;
-        *state.doc_rev.lock().unwrap() += 1;
-    }
-    state.history_edit_cmds.lock().unwrap().clear();
-    *state.history_dirty.lock().unwrap() = false;
-    match h {
-        Some(h) => {
-            h.shutdown();
-            json!({"shutdown": true})
-        }
-        None => json!({"shutdown": false, "reason": "引擎未启动"}),
-    }
-}
 
 /// 底片条（M5-a）：一条命令转发六个动作。参数一律「给了才附」，与 export 同一条
 /// 理由——默认值属于引擎，宿主填一份就会在引擎改默认值时静默漂开。
@@ -1993,7 +1943,7 @@ fn main() {
             inspection_api::inspection_start, inspection_api::inspection_status,
             inspection_api::inspection_cancel, inspection_api::inspection_pull, inspection_api::inspection_release,
             start_engine, bench_start, pull_frame, peek_frame, frame_acked, frame_presented, bench_stats,
-            engine_status, shutdown_engine, diagnostic_env_api::m0_env, load_image, set_strength, compare, compare_status, precompute,
+            engine_status, app_shutdown::shutdown_engine, diagnostic_env_api::m0_env, load_image, set_strength, compare, compare_status, precompute,
             primary_calibration_api::primary_calibration_abort, primary_calibration_api::primary_calibration_request, primary_calibration_api::primary_calibration_status, primary_calibration_api::primary_calibration_frame_status,
             colour_editor_api::colour_editor_abort, colour_editor_api::colour_editor_request, colour_editor_api::colour_editor_status, colour_editor_api::colour_editor_frame_status,
             selective_colour_api::selective_colour_abort, selective_colour_api::selective_colour_request, selective_colour_api::selective_colour_status, selective_colour_api::selective_colour_frame_status,
@@ -2040,6 +1990,9 @@ fn main() {
             canvas_guides_api::canvas_guides_request, canvas_guides_api::canvas_guides_status,
             creative_layers_api::creative_document_request, creative_layers_api::creative_document_status,
             managed_import_api::managed_import_request, managed_import_api::managed_import_status,
+            ingest_session_api::ingest_session_request, ingest_session_api::ingest_session_status,
+            local_workflow_host::local_workflow_workspace, local_workflow_host::local_workflow_definition, local_workflow_host::local_workflow_preflight, local_workflow_host::local_workflow_submit, local_workflow_host::local_workflow_request, local_workflow_host::local_workflow_run,
+            tether_host::tether_capture_state, tether_host::tether_capture_request, tether_host::tether_capture_receipt, tether_host::tether_capture_destination,
             source_relocation_api::source_relocation_request, source_relocation_api::source_relocation_status,
             project_recovery_api::project_recovery_request, project_recovery_api::project_recovery_status,
             project_package_api::project_package_request, project_package_api::project_package_status,

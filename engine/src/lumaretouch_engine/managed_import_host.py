@@ -68,9 +68,17 @@ class ManagedImport:
             if isinstance(rid,str) and rid in self.requests: self.receipts[rid] = result
         self.emit(result)
         return result
-    def handle(self,p):
+    def handle(self,p,*,trusted_precommit=None,trusted_root=None):
         rid = p.get('request_id')
         try:
+            # In-process ingestion owner only; never a JSON-provided bypass.
+            # The hook adds completed-source/project proof, not replacement IO.
+            if trusted_precommit is not None and (not callable(trusted_precommit)
+                    or p.get('action')!='start' or p.get('mode')!='copy'):
+                raise ValueError('Trusted import proof requires an owned copy start')
+            if trusted_root is not None and (not callable(trusted_root)
+                    or p.get('action') != 'start' or p.get('mode') != 'copy'):
+                raise ValueError('Internal root verifier requires a managed-copy start')
             if set(p)-{'cmd','action','request_id','operation_id','mode','paths','root'}: raise ValueError('未知导入参数')
             if not isinstance(rid,str) or str(uuid.UUID(rid))!=rid: raise ValueError('导入需要规范 UUID 请求身份')
             with self.lock:
@@ -119,14 +127,14 @@ class ManagedImport:
                 self.active = rid; self.last_operation = rid; self.cancel.clear()
                 self.requests[rid] = copy.deepcopy(p)
                 self.result(rid,'pending',progress={'phase':'preparing','bytes':0,'total':0})
-                self.worker = threading.Thread(target=self.work,args=(copy.deepcopy(p),snapshot),daemon=True,name='managed-import')
+                self.worker = threading.Thread(target=self.work,args=(copy.deepcopy(p),snapshot,trusted_precommit,trusted_root),daemon=True,name='managed-import')
                 try: self.worker.start()
                 except Exception:
                     self.active = None
                     raise
         except Exception as error:
             return self.result(rid,'unknown' if self.uncertain else 'failed',error=str(error))
-    def work(self,p,snapshot):
+    def work(self,p,snapshot,trusted_precommit=None,trusted_root=None):
         rid,rootfd = p['request_id'],None
         prepared = []
         try:
@@ -136,6 +144,8 @@ class ManagedImport:
             budget = IO.Budget(self.cancel.is_set,lambda progress:self.result(rid,'pending',progress=progress))
             items = IO.select(p.get('paths'),IMAGE_EXTS,budget)
             rootfd = IO.open_directory(p['root'])
+            if trusted_root is not None:
+                trusted_root(rootfd)
             free = os.fstatvfs(rootfd)
             if free.f_bavail*free.f_frsize < budget.total+IO.RESERVE: raise OSError('托管目录空间不足，未开始复制')
             for item in items: prepared.append(IO.prepare(item,rootfd,p['root'],rid,budget))
@@ -155,6 +165,8 @@ class ManagedImport:
                 rows.append(row)
             def recheck():
                 budget.check()
+                if trusted_root is not None:
+                    trusted_root(rootfd)
                 e = self.engine
                 if e._document_versions().workspace!=workspace or e._project_path!=path or e._project_dirty or project_digest(e._project)!=before_digest:
                     raise ValueError('导入期间工程已变化，未登记复制文件')
@@ -162,6 +174,8 @@ class ManagedImport:
                 for item in prepared:
                     found = hash_file(item['path'],checks,item['size'])
                     if found['sha256']!=item['sha256']: raise ValueError('登记前托管文件内容已变化')
+                if trusted_precommit is not None:
+                    trusted_precommit(prepared)
             receipt = TX.persist(path,project,disk_sha,rid,PJ.validate,self.cancel.is_set,recheck,imported=len(rows))
             with self.lock:
                 self.uncertain = {'id':rid,'path':path,'sha':receipt['sha256'],'rows':rows}

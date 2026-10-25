@@ -1,4 +1,6 @@
 /** Presentational project workspace; state and native I/O live in its domain hook. */
+import {NativeWorkflowPanel} from '../localWorkflow/NativeWorkflowPanel';
+import {NativeTetherPanel} from '../tetherCapture/NativeTetherPanel';
 import {RecoveryPanel} from '../projectRecovery/RecoveryPanel';
 import {open as openDialog} from '@tauri-apps/plugin-dialog';
 import type {ProjectState} from '../native';
@@ -67,6 +69,8 @@ export function ProjectWorkspace({workflow,project,projectSuffix,hasImage,onEnte
               chooseNewDirectory={async()=>{const parent=await openDialog({directory:true,title:'选择恢复副本的父目录（将新建独立子目录）'});return typeof parent==='string'?`${parent}/Recovered-${crypto.randomUUID()}`:null;}}
               openRestored={path=>workflow.openRecent(path,'恢复副本')}/>
             <ManagedImportPanel projectKey={`${project?.project_id??''}:${project?.path??''}`} onChanged={()=>{void workflow.refresh();}}/>
+            <NativeWorkflowPanel project={project}/>
+            <NativeTetherPanel onImported={()=>{void workflow.refresh();}}/>
             <ProjectPackagePanel key={`${project?.project_id??''}:${project?.path??''}`} projectOpen={!!project?.open} onChanged={()=>{void workflow.refresh();}}/>
             {project?.open&&<SourceRelocationPanel projectKey={`${project.project_id??''}:${project.path??''}`} onChanged={()=>{void workflow.refresh();}}/>}
             {workflow.error && <div className="projErr">{workflow.error}</div>}

@@ -1,0 +1,501 @@
+{
+  "schema_version": 1,
+  "baseline_commit": "2712b5884a2c6754e4fcddc2673905552af0ee86",
+  "baseline_tree": "cc55c9dea687f1c2bd223e500e667850089e22ce",
+  "date": "2026-10-25",
+  "status": "SOURCE_CONNECTED_PARTIAL_ALL_RUNTIME_ACCEPTANCE_UNRUN",
+  "scope": "Two independent major handbook workflows: USB tether capture via real libgphoto2 and local directory ingestion/optional labels/fixed-profile export, using exact saved-project ownership and immutable receipt proof. No new image algorithm or whole-workflow acceptance count.",
+  "requirements": [
+    "workflow:47251",
+    "workflow:8YEKwsjJg7"
+  ],
+  "manifest_policy": "Exact 93 payload files plus this self-excluded manifest, 94 total. Historical manifests and old sparse directory untouched.",
+  "source_checks": {
+    "python_ast": 19,
+    "json_parse": 1,
+    "toml_parse": 4,
+    "file_lines": {
+      "App.tsx": 2152,
+      "main.rs": 2007,
+      "server.py": 7059
+    },
+    "whitespace": "All payload files including untracked source checked; git diff --check clean",
+    "independent_review": "Tether ABI/source boundary and workflow export path reviewed; reported destination, epoch, event trigger, source-root and uncertain-write findings corrected. Not compilation or runtime proof.",
+    "registry": "Existing HANDLED tuple order preserved; only two new dedicated commands added."
+  },
+  "remaining": [
+    "Camera/ABI/device compatibility, UI/filesystem/export/reopen and all builds/tests/typechecks remain UNRUN",
+    "Restart does not reconstruct lost engine leases; unresolved admitted writes remain unknown and non-retryable",
+    "Post-admission export failure with absent output is not affirmative no-commit evidence",
+    "Tether follow-latest and physical user-pattern destination filenames are not implemented; naming applies to stage and document display",
+    "Workflow preset execution, ERP, AI culling, branching/loops and arbitrary profiles remain unavailable",
+    "Native driver allocation/blocking is not universally bounded by application sink limits; no hard cancellation promise"
+  ],
+  "files": [
+    {
+      "path": "core/local_workflow/Cargo.toml",
+      "bytes": 486,
+      "sha256": "c0015d3e56e60d89807f60694437fad78c875ed13f1976d83fe61994b80ca644"
+    },
+    {
+      "path": "core/local_workflow/ledger.rs",
+      "bytes": 16789,
+      "sha256": "c27a4443e76eed2baea187ba41eaf69ee5d5e417c4bf4f9aa46833587c70f4b0"
+    },
+    {
+      "path": "core/local_workflow/lib.rs",
+      "bytes": 652,
+      "sha256": "5d5d1ca8f8bca0f1adae3817a1edb5f285f65325fa86391bfb2d0ebaacbba06c"
+    },
+    {
+      "path": "core/local_workflow/poll.rs",
+      "bytes": 14217,
+      "sha256": "bca0db109b853d315508f47616ffbad4b2d0399ea1f2a5d6cbe0b6e295751686"
+    },
+    {
+      "path": "core/local_workflow/ports.rs",
+      "bytes": 9414,
+      "sha256": "ca7d3f6889626322991e80161db7ed6ec4dbab30943f9b68c6ae8c76a63c3c28"
+    },
+    {
+      "path": "core/local_workflow/scheduler.rs",
+      "bytes": 20044,
+      "sha256": "8c9dc1160262c41a89e11bc58c05db0f88fcddbb2982ff40da585902f2e12558"
+    },
+    {
+      "path": "core/local_workflow/schema.rs",
+      "bytes": 14274,
+      "sha256": "5ed41b1bea6a7bc0cce83fc70cf77a3b5ad2c3011c6b77cd48013fb351443e14"
+    },
+    {
+      "path": "core/local_workflow/tests.rs",
+      "bytes": 20944,
+      "sha256": "06712fed26e27846ad04578f6749691e97ffa8399dd2d3419715af0527230bc4"
+    },
+    {
+      "path": "core/tether_capture/Cargo.toml",
+      "bytes": 350,
+      "sha256": "12ddf0f7ad6b8565b066ac3970cb6cf629f4db5e5f7a1f63bcf92df57928b532"
+    },
+    {
+      "path": "core/tether_capture/LICENSE-LGPL-2.1",
+      "bytes": 26419,
+      "sha256": "20e50fe7aae3e56378ebf0417d9de904f55a0e61e4df315333e632a4d3555d95"
+    },
+    {
+      "path": "core/tether_capture/THIRD_PARTY.md",
+      "bytes": 3492,
+      "sha256": "cc64762b8ae0b7f6abcd8ba6674c9359ed1ede2ec5e2563c7163927af7204da5"
+    },
+    {
+      "path": "core/tether_capture/ffi.rs",
+      "bytes": 9338,
+      "sha256": "18bd00bc24fdabd0d2d77d48d3b520ffed8b44847fba571c3ad64335111c78a1"
+    },
+    {
+      "path": "core/tether_capture/lib.rs",
+      "bytes": 6855,
+      "sha256": "09784f2e685855d5c5000883d06cb6e229c30db371a26073c148262be6a6c2e0"
+    },
+    {
+      "path": "core/tether_capture/linux.rs",
+      "bytes": 24412,
+      "sha256": "10fb998374ed56dad9066dc970e8616cd64926a68f74747f0b0a76051cab6757"
+    },
+    {
+      "path": "core/tether_capture/tests.rs",
+      "bytes": 4858,
+      "sha256": "c5da1c98911416b03ed6de9ae87f688fccea78d17c50020223506349091901ee"
+    },
+    {
+      "path": "core/tether_capture/transfer.rs",
+      "bytes": 13705,
+      "sha256": "517cb5e575090b688f6eac46a77d0bb0d7de6758cb55eeaa17ffb77c200227a2"
+    },
+    {
+      "path": "docs/development/handbook-traceability.json",
+      "bytes": 487062,
+      "sha256": "a70f56c2bbd1a183ab3dc38e16535a86b9d53ded00e47e4798c9b03187f712b5"
+    },
+    {
+      "path": "docs/ingest-session/ENGINE.md",
+      "bytes": 13403,
+      "sha256": "38d990796aec754bf871253fa6435c14f3e448fa59c548dba839573cb49b4b16"
+    },
+    {
+      "path": "docs/ingest-session/INTEGRATION.md",
+      "bytes": 3155,
+      "sha256": "2b2adbdd2bfd79045cdd265497af3a3ab9aea8313fa81addc78ac6eaf88a0a13"
+    },
+    {
+      "path": "docs/ingest-session/NATIVE-RECEIPTS.md",
+      "bytes": 10185,
+      "sha256": "fcc2a18be252babcb0ed7e31a79a743b2c9260e5e3299c8b37d1193077b2badb"
+    },
+    {
+      "path": "docs/local-workflow/CORE.md",
+      "bytes": 19700,
+      "sha256": "25a6a93022681a871f8d6cb38dd0a749ec008570e6f777558f0de25d80c40d1d"
+    },
+    {
+      "path": "docs/local-workflow/ENGINE.md",
+      "bytes": 9951,
+      "sha256": "76fb026361c21fe9dea0c2b227558cf6187c9d35eb1a3d4210c9a0082497e9d9"
+    },
+    {
+      "path": "docs/local-workflow/HOST.md",
+      "bytes": 8572,
+      "sha256": "1c944e1530f1ee57bed4bff2a1d71592bb51bfd55db74454435a0855444c1cb0"
+    },
+    {
+      "path": "docs/local-workflow/REQUIREMENTS.md",
+      "bytes": 2003,
+      "sha256": "92467c9e7985407a53ab357ea8758f32970377877be20a04b148e65a957b97f4"
+    },
+    {
+      "path": "docs/local-workflow/UI.md",
+      "bytes": 12971,
+      "sha256": "be515289373c7e7978897b0af5fe21edabc5b470aea7eac5d7bb87137feab256"
+    },
+    {
+      "path": "docs/tether-capture/DEVICE.md",
+      "bytes": 13315,
+      "sha256": "69e39dfd19645afc6e9efa74a42840dd2b056c9c095fe25dd10492457ac7364b"
+    },
+    {
+      "path": "docs/tether-capture/HOST.md",
+      "bytes": 13609,
+      "sha256": "8e6235276747c1c0c49b1fbcc375e3453c4ca700939ab4bb0d9e6f3f2e6b8d46"
+    },
+    {
+      "path": "docs/tether-capture/REQUIREMENTS.md",
+      "bytes": 2471,
+      "sha256": "b7fde66b782d4d1ba854ba11e3614ed08c1245fac0ed7b906a393738c8800457"
+    },
+    {
+      "path": "docs/tether-capture/UI.md",
+      "bytes": 13890,
+      "sha256": "28dd0e14a5d9a3df62581885a3b67aba959e9eb0e2710d0f0e121f1a683382f8"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/command_registry.py",
+      "bytes": 2586,
+      "sha256": "6fac4d76f2d380549b38138e3f7a07614abbd86221afaa7e0743f004b6e0d0ae"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/export_command_reply.py",
+      "bytes": 746,
+      "sha256": "12ad0bf47dc6a46517f2c47acdcea73ec84912e12993b819c13401f470bc81ee"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/export_destination_commit.py",
+      "bytes": 2970,
+      "sha256": "6fd12dab5bbe65c21696772a623e23dde21e76019a40cd05c539b4802b0fec2e"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/export_destination_runtime.py",
+      "bytes": 5630,
+      "sha256": "954a9f4fa3e63e264ab7fe9cd41c94b329b7e3ff79980dfe140fe68d43d99706"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/ingest_session_host.py",
+      "bytes": 27878,
+      "sha256": "48edbda076c491ee9c7e6686dc72e7ef24166f845ca2f16549c643d5d82edde0"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/ingest_session_protocol.py",
+      "bytes": 7055,
+      "sha256": "31f4a75f7c303bb661f4e87495735fd8b717ee1135cf45fa4a1da50499dc6b4a"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/managed_import_host.py",
+      "bytes": 13146,
+      "sha256": "fcbedd68357ef98770b75cadd6fa376cb3e29b1eeb403ab8a08e20deb137507b"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/owned_export_destination.py",
+      "bytes": 1643,
+      "sha256": "d080ae8442a6efe3232df0a8050bf9900bc5cdf3160e077afef8b2d034cd18e7"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/project_recovery_runtime.py",
+      "bytes": 10118,
+      "sha256": "1cab7cc1b06d4641a353e850a754df4a7e6d09e5d4b19fde2ad91f9f25895861"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/server.py",
+      "bytes": 471643,
+      "sha256": "9e6db36789762bca4ad5724758e387ac6bbb9e72b35682fbba23367639c13a2d"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/workflow_owner_dispatch.py",
+      "bytes": 1543,
+      "sha256": "440339ad9ee841edb49ee6d19ea087cb0993219013bf822d46181783a13c9916"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/workflow_owner_export.py",
+      "bytes": 9263,
+      "sha256": "c09b9a3f085ce3d69d4286e83c7e7e036b87f14ab141f5d88d1365fd3b1d5ab3"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/workflow_owner_host.py",
+      "bytes": 24514,
+      "sha256": "6ddf37a6a82bb9aaa859c1ad143ebc362f374469611d1a873e90fed943d99a07"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/workflow_owner_protocol.py",
+      "bytes": 11584,
+      "sha256": "844f35f8543715fecf1a7f89626df7ad3055dbf6425f02d0e546d1a4c78ea7ec"
+    },
+    {
+      "path": "engine/tests/test_ingest_integration_unrun.py",
+      "bytes": 4044,
+      "sha256": "addf7c3eb9cc8be58930650ff5cf61fa89339214c8344af5ed236a761e755080"
+    },
+    {
+      "path": "engine/tests/test_ingest_session_host_unrun.py",
+      "bytes": 14759,
+      "sha256": "13764f56e62f8df9882e6592f1fd61bc1d6315e8a82e90837271810b453cdac4"
+    },
+    {
+      "path": "engine/tests/test_ingest_session_protocol_unrun.py",
+      "bytes": 4322,
+      "sha256": "c70d5348fd658b23c32f97aa43175949a7bda43dea8be714976a65d0ddc70f6e"
+    },
+    {
+      "path": "engine/tests/test_owned_export_destination_unrun.py",
+      "bytes": 1569,
+      "sha256": "b6fc05f2c9ab0130f531f5444916e91c84572abae3d0799bcaa05c7042d901e5"
+    },
+    {
+      "path": "engine/tests/test_workflow_owner_contract_unrun.py",
+      "bytes": 15464,
+      "sha256": "28eeadcbc05f50c6fd0e40c1d59415b80c708f1a9d99c5be8de83b1dc22157e8"
+    },
+    {
+      "path": "ui/src-tauri/Cargo.lock",
+      "bytes": 108679,
+      "sha256": "8207f4271facfc98eada7e034cd5f7657261d0f91734012272465a08e2b5e764"
+    },
+    {
+      "path": "ui/src-tauri/Cargo.toml",
+      "bytes": 1069,
+      "sha256": "e48acf134490a61af09d7eadb0b7ca221ce2737569001ef679bac6edfcc44f0a"
+    },
+    {
+      "path": "ui/src-tauri/src/app_shutdown.rs",
+      "bytes": 4231,
+      "sha256": "bec8219529e3f0856493c65a07b6ab169cae6bf4cb7eba16a0febf6ca58f4e3a"
+    },
+    {
+      "path": "ui/src-tauri/src/engine.rs",
+      "bytes": 45442,
+      "sha256": "864c6f9e875da4420df82f49f4b35c4abf80f209242ce914355a537c1340f8bd"
+    },
+    {
+      "path": "ui/src-tauri/src/ingest_receipt_validation.rs",
+      "bytes": 53372,
+      "sha256": "3c383ad53b62eaa1325fd5848edb8730623de8b00565fd5162d25bd5148e8d56"
+    },
+    {
+      "path": "ui/src-tauri/src/ingest_session_api.rs",
+      "bytes": 6499,
+      "sha256": "0f4c7ba328d439ce6d69ec595ff8645b032072f3512498f44aac4b742f0492fc"
+    },
+    {
+      "path": "ui/src-tauri/src/local_workflow_host/data.rs",
+      "bytes": 4565,
+      "sha256": "1d5087d10dce2845804c2c64cba342adebbc9f19752266cc35a76a9a9ebc1424"
+    },
+    {
+      "path": "ui/src-tauri/src/local_workflow_host/ingestion.rs",
+      "bytes": 8386,
+      "sha256": "4ecc5bf0e5cc70ff7ef0be4ffe5a8d547bc7e2f0a343cd1ce78416a70e6eeaa0"
+    },
+    {
+      "path": "ui/src-tauri/src/local_workflow_host/mod.rs",
+      "bytes": 6891,
+      "sha256": "d1fc10de0e1e5583006e42968e75527cb7ff07f0594856de79d19a053e39fd1a"
+    },
+    {
+      "path": "ui/src-tauri/src/local_workflow_host/runtime.rs",
+      "bytes": 41225,
+      "sha256": "f0c5c0acb8dacbc575982635befb292b171682396f2eacff59917a4b87d10645"
+    },
+    {
+      "path": "ui/src-tauri/src/local_workflow_host/storage.rs",
+      "bytes": 10020,
+      "sha256": "0359e217ad486fdf6b36388cabdadf5bcbd94e4553a1ca3a60826eb0c968f92f"
+    },
+    {
+      "path": "ui/src-tauri/src/local_workflow_host/tests_unrun.rs",
+      "bytes": 5346,
+      "sha256": "7c753b4e4818818440596689ea5a34ba95bb1dff841eb25f04606ceae6bc915e"
+    },
+    {
+      "path": "ui/src-tauri/src/local_workflow_host/transport.rs",
+      "bytes": 7449,
+      "sha256": "14debd3866989c68ac31ca15077703c559b96e57bba17c2a57fd349c2db34c9c"
+    },
+    {
+      "path": "ui/src-tauri/src/local_workflow_host/validation.rs",
+      "bytes": 4321,
+      "sha256": "cd181f8f9dc374c9c7d89e79e975b068114d1b13c4e4ac36bc767f91d76ac689"
+    },
+    {
+      "path": "ui/src-tauri/src/local_workflow_host/view.rs",
+      "bytes": 6002,
+      "sha256": "42e89fb36c6d1d920c423d54f41a39368d3b40e05fdc8cfa65b9baaefbc14b8f"
+    },
+    {
+      "path": "ui/src-tauri/src/local_workflow_host/wire.rs",
+      "bytes": 3392,
+      "sha256": "d0fc44d1cfe534820514e6843dc375858c9dac9fdc050e49f410020c377f06da"
+    },
+    {
+      "path": "ui/src-tauri/src/main.rs",
+      "bytes": 99959,
+      "sha256": "0b006c5eb00dd2a5d8b26486521043538983084c9c8df455ad4bdf7ffc1670eb"
+    },
+    {
+      "path": "ui/src-tauri/src/native_dispatch.rs",
+      "bytes": 12811,
+      "sha256": "d2a07dedd8a6c4e363d0171c1c773cc41f960f2b7d47b22645682d51bd08eddd"
+    },
+    {
+      "path": "ui/src-tauri/src/project_recovery_fence.rs",
+      "bytes": 10727,
+      "sha256": "4d0eec35ac2a5ba2e9fe80cc04a229d506ef2d246f1ba56c00e07d0e1f9c6c70"
+    },
+    {
+      "path": "ui/src-tauri/src/tether_host/mod.rs",
+      "bytes": 15521,
+      "sha256": "faab3e04e22ec0595a94022b3d49979097e35213b23104039ec792888e7c66e1"
+    },
+    {
+      "path": "ui/src-tauri/src/tether_host/storage.rs",
+      "bytes": 12583,
+      "sha256": "90e892282b818f08779d43d537f6c774ba27347a27910badc4c7399520b64abe"
+    },
+    {
+      "path": "ui/src-tauri/src/tether_host/tests_unrun.rs",
+      "bytes": 4356,
+      "sha256": "9d40efbab6797aad60d04408d149484a6e0d8186d5039a6a8cb269e52cc4d2c9"
+    },
+    {
+      "path": "ui/src-tauri/src/tether_host/wire.rs",
+      "bytes": 7493,
+      "sha256": "26b2a1d3efe6681cc94f16324f628be71075edd39bd443d5ab48c44a8c3b46da"
+    },
+    {
+      "path": "ui/src-tauri/src/tether_host/worker.rs",
+      "bytes": 20842,
+      "sha256": "55c0eaf840d052d31031b178855465ec3744e6327f73dfe8408c8fe8e54cedff"
+    },
+    {
+      "path": "ui/src-tauri/src/tether_host/worker/capture.rs",
+      "bytes": 17379,
+      "sha256": "12cfcabfa92454b15e06fb8d9b9d1e75eef30c65d23c1cfe258fedf25f4d54c9"
+    },
+    {
+      "path": "ui/src-tauri/src/tether_host/worker/lease.rs",
+      "bytes": 20140,
+      "sha256": "1d7b08847db4f81113609ecf8f4821e702faafcc2d50e2b68455acbae6f13003"
+    },
+    {
+      "path": "ui/src/localWorkflow/LocalWorkflowPanel.tsx",
+      "bytes": 23400,
+      "sha256": "8e56cea7ccf650493a36ff5490783c7f08382920ded649a000f69815707ccf78"
+    },
+    {
+      "path": "ui/src/localWorkflow/NativeWorkflowPanel.tsx",
+      "bytes": 4132,
+      "sha256": "afd26ef41eeb69ae11dfd00d149f51e6320f8ab62d0762e65032e33d2b8de6b0"
+    },
+    {
+      "path": "ui/src/localWorkflow/contracts.ts",
+      "bytes": 7253,
+      "sha256": "ed39522a1f018ed597e2720fa753287ecd53a5e2fe532cf621df1696e46ba52e"
+    },
+    {
+      "path": "ui/src/localWorkflow/controller.ts",
+      "bytes": 24714,
+      "sha256": "893b2cf61d549967a46b9f041ecbd2c89de5fc9b36b364226c89278bb4a2eedf"
+    },
+    {
+      "path": "ui/src/localWorkflow/index.ts",
+      "bytes": 300,
+      "sha256": "d67f67536f4b19c1573135552b2507abebfcea53e43dad34a441a391d0852928"
+    },
+    {
+      "path": "ui/src/localWorkflow/localWorkflow.css",
+      "bytes": 4463,
+      "sha256": "40a94b4dcd1793cd6cc5a927757c9263cc29a7fd68e7d0cd21d56a32566ece70"
+    },
+    {
+      "path": "ui/src/localWorkflow/model.ts",
+      "bytes": 12222,
+      "sha256": "fe83a0b1fff7ec56cfcc0b51b7c3605c5f3d3c97e88603d399ced95c3b93f4ac"
+    },
+    {
+      "path": "ui/src/localWorkflow/nativePort.ts",
+      "bytes": 1205,
+      "sha256": "8d1be165f588e154a6b27ca6924ccd8f1972013f7673b7a79587e9971aee1d92"
+    },
+    {
+      "path": "ui/src/localWorkflow/workflow.unrun.test.ts",
+      "bytes": 21058,
+      "sha256": "7a6b2df4782113f7ad170a863419a8ed4ed353088a0839d3438a6867eb79a13e"
+    },
+    {
+      "path": "ui/src/projects/ProjectWorkspace.tsx",
+      "bytes": 4650,
+      "sha256": "cab97dda1241da942c43dfb8f939efafa9a7ee782053b32cf3084094188c4ed4"
+    },
+    {
+      "path": "ui/src/tetherCapture/NativeTetherPanel.tsx",
+      "bytes": 1187,
+      "sha256": "d89db58ea2096e28cfa854db90f6093788d2d6aa51a8da7b8a48025998507403"
+    },
+    {
+      "path": "ui/src/tetherCapture/TetherCapturePanel.tsx",
+      "bytes": 19936,
+      "sha256": "ebeec5c36b57678b1136c885da9fd269de860b2decb6e0464cec9ea7e23d6170"
+    },
+    {
+      "path": "ui/src/tetherCapture/controller.ts",
+      "bytes": 19131,
+      "sha256": "ac0f660de4406ff680b1a2395bedb4b6b7cbeb179d86d4bde2f37060a1bc11ce"
+    },
+    {
+      "path": "ui/src/tetherCapture/index.ts",
+      "bytes": 379,
+      "sha256": "8a93beb3b7ab6adeb20699e64067081e9d12af6f3c06987f48c90f8492dfbb74"
+    },
+    {
+      "path": "ui/src/tetherCapture/model.ts",
+      "bytes": 4035,
+      "sha256": "9570e972e29963d3f6f4a14692671941729eb2b93ea8de0127cf79105e85dd7f"
+    },
+    {
+      "path": "ui/src/tetherCapture/nativePort.ts",
+      "bytes": 2095,
+      "sha256": "b57816465ef7cb166799f0218bb3f583803304d30a47ff40e32d5e5a866d000c"
+    },
+    {
+      "path": "ui/src/tetherCapture/protocol.ts",
+      "bytes": 7415,
+      "sha256": "211475996c16e32f087eddfb80bf5baa775b29aac84243dda6925f45c7965534"
+    },
+    {
+      "path": "ui/src/tetherCapture/tether.unrun.test.ts",
+      "bytes": 1490,
+      "sha256": "ee2a14e1c9be4e53e71f6275116ae019d57043580a81d3d29c7c03e1bd67d363"
+    },
+    {
+      "path": "ui/src/tetherCapture/tetherCapture.css",
+      "bytes": 3732,
+      "sha256": "ffa2040caf51daeeaf3d07dfd83d20c8caf2cc8af0da780e3329f96bb286c033"
+    }
+  ]
+}

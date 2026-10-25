@@ -38,6 +38,11 @@ def finish(engine, boundary, error=None):
     if boundary is None:
         return
     message = boundary['message']
+    if message.get('cmd') in ('ingest_session', 'workflow_owner'):
+        # The lease owns pending/unknown copy receipts. Only the existing atomic
+        # managed transaction writes the saved project; readback cannot bless a
+        # partial copy or taint a committed recipe on a rejected session request.
+        return
     from .lens_blur_host import read_only as lens_read_only
     if lens_read_only(message):return
     from .expression_replacement_host import read_only as expression_read_only

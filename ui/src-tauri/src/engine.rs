@@ -49,6 +49,8 @@ impl EngineHandle {
         crate::expression_replacement_api::blocks_mutation(self.epoch, &cmd)?;
         if crate::lens_blur_api::read_only(&cmd) { return self.dispatcher.enqueue(None, cmd); }
         if crate::expression_replacement_api::read_only(&cmd) { return self.dispatcher.enqueue(None, cmd); }
+        if crate::local_workflow_host::read_only(&cmd) { return self.dispatcher.enqueue(None, cmd); }
+        if crate::ingest_session_api::read_only(&cmd) { return self.dispatcher.enqueue(None, cmd); }
         if !crate::torso_length_api::read_only(&cmd) && !crate::waist_length_api::read_only(&cmd) && !crate::head_size_api::read_only(&cmd) && !crate::body_slim_api::read_only(&cmd) { crate::project_recovery_fence::issued(self.epoch, &cmd)?; }
         if crate::common_background_readback::read_only(&cmd) { return self.dispatcher.enqueue(None, cmd); }
         // Fringe review/presentation/cancellation never mutate the document or
@@ -234,7 +236,7 @@ pub fn spawn(py: &str, engine_src: &str, session: &str, state: Arc<AppState>,
                             || crate::expression_replacement_api::guards_result(inspection_epoch,id)
                             || crate::lens_blur_api::guards_result(inspection_epoch,id)
                     });
-                    if !scalar_review && v["event"] != "lens_blur_result" && v["event"] != "expression_replacement_result" && v["event"] != "common_background_result" && v["event"] != "fringe_repair_result" && v["event"] != "id_background_result" && v["event"] != "torso_length_result" && v["event"] != "waist_length_result" && v["event"] != "head_size_result" && v["event"] != "body_slim_result" {
+                    if !scalar_review && v["event"] != "ingest_session_result" && v["event"] != "workflow_owner_result" && v["event"] != "lens_blur_result" && v["event"] != "expression_replacement_result" && v["event"] != "common_background_result" && v["event"] != "fringe_repair_result" && v["event"] != "id_background_result" && v["event"] != "torso_length_result" && v["event"] != "waist_length_result" && v["event"] != "head_size_result" && v["event"] != "body_slim_result" {
                         crate::project_recovery_fence::observed(inspection_epoch, &v);
                     }
                     if v["event"]=="ready" && v["command_ack"].as_u64()!=Some(1) {
@@ -347,6 +349,8 @@ fn handle_event(state: &Arc<AppState>, line: &str,inspection_epoch:[u8;16]) {
         "project_recovery_result" => crate::project_recovery_api::receive(inspection_epoch, &v),
         "project_package_result" => crate::project_package_api::receive(inspection_epoch, &v),
         "managed_import_result" => crate::managed_import_api::receive(inspection_epoch, &v),
+        "workflow_owner_result" => { crate::local_workflow_host::receive(inspection_epoch, &v); },
+        "ingest_session_result" => crate::ingest_session_api::receive(inspection_epoch, &v),
         "source_relocation_result" => crate::source_relocation_api::receive(inspection_epoch, &v),
         "preset_organisation_result" => crate::preset_organisation_api::receive(inspection_epoch, &v),
         "sample_library_result" => crate::sample_library_api::receive(inspection_epoch, &v),

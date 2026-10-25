@@ -817,10 +817,19 @@
       "source_url": "https://www.pixcakeai.com/guide/8YEKwsjJg7",
       "title": "自动化工作流",
       "phase": null,
-      "status": "pending_independent_verification",
-      "implementation": [],
-      "verification": [],
-      "scope_note": "原始需求全量保留；本条登记不等于实现或验收通过"
+      "status": "partial_source_connected_unrun",
+      "implementation": [
+        "core/local_workflow",
+        "ui/src-tauri/src/local_workflow_host",
+        "engine/src/lumaretouch_engine/workflow_owner_host.py",
+        "ui/src/localWorkflow",
+        "docs/local-workflow/REQUIREMENTS.md"
+      ],
+      "verification": [
+        "Static source/DTO/ownership inspection only; authored fixtures and all end-to-end/build/UI acceptance UNRUN"
+      ],
+      "scope_note": "原始需求全量保留；本条登记不等于实现或验收通过",
+      "remaining": "Bounded linear local import/labels/fixed-profile export only. Presets requiring actual loaded target/review are preflight-refused; ERP, AI culling, general branches/loops, arbitrary profiles, portable template interchange and unresolved-owner process-restart recovery remain incomplete. Import failure policy is stop-only."
     },
     {
       "id": "workflow:47251",
@@ -829,10 +838,19 @@
       "source_url": "https://www.pixcakeai.com/guide/47251",
       "title": "桌面有线联机",
       "phase": null,
-      "status": "pending_independent_verification",
-      "implementation": [],
-      "verification": [],
-      "scope_note": "原始需求全量保留；本条登记不等于实现或验收通过"
+      "status": "partial_source_connected_unrun",
+      "implementation": [
+        "core/tether_capture",
+        "ui/src-tauri/src/tether_host",
+        "engine/src/lumaretouch_engine/ingest_session_host.py",
+        "ui/src/tetherCapture",
+        "docs/tether-capture/REQUIREMENTS.md"
+      ],
+      "verification": [
+        "Static source/ABI-contract and receipt-path inspection only; authored fixtures, builds, physical-camera and UI acceptance UNRUN"
+      ],
+      "scope_note": "原始需求全量保留；本条登记不等于实现或验收通过",
+      "remaining": "Latest-photo following, direct pattern-named delivery files, AI selection, sync-previous/preset/overlay workflows, restart reconciliation, unlimited sessions and vendor hardware parity remain incomplete. Trigger capture needs actual driver support; no camera interaction performed."
     },
     {
       "id": "workflow:159396",

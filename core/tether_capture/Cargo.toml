@@ -1,0 +1,15 @@
+[package]
+name = "lrt_tether_capture"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.77"
+license = "GPL-3.0-or-later"
+description = "Replaceable, original-preserving USB camera device boundary"
+
+[lib]
+path = "lib.rs"
+
+[dependencies]
+libc = "0.2"
+# Reuse the version already pinned in ui/src-tauri/Cargo.lock. No custom crypto.
+sha2 = "=0.10.9"

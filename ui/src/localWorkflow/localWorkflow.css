@@ -1,0 +1,53 @@
+/* SPDX-License-Identifier: GPL-3.0-or-later */
+.local-workflow { color: inherit; padding: 16px; max-width: 1440px; margin-inline: auto; }
+.local-workflow *, .local-workflow *::before, .local-workflow *::after { box-sizing: border-box; }
+.local-workflow h3, .local-workflow h4 { margin: 0 0 10px; }
+.local-workflow p { line-height: 1.5; margin: 8px 0; }
+.local-workflow small { display: block; opacity: .8; line-height: 1.5; overflow-wrap: anywhere; }
+.local-workflow label { display: flex; flex-direction: column; gap: 5px; margin-block: 9px; font-size: 13px; }
+.local-workflow input:not([type="checkbox"]), .local-workflow select, .local-workflow textarea {
+  width: 100%; min-width: 0; font: inherit; padding: 7px 9px; color: inherit;
+  background: rgba(127, 127, 127, .08); border: 1px solid rgba(127, 127, 127, .35); border-radius: 6px;
+}
+.local-workflow textarea { min-height: 58px; resize: vertical; }
+.local-workflow button { font: inherit; padding: 7px 10px; border-radius: 6px; cursor: pointer; }
+.local-workflow button:disabled { cursor: not-allowed; opacity: .5; }
+.local-workflow :focus-visible { outline: 2px solid #58a5e5; outline-offset: 2px; }
+.local-workflow fieldset { min-width: 0; padding: 12px; margin: 12px 0; border: 1px solid rgba(127, 127, 127, .35); border-radius: 9px; }
+.local-workflow legend { padding-inline: 6px; font-weight: 600; }
+.local-workflow-heading, .local-workflow-toolbar, .local-workflow-inline, .local-workflow-actions {
+  display: flex; align-items: center; flex-wrap: wrap; gap: 9px;
+}
+.local-workflow-heading { justify-content: space-between; gap: 16px; }
+.local-workflow-toolbar { margin-block: 14px; }
+.local-workflow-toolbar label { flex: 1 1 220px; max-width: 380px; }
+.local-workflow-badge { border: 1px solid rgba(127, 127, 127, .4); border-radius: 20px; padding: 6px 12px; font-size: 13px; }
+.local-workflow-layout { display: grid; grid-template-columns: minmax(0, 1.65fr) minmax(260px, 1fr); gap: 20px; align-items: start; }
+.local-workflow-sidebar > section { border: 1px solid rgba(127, 127, 127, .25); border-radius: 9px; padding: 13px; margin: 12px 0; }
+.local-workflow-node { background: rgba(127, 127, 127, .035); }
+.local-workflow-checks { display: flex; flex-wrap: wrap; gap: 14px; }
+.local-workflow-checks label { flex-direction: row; align-items: center; }
+.local-workflow-rule { display: grid; grid-template-columns: minmax(90px, .8fr) minmax(110px, 1fr) minmax(110px, 1fr); gap: 9px; padding-block: 9px; border-bottom: 1px solid rgba(127, 127, 127, .2); }
+.local-workflow-rule button { grid-column: 1 / -1; justify-self: start; }
+.local-workflow-inline label { flex: 1 1 140px; }
+.local-workflow-edges ul, .local-workflow-sidebar ul { padding-left: 20px; }
+.local-workflow-edges li { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding-block: 5px; }
+.local-workflow-diagnostics li { margin-block: 8px; overflow-wrap: anywhere; line-height: 1.5; }
+.local-workflow-diagnostics [data-severity="error"] strong, .local-workflow-error { color: #e2776f; }
+.local-workflow-diagnostics [data-severity="warning"] strong { color: #d9a84f; }
+.local-workflow-warning { padding: 12px; border: 1px solid rgba(217, 168, 79, .55); border-radius: 8px; background: rgba(217, 168, 79, .08); overflow-wrap: anywhere; }
+.local-workflow-warning button { margin-right: 8px; }
+.local-workflow-message { border-left: 3px solid #58a5e5; padding: 8px 12px; overflow-wrap: anywhere; }
+.local-workflow-error { border-left: 3px solid currentColor; padding: 8px 12px; overflow-wrap: anywhere; }
+.local-workflow-run { margin-block: 18px; padding: 14px; border: 1px solid rgba(127, 127, 127, .35); border-radius: 9px; overflow-wrap: anywhere; }
+.local-workflow-profile { max-height: 360px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; padding: 10px;
+  font-size: 12px; line-height: 1.5; border: 1px solid rgba(127, 127, 127, .25); border-radius: 6px; }
+.local-workflow-files { padding-left: 23px; }
+.local-workflow-files > li { padding-block: 8px; border-bottom: 1px solid rgba(127, 127, 127, .2); }
+.local-workflow summary { cursor: pointer; line-height: 1.6; }
+.local-workflow footer { margin-top: 16px; font-size: 12px; opacity: .75; line-height: 1.5; }
+@media (max-width: 860px) {
+  .local-workflow-layout { grid-template-columns: minmax(0, 1fr); }
+  .local-workflow-rule { grid-template-columns: minmax(0, 1fr); }
+  .local-workflow-heading { align-items: flex-start; }
+}

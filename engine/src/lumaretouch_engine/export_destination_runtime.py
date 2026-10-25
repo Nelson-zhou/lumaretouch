@@ -57,17 +57,24 @@ def primary_target(payload, key):
     return next(e.target for e in plan.entries if e.item_id == key)
 
 
-def run(payload, key, function, *args, **kwargs):
-    if payload is None: return function(*args, **kwargs)
+def run(payload, key, function, *args, trusted_roots=None, **kwargs):
+    if payload is None:
+        if trusted_roots is not None:
+            raise DestinationError('Owned workflow output requires its frozen destination plan')
+        return function(*args, **kwargs)
     plan = restore(payload)
     entries = {e.item_id:e for e in plan.entries}
     base = entries[key]
     info = Path(base.source_path).stat()
     if (info.st_dev,info.st_ino,info.st_size,info.st_mtime_ns) != base.source_stamp:
         raise DestinationError('导出来源已变化；请重新预览')
+    from . import owned_export_destination as owned
+    owned_token = owned.enter(trusted_roots)
     token = _ACTIVE.set((plan, entries, key))
     try: return function(*args, **kwargs)
-    finally: _ACTIVE.reset(token)
+    finally:
+        _ACTIVE.reset(token)
+        owned.leave(owned_token)
 
 
 def variant_target(default, variant):

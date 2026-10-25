@@ -1,0 +1,20 @@
+[package]
+name = "lrt_local_workflow"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.77"
+license = "GPL-3.0-or-later"
+description = "Bounded local photo workflow graph, durable scheduler and polling source"
+
+[lib]
+path = "lib.rs"
+crate-type = ["rlib"]
+
+[dependencies]
+# Existing native-host dependencies, not downloaded or compiled for this change.
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+sha2 = "=0.10.9"
+
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"

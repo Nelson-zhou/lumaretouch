@@ -1726,12 +1726,32 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f9f8bd3e56ce4dfc153cf470fffbfa98c7620958b312ca5c3a4b8d5181fd13c6"
 
 [[package]]
+name = "lrt_local_workflow"
+version = "0.1.0"
+dependencies = [
+ "libc",
+ "serde",
+ "serde_json",
+ "sha2",
+]
+
+[[package]]
+name = "lrt_tether_capture"
+version = "0.1.0"
+dependencies = [
+ "libc",
+ "sha2",
+]
+
+[[package]]
 name = "lumaretouch"
 version = "1.12.1"
 dependencies = [
  "base64 0.22.1",
  "gtk",
  "libc",
+ "lrt_local_workflow",
+ "lrt_tether_capture",
  "serde",
  "serde_json",
  "sha2",

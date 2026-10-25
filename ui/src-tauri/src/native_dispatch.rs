@@ -28,6 +28,18 @@ impl AppState {
     }
 
     pub(crate) fn send_to_engine(&self, cmd: Value) -> Result<(), String> {
+        self.send_to_engine_bound(cmd, None)
+    }
+
+    /// Owned receipts must never dispatch into a replacement engine epoch.
+    pub(crate) fn send_to_engine_at_epoch(&self, cmd: Value, expected_epoch: [u8; 16]) -> Result<(), String> {
+        if !matches!(cmd["cmd"].as_str(), Some("ingest_session" | "workflow_owner")) {
+            return Err("Epoch-bound dispatch is restricted to owned ingestion protocols".into());
+        }
+        self.send_to_engine_bound(cmd, Some(expected_epoch))
+    }
+
+    fn send_to_engine_bound(&self, cmd: Value, expected_epoch: Option<[u8; 16]>) -> Result<(), String> {
         // M5-b：命令名先取出来（cmd 下面会被 send 吃掉）。它只用来标"可能有新的一步"，
         // 宿主不数步数、不自己判哪条命令算编辑——名单由引擎的 ready 报
         let name = cmd.get("cmd").and_then(|c| c.as_str()).unwrap_or("").to_string();
@@ -36,10 +48,12 @@ impl AppState {
         // Arm selection and owned proposal queries/cancellation do not alter
         // image pixels or revoke unrelated capture lifetimes.
         // A library view changes neither image history nor any capture lease.
-        if name == "canvas_guides" || name == "project_recovery" || crate::managed_import_api::read_only(&cmd) || (name == "session" && cmd.get("action").and_then(Value::as_str) == Some("query"))
+        if name == "canvas_guides" || name == "project_recovery" || crate::managed_import_api::read_only(&cmd) || crate::ingest_session_api::read_only(&cmd) || crate::local_workflow_host::read_only(&cmd) || (name == "session" && cmd.get("action").and_then(Value::as_str) == Some("query"))
             || (name == "virtual_copy" && matches!(cmd.get("action").and_then(Value::as_str), Some("state") | Some("query"))) {
             let guard = self.engine.lock().map_err(|_| "引擎锁中毒".to_string())?;
-            return guard.as_ref().ok_or("引擎未启动")?.send(cmd);
+            let handle = guard.as_ref().ok_or("引擎未启动")?;
+            require_dispatch_epoch(handle, expected_epoch)?;
+            return handle.send(cmd);
         }
         if crate::people_api::face_style::read_only(&cmd) || crate::people_api::eye_bag::read_only(&cmd) || crate::people_api::face_decoration::read_only(&cmd) || crate::people_api::facial_sculpt::read_only(&cmd) || crate::people_api::eye_makeup_enhance::read_only(&cmd) || crate::people_api::decoration_alias::read_only(&cmd) || crate::people_api::decoration_support_alias::read_only(&cmd) {
             let guard = self.engine.lock().map_err(|_| "引擎锁中毒".to_string())?;
@@ -105,6 +119,7 @@ impl AppState {
         if name!="hello" && name!="inspection_snapshot"{inspection.invalidate();}
         let guard = self.engine.lock().map_err(|_| "引擎锁中毒".to_string())?;
         let handle=guard.as_ref().ok_or_else(|| "引擎未启动".to_string())?;
+        require_dispatch_epoch(handle, expected_epoch)?;
         if crate::sample_library_api::invalidates_capture(&cmd) {
             crate::sample_library_api::invalidate_captures(handle)?;
         }
@@ -154,4 +169,11 @@ impl AppState {
 #[tauri::command]
 pub(crate) fn report(line: String) {
     println!("{line}");
+}
+
+fn require_dispatch_epoch(handle: &crate::engine::EngineHandle, expected: Option<[u8; 16]>) -> Result<(), String> {
+    if expected.is_some_and(|epoch| epoch != handle.epoch()) {
+        return Err("Engine epoch changed before dispatch; original request was not sent to the replacement engine".into());
+    }
+    Ok(())
 }

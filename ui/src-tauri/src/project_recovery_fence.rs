@@ -72,8 +72,8 @@ pub(crate) fn observed(epoch:[u8;16], value:&Value){
     // Receipt hosts can share an epoch but not command/action identity. A late
     // read-only preflight (including one whose result omits scope on rejection)
     // must never settle another host's later mutation with a reused request ID.
-    let preset_or_batch=matches!(command["cmd"].as_str(),Some("preset"|"batch"|"people"|"effect_recovery"));
-    let preset_or_batch_receipt=matches!(event,"preset_result"|"batch_result"|"people_result"|"effect_recovery_result");
+    let preset_or_batch=matches!(command["cmd"].as_str(),Some("preset"|"batch"|"people"|"effect_recovery"|"ingest_session"|"workflow_owner"));
+    let preset_or_batch_receipt=matches!(event,"preset_result"|"batch_result"|"people_result"|"effect_recovery_result"|"ingest_session_result"|"workflow_owner_result");
     if preset_or_batch||preset_or_batch_receipt {
         let expected=format!("{}_result",command["cmd"].as_str().unwrap_or(""));
         if event!=expected||value["action"]!=command["action"] {return;}

@@ -21,6 +21,8 @@ libc = "0.2"
 # Registry provenance and exact package checksums remain in Cargo.lock.
 base64 = "=0.22.1"
 sha2 = "=0.10.9"
+lrt_tether_capture = { path = "../../core/tether_capture" }
+lrt_local_workflow = { path = "../../core/local_workflow" }
 
 [profile.dev]
 opt-level = 1
