@@ -138,6 +138,7 @@ impl AppState {
             "waist_length" => crate::waist_length_api::enqueue(handle, cmd)?,
             "head_size" => crate::head_size_api::enqueue(handle, cmd)?,
             "light_glow" => crate::light_glow_api::enqueue(handle, cmd)?,
+            "portrait_crop" => crate::portrait_crop_api::enqueue(handle, cmd)?,
             "lens_blur" => crate::lens_blur_api::enqueue(handle, cmd)?,
             "expression_replacement" => crate::expression_replacement_api::enqueue(handle, cmd)?,
             "body_slim" => crate::body_slim_api::enqueue(handle, cmd)?,

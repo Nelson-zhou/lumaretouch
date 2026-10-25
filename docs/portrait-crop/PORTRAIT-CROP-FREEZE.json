@@ -1,0 +1,309 @@
+{
+  "schema_version": 1,
+  "baseline_commit": "e1da37bf84753aa4293fb461eef551e5b4e95ca9",
+  "baseline_tree": "f31864ef09dc844cb22d703b1a41f4de23aadf25",
+  "date": "2026-10-25",
+  "status": "SOURCE_CONNECTED_MANUAL_ASSISTED_PORTRAIT_CROP_PARTIAL_ALL_RUNTIME_ACCEPTANCE_UNRUN",
+  "scope": "Actual current-photo portrait composition from a fresh full edited uncropped source: measured face proposals plus explicitly reviewed crown/chin/center, original Rust bounded rule solver, exact full mixed before/after image ACK, canonical existing crop/history/export state, engine/native cancellation and query-only uncertainty/reopen recovery. Old crop/rotate entry and sampler unchanged. Hair-volume family excluded for separate integration.",
+  "requirements": [
+    "control:PC-32478:9",
+    "control:PC-32478:15",
+    "control:PC-32478:16",
+    "control:PC-32478:17"
+  ],
+  "requirement_identity_note": "Preserved control IDs only; missing original hashed LNX mapping not invented. Manual-assisted path is partial, not automatic AI acceptance.",
+  "manifest_policy": "Exact 54 payload files plus this self-excluded manifest. All hair-volume work and older unrelated manifests excluded. No Git writes by worker.",
+  "source_checks": {
+    "python_ast": 23,
+    "toml_parsed": 1,
+    "file_lines": {
+      "ui/src/App.tsx": 2159,
+      "ui/src-tauri/src/main.rs": 2018,
+      "engine/src/lumaretouch_engine/server.py": 7050
+    },
+    "whitespace": "Selected tracked and new text/EOF checked; git diff --check clean.",
+    "independent_review": "Independent core/engine and native/UI audits. Corrected provisional-unknown recovery taint, exact canonical/workspace terminal binding, transport-only dispatcher acknowledgement digest, exact native commit revision, and guarded same-live-engine authoritative reopen reachability. No remaining concrete blocker found within scoped static audit.",
+    "execution": "No product imports, tests, compiler, build, typecheck, inference, hardware, installs or downloads."
+  },
+  "remaining": [
+    "All numerical, ABI, UI, photo-quality, memory/performance, cancellation, history/reopen/export acceptance remains UNRUN. No 24MP or pixel-parity guarantee.",
+    "Official automatic crown/head detection is not reproduced. Genuine crown/chin/center require explicit human measurement/confirmation; fresh face proposals use a display proxy of the edited full source, not full-resolution inference.",
+    "Nonzero current rotation refused without resetting it; no padding or fabricated pixels. Rule ranges and denominator are declared original local conventions, not undocumented vendor equivalence. Vertical position is implied, requested and rounded achieved metrics remain distinct.",
+    "Crop-rule preset saving control:PC-32478:18, batch/cohort composition, arbitrary-rotation composition remain unfinished.",
+    "Verified reopen reconciliation is same-live-engine only. Ended/replaced engine original outcomes remain historical unknown; explicit app/project restart is a separate recovery boundary, not proof of old write outcome.",
+    "Existing opaque SDR and full-candidate source/memory bounds retained. Display PNG RGB8 does not change master precision or add alpha/HDR support.",
+    "Independent hair-volume modules are authored but excluded and not yet shared-render integrated."
+  ],
+  "files": [
+    {
+      "path": "core/portrait_crop/Cargo.toml",
+      "sha256": "4ffd7870da76857f7fede8b79a39ac653c95a469dab6301f4112320899685908",
+      "bytes": 172
+    },
+    {
+      "path": "core/portrait_crop/build_portrait_crop.sh",
+      "sha256": "6509084f79d4cdec815b485139e16351ae1705575cb58c85e259dc0ad3275b4d",
+      "bytes": 434
+    },
+    {
+      "path": "core/portrait_crop/lib.rs",
+      "sha256": "cd075974cc00ea5a070049c7832739c201c0d4bdc802298c93cdea02d1faea30",
+      "bytes": 6126
+    },
+    {
+      "path": "core/portrait_crop/portrait_crop.h",
+      "sha256": "20693ab678688abeca24151099cd24ffa2db46e41f44889e65991cdda3e5d34a",
+      "bytes": 2021
+    },
+    {
+      "path": "core/portrait_crop/tests_unrun.rs",
+      "sha256": "ea348753a5623dcdf1d96a0a840aef8935721ec1408c4d098436e240ee6d718c",
+      "bytes": 4755
+    },
+    {
+      "path": "docs/portrait-crop/CORE.md",
+      "sha256": "0b38a37172b862702cfb9ebfe3fbb0bcb1da5be311183e05e19ccadde4f1d72c",
+      "bytes": 10944
+    },
+    {
+      "path": "docs/portrait-crop/HOST.md",
+      "sha256": "319d18f21471be5e7b1542d4db763851979785cba3de43c61002ce28e000a863",
+      "bytes": 11538
+    },
+    {
+      "path": "docs/portrait-crop/INTEGRATION.md",
+      "sha256": "38437541c23d3ad9a7bce4ebdd35fccf8b10f31e7fed313354beb41884c55be4",
+      "bytes": 4262
+    },
+    {
+      "path": "docs/portrait-crop/NATIVE.md",
+      "sha256": "7d171c17615b92e06709da7d7fcabcb11233ca22e09b2d5fb597c75d4a2797e6",
+      "bytes": 8589
+    },
+    {
+      "path": "docs/portrait-crop/RESEARCH.md",
+      "sha256": "2c9ca59203de8ddf774473cb5593e3961bd31290961b697e34e0976e9c5f6475",
+      "bytes": 5681
+    },
+    {
+      "path": "docs/portrait-crop/UI.md",
+      "sha256": "8cef8a54e071340aa2f35ebfc21531370c8d1b30c0bae3c33f11e454192c71c2",
+      "bytes": 12326
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/command_registry.py",
+      "sha256": "ef0db2bd573375e98393d46030a2ab1852af5a828c3aec88d13d7482da387a14",
+      "bytes": 2748
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/creative_capture_routes.py",
+      "sha256": "a39230804f6b48e6c3237f711fe9f2e9cc8d022383540264017ce860e5ecbd5d",
+      "bytes": 2285
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_host.py",
+      "sha256": "375ed2e56fc35cca3316939adc129f154cff3238dbe8e3eb6d7e4765b4d59271",
+      "bytes": 28461
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/portrait_crop_capture.py",
+      "sha256": "5bd88bb8dddcef6811d9678f6c69c11c44ba99d4f548843eb580d2d56fb77306",
+      "bytes": 11768
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/portrait_crop_controller.py",
+      "sha256": "c380e992595ad88fbc5b27ac8e94ac7a3cb72d9ccec53562e518817eb9ceae19",
+      "bytes": 5962
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/portrait_crop_engine.py",
+      "sha256": "735b0c0381f08db92e9fef05a3f76e775fa38c1d7ffb635a07eb885c1bde320c",
+      "bytes": 6198
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/portrait_crop_host.py",
+      "sha256": "328c734d60c9af9b07422101cda470c00064c40be28da3b2649625d4d5a09cbb",
+      "bytes": 16899
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/portrait_crop_native.py",
+      "sha256": "c7184a09ffedd3759489c331d2196b84240666c9a30e44a330a03d42ec6370d5",
+      "bytes": 3454
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/portrait_crop_planner.py",
+      "sha256": "c81c0c092769632d4e7d74987bdec4e530486adb10e434b9b3a36ba72e095d6d",
+      "bytes": 5347
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/portrait_crop_project.py",
+      "sha256": "cf9f2f8a93fc1aacfa532f1fcfdd6aa3f3f4814a534c54ab717058f6b9aef32f",
+      "bytes": 10227
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/portrait_crop_recovery.py",
+      "sha256": "a914c94449552f6f534e419a094118cd1408b72254febc52600bad47ff6acdd8",
+      "bytes": 3433
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/portrait_crop_review.py",
+      "sha256": "4ff49d3f94e196ecfea25870a3a3bffb4656a59b23825589a2b1e0eef68c65a1",
+      "bytes": 6602
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/portrait_crop_routes.py",
+      "sha256": "baa5cec1dcf72511b737e01d1f57a912745a47a175175913cbe6cc18b6d73bba",
+      "bytes": 2279
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/portrait_crop_state.py",
+      "sha256": "03f7006d8dd3b9aca60ef7c563974466f3b92101fe7b61d2306fdc0ec1bba4ee",
+      "bytes": 4297
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/project_recovery_runtime.py",
+      "sha256": "b9d2b18e7dc56d6a0c4f4a9de709906b49853c998b5c1a85dd27bb45da6c22c1",
+      "bytes": 12041
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/read_job_ingress.py",
+      "sha256": "e98f7c2c4e8fa3c0dcc61362832ec4217f72ac646841e761a2e5d7141e5c6685",
+      "bytes": 2969
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/server.py",
+      "sha256": "a957088d0e7c026e374c7b93af5f7dcc7b44dad633e1112404eee590fe691db7",
+      "bytes": 472218
+    },
+    {
+      "path": "engine/tests/test_portrait_crop_host_unrun.py",
+      "sha256": "0c258408778ba474f5bf5a96e92728329330c2dcf091512b202419439aebbb05",
+      "bytes": 14512
+    },
+    {
+      "path": "engine/tests/test_portrait_crop_integration_unrun.py",
+      "sha256": "9b1d9f3a4f8d46ba6f99f7db2cc32695166a23a43523315f64127b026c6749a5",
+      "bytes": 2312
+    },
+    {
+      "path": "engine/tests/test_portrait_crop_native_unrun.py",
+      "sha256": "d9f26acb1073229bfca0592762297b5289a1e5c2b3b963c151191ac4c6aea212",
+      "bytes": 2800
+    },
+    {
+      "path": "engine/tests/test_portrait_crop_planner_unrun.py",
+      "sha256": "02a4071b31b4ee8bdbab396a4de72bbc15488a91caa89c9fd6a80d5aebc76d82",
+      "bytes": 6388
+    },
+    {
+      "path": "engine/tests/test_portrait_crop_recovery_unrun.py",
+      "sha256": "b93b787c51edbf1181c3a8e11b1459e6eaa131933ec6977aec4751abdb7baeb5",
+      "bytes": 4344
+    },
+    {
+      "path": "engine/tests/test_portrait_crop_state_unrun.py",
+      "sha256": "ef3a03f4315d65587337d19c18b49ec60877d9e9178c9bb3ed931d9a74d0bbcf",
+      "bytes": 3684
+    },
+    {
+      "path": "packaging/stage-engine.sh",
+      "sha256": "98a793d50a55cafc55fae46440f55c297ba77af49b07682177b679b9e578d61b",
+      "bytes": 31814
+    },
+    {
+      "path": "ui/src-tauri/src/capture_lifecycle.rs",
+      "sha256": "13159dce3cd49e01891b2cbcc04ace11a3b14f07b994fe1161263a4d249eed33",
+      "bytes": 3992
+    },
+    {
+      "path": "ui/src-tauri/src/engine.rs",
+      "sha256": "154b23d03399aa1d4e87196c6305b56f6d1d650fb7e43f8b258e932fae5864d5",
+      "bytes": 52251
+    },
+    {
+      "path": "ui/src-tauri/src/main.rs",
+      "sha256": "9b8c2943a78cfefa8b560bfc3b9a3752507054e1c206bab4e89b952bb66a2454",
+      "bytes": 100838
+    },
+    {
+      "path": "ui/src-tauri/src/native_dispatch.rs",
+      "sha256": "40f3cb609ee4b08c69491b738ae9fc7b96b1d90a592cced8204afc415187a72c",
+      "bytes": 13620
+    },
+    {
+      "path": "ui/src-tauri/src/portrait_crop_api.rs",
+      "sha256": "d929a623f06cae451793ee37cf18524c172e40443c608779f0088bf5b5fdae2c",
+      "bytes": 37731
+    },
+    {
+      "path": "ui/src-tauri/src/portrait_crop_protocol.rs",
+      "sha256": "e004bd1a4158b6d386e7aaeb9935f644fc1d9a12a7c53b5fa2fb81dd76f0db82",
+      "bytes": 26077
+    },
+    {
+      "path": "ui/src-tauri/src/portrait_crop_protocol_unrun.rs",
+      "sha256": "3e200d865853b3a66c4a75553bb85f6101cd770284254d9e57739064c120dc04",
+      "bytes": 9376
+    },
+    {
+      "path": "ui/src/App.tsx",
+      "sha256": "758ea0262d7ccb75f329fae580a76af04852012637d71834940ab2c366538969",
+      "bytes": 159059
+    },
+    {
+      "path": "ui/src/native.ts",
+      "sha256": "325883ed3729f096391d7bb31e19d9382dbafcdbbd67f0a1f8cf50bed8f215ec",
+      "bytes": 116375
+    },
+    {
+      "path": "ui/src/portraitCrop/PortraitCropImage.tsx",
+      "sha256": "8afdcca5d931b0c88b81523aa4e734304ed6f48b3b750a647dd0f99f6207aa8d",
+      "bytes": 2512
+    },
+    {
+      "path": "ui/src/portraitCrop/PortraitCropPanel.tsx",
+      "sha256": "4586d05bd951c4c7635d21d3c4be4c509fac2c4f9b63b868bbfc84d623b67107",
+      "bytes": 15203
+    },
+    {
+      "path": "ui/src/portraitCrop/PortraitCropWorkspaceHost.tsx",
+      "sha256": "2b206cd781d8ea38263ce479e893dbad72cdfa8643bf42b3ffbf7741e56ea25f",
+      "bytes": 5023
+    },
+    {
+      "path": "ui/src/portraitCrop/controller.ts",
+      "sha256": "4d3c830b8e32d0ae713c186a0ad0cb459e99835412a1ee18ef6ee4977b79e5e3",
+      "bytes": 18798
+    },
+    {
+      "path": "ui/src/portraitCrop/index.ts",
+      "sha256": "220c4723eae9bbd404a23d89f8f57bc6139409cc1bdc8bae01baf84aced60961",
+      "bytes": 644
+    },
+    {
+      "path": "ui/src/portraitCrop/model.ts",
+      "sha256": "091824db9608463aedc67631e479819245eace3d6ffa770cf885b70c3618a0d4",
+      "bytes": 17775
+    },
+    {
+      "path": "ui/src/portraitCrop/portraitCrop.css",
+      "sha256": "879435166ac73f99f2a3078a9d8b08e0a95c5dce69bed7b308fb36b856df507c",
+      "bytes": 2856
+    },
+    {
+      "path": "ui/src/portraitCrop/transport.ts",
+      "sha256": "ab24adf21e33ef6b1b967929b88cc4262f513df45fc767e1832f07cd36546264",
+      "bytes": 6022
+    },
+    {
+      "path": "ui/src/portraitCrop/workflow.unrun.test.ts",
+      "sha256": "bf5c8f4a5512cc43c26e47bb028f3c94e9bb9ab751ce0ef4991f50201c960297",
+      "bytes": 15458
+    },
+    {
+      "path": "ui/src/workspaces/guardCreativeWork.ts",
+      "sha256": "c57d907fb3aafcf26122a00b7863744dc27833c5c5e1f1b091814ca3e75707df",
+      "bytes": 1759
+    }
+  ]
+}

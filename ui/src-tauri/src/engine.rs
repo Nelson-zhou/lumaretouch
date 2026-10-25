@@ -48,12 +48,14 @@ impl EngineHandle {
         crate::hair_unification_api::blocks_mutation(self.epoch, &cmd)?;
         crate::creative_selection_api::blocks_mutation(self.epoch, &cmd)?;
         crate::light_glow_api::blocks_mutation(self.epoch, &cmd)?;
+        crate::portrait_crop_api::blocks_mutation(self.epoch, &cmd)?;
         crate::lens_blur_api::blocks_mutation(self.epoch, &cmd)?;
         crate::expression_replacement_api::blocks_mutation(self.epoch, &cmd)?;
         if crate::background_material_api::read_only(&cmd) { return self.dispatcher.enqueue(None, cmd); }
         if crate::hair_unification_api::read_only(&cmd) { return self.dispatcher.enqueue(None, cmd); }
         if crate::creative_selection_api::read_only(&cmd) { return self.dispatcher.enqueue(None, cmd); }
         if crate::light_glow_api::read_only(&cmd) { return self.dispatcher.enqueue(None, cmd); }
+        if crate::portrait_crop_api::read_only(&cmd) { return self.dispatcher.enqueue(None, cmd); }
         if crate::lens_blur_api::read_only(&cmd) { return self.dispatcher.enqueue(None, cmd); }
         if crate::expression_replacement_api::read_only(&cmd) { return self.dispatcher.enqueue(None, cmd); }
         if crate::local_workflow_host::read_only(&cmd) { return self.dispatcher.enqueue(None, cmd); }
@@ -96,6 +98,16 @@ impl EngineHandle {
         if let Err(error)=self.input.with_writer(|writer|writer.write_all(&line).and_then(|_|writer.flush())) {
             self.dispatcher.close(); self.input.close();
             return Err(format!("镜头读取取消写入未获确认，不会重发：{error}"));
+        }
+        Ok(())
+    }
+    pub(crate) fn cancel_portrait_crop_read(&self, request_id: &str, command_sha256: &str) -> Result<(), String> {
+        if !self.is_alive() { return Err("原引擎已结束；取消结果未确认".into()); }
+        let mut line=serde_json::to_vec(&json!({"cmd":"portrait_crop_cancel","request_id":request_id,"command_sha256":command_sha256})).map_err(|e|e.to_string())?;
+        line.push(b'\n');
+        if let Err(error)=self.input.with_writer(|writer|writer.write_all(&line).and_then(|_|writer.flush())) {
+            self.dispatcher.close(); self.input.close();
+            return Err(format!("取消请求写入未获确认，不会重发：{error}"));
         }
         Ok(())
     }
@@ -142,12 +154,14 @@ impl EngineHandle {
         crate::hair_unification_api::blocks_mutation(self.epoch, &cmd)?;
         crate::creative_selection_api::blocks_mutation(self.epoch, &cmd)?;
         crate::light_glow_api::blocks_mutation(self.epoch, &cmd)?;
+        crate::portrait_crop_api::blocks_mutation(self.epoch, &cmd)?;
         crate::lens_blur_api::blocks_mutation(self.epoch, &cmd)?;
         crate::expression_replacement_api::blocks_mutation(self.epoch, &cmd)?;
         if crate::background_material_api::read_only(&cmd) { return self.dispatcher.enqueue(None, cmd); }
         if crate::hair_unification_api::read_only(&cmd) { return self.dispatcher.enqueue(None, cmd); }
         if crate::creative_selection_api::read_only(&cmd) { return self.dispatcher.enqueue(None, cmd); }
         if crate::light_glow_api::read_only(&cmd) { return self.dispatcher.enqueue(None, cmd); }
+        if crate::portrait_crop_api::read_only(&cmd) { return self.dispatcher.enqueue(None, cmd); }
         if crate::lens_blur_api::read_only(&cmd) || crate::expression_replacement_api::read_only(&cmd) { return self.dispatcher.enqueue(None, cmd); }
         if !crate::torso_length_api::read_only(&cmd) && !crate::waist_length_api::read_only(&cmd) && !crate::head_size_api::read_only(&cmd) && !crate::body_slim_api::read_only(&cmd) { crate::project_recovery_fence::issued(self.epoch, &cmd)?; }
         if cmd["cmd"] != "preset_organisation" && crate::sample_library_api::invalidates_capture(&cmd) && !crate::semantic_colour_api::read_only(&cmd) && !crate::shoulder_shape_api::read_only(&cmd) && !crate::leg_shape_api::read_only(&cmd) && !crate::waist_shape_api::read_only(&cmd) && !crate::leg_length_api::read_only(&cmd) && !crate::torso_length_api::read_only(&cmd) && !crate::waist_length_api::read_only(&cmd) && !crate::head_size_api::read_only(&cmd) && !crate::body_slim_api::read_only(&cmd) && !crate::neck_shape_api::read_only(&cmd) && !crate::arm_shape_api::read_only(&cmd) {
@@ -257,6 +271,7 @@ pub fn spawn(py: &str, engine_src: &str, session: &str, state: Arc<AppState>,
         thread::spawn(move || {
             while let Ok(line) = rx.recv() {
                 if let Some(marker)=crate::light_glow_api::observe_line(inspection_epoch, &line) { crate::project_recovery_fence::observed(inspection_epoch, &marker); }
+                if let Some(marker)=crate::portrait_crop_api::observe_line(inspection_epoch, &line) { crate::project_recovery_fence::observed(inspection_epoch, &marker); }
                 if let Some(marker)=crate::lens_blur_api::observe_line(inspection_epoch, &line) { crate::project_recovery_fence::observed(inspection_epoch, &marker); }
                 if let Some(marker)=crate::expression_replacement_api::observe_line(inspection_epoch, &line) { crate::project_recovery_fence::observed(inspection_epoch, &marker); }
                 if let Some(marker)=crate::hair_unification_api::observe_line(inspection_epoch, &line) { crate::project_recovery_fence::observed(inspection_epoch, &marker); if marker["success"]==true && marker["doc_state"].is_object() { st.on_layer_frame(&marker); } }
@@ -278,9 +293,10 @@ pub fn spawn(py: &str, engine_src: &str, session: &str, state: Arc<AppState>,
                             || crate::hair_unification_api::guards_result(inspection_epoch,id)
                             || crate::creative_selection_api::guards_result(inspection_epoch,id)
                             || crate::light_glow_api::guards_result(inspection_epoch,id)
+                            || crate::portrait_crop_api::guards_result(inspection_epoch,id)
                             || crate::lens_blur_api::guards_result(inspection_epoch,id)
                     });
-                    if !scalar_review && v["event"] != "hair_unification_result" && v["event"] != "creative_selection_result" && v["event"] != "ingest_session_result" && v["event"] != "workflow_owner_result" && v["event"] != "light_glow_result" && v["event"] != "lens_blur_result" && v["event"] != "expression_replacement_result" && v["event"] != "common_background_result" && v["event"] != "fringe_repair_result" && v["event"] != "id_background_result" && v["event"] != "torso_length_result" && v["event"] != "waist_length_result" && v["event"] != "head_size_result" && v["event"] != "body_slim_result" {
+                    if !scalar_review && v["event"] != "portrait_crop_result" && v["event"] != "hair_unification_result" && v["event"] != "creative_selection_result" && v["event"] != "ingest_session_result" && v["event"] != "workflow_owner_result" && v["event"] != "light_glow_result" && v["event"] != "lens_blur_result" && v["event"] != "expression_replacement_result" && v["event"] != "common_background_result" && v["event"] != "fringe_repair_result" && v["event"] != "id_background_result" && v["event"] != "torso_length_result" && v["event"] != "waist_length_result" && v["event"] != "head_size_result" && v["event"] != "body_slim_result" {
                         crate::project_recovery_fence::observed(inspection_epoch, &v);
                     }
                     if v["event"]=="ready" && v["command_ack"].as_u64()!=Some(1) {
@@ -309,6 +325,7 @@ pub fn spawn(py: &str, engine_src: &str, session: &str, state: Arc<AppState>,
             crate::background_material_api::ended(inspection_epoch);
             crate::hair_unification_api::ended(inspection_epoch);
             crate::light_glow_api::ended(inspection_epoch);
+            crate::portrait_crop_api::ended(inspection_epoch);
             crate::lens_blur_api::ended(inspection_epoch);
             crate::neck_shape_api::ended(inspection_epoch);
             crate::arm_shape_api::ended(inspection_epoch);
@@ -516,6 +533,7 @@ fn handle_event(state: &Arc<AppState>, line: &str,inspection_epoch:[u8;16]) {
             crate::hair_unification_api::ready(inspection_epoch, v["hair_unification_protocol"]==1, v["hair_unification_capability"]["available"]==true);
             crate::background_material_api::ready(inspection_epoch, v["background_material_library_protocol"].as_u64()==Some(1));
             crate::light_glow_api::ready(inspection_epoch, if v["light_glow_protocol"].as_u64()==Some(1) { &v["light_glow_capability"] } else { &Value::Null });
+            crate::portrait_crop_api::ready(inspection_epoch, &v["portrait_crop"]);
             crate::lens_blur_api::ready(inspection_epoch, if v["lens_blur_protocol"].as_u64()==Some(3) { &v["lens_blur_capability"] } else { &Value::Null });
             crate::expression_replacement_api::ready(inspection_epoch, v["expression_replacement_protocol"].as_u64()==Some(1) && v["expression_replacement_operation_id"]=="lnx.expression_replacement.v1" && v["expression_replacement_available"]==true);
             crate::body_slim_api::ready(inspection_epoch, v["body_slim_protocol"].as_u64() == Some(1));
@@ -648,6 +666,7 @@ fn handle_event(state: &Arc<AppState>, line: &str,inspection_epoch:[u8;16]) {
             // 整条回显：装机自证要拿它比“重开后 dirty 说的是不是真话”
             crate::creative_selection_api::project_reopened(inspection_epoch, &v);
             crate::hair_unification_api::project_reopened(inspection_epoch, &v);
+            crate::portrait_crop_api::project_reopened(inspection_epoch, &v);
             state.on_project(&v);
             println!("M0_PROJECT {line}");
         }

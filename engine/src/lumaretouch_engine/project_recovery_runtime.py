@@ -14,6 +14,8 @@ def observe(event):
     boundary = getattr(_local, 'boundary', None)
     if boundary is not None:
         message = boundary['message']
+        from .portrait_crop_recovery import observe as crop_observe
+        if crop_observe(boundary, event): return
         if (message.get('cmd') == 'creative_selection' and event.get('event') == 'creative_selection_result'
                 and event.get('request_id') == message.get('request_id') and event.get('action') == message.get('action')):
             boundary['selection_outcome'] = {key: event.get(key) for key in ('status', 'success', 'outcome_unknown', 'no_write')}
@@ -43,6 +45,8 @@ def finish(engine, boundary, error=None):
     if boundary is None:
         return
     message = boundary['message']
+    from .portrait_crop_recovery import finish as crop_finish
+    if crop_finish(engine, boundary, error): return
     if message.get('cmd') in ('ingest_session', 'workflow_owner', 'background_material_library', 'background_material_library_cancel'):
         # The lease owns pending/unknown copy receipts. Only the existing atomic
         # managed transaction writes the saved project; readback cannot bless a
@@ -129,6 +133,8 @@ class Runtime:
         return (self.engine._project or {}).get('project_id')
 
     def switch(self):
+        self.__dict__.pop('_portrait_crop_taint', None)
+        self.__dict__.pop('_portrait_crop_completed', None)
         self.scheduler.switch(self.project_id())
         self.revision += 1
         self.last_offered = -1
@@ -146,7 +152,7 @@ class Runtime:
             # implement the existing active/pending/uncertain/job conventions.
             if name in ('bench', '_export', '_thumbs', '_picks'):
                 if owner.is_alive(): raise RecoveryError('后台任务尚未完成：' + name)
-            if not (name.endswith(('_controller', '_owner', '_host')) or name in ('_batch_sync','_expression_replacement_service','_lens_blur_service','_light_glow_service')):
+            if not (name.endswith(('_controller', '_owner', '_host')) or name in ('_batch_sync','_portrait_crop_service','_expression_replacement_service','_lens_blur_service','_light_glow_service')):
                 continue
             for field in ('active', 'uncertain', 'pending', 'job', 'worker_running'):
                 value = getattr(owner, field, None)

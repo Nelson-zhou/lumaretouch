@@ -1,6 +1,8 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 """Reader-thread read-job controls, extracted without changing order or owners."""
 def stop(engine):
+    from .portrait_crop_controller import controller as crop_jobs
+    crop_jobs(engine).stop()
     engine._background_material_host().stop()
     from .creative_selection_jobs import controller as selection_jobs
     selection_jobs(engine).stop()
@@ -27,6 +29,8 @@ def stop(engine):
     engine._owned_reader_stop()
 
 def ingress(engine, line):
+    from .portrait_crop_controller import controller as crop_jobs
+    if crop_jobs(engine).ingress(line): return True
     if engine._background_material_host().observe_line(line): return True
     from .creative_selection_jobs import controller as selection_jobs
     selection_jobs(engine).ingress(line)

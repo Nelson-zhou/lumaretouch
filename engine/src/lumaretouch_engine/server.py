@@ -91,6 +91,7 @@ from .master16_policy import Master16PolicyMixin
 from .body_pose_host import BodyPoseHostMixin
 from .hair_colour_controller import HairColourHostMixin, MUTATIONS as HAIR_MUTATIONS
 from . import hair_unification_controller as HUC
+from .portrait_crop_engine import PortraitCropEngineMixin
 from .people_host import PeopleHostMixin
 from .workflow_ports import WorkflowPortsMixin
 from . import library_query_host as LQ
@@ -215,7 +216,7 @@ class _TaskControl:
         self.cancel = threading.Event()
 
 
-class Engine(HUC.HairUnificationHostMixin, BackgroundMaterialHostMixin, CreativeModuleCommandsMixin, FringeRepairHostMixin, PresetOrganisationHostMixin, HairColourHostMixin, Master16PolicyMixin, BodyPoseHostMixin, PeopleHostMixin, PreviewLifecycleMixin, StudioToolsMixin, PortraitGeometryMixin, WorkflowPortsMixin, SampleLibraryHostMixin, SemanticColourHostMixin):
+class Engine(PortraitCropEngineMixin, HUC.HairUnificationHostMixin, BackgroundMaterialHostMixin, CreativeModuleCommandsMixin, FringeRepairHostMixin, PresetOrganisationHostMixin, HairColourHostMixin, Master16PolicyMixin, BodyPoseHostMixin, PeopleHostMixin, PreviewLifecycleMixin, StudioToolsMixin, PortraitGeometryMixin, WorkflowPortsMixin, SampleLibraryHostMixin, SemanticColourHostMixin):
     def __init__(self, session: str):
         self.session = session
         self.shm: FrameShm | None = None
@@ -541,7 +542,7 @@ class Engine(HUC.HairUnificationHostMixin, BackgroundMaterialHostMixin, Creative
               "history_max": self.HISTORY_MAX,
               "history_group_ms": self.HISTORY_GROUP_MS,
               "history_edit_cmds": list(self.EDIT_CMDS),
-              "hair_unification_protocol": 1, "hair_unification_capability": HUC.capability(), "creative_document_protocol": 1, "creative_selection_protocol": 1, "creative_selection_capability": selection_capability(), "background_material_library_protocol": 1,
+              "portrait_crop": self._portrait_crop_capability(), "hair_unification_protocol": 1, "hair_unification_capability": HUC.capability(), "creative_document_protocol": 1, "creative_selection_protocol": 1, "creative_selection_capability": selection_capability(), "background_material_library_protocol": 1,
               "canvas_guides_protocol": 1,
               "canvas_guides_actions": ["state", "set", "undo", "redo"],
               # 项目面的能力名单由引擎报出去（与 export 的格式名单同一条理由）：
@@ -6708,7 +6709,7 @@ class Engine(HUC.HairUnificationHostMixin, BackgroundMaterialHostMixin, Creative
                           'success': False, 'outcome_unknown': False, 'error': reason})
                     return
                 raise ValueError(reason)
-            if name in ('lens_blur', 'light_glow', 'creative_selection', 'hair_unification'):
+            if name in ('portrait_crop', 'lens_blur', 'light_glow', 'creative_selection', 'hair_unification'):
                 fn(msg); return  # The reviewed copy transaction owns source fences and history.
             if name == 'expression_replacement':
                 fn(msg); return  # Dedicated exact source/copy transaction owns its history and receipts.

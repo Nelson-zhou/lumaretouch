@@ -232,6 +232,12 @@ cp "$here/../LICENSE" "$here/../docs/semantic_colour/README.md" "$stage/lumareto
 mkdir -p "$stage/lumaretouch_engine/third_party/semantic_colour/batch"
 cp "$here/../docs/semantic_colour_batch/"*.md "$stage/lumaretouch_engine/third_party/semantic_colour/batch/"
 
+# Original portrait composition scalar planner. No model download/fallback.
+bash "$here/../core/portrait_crop/build_portrait_crop.sh" "$stage/lumaretouch_engine/bin/liblrt_portrait_crop.so"
+mkdir -p "$stage/lumaretouch_engine/third_party/portrait_crop"
+cp "$here/../core/portrait_crop/"{lib.rs,tests_unrun.rs,portrait_crop.h,Cargo.toml,build_portrait_crop.sh} "$here/../LICENSE" "$stage/lumaretouch_engine/third_party/portrait_crop/"
+cp "$here/../docs/portrait-crop/"{CORE.md,RESEARCH.md,HOST.md} "$stage/lumaretouch_engine/third_party/portrait_crop/"
+
 # Original source-domain hair colour and measured-highlight operator, no weights.
 # Independent manually referenced hair unification. Source only, build UNRUN.
 bash "$here/../core/hair_unification/build_hair_unification.sh" "$stage/lumaretouch_engine/bin/liblrt_hair_unification.so"

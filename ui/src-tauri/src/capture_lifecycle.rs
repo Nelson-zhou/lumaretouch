@@ -27,6 +27,7 @@ impl AppState {
         crate::background_material_api::reset(epoch);
         crate::hair_unification_api::reset(epoch);
         crate::light_glow_api::reset(epoch);
+        crate::portrait_crop_api::reset(epoch);
         crate::lens_blur_api::reset(epoch);
         crate::expression_replacement_api::reset(epoch);
         crate::shoulder_shape_api::reset(epoch);

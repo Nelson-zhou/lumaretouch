@@ -1,3 +1,4 @@
+import {PortraitCropWorkspaceHost} from './portraitCrop';
 import {createStartEngineAction} from './engine/startEngineAction';
 import {SkinReferenceMatchPanel} from './skinReferenceMatch/SkinReferenceMatchPanel';
 import {SkinReferenceBodyPanel} from './skinReferenceBody/SkinReferenceBodyPanel';
@@ -210,6 +211,7 @@ export default function App() {
     setHudState(v);
   }, []);
   const [busy, setBusy] = useState(false);
+  const [portraitCropBusy, setPortraitCropBusy] = useState(false);
   const [skipDraw, setSkipDraw] = useState(false);
   const [upload, setUpload] = useState<"raw" | "bitmap" | "pingpong">("raw");
   const [ctxOpt, setCtxOpt] = useState(false);
@@ -1849,7 +1851,7 @@ export default function App() {
   const glow=useGlowWorkspaceBinding({sourceUid:doc?.source_uid??'',loadId:doc?.document_id??'',engineKey:String(pid??''),hostRevision:status?.doc_rev??-1,active:workspace==='creative',
     available:!!status?.engine_alive&&hasImage&&status.image?.load_id===doc?.document_id&&caps?.light_glow_protocol===GLOW_PROTOCOL&&validGlowCapability(glowCapability)&&glowCapability.status==='available',
     externalBusy:imageToolBusy||idBackgroundBusy||creative.pending||expression.busy||expressionOpen||lens.busy||lensOpen||colorSampler.active||sampleLibrary.open,queueBusy:!!status?.edit_queue?.in_flight||!!status?.edit_queue?.pending},refreshFromEngine);
-  armBusyRef.current=armBusyRef.current||expression.busy||lens.busy||glow.busy||hairUnification.state.open||hairUnification.state.pending||hairUnification.state.checking||hairUnification.state.preparing||hairUnification.state.refreshing;
+  armBusyRef.current=armBusyRef.current||portraitCropBusy||expression.busy||lens.busy||glow.busy||hairUnification.state.open||hairUnification.state.pending||hairUnification.state.checking||hairUnification.state.preparing||hairUnification.state.refreshing;
   creativeRoute.current={active:workspace==='creative',pending:creative.pending,importPaths:creative.importPaths,history:creative.history};
   const guides=useCanvasGuides({loadId:doc?.document_id??'',report:doc?.canvas_guides,center:doc?.crop?[(doc.crop.rect[0]+doc.crop.rect[2])/2,(doc.crop.rect[1]+doc.crop.rect[3])/2]:undefined,
     contextKey:JSON.stringify([pid,doc?.document_id,doc?.crop,view,workspace]),modes:{
@@ -1867,7 +1869,7 @@ export default function App() {
   };
   // Keep uncertain arm/waist mutations and proposal cancellation from racing other UI edits.
   // Original-receipt checks, popup Close and the activity locator remain accessible.
-  const guardArmWork=(event:import('react').SyntheticEvent)=>guardCreativeWork(event,{hairUnification:hairUnification.state.open||hairUnification.state.pending||hairUnification.state.checking||hairUnification.state.preparing||hairUnification.state.refreshing,glow:glow.busy||glowOpen,lens:lens.busy||lensOpen,expression:expression.busy||expressionOpen,background:fringe.active||fringe.pending||commonBackground.active||commonBackground.pending,heal:healBrush.pending,layers:creative.pending,selection:selection.busy,
+  const guardArmWork=(event:import('react').SyntheticEvent)=>guardCreativeWork(event,{portraitCrop:portraitCropBusy,hairUnification:hairUnification.state.open||hairUnification.state.pending||hairUnification.state.checking||hairUnification.state.preparing||hairUnification.state.refreshing,glow:glow.busy||glowOpen,lens:lens.busy||lensOpen,expression:expression.busy||expressionOpen,background:fringe.active||fringe.pending||commonBackground.active||commonBackground.pending,heal:healBrush.pending,layers:creative.pending,selection:selection.busy,
     idBackground:idBackgroundBusy,body:arms.busy||waist.busy||length.busy||neck.busy||torso.busy||waistLength.busy||headSize.busy||bodySlim.busy});
   return (
     <div className={"app ws-" + workspace} onClickCapture={guardArmWork} onPointerDownCapture={guardArmWork} onKeyDownCapture={guardArmWork}>
@@ -1877,6 +1879,7 @@ export default function App() {
       <LightGlowWorkspaceHost owner={glow} unavailableReason={validGlowCapability(glowCapability)?(glowCapability.status==='available'?undefined:glowCapability.reason||'发光原生模块不可用'): '缺少匹配的发光原生模块；不会降级为占位效果或自动安装'} open={glowOpen} onOpen={()=>setGlowOpen(true)} onClose={()=>setGlowOpen(false)}/>
       <LensWorkspaceHost owner={lens} open={lensOpen} onOpen={()=>setLensOpen(true)} onClose={()=>setLensOpen(false)}/>
       <ExpressionWorkspaceHost owner={expression} open={expressionOpen} onOpen={()=>setExpressionOpen(true)} onClose={()=>setExpressionOpen(false)}/>
+      <PortraitCropWorkspaceHost contextKey={doc?.document_id?JSON.stringify([pid,doc.document_id,status?.doc_rev,status?.image?.load_id,doc.source_uid,workspace]):null} enabled={!!status?.engine_alive&&hasImage&&status.image?.load_id===doc?.document_id&&workspace==='retouch'&&!imageToolBusy&&!idBackgroundBusy&&!creative.pending&&!expression.busy&&!expressionOpen&&!lens.busy&&!lensOpen&&!glow.busy&&!glowOpen&&!hair.state.pending&&!hairUnification.state.open&&!hairUnification.state.pending&&!sampleLibrary.open&&!colorSampler.active&&!status?.edit_queue?.in_flight&&!status?.edit_queue?.pending} onChanged={refreshFromEngine} onBusy={setPortraitCropBusy} onReopenProject={()=>projectFlow.perform('open')}/>
       <SampleLibraryHost owner={sampleLibrary}/>
       <BackgroundMaterialHost owner={materials}/>
 

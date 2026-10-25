@@ -272,6 +272,8 @@ class PeopleHostMixin:
         load_unification(self,project)
         from .hair_unification_controller import invalidate_after_reload
         invalidate_after_reload(self)
+        from .portrait_crop_routes import invalidate_after_reload as invalidate_portrait_crop
+        invalidate_portrait_crop(self)
         self.__dict__.pop('_skin_reference_match_reviews',None)
         self.__dict__.pop('_skin_reference_body_reviews',None)
         self._people_graph_owner=PeopleGraphOwner(project.get('people_graph'))
