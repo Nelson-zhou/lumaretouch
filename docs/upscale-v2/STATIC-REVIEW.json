@@ -1,0 +1,64 @@
+{
+  "schema": "lrt.upscale-v2.static-review.v1",
+  "checked_on": "2026-10-25",
+  "checks_performed": [
+    "Python AST parse without product import",
+    "JSON parse",
+    "UTF-8 text/trailing-whitespace scan",
+    "local upstream license byte equality",
+    "source file SHA256"
+  ],
+  "python_files_parsed": 8,
+  "license_copy_equal": true,
+  "imports_read_statically": {
+    "__init__.py": [
+      "adapter",
+      "geometry",
+      "source"
+    ],
+    "architecture.py": [
+      "dataclasses",
+      "math"
+    ],
+    "geometry.py": [
+      "architecture",
+      "dataclasses",
+      "source",
+      "typing"
+    ],
+    "adapter.py": [
+      "architecture",
+      "dataclasses",
+      "typing"
+    ],
+    "_stream.py": [
+      "dataclasses",
+      "geometry",
+      "hashlib",
+      "numeric",
+      "source",
+      "sys",
+      "typing"
+    ],
+    "_network.py": [
+      "architecture",
+      "collections"
+    ],
+    "numeric.py": [
+      "dataclasses",
+      "math"
+    ],
+    "source.py": [
+      "dataclasses",
+      "hashlib",
+      "math",
+      "re",
+      "struct",
+      "typing"
+    ]
+  },
+  "runtime_checks_run": false,
+  "tests_run": false,
+  "inference_run": false,
+  "scope": "New upscale_v2 and upscale-v2 files only; no repository-wide execution claim."
+}

@@ -1,0 +1,121 @@
+{
+  "schema": "lrt.upscale-v2.source-provenance.v1",
+  "checked_on": "2026-10-25",
+  "status": "isolated_source_authored_unavailable_unrun",
+  "reference_contract": "lrt.upscale-v2.native-candidate.v1",
+  "sources": [
+    {
+      "repo": "xinntao/Real-ESRGAN",
+      "revision": "fa4c8a03ae3dbc9ea6ed471a6ab5da94ac15c2ea",
+      "path": "inference_realesrgan.py",
+      "git_blob_sha": "0a8cc43addb2e8e94b9920cef109443c7f475241",
+      "url": "https://github.com/xinntao/Real-ESRGAN/blob/fa4c8a03ae3dbc9ea6ed471a6ab5da94ac15c2ea/inference_realesrgan.py"
+    },
+    {
+      "repo": "xinntao/Real-ESRGAN",
+      "revision": "fa4c8a03ae3dbc9ea6ed471a6ab5da94ac15c2ea",
+      "path": "realesrgan/utils.py",
+      "git_blob_sha": "67e5232d61e93807f22b052499a733cd348a61a0",
+      "url": "https://github.com/xinntao/Real-ESRGAN/blob/fa4c8a03ae3dbc9ea6ed471a6ab5da94ac15c2ea/realesrgan/utils.py"
+    },
+    {
+      "repo": "XPixelGroup/BasicSR",
+      "revision": "651835a1b9d38dbbdaf45750f56906be2364f01a",
+      "path": "basicsr/archs/rrdbnet_arch.py",
+      "git_blob_sha": "63d07080c2ec1305090c59b7bfbbda2b003b18e4",
+      "url": "https://github.com/XPixelGroup/BasicSR/blob/651835a1b9d38dbbdaf45750f56906be2364f01a/basicsr/archs/rrdbnet_arch.py"
+    },
+    {
+      "repo": "XPixelGroup/BasicSR",
+      "revision": "651835a1b9d38dbbdaf45750f56906be2364f01a",
+      "path": "basicsr/archs/arch_util.py",
+      "git_blob_sha": "11b82a74e84e0e76e5b6e6dec4cad692c972ff63",
+      "url": "https://github.com/XPixelGroup/BasicSR/blob/651835a1b9d38dbbdaf45750f56906be2364f01a/basicsr/archs/arch_util.py"
+    },
+    {
+      "repo": "XPixelGroup/BasicSR",
+      "revision": "651835a1b9d38dbbdaf45750f56906be2364f01a",
+      "path": "LICENSE.txt",
+      "git_blob_sha": "3245f3f9e4f476ee3a283f41dd0d9db65544c222",
+      "url": "https://github.com/XPixelGroup/BasicSR/blob/651835a1b9d38dbbdaf45750f56906be2364f01a/LICENSE.txt"
+    }
+  ],
+  "additional_primary_reads": [
+    {
+      "url": "https://api.github.com/repos/XPixelGroup/BasicSR/git/trees/651835a1b9d38dbbdaf45750f56906be2364f01a?recursive=1",
+      "revision": "651835a1b9d38dbbdaf45750f56906be2364f01a",
+      "truncated": false,
+      "notice_entries": []
+    },
+    {
+      "url": "https://github.com/XPixelGroup/BasicSR/blob/651835a1b9d38dbbdaf45750f56906be2364f01a/LICENSE/README.md",
+      "git_blob_sha": "5459803d54d43cdaf347c36ea1827975115bf66b"
+    }
+  ],
+  "candidates": [
+    {
+      "model_id": "RealESRGAN_x2plus",
+      "scale": 2,
+      "input_unshuffle": 2,
+      "features": 64,
+      "blocks": 23,
+      "growth": 32,
+      "checkpoint_sha256": null,
+      "runtime_distribution_hashes": null,
+      "checkpoint_license_review": "pending",
+      "production_admitted": false
+    },
+    {
+      "model_id": "RealESRGAN_x4plus",
+      "scale": 4,
+      "input_unshuffle": 1,
+      "features": 64,
+      "blocks": 23,
+      "growth": 32,
+      "checkpoint_sha256": null,
+      "runtime_distribution_hashes": null,
+      "checkpoint_license_review": "pending",
+      "production_admitted": false
+    }
+  ],
+  "license": {
+    "adapted_graph": "Apache-2.0",
+    "copyright": "Copyright 2018-2022 BasicSR Authors",
+    "license_file": "engine/src/lumaretouch_engine/upscale_v2/LICENSE.BasicSR.txt",
+    "notice_file": "engine/src/lumaretouch_engine/upscale_v2/NOTICE",
+    "license_copy_source": "docs/upscale-research/licenses/BasicSR-Apache-2.0.txt",
+    "license_sha256": "5447872f21ddc29dc0dc060d5c885513c01c904e9da9931bba69898a6fb4d415",
+    "packaging_verified": false
+  },
+  "execution": {
+    "product_imports": false,
+    "model_construction": false,
+    "weights_downloaded": false,
+    "checkpoint_load": false,
+    "inference": false,
+    "dependencies_installed": false,
+    "tests": false,
+    "build": false,
+    "compiler": false,
+    "typecheck": false,
+    "git_writes": false,
+    "github_writes": false,
+    "extra_external_codex_tasks": false
+  },
+  "scope": [
+    "engine/src/lumaretouch_engine/upscale_v2/",
+    "docs/upscale-v2/"
+  ],
+  "restrictions": "Static source/AST/JSON/hash review only. Public primary text/metadata reads did not download code files or model bytes into the workspace.",
+  "remaining_gates": [
+    "authenticated checkpoint digest and license",
+    "authenticated reviewed runtime distributions",
+    "installed source/config integrity",
+    "bounded safe local checkpoint loader",
+    "resource reservation and runtime scratch envelopes",
+    "actual checkpoint compatibility",
+    "whole-frame versus tiled numeric and phase validation",
+    "photographic quality and hallucination review",
+    "parent source/region/layer/history/protocol/UI integration"
+  ]
+}

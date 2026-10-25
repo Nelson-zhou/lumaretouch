@@ -1,0 +1,149 @@
+{
+  "schema_version": 1,
+  "baseline_commit": "51ef4b90f6d1d1b499940c77f5d2215b05dc43e3",
+  "requirement_ids": [
+    "LNX-REF-WF-158251-a4c9a2ccc1",
+    "LNX-REF-WF-127932-657ed77402"
+  ],
+  "status": "SOURCE_IMPLEMENTED_PRIVATE_BACKEND_PUBLIC_PRODUCTION_UNAVAILABLE_ALL_RUNTIME_UNRUN",
+  "scope": "Pinned-compatible RRDB graph, safe-envelope schema, actual private float tiled native-size reference computation and explicit public refusal pending evidence. Not an end-user AI capability.",
+  "date": "2026-10-25",
+  "manifest_policy": "Exact files below plus this manifest; all concurrent lens/shared edits excluded. No legacy upscaler changes.",
+  "source_checks": {
+    "python_ast": 8,
+    "json": "parsed",
+    "whitespace": "all listed files clean",
+    "provenance": "Pinned BasicSR code adaptation with full Apache2 license and modification NOTICE; no checkpoint bytes downloaded"
+  },
+  "remaining": [
+    "verified safe loader and exact immutable checkpoint digest",
+    "upstream checkpoint rights and distribution review",
+    "pinned runtime/code/config integrity and resource reservations",
+    "numerical, tile halo, native-size restoration and portrait quality acceptance",
+    "actual source-owned host/UI/full comparison/history/export integration",
+    "separately owned face/body/background semantic region support"
+  ],
+  "unrun": [
+    "product imports/execution",
+    "tests/build/typecheck/compiler",
+    "model download/inference",
+    "numerical/performance/memory/photo acceptance"
+  ],
+  "files": [
+    {
+      "path": "docs/upscale-research/BACKEND-CONTRACT.md",
+      "bytes": 13860,
+      "sha256": "20048c9c6c6ff2c1f6f46ba9c2771590c3c8ec8df4940005f6e0aa81877159ef"
+    },
+    {
+      "path": "docs/upscale-research/IMPLEMENTATION-MAP.md",
+      "bytes": 12341,
+      "sha256": "30bc1abf6c9fb0af828cb4f5178a7eb756b9bc6f22106dc88e69e4781a384d39"
+    },
+    {
+      "path": "docs/upscale-research/LOCAL-SOURCE-SHA256.txt",
+      "bytes": 1564,
+      "sha256": "545496d026e6524013f91203c6655906478887c1e16a2b51503152df8b21729c"
+    },
+    {
+      "path": "docs/upscale-research/PROVENANCE.json",
+      "bytes": 8375,
+      "sha256": "d7581ee5a53876ed71abeddd55349dff250b2281ae6a7852d4c6c28edc6fd65a"
+    },
+    {
+      "path": "docs/upscale-research/README.md",
+      "bytes": 9444,
+      "sha256": "8f89d7b536fd9168fa0cd148d0fd248ba665e4baf48f09c042f2ad8aaee341d9"
+    },
+    {
+      "path": "docs/upscale-research/licenses/BasicSR-Apache-2.0.txt",
+      "bytes": 11350,
+      "sha256": "5447872f21ddc29dc0dc060d5c885513c01c904e9da9931bba69898a6fb4d415"
+    },
+    {
+      "path": "docs/upscale-research/licenses/Real-ESRGAN-BSD-3-Clause.txt",
+      "bytes": 1519,
+      "sha256": "4a699ec4863d96a91fc265948a0c90033f7e8735d515524dcf3444736406e0c2"
+    },
+    {
+      "path": "docs/upscale-v2/ACCEPTANCE-UNRUN.md",
+      "bytes": 5619,
+      "sha256": "d14328186d7645010e500f3a1b1478fcb222f46bd53aec9a5a61a9b129be9207"
+    },
+    {
+      "path": "docs/upscale-v2/PROVENANCE.json",
+      "bytes": 4671,
+      "sha256": "223271d943b18ed15b91c4369694b9e0dd39e365e797c72c46f5a3d6016d4184"
+    },
+    {
+      "path": "docs/upscale-v2/README.md",
+      "bytes": 5778,
+      "sha256": "1d2435958f50eae88f30cce71f1749f796e80cc86a69080ee254a7bad651dcb8"
+    },
+    {
+      "path": "docs/upscale-v2/SOURCE-SHA256.txt",
+      "bytes": 1832,
+      "sha256": "fb45364fe22a6d931581e872880a68399fd66b83713d7e35180a02a974803ef9"
+    },
+    {
+      "path": "docs/upscale-v2/STATIC-REVIEW.json",
+      "bytes": 1277,
+      "sha256": "fe73d710af1a54bf7c77b48c626898eef2a5a46daa55a408641a4a4a52e0eaa2"
+    },
+    {
+      "path": "docs/upscale-v2/STREAMING-CONTRACT.md",
+      "bytes": 7818,
+      "sha256": "5f75511acab32609caa58e08791fcb22bd45981febe8b53619dd2cdd0595d444"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/upscale_v2/LICENSE.BasicSR.txt",
+      "bytes": 11350,
+      "sha256": "5447872f21ddc29dc0dc060d5c885513c01c904e9da9931bba69898a6fb4d415"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/upscale_v2/NOTICE",
+      "bytes": 2081,
+      "sha256": "8f6445c0a545e418da9c82eb2c3868ce875f144d305acca25fe84ae7ecb1a890"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/upscale_v2/__init__.py",
+      "bytes": 683,
+      "sha256": "b8be540ddccfdef6f131090a4f096edcfa6a89b3280d01e557923344fc7c4a6b"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/upscale_v2/_network.py",
+      "bytes": 7063,
+      "sha256": "6fd8018df8357be4694701323f3ff3d7e32c897772bef1812bae783c429c190a"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/upscale_v2/_stream.py",
+      "bytes": 11061,
+      "sha256": "749bde70d2c15f00df2b71653de301681e062bf3f20c518ca7e110dae980c1fb"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/upscale_v2/adapter.py",
+      "bytes": 2443,
+      "sha256": "f8e620742f694dfe7d32733aca85ab2846f1bf6b43c503180f73eed8fa4a8725"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/upscale_v2/architecture.py",
+      "bytes": 2385,
+      "sha256": "3c8e8dae64a8fa1c55bfba0dd462f1ad179fb903c6e74e6e19b2a07adf01bff2"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/upscale_v2/geometry.py",
+      "bytes": 5406,
+      "sha256": "ae8b97756368ff153c2d21aeacb7dad6cdee7dfa03adb6bf1fd6b9656911a30e"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/upscale_v2/numeric.py",
+      "bytes": 3716,
+      "sha256": "58778a9759aa745df4ef5f06661a83aaee31bdb6208d2f8b07e3f47dcd7c9c87"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/upscale_v2/source.py",
+      "bytes": 3445,
+      "sha256": "4421aa0244dcded6e91ad080139d87261a212e5fc69ff131a398534ecded05bf"
+    }
+  ]
+}

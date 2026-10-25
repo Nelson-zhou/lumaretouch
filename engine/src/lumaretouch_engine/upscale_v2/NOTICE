@@ -1,0 +1,33 @@
+LumaRetouch optional AI clarity v2: source-only compatibility candidate
+
+_network.py adapts the inference architecture and pixel-unshuffle ordering from:
+  BasicSR, Copyright 2018-2022 BasicSR Authors
+  https://github.com/XPixelGroup/BasicSR
+  revision 651835a1b9d38dbbdaf45750f56906be2364f01a
+  basicsr/archs/rrdbnet_arch.py, blob 63d07080c2ec1305090c59b7bfbbda2b003b18e4
+  basicsr/archs/arch_util.py, blob 11b82a74e84e0e76e5b6e6dec4cad692c972ff63
+  Licensed under Apache License 2.0; full text in LICENSE.BasicSR.txt.
+
+Modified 2026 for LumaRetouch. Changes include private lazy construction with a
+caller-supplied runtime, exact candidate-only configuration, strict checkpoint
+tensor validation, explicit CPU/f32 construction, inference-only graph handling,
+and no registry, training initializer or dependency imports. Graph arithmetic,
+parameter names, shapes and unshuffle ordering target the pinned inference
+architecture. Random initialization is never returned as a restoration model.
+The network has not been imported, instantiated, loaded, tested or executed.
+
+The pinned BasicSR recursive Git tree was read on 2026-10-25, truncated=false,
+and contained no NOTICE/NOTICE.* file. Its LICENSE/README.md was also inspected.
+No StyleGAN2, DFDNet, DiffJPEG, SwinIR, ECBSR, timm initializer, deformable-conv,
+training, metric or third-party image code from that tree is included here.
+
+Real-ESRGAN v0.3.0 at fa4c8a03ae3dbc9ea6ed471a6ab5da94ac15c2ea is the reference
+for candidate names, architecture configuration and params_ema/params priority.
+Its inference helper is not vendored or imported. The research archive retains
+its BSD-3-Clause license; no claim is made that this code license automatically
+licenses the checkpoint artifacts. No model weights are included or approved.
+
+Other original modules retain the repository's GPL-3.0-or-later terms. This
+notice does not replace upstream licenses or grant checkpoint distribution.
+Any future distribution must carry this notice and LICENSE.BasicSR.txt, and
+complete separate model/runtime/license and packaging admission.
