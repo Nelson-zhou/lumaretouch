@@ -6,10 +6,13 @@ not measured quality claims or reverse-engineered proprietary behavior.
 ## Input color and coordinates
 
 Active inputs are interleaved float32 RGB in genuine encoded working-sRGB, finite
-and in [0,1]. The core does not guess an ICC profile or accept display proxies,
-8-bit roundtrips, camera RGB, linear data mislabeled as encoded, HDR or wide-gamut
-values. Source and masks have the same source-grid raster; tile coordinates refer
-to that raster. Caller owns any upstream color management and alpha handling.
+and in [0,1]. The core does not guess an ICC profile or accept display-rendered
+colors, 8-bit roundtrips, camera RGB, linear data mislabeled as encoded, HDR or
+wide-gamut values. Reference measurement always uses the genuine immutable full
+source and same-source-grid masks, never a display proxy. Composition may use an
+explicit, provenance-bound downscaled CURRENT float processing grid; its target
+mask and tile coordinates must use that same declared grid. Caller owns upstream
+color management, projection and alpha handling.
 
 Each channel is decoded using the sRGB transfer function: v/12.92 at or below
 0.04045, otherwise ((v+0.055)/1.055)^2.4. Linear luminance is
@@ -80,6 +83,44 @@ The target coverage is provided by the host and MUST be zero wherever the select
 reference sample mask is positive. Mere multiplication by (1-sample_weight) would
 not exactly protect a fractional sample. The core cannot enforce that exclusion
 because the composition ABI intentionally carries no sample-mask raster.
+
+## Explicit processing-grid projection
+
+The old `compose_v1` remains source-grid-only. New `compose_grid_v1` declares the
+complete current processing grid separately from the tile rectangle and from the
+immutable measured full source. It performs the identical per-pixel chromatic math
+above; no color or statistics are interpolated, and the core does not resize RGB
+or masks. Different preview/export pixels can produce different gated results;
+identical q does not claim pixel equality across image resampling.
+
+For source dimensions (W,H) and declared grid (Gx,Gy), require positive dimensions,
+Gx<=W and Gy<=H. The exact full grid is accepted without an alignment condition.
+Reduced grids require both Gx and Gy to be divisible by 8. The decoder uses
+`max(8, floor(axis*k/8)*8)` separately on each axis, not ordinary pixel rounding.
+The strict half-open intervals [Gx/W,(Gx+8)/W) and [Gy/H,(Gy+8)/H) must overlap.
+Equivalently, require Gx H < (Gy+8) W AND Gy W < (Gx+8) H with checked u64 arithmetic.
+An equality at an upper boundary is rejected. This is the canonical dimensional
+policy already implemented by `body_pose_evidence.whole_source_shape`.
+
+For example, 6000x4000 -> 3464x2304 satisfies both strict inequalities despite
+exceeding a one-pixel aspect tolerance. A loose symmetric 8*(W+H) error allowance
+is not the contract: it could accept grids without a common downward scale.
+`decode.proxy_size` also has an 8-pixel floor and a tiny-budget decrement fallback.
+An axis-upscaling or out-of-interval result from those exceptions is explicitly
+unsupported rather than weakening the core guard. The host must verify the exact
+pipeline projection and budget; passing the shape guard does not prove image
+provenance. Tiles must fit (Gx,Gy), including neutral calls. Neutral has no reference
+and therefore cannot check source-relative projection or reduced-grid alignment.
+
+The host re-rasterizes the selected manual region on the declared display grid and
+zeros target coverage wherever that display-selected mask is nonzero. If the
+selected display mask becomes entirely zero, the host refuses that preview.
+This is not a conservative footprint projection of every original source subpixel
+or disconnected component: small components or boundary portions can disappear
+under re-rasterization, and exact preview-edge parity is not claimed. Full-source
+export excludes every positive original selected-mask pixel exactly. Keep measured
+full-source dimensions/counts/quality unchanged: an application grid change is
+not remeasurement or sample rescaling.
 
 ## Research and license boundaries
 

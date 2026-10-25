@@ -1,0 +1,124 @@
+{
+  "schema_version": 1,
+  "baseline_commit": "e68481eadb66c70b33f6271b1780c529b3f8c501",
+  "baseline_tree": "b6329da089a2677291622b7c304e3a1e3d7fca9c",
+  "date": "2026-10-25",
+  "status": "SOURCE_CORRECTION_ALL_RUNTIME_ACCEPTANCE_UNRUN",
+  "scope": "Correct ordinary hair preview reference fitting to authenticated native-precision full source; separate explicit application-grid ABI preserves measured dimensions/counts and old native functions. Reusable immutable portrait fit source for independent future family.",
+  "requirements": [
+    "LNX-REF-PC-32472-C-fb2fe59a22"
+  ],
+  "manifest_policy": "Exact 18 payload files plus this self-excluded manifest. All skin_reference_match parallel files and historical manifests excluded.",
+  "source_checks": {
+    "python_ast": 10,
+    "file_lines": {
+      "ui/src/App.tsx": 2160,
+      "ui/src-tauri/src/main.rs": 2015,
+      "engine/src/lumaretouch_engine/server.py": 7047
+    },
+    "whitespace": "All modified and new text including EOF checked; git diff --check clean.",
+    "legacy_function_source_parity": "measure_v1 and compose_v1 function bodies byte-identical to baseline; not numerical execution/parity.",
+    "independent_review": "Provider source ownership/precision/ICC/derived paths and grid audit. Corrected actual ALIGN8 rounding and disappeared selected-sample refusal; no remaining code blocker in bounded source review."
+  },
+  "remaining": [
+    "No tests/build/typecheck/product imports/inference/numerical/photographic/memory/performance/history/export acceptance executed.",
+    "Current preview and final export still differ in resampling/quantization and other stages; invariant full-source fitting is not a full preview/export pixel-parity claim.",
+    "Preview protects re-rasterized nonzero selected masks; wholly vanished selection refuses. No conservative preservation of every original subpixel/component at display scale; full-source protection remains exact by source contract.",
+    "Full source capture may decode repeatedly and conservatively refuses insufficient working budget; max32MP admission is not demonstrated24MP capacity. Existing decoder kernels are synchronous, with cancellation around rather than inside them.",
+    "Original RAW8 delivery math unchanged, while new fitting independently requires genuine RAW16 decoder. Missing decoder/core is an explicit refusal, not proxy fallback. Alpha/HDR unsupported paths refuse without clipping.",
+    "Hair remains manual-reference partial; presets/batch/cohorts/aliases/automatic reference detection and dedicated recovery brush unchanged unsupported.",
+    "Skin-reference core/native/support/runtime parallel files excluded, not an end-user completion claim."
+  ],
+  "files": [
+    {
+      "path": "core/hair_unification/hair_unification.h",
+      "sha256": "169ef3d1ca30b2187a1b497c4a8408f9b55d034e7afc8a537c1c402e9b18f0f6",
+      "bytes": 5612
+    },
+    {
+      "path": "core/hair_unification/lib.rs",
+      "sha256": "8b5613ee758e3bea386f24dcfac06a96a15271189e38bb8511aa3b238b55c1a9",
+      "bytes": 23143
+    },
+    {
+      "path": "core/hair_unification/tests.rs",
+      "sha256": "c9d5c7eb0a30bc6821f684f132f63a88cf9a4d81aa22f0ab785a247f5c0e1487",
+      "bytes": 16962
+    },
+    {
+      "path": "docs/hair-unification/ABI.md",
+      "sha256": "6c6642e6304e8f78d0a079b43fd37dd0f0f4d126bd249aeaeaf8389a74930c3b",
+      "bytes": 10648
+    },
+    {
+      "path": "docs/hair-unification/CORE.md",
+      "sha256": "b1d06a9165436a1cb8d778acbc5402b7e99decf37c7e2b091ac82112e06be268",
+      "bytes": 6646
+    },
+    {
+      "path": "docs/hair-unification/FULL-SOURCE-FIT.md",
+      "sha256": "5aab4507ba7f2aa738953c212f2aa5f2f8a7b4a6bccd2726592305fb624d9639",
+      "bytes": 7881
+    },
+    {
+      "path": "docs/hair-unification/INTEGRATED-STATUS.md",
+      "sha256": "5cd640e3e2869e98ba04195c8873d5a81cdd2766d3c5f6d730a4ceb0c8efc876",
+      "bytes": 7429
+    },
+    {
+      "path": "docs/hair-unification/NUMERICS.md",
+      "sha256": "8423fa7865918f70483cfcc13d8fb3c93108c7adda1d6422f229287789b7c571",
+      "bytes": 9311
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/hair_unification_composition.py",
+      "sha256": "a3d688769bff80258d9cc0b75dfdf37d35e64ace69f708c051818e688f360729",
+      "bytes": 5624
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/hair_unification_native.py",
+      "sha256": "a93d9a22ac5b223b1225cac02b6df7eb8cdc04d1984c420911f151192228cd77",
+      "bytes": 11944
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/hair_unification_project.py",
+      "sha256": "4c0413ed028e73e384f84716095dfcaf6c75fc4f77251f9e74bee299d37bd051",
+      "bytes": 13607
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/hair_unification_projection.py",
+      "sha256": "bc8b957d53e41c2668c796a3cd28aa1b7407e615f23eb94d4731b96f7ffada36",
+      "bytes": 3892
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/hair_unification_runtime.py",
+      "sha256": "20ecfd170402a723ef963d327f786e7f707642cd81219260f3ea4d02cbad5dbc",
+      "bytes": 11255
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_engine_runtime.py",
+      "sha256": "028680b18e85256c8af316353cb741a23ed0205db6f6dd1eaa5a494fc4911a27",
+      "bytes": 14279
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_render_runtime.py",
+      "sha256": "9d96e652cd46eede7082ecd431164afe9a84a3c561c489d76bd30c142ac657aa",
+      "bytes": 39556
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/portrait_fit_source.py",
+      "sha256": "5e72a989285587225ea508c2c1b4b1d4eb232ccdf777d599a9c563f8863a4de9",
+      "bytes": 16349
+    },
+    {
+      "path": "engine/tests/test_hair_unification_full_source_unrun.py",
+      "sha256": "cc02fb2fbf49784d8068184caf5404e675f95433cbacab1975ed0f2cff9d5126",
+      "bytes": 3235
+    },
+    {
+      "path": "engine/tests/test_portrait_fit_source_unrun.py",
+      "sha256": "f5a72e9d1f9b7e73928b4ef57cc3452e3fef77bb8b42524fcbd88cf1196f7263",
+      "bytes": 14433
+    }
+  ]
+}

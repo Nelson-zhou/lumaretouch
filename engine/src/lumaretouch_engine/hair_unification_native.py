@@ -89,6 +89,10 @@ def _library():
             C.c_uint32, C.c_uint32, C.c_uint32, C.c_uint32, C.c_float, C.POINTER(Reference),
             C.POINTER(Limits), P, C.c_uint64, CANCEL, C.c_void_p]
         lib.lrt_hair_unification_compose_v1.restype = C.c_int32
+        lib.lrt_hair_unification_compose_grid_v1.argtypes = [P, C.c_uint64, P, C.c_uint64,
+            C.c_uint32, C.c_uint32, C.c_uint32, C.c_uint32, C.c_uint32, C.c_uint32,
+            C.c_float, C.POINTER(Reference), C.POINTER(Limits), P, C.c_uint64, CANCEL, C.c_void_p]
+        lib.lrt_hair_unification_compose_grid_v1.restype = C.c_int32
         return lib
     except (OSError, AttributeError) as error:
         raise RuntimeError('Hair-unification required native symbols cannot load') from error
@@ -166,7 +170,7 @@ def measure(source, hair, roots, tips, recipe, *, byte_budget, cancelled=lambda:
         tuple(reference.chroma_ratio)).checked()
 
 
-def compose(current, coverage, reference, recipe, *, origin=(0, 0), cancelled=lambda: False):
+def compose(current, coverage, reference, recipe, *, origin=(0, 0), application_shape=None, cancelled=lambda: False):
     """Tile pointwise only: full-source reference already measured and authenticated."""
     recipe = S.check(recipe)
     if not S.active(recipe): return current
@@ -175,9 +179,15 @@ def compose(current, coverage, reference, recipe, *, origin=(0, 0), cancelled=la
     if type(current) is not np.ndarray or current.ndim != 3 or current.shape[2] != 3:
         raise ValueError('Hair-unification composition needs current RGB')
     h, w = current.shape[:2]; x, y = origin
+    gh, gw = (ref.source_height, ref.source_width) if application_shape is None else application_shape
     if (type(x) is not int or type(y) is not int or min(x, y) < 0 or min(h, w) < 1
-            or h*w > MAX_TILE_PIXELS or x+w > ref.source_width or y+h > ref.source_height):
-        raise ValueError('Hair-unification tile differs from measured full-source coordinates')
+            or any(type(v) is not int or v < 1 for v in (gh, gw))
+            or gh > ref.source_height or gw > ref.source_width
+            or ((gh, gw) != (ref.source_height, ref.source_width) and
+                (gw % 8 or gh % 8 or gw*ref.source_height >= (gh+8)*ref.source_width
+                 or gh*ref.source_width >= (gw+8)*ref.source_height))
+            or h*w > MAX_TILE_PIXELS or x+w > gw or y+h > gh):
+        raise ValueError('Hair-unification tile differs from declared whole-source application grid')
     _array(current, (h, w, 3), 'Current RGB'); _array(coverage, (h, w), 'Owned target coverage')
     current = np.array(current, dtype=np.float32, order='C', copy=True)
     coverage = np.array(coverage, dtype=np.float32, order='C', copy=True)
@@ -185,8 +195,8 @@ def compose(current, coverage, reference, recipe, *, origin=(0, 0), cancelled=la
     if cancelled(): raise InterruptedError('Hair-unification composition cancelled')
     output = np.empty_like(current); callback, errors = _callback(cancelled)
     limits = Limits(MAX_PIXELS, MAX_TILE_PIXELS, 1_000_000_000, SCRATCH_BYTES)
-    status = native().lrt_hair_unification_compose_v1(current.ctypes.data_as(P), current.size,
-        coverage.ctypes.data_as(P), coverage.size, x, y, w, h, recipe['amount'], C.byref(ref), C.byref(limits),
+    status = native().lrt_hair_unification_compose_grid_v1(current.ctypes.data_as(P), current.size,
+        coverage.ctypes.data_as(P), coverage.size, gw, gh, x, y, w, h, recipe['amount'], C.byref(ref), C.byref(limits),
         output.ctypes.data_as(P), output.size, callback, None)
     _result(status, errors, cancelled)
     if not np.isfinite(output).all() or np.any((output < 0) | (output > 1)):

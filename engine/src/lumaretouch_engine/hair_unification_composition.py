@@ -26,8 +26,9 @@ def apply_records_np(current, records, recovery=None, *, source_shape=None, orig
             raise ValueError('Hair unification cannot borrow another operator recovery mask')
         if not isinstance(record.amounts, Parameters): raise ValueError('Missing measured hair-unification parameters')
         ref = record.amounts.reference.checked()
-        if (ref.source_height, ref.source_width) != source_shape:
-            raise ValueError('Hair-unification reference was measured at another source extent')
+        declared = record.amounts.application_shape or (ref.source_height, ref.source_width)
+        if tuple(declared) != source_shape:
+            raise ValueError('Hair-unification coverage belongs to another declared application grid')
         y, x, rh, rw = record.window; weights = record.weights
         if (min(y, x) < 0 or min(rh, rw) <= 0 or y+rh > source_shape[0] or x+rw > source_shape[1]
                 or type(weights) is not np.ndarray or weights.dtype != np.float32 or weights.shape != (rh, rw)
@@ -47,7 +48,8 @@ def apply_records_np(current, records, recovery=None, *, source_shape=None, orig
             cov = np.ascontiguousarray(weights[top-y:bottom-y, x0-x:x1-x])
             if not np.any(cov > 0): continue
             pixels = np.ascontiguousarray(current[top-oy:bottom-oy, x0-ox:x1-ox])
-            updated = N.compose(pixels, cov, ref, record.amounts.recipe, origin=(x0, top), cancelled=cancelled)
+            updated = N.compose(pixels, cov, ref, record.amounts.recipe, origin=(x0, top),
+                                application_shape=source_shape, cancelled=cancelled)
             if result is current: result = current.copy()
             destination = result[top-oy:bottom-oy, x0-ox:x1-ox]
             take = cov > 0

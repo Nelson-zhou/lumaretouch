@@ -70,7 +70,7 @@ def verify_analysis(face, analysis, shape):
 
 
 def prepare(state, asset_sha256, source, analyses, *, byte_budget, document_id=None, max_faces=32, recovery_assets=None, repaired=None,
-            creative_source=None, creative_repair_evidence=None, hair_assets=None, hair_unification_assets=None, hair_evidence=None, hair_source_path=None, force_hair_prompted=False, eye_light_assets=None, blush_makeup_assets=None, face_decoration_assets=None,facial_sculpt_assets=None,eye_makeup_enhance_assets=None, lipstick_assets=None,eyeliner_assets=None,eyelash_assets=None,brow_makeup_assets=None,iris_makeup_assets=None,skin_colour_body_assets=None,skin_finish_body_assets=None,body_skin_evenness_assets=None,body_face_match_assets=None,collarbone_assets=None,eye_bag_preserve_assets=None,body_bank=None):
+            creative_source=None, creative_repair_evidence=None, hair_assets=None, hair_unification_assets=None, hair_unification_source=None, full_source_verified=False, hair_evidence=None, hair_source_path=None, force_hair_prompted=False, eye_light_assets=None, blush_makeup_assets=None, face_decoration_assets=None,facial_sculpt_assets=None,eye_makeup_enhance_assets=None, lipstick_assets=None,eyeliner_assets=None,eyelash_assets=None,brow_makeup_assets=None,iris_makeup_assets=None,skin_colour_body_assets=None,skin_finish_body_assets=None,body_skin_evenness_assets=None,body_face_match_assets=None,collarbone_assets=None,eye_bag_preserve_assets=None,body_bank=None):
     state = S.check(state)
     from . import hair_unification_project as UNIFY
     UNIFY.validate_graph(state)
@@ -501,7 +501,7 @@ def prepare(state, asset_sha256, source, analyses, *, byte_budget, document_id=N
     prepared=PreparedPeople(plan,geometry,tuple(effects)+hair,facts,owned_recovery,tuple(fields))
     from .hair_unification_runtime import prepare_bank as prepare_unification
     unified, unify_facts=prepare_unification(state,asset_sha256,source,plan,
-        evidence=hair_evidence,assets=hair_unification_assets,hair_assets=hair_assets,
+        evidence=hair_evidence,assets=hair_unification_assets,hair_assets=hair_assets,measurement_source=hair_unification_source,full_source_verified=full_source_verified,
         byte_budget=byte_budget-retained_bytes(prepared)-source.nbytes-(0 if repaired is None else repaired.nbytes),
         source_path=hair_source_path,force_prompted=force_hair_prompted)
     for key,fact in unify_facts.items():facts.setdefault(key,{})['hair_unification']=fact

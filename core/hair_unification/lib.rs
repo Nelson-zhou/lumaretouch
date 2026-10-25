@@ -393,5 +393,83 @@ pub unsafe extern "C" fn lrt_hair_unification_compose_v1(
     match result { Ok(Ok(())) => OK, Ok(Err(code)) => code, Err(_) => PANIC_ERROR }
 }
 
+fn validate_grid_projection(grid_width: u32, grid_height: u32, reference: &ReferenceV1) -> Result<(), i32> {
+    if grid_width == 0 || grid_height == 0 || grid_width > reference.source_width
+        || grid_height > reference.source_height { return Err(ABI_ERROR); }
+    if grid_width == reference.source_width && grid_height == reference.source_height { return Ok(()); }
+    // decode.proxy_size aligns EACH reduced axis to 8, with an 8-pixel minimum.
+    // Exact full grids need no alignment. An exceptional tiny-axis decoder
+    // upscale is deliberately refused by the non-upscaling check above.
+    if grid_width % 8 != 0 || grid_height % 8 != 0 { return Err(ABI_ERROR); }
+    // Same strict common-scale interval as body_pose_evidence.whole_source_shape:
+    // [grid_width/source_width, (grid_width+8)/source_width) must overlap the
+    // height interval. Upper ends are OPEN because proxy_size rounds downward.
+    // The host still authenticates exact proxy_size output and budget. Tiny-axis
+    // floor/fallback results outside this interval are deliberately unsupported.
+    let a = (grid_width as u64).checked_mul(reference.source_height as u64).ok_or(ABI_ERROR)?;
+    let b = (grid_height as u64).checked_mul(reference.source_width as u64).ok_or(ABI_ERROR)?;
+    let upper_y = (grid_height as u64).checked_add(8)
+        .and_then(|v| v.checked_mul(reference.source_width as u64)).ok_or(ABI_ERROR)?;
+    let upper_x = (grid_width as u64).checked_add(8)
+        .and_then(|v| v.checked_mul(reference.source_height as u64)).ok_or(ABI_ERROR)?;
+    if a >= upper_y || b >= upper_x { return Err(ABI_ERROR); }
+    Ok(())
+}
+
+/// Explicit processing-grid composition with a genuine full-source reference.
+/// The older compose_v1 implementation and its source-grid-only ABI are unchanged.
+/// # Safety
+/// Buffers follow compose_v1's live/aligned/disjoint rules. The caller additionally
+/// guarantees the current grid and target coverage were projected from the same
+/// source/person/transform in working-sRGB, without falsifying reference metadata.
+#[no_mangle]
+pub unsafe extern "C" fn lrt_hair_unification_compose_grid_v1(
+    current_rgb: *const f32, current_rgb_len: u64, hair: *const f32, hair_len: u64,
+    grid_width: u32, grid_height: u32,
+    tile_x: u32, tile_y: u32, tile_width: u32, tile_height: u32,
+    signed_amount: f32, reference: *const ReferenceV1, limits: *const LimitsV1,
+    output_rgb: *mut f32, output_rgb_len: u64, cancel: CancelV1, cancel_context: *mut c_void,
+) -> i32 {
+    let result = panic::catch_unwind(panic::AssertUnwindSafe(|| -> Result<(), i32> {
+        let direction = amount_direction(signed_amount)?;
+        let limit = get_limits(limits)?;
+        count(grid_width, grid_height, limit.max_source_pixels)?;
+        let n = count(tile_width, tile_height, limit.max_tile_pixels)?;
+        let end_x = tile_x.checked_add(tile_width).ok_or(ABI_ERROR)?;
+        let end_y = tile_y.checked_add(tile_height).ok_or(ABI_ERROR)?;
+        if end_x > grid_width || end_y > grid_height { return Err(ABI_ERROR); }
+        let rgb_len = n.checked_mul(3).ok_or(ABI_ERROR)?;
+        exact_len(current_rgb_len, rgb_len)?; exact_len(output_rgb_len, rgb_len)?;
+        let output_span = span(output_rgb, rgb_len)?;
+        disjoint(output_span, span(current_rgb, rgb_len)?)?;
+        if !limits.is_null() { disjoint(output_span, span(limits, 1)?)?; }
+        let mut budget = Budget::new(limit, cancel, cancel_context);
+        budget.poll()?;
+        if direction == 0 {
+            // Explicit grid bounds remain meaningful without evidence. The RGB
+            // bits, mask and reference otherwise follow the legacy neutral path.
+            budget.charge(n as u64)?;
+            budget.poll()?;
+            ptr::copy_nonoverlapping(current_rgb, output_rgb, rgb_len);
+            return Ok(());
+        }
+        exact_len(hair_len, n)?;
+        disjoint(output_span, span(hair, n)?)?;
+        disjoint(output_span, span(reference, 1)?)?;
+        let r = ptr::read(reference);
+        validate_reference(&r, direction, limit)?;
+        validate_grid_projection(grid_width, grid_height, &r)?;
+        let scratch = (rgb_len as u64).checked_mul(mem::size_of::<f32>() as u64)
+            .and_then(|v| v.checked_add(4096)).ok_or(LIMIT_ERROR)?;
+        if scratch > limit.max_working_bytes { return Err(LIMIT_ERROR); }
+        let candidate = compose(slice::from_raw_parts(current_rgb, rgb_len),
+            slice::from_raw_parts(hair, n), signed_amount, &r, &mut budget)?;
+        budget.poll()?;
+        ptr::copy_nonoverlapping(candidate.as_ptr(), output_rgb, rgb_len);
+        Ok(())
+    }));
+    match result { Ok(Ok(())) => OK, Ok(Err(code)) => code, Err(_) => PANIC_ERROR }
+}
+
 #[cfg(test)]
 mod tests;

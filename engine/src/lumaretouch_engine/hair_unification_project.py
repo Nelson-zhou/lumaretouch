@@ -93,8 +93,16 @@ def shared_preview(engine, state=None):
     from .creative_derived_source import record, verify
     binding = engine._people_source(); derived = record(engine) is not None
     if derived: verify(binding, engine)
+    from copy import deepcopy
+    expected = deepcopy(binding)
+    def full_source(*, byte_budget, cancelled):
+        # Lazy: decode only at the fitting phase, after other prepared residents
+        # have been subtracted. Never fit pipe.src_f32's display proxy.
+        from .portrait_fit_source import capture
+        return capture(engine, expected_source=expected, byte_budget=byte_budget, cancelled=cancelled)
     return {'hair_evidence': EVIDENCE.current(engine, binding),
-            'hair_source_path': None if derived else engine._doc_path}
+            'hair_source_path': None if derived else engine._doc_path,
+            'hair_unification_source': full_source}
 
 
 def capture(engine, snapshot, precompute, binding, *, source_path):
@@ -152,7 +160,18 @@ def kwargs(snapshot):
             raise ValueError('Derived hair-unification cannot use an original file path')
     else:
         verify_snapshot(snapshot)
-    return {'hair_unification_assets': A.check_store(snapshot.get(KEY, {}))}
+    result = {'hair_unification_assets': A.check_store(snapshot.get(KEY, {}))}
+    if snapshot.get('creative_source') is None and needed(snapshot['state'], snapshot['asset_sha256']):
+        from copy import deepcopy
+        expected = deepcopy(snapshot['hair_colour_evidence']['source'])
+        path = snapshot['hair_colour_source_path']; stamp = tuple(snapshot['hair_colour_source_stamp'])
+        def full_source(*, byte_budget, cancelled):
+            # Fit precision is independent of JPEG/PNG8/master delivery choice.
+            from .portrait_fit_source import capture_original
+            return capture_original(path, expected_source=expected, expected_stamp=stamp,
+                                    byte_budget=byte_budget, cancelled=cancelled)
+        result['hair_unification_source'] = full_source
+    return result
 
 
 def changed_assets(before, candidate):

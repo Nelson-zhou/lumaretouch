@@ -50,6 +50,44 @@ with the selected sample region fully excluded. Input/output RGB lengths are 3wh
 coverage length is wh. Active tile must fit the measured reference's source raster.
 CURRENT pixels can differ from measurement pixels due to earlier pipeline effects.
 
+`compose_grid_v1` is a separate additive symbol with this exact argument order:
+current_rgb, current_rgb_len, hair, hair_len, grid_width, grid_height, tile_x,
+tile_y, tile_width, tile_height, signed_amount, reference, limits, output_rgb,
+output_rgb_len, cancel, cancel_context. Grid width/height are u32 and are inserted
+immediately before the original four tile coordinates. Tile lengths still refer
+only to the tightly packed tile, not the complete grid. There are no struct changes,
+no version reinterpretation and no change to the old `compose_v1` entry.
+
+The grid is the complete CURRENT processing raster; tile coordinates are relative
+to it. Active reference metadata remains the genuine full-source measurement,
+including its full dimensions and original sample statistics. The new entry checks:
+
+- Nonzero grid dimensions and grid pixel count <= max_source_pixels.
+- Nonzero tile dimensions, existing max_tile_pixels, checked coordinate addition,
+  and tile containment within the declared grid.
+- Grid width/height individually <= reference source width/height, without upscaling.
+- Exact full-source grid is accepted without alignment requirements. Otherwise,
+  BOTH grid dimensions must be multiples of 8, matching `decode.proxy_size`.
+- A single common downward-aligned scale must exist. Using checked u64 arithmetic,
+  BOTH inequalities are STRICT: grid_width*source_height < (grid_height+8)*source_width
+  and grid_height*source_width < (grid_width+8)*source_height. Equality fails because
+  the upper scale-interval endpoint is open. This matches the existing canonical
+  dimensional guard in `body_pose_evidence.whole_source_shape`, not a one-pixel rule.
+- All original reference, sign, pixel, mask, alias, cancellation and scratch checks.
+
+The host owns exact source/projection provenance and color/mask fidelity. Passing
+the aspect test alone does not establish that a crop, rotated raster or unrelated
+image came from the reference source. The core performs no resizing or remeasurement.
+The host must authenticate the exact `decode.proxy_size` output for its actual
+budget, not merely choose any dimensions passing the interval. That decoder aligns
+both axes downward to 8, floors them at 8, and can decrement them again in its tiny
+budget fallback. An originally tiny axis that would enlarge, or any floor/fallback
+result outside the strict common interval, is explicitly refused by this core.
+Reference dimensions, q and sample statistics must NEVER be rewritten or rescaled
+to accommodate a preview. Export may declare the exact full-source grid. A missing
+new symbol is an explicit compatibility blocker for preview-grid composition, not
+permission to reinterpret the old entry or spoof reference metadata.
+
 ## Neutral path
 
 The host must bypass evidence and native loading for either signed floating zero.
@@ -59,6 +97,12 @@ spans. It does not inspect RGB values, reference or hair. It copies all current 
 including NaN payloads and negative zero. Null reference/hair are allowed regardless
 of unused hair length; input/output in-place overlap is still rejected. It polls
 cancellation before commit. No source-bound check is possible without a reference.
+
+The explicit-grid neutral entry additionally checks its nonzero grid and grid-pixel
+budget and requires tile containment within that grid. It still never reads hair
+or reference, so no source projection or source-dimension check is possible on zero.
+This extra structural validation belongs only to the new symbol; old neutral
+semantics remain unchanged.
 
 Native zero measure validates source shape, limits, reference output alignment and
 its non-overlap with limits, then writes neutral metadata. It does not read source
@@ -99,7 +143,8 @@ foreign pointers, data races and foreign callback unwinding are not recoverable.
 ## Status codes
 
 - 0: success.
-- 1: bad ABI shape, pointer span, alias, tile bounds, reference schema or sign.
+- 1: bad ABI shape, pointer span, alias, tile bounds, reference schema/sign, or
+  active explicit-grid projection/upscaling policy.
 - 2: invalid amount, nonfinite/out-of-range RGB or mask, sample outside hair, bad q.
 - 3: invalid/exceeded limits, dimensions too large, work or scratch budget exceeded.
 - 4: cancellation observed before publication.
@@ -112,3 +157,16 @@ foreign pointers, data races and foreign callback unwinding are not recoverable.
 No status means "AI unavailable" because this operator performs no learned inference.
 No fallback to source-color overwrite, additive-delta clipping, palette tint or
 invented sample selection is permitted on an error.
+
+## Added explicit-grid acceptance fixtures: UNRUN
+
+The original 14 numerical fixtures remain. Six additional source-only fixtures
+cover full-grid equivalence to the old entry, preview use without mutating reference
+metadata, canonical ALIGN=8 interval acceptance/upscale and distortion refusal, neutral grid
+bounds with arbitrary float bits, transactional grid/cancellation/alias errors,
+and preview row-tile versus whole-preview equality. All 20 fixtures remain UNRUN;
+no Rust build, parsing, native call, test or runtime result is asserted.
+The shape guard fixture explicitly accepts 6000x4000 -> 3464x2304, rejects gross
+aspect distortion and an open-interval equality, accepts an unaligned exact full
+grid, and refuses tiny-axis upscaling. Preview ABI fixtures retain a genuine
+128x64 measured reference while composing the pipeline-aligned 88x40 grid.

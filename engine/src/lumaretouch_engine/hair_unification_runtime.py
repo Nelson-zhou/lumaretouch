@@ -20,6 +20,7 @@ class HairUnificationRefused(ValueError):
 class Parameters:
     amount: float
     reference: N.MeasuredReference
+    application_shape: tuple = ()
 
     @property
     def recipe(self):
@@ -47,7 +48,7 @@ def target_coverage(hair, roots, tips, recipe):
     return target
 
 
-def prepare_bank(state, asset_sha256, source, plan, *, evidence=None, assets=None,
+def _prepare_full_bank(state, asset_sha256, source, plan, *, evidence=None, assets=None,
                  hair_assets=None, byte_budget, source_path=None, force_prompted=False,
                  cancelled=lambda: False):
     requests = []
@@ -78,6 +79,8 @@ def prepare_bank(state, asset_sha256, source, plan, *, evidence=None, assets=Non
         hair_record = A.current_support(state, record, hair_assets)
         selected[ref['face_instance_id']] = (record, hair_record)
     binding = next(iter(selected.values()))[0]['source']
+    if (h, w) != (binding['height'], binding['width']):
+        raise HairUnificationRefused('参考统计必须使用完整不可变源图，不接受显示代理或伪造尺寸')
     hair = ANALYSIS.at_dimensions(evidence, binding, (h, w)); evidence_sha = EVIDENCE.identity(evidence)
     if any(record['semantic_evidence_sha256'] != evidence_sha or record['source'] != binding
            for record, _ in selected.values()):
@@ -115,14 +118,56 @@ def prepare_bank(state, asset_sha256, source, plan, *, evidence=None, assets=Non
             'face_ref': ref, 'source_sha256': asset_sha256, 'asset_sha256': A.digest(record),
             'support_sha256': record['support_sha256'], 'semantic_evidence_sha256': evidence_sha,
             'reference_side': S.reference_side(recipe), 'selected_pixels': reference.selected_pixels,
+            'measurement_dimensions': [w, h], 'application_dimensions': [w, h],
+            'reference_fit': 'immutable-native-full-source-v1',
             'reliable_pixels': reference.reliable_pixels, 'effective_samples': reference.effective_samples,
             'target_pixels': int(np.count_nonzero(coverage)), 'target_extent': 'reviewed-own-person-hair-minus-selected-sample-nonzero-footprint',
             'composition': 'current-linear-luminance-preserving-chroma',
             'limitation': '不均衡纯亮度差、不恢复裁黑过曝细节、不推断发根发梢位置；柔边取样的整个非零范围受保护。'}
         effects.append(LocalEffect(ref, S.STAGE, window, weights=local,
-            amounts=Parameters(recipe['amount'], reference), facts=fact))
+            amounts=Parameters(recipe['amount'], reference, (h, w)), facts=fact))
         facts[ref['face_instance_id']] = fact
     return tuple(effects), facts
+
+
+def prepare_bank(state, asset_sha256, source, plan, *, evidence=None, assets=None,
+                 hair_assets=None, byte_budget, source_path=None, force_prompted=False,
+                 measurement_source=None, full_source_verified=False, cancelled=lambda: False):
+    """Fit genuine full precision once, then independently declare the apply grid.
+
+    Preview and original-file export use an authenticated lazy source provider.
+    Canonical derived export alone may reuse its already verified full f32 source.
+    A same-size RGB8 proxy is not proof of genuine source precision.
+    """
+    if not any(S.active(R.materialize(entry['resolved'], S.OP, S.neutral(), S.check))
+               for entry in plan['entries']): return (), {}
+    common = dict(evidence=evidence, assets=assets, hair_assets=hair_assets,
+                  source_path=source_path, force_prompted=force_prompted, cancelled=cancelled)
+    if measurement_source is None:
+        if full_source_verified is not True:
+            raise HairUnificationRefused('缺少完整源图统计入口；不从显示代理估算参考色')
+        return _prepare_full_bank(state, asset_sha256, source, plan, byte_budget=byte_budget, **common)
+    if not callable(measurement_source): raise ValueError('Invalid full-source fit provider')
+    if type(source) is not np.ndarray or source.ndim != 3 or source.shape[2] != 3:
+        raise ValueError('Missing declared current application grid')
+    application_shape = tuple(int(v) for v in source.shape[:2])
+    reserve = source.shape[0]*source.shape[1]*(48+4*len(ownership_faces(state, asset_sha256))) + 16*1024*1024
+    if type(byte_budget) is not int or byte_budget <= reserve:
+        raise HairUnificationRefused('完整参考统计与显示范围合计超过内存预算')
+    from .portrait_fit_source import FullSource
+    captured = measurement_source(byte_budget=byte_budget-reserve, cancelled=cancelled)
+    if not isinstance(captured, FullSource) or captured.binding['sha256'] != asset_sha256:
+        raise ValueError('Full-source fit provider returned another immutable owner')
+    full_shape = tuple(captured.pixels.shape[:2])
+    effects, facts = _prepare_full_bank(state, asset_sha256, captured.pixels, plan,
+        byte_budget=byte_budget-reserve-captured.owned_bytes, **common)
+    # Only immutable tiny measurements survive. No full source image is cached
+    # on the preview pipeline or duplicated into history.
+    del captured
+    if application_shape == full_shape: return effects, facts
+    from .hair_unification_projection import project
+    return project(effects, facts, state, assets, hair_assets, evidence, application_shape,
+                   source_path=source_path, force_prompted=force_prompted, cancelled=cancelled)
 
 
 def ownership_faces(state, asset_sha256):

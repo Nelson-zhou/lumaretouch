@@ -1,6 +1,7 @@
 # Manual root/tip hair-colour unification: connected source, acceptance UNRUN
 
 Baseline: `050508e0d3c75681f17a77834221f62e52579eae`.
+Full-source measurement correction baseline: `e68481eadb66c70b33f6271b1780c529b3f8c501`.
 Exact requirement: `LNX-REF-PC-32472-C-fb2fe59a22`, preserved `control:PC-32472:13`.
 The [official guide](https://www.pixcakeai.com/guide/32472) specifies negative/left
 referencing hair ends and positive/right referencing roots. It does not publish
@@ -30,6 +31,32 @@ no independent channel clipping. Brightness-only colour differences, bleached or
 clipped hair, mixed illumination and ambiguous samples remain real limitations.
 The new stage follows existing hair colour/gloss and precedes the single people
 geometry sampler. Combined palettes need not equal the untouched reference RGB.
+
+### Ordinary preview reference correction
+
+Independent source review after the initial capture found that ordinary preview
+passed its RGB8 proxy into measurement, while full review/export used full pixels.
+The follow-on source slice removes that inconsistency: ordinary preview lazily
+decodes the authenticated immutable source at native precision for fitting.
+Original-file export uses the same fit decoder independently of output precision
+(including existing RAW8 delivery); derived export uses its canonical full float
+source. RGB16 ICC conversion is performed once by the existing shared decoder
+contract. No original source, old delivery decoder or old effect recipe is changed.
+
+The fit retains full-source dimensions and sample statistics. A separate explicit
+application-grid native entry accepts authenticated full or ALIGN=8 whole-source
+preview grids; it does not resize/relabel the reference. Application coverage is
+reconstructed on that grid, with all retained neighbouring ownership checked.
+If the selected protected sample vanishes on an excessively reduced display grid,
+preparation refuses rather than quietly treating it as editable target hair.
+Full-source sample measurement and old compose entry function bodies remain
+unchanged. Display resampling/quantization and other preview-stage differences
+still preclude a claim of complete preview/export pixel parity.
+
+Full decode/fitting and application-grid residents are separately budgeted; the
+source buffer is released after preparation, not embedded into history or kept
+as a permanent preview cache. This may decode repeatedly and can refuse large
+images under the actual budget. Performance/24 MP support is not established.
 
 ## Shared integration map
 

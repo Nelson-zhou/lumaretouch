@@ -37,17 +37,37 @@ that is only brightness can remain unchanged. Chromatic variation may be reduced
    hair/root/tip masks. Root/tip masks are already intersected with reviewed hair
    support and any real semantic confidence. The selected sign chooses the only
    reference measured. The opposite mask may be empty but must still be valid.
-2. `lrt_hair_unification_compose_v1`: bounded contiguous CURRENT-stage RGB tile,
-   effective target coverage tile, selected reference and the same sign. No halo,
-   image neighborhood or original RGB replacement is involved. Tiles have source
-   coordinates; a one-row tile is valid. Full-source statistics are never computed
-   independently per tile, so the mathematical operator has no tile seams.
+2. Composition uses a bounded contiguous CURRENT-stage RGB tile, effective target
+   coverage tile, selected reference and the same sign. The original
+   `lrt_hair_unification_compose_v1` retains its source-grid-only coordinates and
+   behavior unchanged. The separate `lrt_hair_unification_compose_grid_v1` accepts
+   an explicitly declared processing grid, allowing a genuine float preview to
+   use the same full-source reference as export. No halo, resize, image neighborhood,
+   remeasurement or original RGB replacement is involved. A one-row tile is valid.
+   Full-source statistics are never computed independently per tile, so the
+   mathematical operator has no tile seams.
 
 The host owns evidence/source/person/transform/grid IDs, freshness, immutable mask
 ownership, reference caching, cancellation sequencing, and rejection of stale
 results. Recompute after source, root/tip marks, coverage or sign changes. It must
-not reuse a reference between people, rasters, color spaces or transformed grids.
-Amount magnitude may change with the same reference; sign may not.
+not reuse a reference between people, unrelated source rasters, color spaces or
+untracked transforms. An explicitly declared downscaled processing grid of the
+SAME source may reuse the immutable full-source reference. Amount magnitude may
+change with the same reference; sign may not.
+
+Preview grid dimensions must not exceed the full source dimensions, and the core
+accepts either the exact full grid or reduced dimensions aligned to 8 on BOTH axes.
+For a reduced grid, a single common downward-aligned scale interval must exist,
+using the strict integer guard already used by `body_pose_evidence.whole_source_shape`.
+This reflects `decode.proxy_size`, not a one-output-pixel rounding assumption.
+The host must bind the actual source-to-preview projection, CURRENT working-sRGB
+pixels and projected target/protected-reference coverage, and verify the exact
+pipeline `proxy_size` dimensions for the chosen budget. A compatible pair of
+dimensions alone cannot establish that provenance. Cropping, rotation, mirroring,
+unrelated imagery or mislabeled display pixels are not authorized by the dimensional
+check. Exceptional tiny-axis 8-pixel floors that upscale or violate the common
+interval are explicitly unsupported. Export uses the exact full grid. Never alter reference source dimensions,
+sample counts, reliability statistics or q to make a preview pass legacy checks.
 
 If composed after existing `hair_colour`, the pipeline is an ordered artistic
 combination: this field acts on palette-modified current pixels while retaining

@@ -52,13 +52,41 @@ int32_t lrt_hair_unification_compose_v1(
     float *output_rgb, uint64_t output_rgb_len,
     LrtHairUnificationCancelV1 cancel, void *cancel_context);
 
+/* Explicit processing-grid variant. Reference remains a genuine full-source
+ * measurement; its source dimensions and sample statistics MUST NOT be changed.
+ * No resizing or remeasurement is performed. Tiles address grid_width/height.
+ * Active grid dimensions must not exceed the source dimensions. Exact full grids
+ * are accepted without alignment. Reduced grids require BOTH dimensions to be
+ * multiples of 8, matching decode.proxy_size's block alignment. Both STRICT
+ * common-scale inequalities must hold (checked u64 arithmetic):
+ * grid_width*source_height < (grid_height+8)*source_width AND
+ * grid_height*source_width < (grid_width+8)*source_height.
+ * The decoder's max(8, ...) floor does not permit this core to upscale an axis;
+ * such previews and tiny-axis floor/fallbacks outside the common interval are
+ * explicitly unsupported, rather than silently relaxing the projection policy.
+ * This dimensional test is not provenance validation; caller owns the exact
+ * pipeline proxy_size result/budget, float color fidelity and protected coverage.
+ * Zero still ignores reference/hair, but validates grid size and tile containment.
+ * The old compose_v1 remains source-grid-only with its original semantics.
+ */
+int32_t lrt_hair_unification_compose_grid_v1(
+    const float *current_rgb, uint64_t current_rgb_len,
+    const float *hair, uint64_t hair_len,
+    uint32_t grid_width, uint32_t grid_height,
+    uint32_t tile_x, uint32_t tile_y, uint32_t tile_width, uint32_t tile_height,
+    float signed_amount, const LrtHairUnificationReferenceV1 *reference,
+    const LrtHairUnificationLimitsV1 *limits,
+    float *output_rgb, uint64_t output_rgb_len,
+    LrtHairUnificationCancelV1 cancel, void *cancel_context);
+
 /* NULL limits uses {64000000,262144,1000000000,8388608}.
  * Limits can only reduce these hard ceilings. NULL cancel disables cancellation.
  * Source RGB is genuine encoded working-sRGB float32 in [0,1], not an 8-bit proxy.
  * Active masks are finite [0,1]. roots/tips must be <= hair and not overlap.
  * Negative amount selects tips, positive selects roots. Amount is in [-1,1].
  * Reference is a full-source measurement; compose inputs are tightly packed
- * CURRENT-stage tile RGB/coverage, with tile coordinates in that source grid.
+ * CURRENT-stage tile RGB/coverage. Legacy compose_v1 uses source coordinates;
+ * compose_grid_v1 uses the explicitly declared processing-grid coordinates.
  * chroma_ratio is q = linear RGB / Y - 1, with weighted sum(q) approximately 0.
  * Current-stage luminance/detail are preserved; no blur, invented hair or delta.
  * Zero compose ignores reference and hair, preserves every current float bit.
