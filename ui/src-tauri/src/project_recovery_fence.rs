@@ -45,7 +45,7 @@ pub(crate) fn issued(epoch:[u8;16], command:&Value)->Result<(),String>{
     // Check a pending ID collision first: read-only status cannot release or
     // replace an already-issued mutation belonging to another receipt host.
     if crate::batch_api::read_only(command) || crate::torso_transfer_protocol::read_only_head_preflight(command) || crate::preset_api::read_only(command)
-        || crate::people_api::skin_reference_body::read_only(command) || crate::people_api::skin_reference_match::read_only(command)
+        || crate::people_api::skin_reference_choice::read_only(command) || crate::people_api::skin_reference_body::read_only(command) || crate::people_api::skin_reference_match::read_only(command)
         || crate::people_api::face_style::read_only(command) || crate::people_api::eye_bag::read_only(command)
         || crate::people_api::face_decoration::read_only(command) || crate::people_api::facial_sculpt::read_only(command) || crate::people_api::eye_makeup_enhance::read_only(command) || crate::people_api::decoration_alias::read_only(command) || crate::people_api::decoration_support_alias::read_only(command) {return Ok(());}
     if store.len()>=4096{return Err("未确认请求超过恢复屏障容量，请查询原请求或重新打开工程".into());}

@@ -10,6 +10,8 @@ pub(crate) mod face_style;
 pub(crate) mod skin_reference_match;
 #[path = "skin_reference_body_people.rs"]
 pub(crate) mod skin_reference_body;
+#[path = "skin_reference_choice_people.rs"]
+pub(crate) mod skin_reference_choice;
 #[path = "eye_bag_preserve.rs"]
 pub(crate) mod eye_bag;
 #[path = "facial_sculpt_protocol.rs"]
@@ -23,7 +25,7 @@ pub(crate) mod decoration_alias;
 #[path = "face_decoration_support_alias_protocol.rs"]
 pub(crate) mod decoration_support_alias;
 
-const PEOPLE_ACTIONS: &[&str] = &["skin_reference_body_catalog", "skin_reference_body_preview", "skin_reference_body_image", "skin_reference_body_confirm", "skin_reference_body_clear", "skin_reference_match_catalog", "skin_reference_match_preview", "skin_reference_match_image", "skin_reference_match_confirm", "skin_reference_match_clear", "eye_makeup_enhance_reference", "eye_makeup_enhance_review", "facial_sculpt_reference", "facial_sculpt_review", "face_decoration_support_alias_preview", "face_decoration_support_alias_image", "face_decoration_support_alias_confirm", "face_decoration_alias_preview", "face_decoration_alias_image", "face_decoration_alias_confirm", "face_decoration_reference", "face_decoration_review", "eye_bag_source_image", "eye_bag_reference", "eye_bag_preview", "eye_bag_image", "eye_bag_confirm", "face_style_catalog", "face_style_preview", "face_style_image", "face_style_confirm", "patch", "link", "group", "face_status", "manual_add", "create_person", "select", "target", "analyse_face", "resolve_legacy", "eye_light_reference", "eye_light_review", "blush_palette", "blush_reference", "blush_review", "lipstick_palette", "lipstick_reference", "lipstick_review", "eyeliner_palette", "eyeliner_reference", "eyeliner_review", "iris_reference", "iris_review", "eyelash_palette", "eyelash_reference", "eyelash_review", "brow_makeup_palette", "brow_makeup_reference", "brow_makeup_review", "skin_body_reference", "skin_body_preview", "skin_body_confirm", "skin_body_detach", "skin_finish_body_reference", "skin_finish_body_preview", "skin_finish_body_confirm", "skin_finish_body_detach", "body_skin_evenness_reference", "body_skin_evenness_preview", "body_skin_evenness_confirm", "body_skin_evenness_detach", "body_face_match_reference", "body_face_match_preview", "body_face_match_confirm", "body_face_match_detach", "collarbone_reference", "collarbone_preview", "collarbone_confirm", "collarbone_detach"];
+const PEOPLE_ACTIONS: &[&str] = &["skin_reference_choice", "skin_reference_body_catalog", "skin_reference_body_preview", "skin_reference_body_image", "skin_reference_body_confirm", "skin_reference_body_clear", "skin_reference_match_catalog", "skin_reference_match_preview", "skin_reference_match_image", "skin_reference_match_confirm", "skin_reference_match_clear", "eye_makeup_enhance_reference", "eye_makeup_enhance_review", "facial_sculpt_reference", "facial_sculpt_review", "face_decoration_support_alias_preview", "face_decoration_support_alias_image", "face_decoration_support_alias_confirm", "face_decoration_alias_preview", "face_decoration_alias_image", "face_decoration_alias_confirm", "face_decoration_reference", "face_decoration_review", "eye_bag_source_image", "eye_bag_reference", "eye_bag_preview", "eye_bag_image", "eye_bag_confirm", "face_style_catalog", "face_style_preview", "face_style_image", "face_style_confirm", "patch", "link", "group", "face_status", "manual_add", "create_person", "select", "target", "analyse_face", "resolve_legacy", "eye_light_reference", "eye_light_review", "blush_palette", "blush_reference", "blush_review", "lipstick_palette", "lipstick_reference", "lipstick_review", "eyeliner_palette", "eyeliner_reference", "eyeliner_review", "iris_reference", "iris_review", "eyelash_palette", "eyelash_reference", "eyelash_review", "brow_makeup_palette", "brow_makeup_reference", "brow_makeup_review", "skin_body_reference", "skin_body_preview", "skin_body_confirm", "skin_body_detach", "skin_finish_body_reference", "skin_finish_body_preview", "skin_finish_body_confirm", "skin_finish_body_detach", "body_skin_evenness_reference", "body_skin_evenness_preview", "body_skin_evenness_confirm", "body_skin_evenness_detach", "body_face_match_reference", "body_face_match_preview", "body_face_match_confirm", "body_face_match_detach", "collarbone_reference", "collarbone_preview", "collarbone_confirm", "collarbone_detach"];
 fn text(value: &Value) -> bool { value.as_str().is_some_and(|s| !s.is_empty() && s.len() <= 128) }
 fn revision(value: &Value) -> bool { value.as_u64().is_some_and(|n| n <= 9_007_199_254_740_991) }
 fn digest(value: &Value) -> bool {
@@ -64,11 +66,11 @@ impl ReceiptKind for PeopleKind {
     fn valid(value: &Value, document: Option<&str>) -> bool {
         if value["protocol"] != 1 || value["document_id"].as_str() != document
             || !value["success"].is_boolean() || !value["outcome_unknown"].is_boolean() { return false; }
-        if !skin_reference_body::receipt(value) || !skin_reference_match::receipt(value) || !decoration_support_alias::receipt(value) || !decoration_alias::receipt(value) || !face_style::receipt(value) || !eye_bag::receipt(value) || !face_decoration::receipt(value) || !facial_sculpt::receipt(value) || !eye_makeup_enhance::receipt(value) { return false; }
+        if !skin_reference_choice::receipt(value) || !skin_reference_body::receipt(value) || !skin_reference_match::receipt(value) || !decoration_support_alias::receipt(value) || !decoration_alias::receipt(value) || !face_style::receipt(value) || !eye_bag::receipt(value) || !face_decoration::receipt(value) || !facial_sculpt::receipt(value) || !eye_makeup_enhance::receipt(value) { return false; }
         if value["success"] != true { return value["error"].is_string(); }
         // This family already checks complete source-wide report publication;
         // reads/tombstones intentionally carry no selected-face document view.
-        if skin_reference_body::action(value) || skin_reference_match::action(value) { return true; }
+        if skin_reference_choice::action(value) || skin_reference_body::action(value) || skin_reference_match::action(value) { return true; }
         if face_decoration::released_reference(value) || facial_sculpt::released_reference(value) || eye_makeup_enhance::released_reference(value) { return true; }
         if decoration_alias::action(value) || decoration_support_alias::action(value) {return true;}
         if (face_style::action(value) && value["action"] != "face_style_confirm") || (eye_bag::action(value) && value["action"] != "eye_bag_confirm") {
@@ -134,7 +136,7 @@ pub(crate) fn receive(epoch: [u8; 16], value: &Value) -> bool {
     if let Ok(mut mailbox) = mailbox().lock() {
         let guarded = value["request_id"].as_str().is_some_and(|id| mailbox.host.guards_review(mailbox.epoch, id));
         mailbox.host.receive(epoch, value);
-        return (!skin_reference_body::action(value) && !skin_reference_match::action(value) && !face_style::action(value) && !eye_bag::action(value) && !face_decoration::action(value) && !facial_sculpt::action(value) && !eye_makeup_enhance::action(value) && !decoration_alias::action(value) && !decoration_support_alias::action(value) && !guarded) || (mailbox.epoch == epoch
+        return (!skin_reference_choice::action(value) && !skin_reference_body::action(value) && !skin_reference_match::action(value) && !face_style::action(value) && !eye_bag::action(value) && !face_decoration::action(value) && !facial_sculpt::action(value) && !eye_makeup_enhance::action(value) && !decoration_alias::action(value) && !decoration_support_alias::action(value) && !guarded) || (mailbox.epoch == epoch
             && value["request_id"].as_str().is_some_and(|id|
                 mailbox.host.status(id)["result"] == *value && value["success"] == true));
     }
@@ -213,6 +215,7 @@ pub(crate) fn people(state: tauri::State<'_, std::sync::Arc<crate::AppState>>, r
     face_style::command(&request)?;
     skin_reference_match::command(&request)?;
     skin_reference_body::command(&request)?;
+    skin_reference_choice::command(&request)?;
     eye_bag::command(&request)?;
     face_decoration::command(&request)?;
     facial_sculpt::command(&request)?;
@@ -229,6 +232,9 @@ pub(crate) fn people(state: tauri::State<'_, std::sync::Arc<crate::AppState>>, r
     };
     if state.ready_caps.lock().map_err(|_| "能力锁失败")?["people_protocol"] != 1 {
         return Err("引擎未提供确认式人物协议".into());
+    }
+    if skin_reference_choice::action(&command) && state.ready_caps.lock().map_err(|_| "能力锁失败")?["skin_reference_choice_protocol"] != 1 {
+        return Err("引擎未提供完整源图测量的只读参照建议协议".into());
     }
     if skin_reference_body::action(&command) && state.ready_caps.lock().map_err(|_| "能力锁失败")?["skin_reference_body_protocol"] != 1 {
         return Err("引擎未提供当前照片的身体肤色参照审核协议".into());
@@ -278,7 +284,7 @@ pub(crate) fn people(state: tauri::State<'_, std::sync::Arc<crate::AppState>>, r
                 return Err("共用源图支撑审核凭据已过期或未完成，请重新读取当前人物原图".into());
             }
         }
-        if skin_reference_body::action(&command) || skin_reference_match::action(&command) || face_style::action(&command) || eye_bag::action(&command) || face_decoration::action(&command) || facial_sculpt::action(&command) || eye_makeup_enhance::action(&command) || decoration_alias::action(&command) || decoration_support_alias::action(&command) { mailbox.host.begin_command(epoch, &command)?; }
+        if skin_reference_choice::action(&command) || skin_reference_body::action(&command) || skin_reference_match::action(&command) || face_style::action(&command) || eye_bag::action(&command) || face_decoration::action(&command) || facial_sculpt::action(&command) || eye_makeup_enhance::action(&command) || decoration_alias::action(&command) || decoration_support_alias::action(&command) { mailbox.host.begin_command(epoch, &command)?; }
         else { mailbox.host.begin_bound(epoch, id, request["action"].as_str().unwrap(), request["document_id"].as_str())?; }
     }
     command["host_epoch"] = json!(crate::frame_identity::hex(epoch));

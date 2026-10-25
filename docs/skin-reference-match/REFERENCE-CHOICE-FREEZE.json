@@ -1,0 +1,218 @@
+{
+  "schema_version": 1,
+  "baseline_commit": "13c78a7e96e2ffc45b07d148f615915c4b16f43f",
+  "baseline_tree": "dafab8ac7f272174d5c3b5fe7bb24108d66924b2",
+  "date": "2026-10-25",
+  "status": "SOURCE_CONNECTED_MEASURED_REFERENCE_PROPOSAL_PARTIAL_ALL_RUNTIME_ACCEPTANCE_UNRUN",
+  "scope": "Current-photo face/body panel measured brightest-retained-face suggestion with explicit user choice/override, genuine immutable native-precision source diagnostics, exact catalog/source/repair proof, existing sole people read queue and native receipt binding. No automatic correction or consent, new numerical algorithm, learned-AI or complete global face census claim.",
+  "requirements": [
+    "control:PC-32465:19"
+  ],
+  "requirement_identity_note": "Preserved control key only; original lost hashed LNX mapping not invented.",
+  "manifest_policy": "Exact 36 payload files plus this self-excluded manifest. Older/unrelated manifests excluded. No Git writes by worker.",
+  "source_checks": {
+    "python_ast": 8,
+    "toml_parsed": 1,
+    "file_lines": {
+      "ui/src/App.tsx": 2156,
+      "ui/src-tauri/src/main.rs": 2015,
+      "engine/src/lumaretouch_engine/server.py": 7049
+    },
+    "whitespace": "All selected tracked/new text and EOF checked statically; git diff --check clean.",
+    "cross_language": "Host/native/UI exact report/proposal field sets statically compared. Actual canonical engine read envelope and native numerical tolerance reflected in authored fixtures.",
+    "independent_review": "Verified real Rust robust-luminance diagnostic indexes and read-only source/proof paths. Corrected pre-verifier snapshot admission ordering, storage-versus-measurement encoding mismatch, UI roundoff-band rejection and actual engine envelope mismatch. Final memory guard reread independently; no further definite engine/proof defect established in scoped static audit.",
+    "execution": "No product imports, tests, compiler, build, typecheck, inference, hardware, installs or downloads."
+  },
+  "remaining": [
+    "All numerical/ABI/GUI/real-photo/resource/performance/history/reopen/export acceptance remains UNRUN. No 24MP or preview/export pixel-parity guarantee.",
+    "Suggestion is brightest among enabled retained reliably measured faces under declared robust source luminance, not complete photograph detection, intrinsic complexion, demographic inference or proprietary metric parity. Unknown occlusion/detector/semantic errors require visual review.",
+    "Near ties, reached detector limit and unavailable enabled-face measurements block automatic nomination; user can explicitly choose a measured alternative. The result never auto-selects, grants ownership, acknowledges images or applies correction.",
+    "Existing face/body full mixed-image review still owns writes. Body ownership is manually reviewed with BodyRef evidence; no automatic instance segmentation. Common reference restrictions across retained face/body matching remain.",
+    "Source/review displays remain reduced RGB8, not native inspection. Immutable original PNG16/ICC16/RAW16 and canonical derived opaque SDR precision contracts retained; unsupported alpha/HDR refused without clipping.",
+    "Preset/batch/cohort/shared-source aliases, automatic consent/application and dedicated effect-recovery remain separate unfinished paths. This is one requirement extension, not an additional algorithm count.",
+    "Existing face-count, source/capture/fit/full-render memory and decoder/solver cancellation limits remain. Phase allowances record actual historical inputs; final actual admitted peak is bounded in source, not measured at runtime.",
+    "Read-only proposal uses original-request query/uncertainty safeguards and retained source catalog proof; evicted/stale catalog requires reload. No new mutation or history owner, no hot runtime plugin loading."
+  ],
+  "files": [
+    {
+      "path": "docs/skin-reference-match/BODY-INTEGRATION.md",
+      "sha256": "8e90492bc135f8da25cef1e0bce4f6d45488afadbcee9d15213ccb459db759fe",
+      "bytes": 5074
+    },
+    {
+      "path": "docs/skin-reference-match/CHOICE-HOST.md",
+      "sha256": "270e42894f96ab11420ccb3aa2272c472bfd67fadb8035ff6fa28941c9345a49",
+      "bytes": 14105
+    },
+    {
+      "path": "docs/skin-reference-match/CHOICE-INTEGRATION.md",
+      "sha256": "12b97d8608a4f273a7c98a1a26cd3da196f3385c16a8610f66ef8ab0f678c7b1",
+      "bytes": 5737
+    },
+    {
+      "path": "docs/skin-reference-match/CHOICE-NATIVE.md",
+      "sha256": "2932adbc53e81278f1d329877b5d343761a8326f2e94ea84313eaaded5396a1c",
+      "bytes": 11559
+    },
+    {
+      "path": "docs/skin-reference-match/CHOICE-UI.md",
+      "sha256": "cd3de58911ad9527f85a70bab73cc8cfb6a212572e08199272a91cfbcf65f2ff",
+      "bytes": 12759
+    },
+    {
+      "path": "docs/skin-reference-match/INTEGRATION.md",
+      "sha256": "a85ea95492435b51e45c0f3f62ca3a2620a84ece5dd5e5fc4dde0116b848c16a",
+      "bytes": 5805
+    },
+    {
+      "path": "docs/skin-reference-match/REFERENCE-CHOICE.md",
+      "sha256": "96638dd0e03cf831d9b16b56c6699f1347fdfa2747f893141712131727f5d7e4",
+      "bytes": 13110
+    },
+    {
+      "path": "docs/skin-reference-match/RESEARCH.md",
+      "sha256": "4309b2a91f6a298a4e38fca130c9cd1628064bdc74fbd1c54200fc20120204e0",
+      "bytes": 5066
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_host_commands.py",
+      "sha256": "64324567be6f0f7d78407972e8404328dab6234100794033e2071055a996b515",
+      "bytes": 41080
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_reference_dispatch.py",
+      "sha256": "1434c45ad0426c0c5b095b8526f42159b69c9a8e66466cc17a9108c4717afe88",
+      "bytes": 1160
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/server.py",
+      "sha256": "c36e772c6136f836752c42dc9c494ccca6637479ea26608c8ee05e8fd2f61f41",
+      "bytes": 472067
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/skin_reference_choice.py",
+      "sha256": "75c37fdec8f014703efc723ae44698c6d43e6689558ed346144831fb65ee0e2c",
+      "bytes": 15780
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/skin_reference_choice_host.py",
+      "sha256": "268000437f91101dd1d366de556ecd66effd94b50f7060173bec1c81caaf1564",
+      "bytes": 25318
+    },
+    {
+      "path": "engine/tests/test_skin_reference_choice_host_unrun.py",
+      "sha256": "758466dc82b39bad6ca04db4644fc58e28a070524f9ba61b9f300ba3dc738c0f",
+      "bytes": 20321
+    },
+    {
+      "path": "engine/tests/test_skin_reference_choice_integration_unrun.py",
+      "sha256": "68352660a412c0171f15eb5298283dce26562d5b5653b4ebe730232b992a20d5",
+      "bytes": 2410
+    },
+    {
+      "path": "engine/tests/test_skin_reference_choice_unrun.py",
+      "sha256": "8d707a47cb0671416152b11b1ecb33d62e2f61fa7313d61ae03e193cd8f7cf7d",
+      "bytes": 19144
+    },
+    {
+      "path": "ui/src-tauri/src/engine.rs",
+      "sha256": "572d6a20b705ab4551118798826ba12b2162769491d65e64928b0e6fcc2a2d4e",
+      "bytes": 50688
+    },
+    {
+      "path": "ui/src-tauri/src/native_dispatch.rs",
+      "sha256": "a3c3ae4e7acce9139ebe4cb7ebab6c42d142dcb8f6e67b9db6a75c7eefc5e2a5",
+      "bytes": 13540
+    },
+    {
+      "path": "ui/src-tauri/src/people_api.rs",
+      "sha256": "01c7cfcad3b03aac488317f0008e3009fa8ace1028c8ecdd5b83c69011c5e86a",
+      "bytes": 21943
+    },
+    {
+      "path": "ui/src-tauri/src/preset_alias_recovery_fence.rs",
+      "sha256": "198f062acab46687ee065b82aa642733e5cad10471f0008aea5dd37b319a7421",
+      "bytes": 7905
+    },
+    {
+      "path": "ui/src-tauri/src/project_recovery_fence.rs",
+      "sha256": "4123068ddfab476a1dcdbb0b0b13263ddab62bfe794f20e10ffa87c17929f9c2",
+      "bytes": 11350
+    },
+    {
+      "path": "ui/src-tauri/src/receipt_host.rs",
+      "sha256": "dccbc161b63048c6e8b4f83624052dc8586137013981902ca46f95deef83febe",
+      "bytes": 51687
+    },
+    {
+      "path": "ui/src-tauri/src/skin_reference_choice_people.rs",
+      "sha256": "58e61f2132dadd03bef566e3bb99aa7636e121cd7035286dd06231d57e21c9fc",
+      "bytes": 41539
+    },
+    {
+      "path": "ui/src/App.tsx",
+      "sha256": "84f5d01ec81e5c981c6c9c8c39d9c33f30f9d1c10c34a912e1c382a43b822560",
+      "bytes": 158175
+    },
+    {
+      "path": "ui/src/native.ts",
+      "sha256": "dbab5dac1d58980807aa441e11b0a8454f641073c269b8490a37f555a5e969f8",
+      "bytes": 116279
+    },
+    {
+      "path": "ui/src/people/model.ts",
+      "sha256": "a492d2a513f97f2bc9bdb687ae55cebb701a877604dad338975b12a09ef30d85",
+      "bytes": 12531
+    },
+    {
+      "path": "ui/src/people/usePeopleWorkflow.ts",
+      "sha256": "a45bbdf5496b5331212f5124b9f865d79518b58e8dd3ab50472d672b6a66ed20",
+      "bytes": 23377
+    },
+    {
+      "path": "ui/src/people/workflow.ts",
+      "sha256": "1f82aebf71394810c1632f7b70991ac3b9f5d33e55ca54b2eeebb23fc765cfdb",
+      "bytes": 43301
+    },
+    {
+      "path": "ui/src/skinReferenceBody/SkinReferenceBodyPanel.tsx",
+      "sha256": "93f52157e72aa16ffc34bbc0a50a04ca6b318a3a7a0e8282d0744c94d17e68b1",
+      "bytes": 23077
+    },
+    {
+      "path": "ui/src/skinReferenceChoice/SkinReferenceChoicePanel.tsx",
+      "sha256": "c00c19474481a08e4bdce2193ba749a171ac3688d04b7eda910464d6fe214523",
+      "bytes": 13505
+    },
+    {
+      "path": "ui/src/skinReferenceChoice/fixtures.unrun.test.ts",
+      "sha256": "f6404127ee531b1f67100ee21488cba9d521f953455394a795c5d3e09874c3c5",
+      "bytes": 8377
+    },
+    {
+      "path": "ui/src/skinReferenceChoice/model.ts",
+      "sha256": "153192dc06bb1ec464bece1453b4b35e6db4be27de01a2a0db9f029e4cfb341b",
+      "bytes": 24889
+    },
+    {
+      "path": "ui/src/skinReferenceChoice/model.unrun.test.ts",
+      "sha256": "3199ec9282bf462124dbd830d1211c5cf047bdff0b7ac5f7e373fe524e00d273",
+      "bytes": 10955
+    },
+    {
+      "path": "ui/src/skinReferenceChoice/reviewGuard.ts",
+      "sha256": "c82c2a3e49ee405cb1ebc06357218318d32189afb610cd18c703f82bc5e0d962",
+      "bytes": 6309
+    },
+    {
+      "path": "ui/src/skinReferenceChoice/reviewGuard.unrun.test.ts",
+      "sha256": "155ecdcd24debfc28cb8e708ccca0ca68f3039bf1dd281fd1ad74521b7eeb469",
+      "bytes": 4428
+    },
+    {
+      "path": "ui/src/skinReferenceMatch/SkinReferenceMatchPanel.tsx",
+      "sha256": "dbbf0371aa79555949427d8acb8672ea80bfca5f711eb5a1f2798186f47a535a",
+      "bytes": 20756
+    }
+  ]
+}

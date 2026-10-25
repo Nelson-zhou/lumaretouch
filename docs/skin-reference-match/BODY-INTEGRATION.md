@@ -53,9 +53,9 @@ retained-target report, source/document revisions, support bank and the selected
 body's consent. Source and review display remain reduced RGB8, not native zoom.
 
 Current-photograph original/derived paths are connected. Preset/batch/cohort and
-shared-source aliases stay guarded. Automatic brightest-reference helper research
-is independent; unless its public route is separately connected, it remains
-unavailable, not an end-user capability. Existing face-only behavior is retained.
+shared-source aliases stay guarded. The subsequent [measured-reference proposal](CHOICE-INTEGRATION.md) connects
+a source-bound suggestion with explicit user choice. It does not discover all
+people, authorize a body or automatically apply the correction. Existing face-only behavior is retained.
 
 ## Admission and limitations
 

@@ -6,7 +6,10 @@ export, resource usage and photographic acceptance are **UNRUN**.
 The following records the preserved face-only v1 integration. The separately
 consented body extension is now source-connected through [BODY-INTEGRATION.md](BODY-INTEGRATION.md);
 it reuses the same solver without changing old face recipes. Both remain partial
-and all runtime acceptance is UNRUN.
+and all runtime acceptance is UNRUN. The subsequent
+[measured-reference suggestion](CHOICE-INTEGRATION.md) adds an explicit-choice
+proposal among retained measured faces, not automatic global face detection or
+auto-application.
 
 ## Requirement and independent module
 

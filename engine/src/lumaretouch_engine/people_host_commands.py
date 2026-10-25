@@ -7,7 +7,7 @@ import json
 from . import people_state as S,people_algorithms as A,people_edit as EDIT
 from .people_command import validate_envelope
 from .people_graph_owner import affected_assets
-from .people_reference_dispatch import ACTIONS as SKIN_REFERENCE_ACTIONS, READS as SKIN_REFERENCE_READS, WRITES as SKIN_REFERENCE_WRITES, module as reference_module
+from .people_reference_dispatch import ACTIONS as SKIN_REFERENCE_ACTIONS, READS as SKIN_REFERENCE_READS, WRITES as SKIN_REFERENCE_WRITES, module as reference_module, request_marker as reference_request_marker
 
 
 FACE_STYLE_READS = frozenset(('face_style_catalog','face_style_preview','face_style_image'))
@@ -231,8 +231,9 @@ def apply(engine,raw,emit):
         frame=None
     elif action in SKIN_REFERENCE_READS:
         reference_review = reference_module(action)
-        method={'catalog':reference_review.catalogue, 'preview':reference_review.preview,
-                'image':reference_review.image}[action.rsplit('_',1)[1]]
+        method=(reference_review.propose if action=='skin_reference_choice' else
+                {'catalog':reference_review.catalogue, 'preview':reference_review.preview,
+                 'image':reference_review.image}[action.rsplit('_',1)[1]])
         records[request]['payload']=method(engine,state,target,payload)
         frame=None
     elif action=='iris_reference':
@@ -456,7 +457,7 @@ def finish(engine,p,error,emit):
     if eye_bag_action:
         echo={'eye_bag_request':deepcopy({key:p.get(key) for key in ('action','document_id','document_epoch','document_revision','state_revision','association_revision','target','payload')})}
     if reference_action:
-        echo={('skin_reference_body_request' if p.get('action','').startswith('skin_reference_body_') else 'skin_reference_match_request'):deepcopy({key:p.get(key) for key in ('action','document_id','document_epoch','document_revision','state_revision','association_revision','target','payload')})}
+        echo={reference_request_marker(p.get('action')):deepcopy({key:p.get(key) for key in ('action','document_id','document_epoch','document_revision','state_revision','association_revision','target','payload')})}
     digest=hashlib.sha256(json.dumps({k:v for k,v in p.items() if k!='cmd'},sort_keys=True,allow_nan=False).encode()).hexdigest()
     if old.get('digest') not in (None,digest):
         emit({'event':'people_result','protocol':1,'action':p.get('action'),'request_id':p['request_id'],'document_id':p.get('document_id'),

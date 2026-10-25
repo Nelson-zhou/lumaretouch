@@ -23,8 +23,10 @@ not a complete reproduction of the externally described AI feature.
 
 The subsequent [body extension](BODY-INTEGRATION.md) uses independently reviewed
 BodyRef ownership and the same measured reference fit. This does not change the
-remaining automatic-reference and automatic instance-segmentation gaps or add
-an algorithm count. No additional upstream implementation was incorporated.
+remaining full-automation and automatic instance-segmentation gaps or add
+an algorithm count. [Measured reference proposals](CHOICE-INTEGRATION.md)
+subsequently reuse the same Rust robust luminance diagnostic and still require
+explicit user choice and ordinary full-image correction review. No additional upstream implementation was incorporated.
 
 ## darktable color mapping
 

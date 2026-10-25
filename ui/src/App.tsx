@@ -1902,8 +1902,8 @@ export default function App() {
                         note={setDragNote} onDone={requestPanelRefresh}
                         thumb={strip?.current ? thumbs[strip.current] : undefined}
                         people={peopleWorkflow}
-                        skinReferencePanel={<SkinReferenceMatchPanel people={peopleWorkflow} available={status?.ready_caps?.skin_reference_match_protocol===1} blocked={hairBusy||hair.state.pending||!!status?.edit_queue?.in_flight||!!status?.edit_queue?.pending||!!status?.edit_queue?.closed}/> }
-                        skinReferenceBodyPanel={<SkinReferenceBodyPanel people={peopleWorkflow} available={status?.ready_caps?.skin_reference_body_protocol===1} blocked={hairBusy||hair.state.pending||!!status?.edit_queue?.in_flight||!!status?.edit_queue?.pending||!!status?.edit_queue?.closed}/> }
+                        skinReferencePanel={<SkinReferenceMatchPanel choiceAvailable={status?.ready_caps?.skin_reference_choice_protocol===1} people={peopleWorkflow} available={status?.ready_caps?.skin_reference_match_protocol===1} blocked={hairBusy||hair.state.pending||!!status?.edit_queue?.in_flight||!!status?.edit_queue?.pending||!!status?.edit_queue?.closed}/> }
+                        skinReferenceBodyPanel={<SkinReferenceBodyPanel choiceAvailable={status?.ready_caps?.skin_reference_choice_protocol===1} people={peopleWorkflow} available={status?.ready_caps?.skin_reference_body_protocol===1} blocked={hairBusy||hair.state.pending||!!status?.edit_queue?.in_flight||!!status?.edit_queue?.pending||!!status?.edit_queue?.closed}/> }
                         hairUnificationPanel={<HairUnificationPanel port={hairUnification.port} engineAlive={engineAlive} onStartEngine={onStartEngine} busy={hairBusy||hair.state.pending} available={status?.ready_caps?.hair_unification_protocol===1}/>} hairPort={hair.port} hairBusy={hairBusy} refreshHair={refreshFromEngine}
                         brush={{ on: brushOn, mode: brushMode, radius: brushRadius }}
                         onBrush={(patch) => {

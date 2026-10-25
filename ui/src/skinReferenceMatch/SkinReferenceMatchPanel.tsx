@@ -4,6 +4,7 @@ import type {PeopleAction, PeopleView} from '../people/model';
 import type {PeopleOwner} from '../people/usePeopleWorkflow';
 import type {SpillImage} from '../spillRemoval/model';
 import {ReviewedImage} from './ReviewedImage';
+import {SkinReferenceChoicePanel} from '../skinReferenceChoice/SkinReferenceChoicePanel';
 import {ack, canonical, catalogImage, object, parseAmount, reviewImage, reviewKey, skinReferenceBinding,
   skinReferenceContext, validCatalog, validClear, validConfirmation, validPreview, validReview,
   type SkinReferenceAction, type SkinReferenceCatalog, type SkinReferencePreview, type SkinReferenceReview,
@@ -14,8 +15,8 @@ type Expected = {command: PeopleAction; key: string; view: PeopleView; preview?:
 type Pair<T> = Partial<Record<SkinReferenceSide, T>>;
 
 /** Draft UI only. PeopleOwner owns admission, pending IDs, polling, mutation and history. */
-export function SkinReferenceMatchPanel({people, blocked, available}: {
-  people: PeopleOwner; blocked: boolean; available: boolean;
+export function SkinReferenceMatchPanel({people, blocked, available, choiceAvailable}: {
+  people: PeopleOwner; blocked: boolean; available: boolean; choiceAvailable: boolean;
 }) {
   const view = people.value, binding = skinReferenceBinding(view);
   const [catalog, setCatalog] = useState<SkinReferenceCatalog | null>(null);
@@ -132,7 +133,7 @@ export function SkinReferenceMatchPanel({people, blocked, available}: {
     && ['skin_reference_match_confirm', 'skin_reference_match_clear'].includes(result.command.action);
   return <section aria-label="多人肤色与亮度参考匹配">
     <h4>多人肤色与亮度参考匹配</h4>
-    <p>仅匹配当前照片中明确勾选人脸的皮肤颜色与亮度，使用你选择的另一张脸作为参考。不会自动选择最亮的人，不处理身体，也不是身体 AI 匹配。</p>
+    <p>仅匹配当前照片中明确勾选人脸的皮肤颜色与亮度，使用你选择的另一张脸作为参考。可请求实测亮度建议，但仍需你明确选择；本面板不处理身体，也不是身体 AI 匹配。</p>
     <p className="muted">这是部分匹配功能：基于已测得的脸部区域与当前原图或有效派生来源，不识别人名或身份。参考脸不会被本功能修改；眼睛、嘴唇、头发和背景不属于目标皮肤。请以真实前后图判断局部边缘、肤色和原有效果叠加后的结果。</p>
     {!available && <p role="status">当前引擎尚未提供此功能，不能使用其他肤色滑块代替。</p>}
     {!view && <p role="status">请先打开照片并完成人物分析。</p>}
@@ -159,6 +160,11 @@ export function SkinReferenceMatchPanel({people, blocked, available}: {
         </div>
         <p className="muted">来源 {catalog.source.width} × {catalog.source.height}；显示图 {catalog.source_image.width} × {catalog.source_image.height}。此图用于确认人物归属，不是编辑后预览，也不是原尺寸质量验收。</p>
       </figure>
+      <SkinReferenceChoicePanel people={people} family="face" catalog={catalog} sourceSeen={sourceSeen}
+        available={choiceAvailable} blocked={busy || !allowed} onReferenceChosen={ref => {
+          if (live.current.binding !== binding || live.current.busy || !sourceSeen || document.visibilityState !== 'visible') return;
+          setReferenceId(ref.face_instance_id); setTargetIds(old => old.filter(id => id !== ref.face_instance_id)); invalidateSelection();
+        }}/>
       <fieldset disabled={busy || !allowed || !catalog.skin_reference_match_available}>
         <legend>明确选择参考与目标，不自动预选</legend>
         <label>参考人物<select value={referenceId} onChange={event => {

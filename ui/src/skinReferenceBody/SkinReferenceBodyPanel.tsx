@@ -6,6 +6,7 @@ import type {SpillImage} from '../spillRemoval/model';
 import type {SkinBodyMask} from '../skinColour/bodyReviewModel';
 import {SkinBodySourceEditor} from '../skinColour/SkinBodySourceEditor';
 import {ReviewedImage} from './ReviewedImage';
+import {SkinReferenceChoicePanel} from '../skinReferenceChoice/SkinReferenceChoicePanel';
 import {OPERATION_ID, ack, canonical, catalogImage, emptyMask, object, parseAmount, previewMatchesCatalog,
   requestFits, reviewImage, reviewKey, skinReferenceBodyBinding, skinReferenceBodyContext, sourceEditorImage,
   targetKey, validCatalog, validClear, validConfirmation, validMask, validPreview, validReview,
@@ -19,8 +20,8 @@ type Consent = {visible: boolean; unoccluded: boolean; ownership: boolean; refer
 const noConsent = (): Consent => ({visible: false, unoccluded: false, ownership: false, referenceUnchanged: false});
 
 /** Ephemeral draft only. The canonical PeopleOwner remains the only request, mutation and history owner. */
-export function SkinReferenceBodyPanel({people, blocked, available}: {
-  people: PeopleOwner; blocked: boolean; available: boolean;
+export function SkinReferenceBodyPanel({people, blocked, available, choiceAvailable}: {
+  people: PeopleOwner; blocked: boolean; available: boolean; choiceAvailable: boolean;
 }) {
   const view = people.value, binding = skinReferenceBodyBinding(view);
   const [catalog, setCatalog] = useState<SkinReferenceBodyCatalog | null>(null);
@@ -139,7 +140,7 @@ export function SkinReferenceBodyPanel({people, blocked, available}: {
     && ['skin_reference_body_confirm', 'skin_reference_body_clear'].includes(result.command.action);
   return <section aria-label="同照参考脸匹配独立身体皮肤">
     <h4>同照参考脸 → 独立身体皮肤</h4>
-    <p>选择当前照片中的真实参考脸，再独立审核明确归属的一处身体皮肤。仅部分匹配颜色与亮度，不自动选最亮的脸，不推断身体归属，也不是新的身体 AI 算法。</p>
+    <p>选择当前照片中的真实参考脸，再独立审核明确归属的一处身体皮肤。可请求实测亮度建议，但仍需你明确选择；不推断身体归属，也不是新的身体 AI 算法。</p>
     <p className="muted">可只处理身体，不必启用脸部匹配。参考脸可为目标本人或同照其他人物；本功能保护所有人脸，不把脸框当作身体区域，也不改脸部匹配设置。</p>
     {!available && <p role="status">当前引擎尚未提供独立身体参考协议，不能借用其他身体功能代替。</p>}
     {!view && <p role="status">请先打开照片、完成人物分析，并明确确认目标人物与身体的关联。</p>}
@@ -166,6 +167,12 @@ export function SkinReferenceBodyPanel({people, blocked, available}: {
         </div>
         <p className="muted">来源 {catalog.source.width} × {catalog.source.height}；显示 {catalog.source_image.width} × {catalog.source_image.height}。缩略图不构成原尺寸质量验收。</p>
       </figure>
+      <SkinReferenceChoicePanel people={people} family="body" catalog={catalog} sourceSeen={sourceSeen}
+        available={choiceAvailable} blocked={busy || !allowed} lockedReference={donor} onReferenceChosen={ref => {
+          if (live.current.binding !== binding || live.current.busy || !sourceSeen || document.visibilityState !== 'visible'
+            || donor && canonical(donor) !== canonical(ref)) return;
+          setReferenceId(ref.face_instance_id); invalidateSelection();
+        }}/>
       <fieldset disabled={busy || !allowed || !catalog.skin_reference_body_available}>
         <legend>分别选择参考脸和已明确归属的身体，不自动预选</legend>
         <label>参考脸<select value={referenceId} onChange={event => {setReferenceId(event.target.value); invalidateSelection();}}>
