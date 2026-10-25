@@ -28,7 +28,7 @@ def test_frozen_export_and_preview_have_dedicated_provider():
 
 def test_existing_stage_order_preserved_with_independent_prefix():
     text = source('people_effects.py')
-    assert "STAGES = ('skin_reference_match', 'body_face_match'" in text
+    assert "STAGES = ('skin_reference_match', 'skin_reference_body_match', 'body_face_match'" in text
     assert 'skin_reference_match_composition import apply_records_np' in text
     assert "source_effect(self,'skin_reference_match'" in source('vram.py') or '"skin_reference_match"' in source('vram.py')
 
@@ -50,5 +50,5 @@ def test_saved_support_and_legacy_neutral_contract():
 
 def test_explicit_reviewed_writes_have_independent_history_groups():
     text = source('history_policy.py')
-    assert 'in ("skin_reference_match_confirm","skin_reference_match_clear")' in text
+    assert 'in ("skin_reference_match_confirm","skin_reference_match_clear","skin_reference_body_confirm","skin_reference_body_clear")' in text
     assert 'return "people:"+msg["action"]+":"+str(msg.get("request_id"))' in text

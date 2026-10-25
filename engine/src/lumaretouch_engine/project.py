@@ -225,6 +225,9 @@ def validate(p: object) -> None:
     from .skin_reference_match_project import validate as validate_reference_match
     try:validate_reference_match(p,allowed=sv==SCHEMA)
     except (ValueError,TypeError,KeyError) as error:raise ProjectError(str(error)) from error
+    from .skin_reference_body_project import validate as validate_reference_body
+    try:validate_reference_body(p,allowed=sv==SCHEMA)
+    except (ValueError,TypeError,KeyError) as error:raise ProjectError(str(error)) from error
     _validate_fringe_records(p, allowed=(sv == SCHEMA))
     from .primary_calibration_adapters import validate_records as validate_primary
     try:validate_primary(p,allowed=sv in (PRIMARY_SCHEMA,DETAIL_SCHEMA,GRAIN_SCHEMA,COLOUR_EDITOR_SCHEMA,SCHEMA))

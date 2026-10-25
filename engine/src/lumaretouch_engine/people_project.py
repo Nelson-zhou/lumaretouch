@@ -41,6 +41,8 @@ def validate_records(value):
                 validate_hair_unification_graph(value[key])
                 from .skin_reference_match_project import validate_graph as validate_reference_match_graph
                 validate_reference_match_graph(value[key])
+                from .skin_reference_body_project import validate_graph as validate_reference_body_graph
+                validate_reference_body_graph(value[key])
                 from .facial_sculpt_project import validate_graph as validate_facial_sculpt_graph
                 validate_facial_sculpt_graph(value[key])
                 from .eye_makeup_enhance_project import validate_graph as validate_eye_makeup_enhance_graph

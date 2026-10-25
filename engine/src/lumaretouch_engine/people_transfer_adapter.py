@@ -166,4 +166,6 @@ def stage(payload, target_state, *, eye_bag_review=None):
     require_unreviewed_transition(target_state,out)
     from .skin_reference_match_project import require_unreviewed_transition as require_reference_transition
     require_reference_transition(target_state,out)
+    from .skin_reference_body_project import require_unreviewed_transition as require_body_reference_transition
+    require_body_reference_transition(target_state,out)
     return out

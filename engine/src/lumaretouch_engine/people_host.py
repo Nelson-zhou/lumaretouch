@@ -192,6 +192,8 @@ class PeopleHostMixin:
             result['eye_makeup_enhance']=eye_makeup_enhance_report(self,state,source,self._people_cursors.get(asset))
             from .skin_reference_match_host import report as skin_reference_report
             result['skin_reference_match']=skin_reference_report(self,state)
+            from .skin_reference_body_host import report as skin_reference_body_report
+            result['skin_reference_body_match']=skin_reference_body_report(self,state)
             result.update(binding=self._people_binding(),editing_target=deepcopy(target),editing_overrides=overrides,legacy_unresolved=legacy_report(state,asset))
             return result
         except (ValueError,OSError):return None
@@ -251,6 +253,8 @@ class PeopleHostMixin:
         validate_unification(project)
         from .skin_reference_match_project import validate as validate_reference_match
         validate_reference_match(project)
+        from .skin_reference_body_project import validate as validate_reference_body
+        validate_reference_body(project)
         from .people_cross_owner_project import validate_project
         validate_project(project)
         return prepare(project,rows,self.HISTORY_MAX)
@@ -269,6 +273,7 @@ class PeopleHostMixin:
         from .hair_unification_controller import invalidate_after_reload
         invalidate_after_reload(self)
         self.__dict__.pop('_skin_reference_match_reviews',None)
+        self.__dict__.pop('_skin_reference_body_reviews',None)
         self._people_graph_owner=PeopleGraphOwner(project.get('people_graph'))
         self._people_support=SUPPORT.check_store(project.get('people_support_assets',{}))
         self._people_landmarks=RA.check_store(project.get('people_landmarks',{}))
@@ -353,6 +358,8 @@ class PeopleHostMixin:
         require_hair_unification_transition(self,before,candidate)
         from .skin_reference_match_project import require_transition as require_reference_transition
         require_reference_transition(self,before,candidate)
+        from .skin_reference_body_project import require_transition as require_body_reference_transition
+        require_body_reference_transition(self,before,candidate)
         from .eye_makeup_enhance_project import require_transition as require_eye_makeup_enhance_transition
         require_eye_makeup_enhance_transition(self,before,candidate)
         def signature(state,asset):

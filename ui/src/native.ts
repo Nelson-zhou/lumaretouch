@@ -1101,6 +1101,7 @@ export interface EngineStatus {
     arm_shape_protocol?: number;
     semantic_colour_protocol?: number;
     semantic_colour_workflow_protocol?: number;
+    skin_reference_body_protocol?: number; skin_reference_body_available?: boolean; skin_reference_body_reason?: string | null;
     skin_reference_match_protocol?: number; skin_reference_match_available?: boolean; skin_reference_match_reason?: string | null;
     hair_unification_protocol?: number; hair_unification_capability?: {available:boolean;reason?:string|null}; hair_colour_protocol?: number;
     sample_library_protocol?: number;

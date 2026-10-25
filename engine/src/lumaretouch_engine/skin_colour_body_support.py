@@ -386,6 +386,15 @@ def raster(state, assets, face_ref, body_bank, analysis, shape, *, byte_budget=N
                 if other['source'] != record['source']:
                     raise ValueError('Competing body-skin review has different source dimensions')
                 others.append(other)
+        # The independent selected-reference family reserves foreign ownership
+        # even when inactive. This does not borrow its operation-specific consent.
+        from .skin_reference_body_support import _attached as reference_body_attached
+        attached = reference_body_attached(state, assets, ref)
+        if attached is not None:
+            other, _ = attached
+            if other['source'] != record['source']:
+                raise ValueError('Competing reference-body review has different source dimensions')
+            others.append(other)
     recipes = [record['row']['review']['recipe']] + [r['row']['review']['recipe'] for r in others]
     work = sum(M.validate_budget(recipe, shape)['work'] for recipe in recipes)
     if work > M.MAX_WORK:

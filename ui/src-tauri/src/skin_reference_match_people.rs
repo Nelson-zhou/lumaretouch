@@ -20,33 +20,33 @@ const MAX_RESULT_BYTES: usize = 8 * 1024 * 1024;
 const MAX_PNG_BYTES: usize = 4 * 1024 * 1024;
 const MAX_BASE64_BYTES: usize = 5_592_408;
 
-fn fields(v: &Value, names: &[&str]) -> bool {
+pub(super) fn fields(v: &Value, names: &[&str]) -> bool {
     v.as_object().is_some_and(|m| m.len() == names.len() && names.iter().all(|key| m.contains_key(*key)))
 }
-fn allowed(v: &Value, required: &[&str], optional: &[&str]) -> bool {
+pub(super) fn allowed(v: &Value, required: &[&str], optional: &[&str]) -> bool {
     v.as_object().is_some_and(|m| required.iter().all(|key| m.contains_key(*key))
         && m.keys().all(|key| required.contains(&key.as_str()) || optional.contains(&key.as_str())))
 }
-fn identifier(v: &Value) -> bool {
+pub(super) fn identifier(v: &Value) -> bool {
     v.as_str().is_some_and(|s| !s.is_empty() && s.len() <= 128
         && s.bytes().all(|b| b.is_ascii_alphanumeric() || b"_.:-".contains(&b)))
 }
-fn revision(v: &Value) -> bool { v.as_u64().is_some_and(|n| n <= MAX_REVISION) }
-fn next_revision(v: &Value, before: &Value) -> bool {
+pub(super) fn revision(v: &Value) -> bool { v.as_u64().is_some_and(|n| n <= MAX_REVISION) }
+pub(super) fn next_revision(v: &Value, before: &Value) -> bool {
     revision(v) && v.as_u64().zip(before.as_u64()).is_some_and(|(after, before)| before.checked_add(1) == Some(after))
 }
-fn decimal_revision(v: &Value, expected: &Value) -> bool {
+pub(super) fn decimal_revision(v: &Value, expected: &Value) -> bool {
     revision(expected) && v.as_str() == expected.as_u64().map(|n| n.to_string()).as_deref()
 }
-fn amount(v: &Value, active: bool) -> bool {
+pub(super) fn amount(v: &Value, active: bool) -> bool {
     v.as_f64().is_some_and(|n| n.is_finite() && n <= 1.0 && if active { n > 0.0 } else { n >= 0.0 })
 }
-fn face_ref(v: &Value, asset: &Value) -> bool {
+pub(super) fn face_ref(v: &Value, asset: &Value) -> bool {
     fields(v, &["asset_sha256", "face_instance_id", "analysis_revision"])
         && hex(asset, 64) && v["asset_sha256"] == *asset && identifier(&v["face_instance_id"])
         && revision(&v["analysis_revision"])
 }
-fn face_refs(v: &Value, asset: &Value, minimum: usize, maximum: usize) -> bool {
+pub(super) fn face_refs(v: &Value, asset: &Value, minimum: usize, maximum: usize) -> bool {
     let Some(rows) = v.as_array() else { return false; };
     let mut seen = BTreeSet::new();
     (minimum..=maximum).contains(&rows.len()) && rows.iter().all(|row|
@@ -56,7 +56,7 @@ fn selection(reference: &Value, targets: &Value, asset: &Value) -> bool {
     face_ref(reference, asset) && face_refs(targets, asset, 1, MAX_TARGETS)
         && targets.as_array().unwrap().iter().all(|row| row["face_instance_id"] != reference["face_instance_id"])
 }
-fn ack(v: &Value) -> bool {
+pub(super) fn ack(v: &Value) -> bool {
     fields(v, &["review_sha256", "before_sha256", "after_sha256"])
         && ["review_sha256", "before_sha256", "after_sha256"].iter().all(|key| hex(&v[*key], 64))
 }
@@ -101,7 +101,7 @@ fn size(v: &Value) -> Option<(u64, u64)> {
     let (w, h) = (items[0].as_u64()?, items[1].as_u64()?);
     (w > 0 && h > 0 && w <= u32::MAX as u64 && h <= u32::MAX as u64).then_some((w, h))
 }
-fn source(v: &Value, asset: &Value) -> bool {
+pub(super) fn source(v: &Value, asset: &Value) -> bool {
     fields(v, &["sha256", "width", "height"]) && v["sha256"] == *asset && hex(asset, 64)
         && ["width", "height"].iter().all(|key| v[*key].as_u64().is_some_and(|n| n > 0 && n <= u32::MAX as u64))
 }
@@ -128,11 +128,11 @@ pub(crate) fn image(v: &Value) -> bool {
         && bytes.get(25) == Some(&2)
         && format!("{:x}", Sha256::digest(&bytes)) == v["sha256"].as_str().unwrap()
 }
-fn source_image(v: &Value, s: &Value) -> bool {
+pub(super) fn source_image(v: &Value, s: &Value) -> bool {
     let meta = json!({"mime":v["mime"], "width":v["width"], "height":v["height"], "sha256":v["sha256"]});
     image(v) && compact(&meta, (s["width"].as_u64().unwrap(), s["height"].as_u64().unwrap()))
 }
-fn owner(v: &Value, r: &Value) -> bool {
+pub(super) fn owner(v: &Value, r: &Value) -> bool {
     fields(v, &["document", "people_scope", "state_revision", "association_revision", "graph_sha256", "source_proof"])
         && fields(&v["document"], &["document_id", "epoch", "revision"])
         && v["document"]["document_id"] == r["document_id"] && v["document"]["epoch"] == r["document_epoch"]
@@ -141,7 +141,7 @@ fn owner(v: &Value, r: &Value) -> bool {
         && (v["people_scope"] == "project" || v["people_scope"] == r["document_id"])
         && source_proof(&v["source_proof"]) && v["source_proof"]["asset_sha256"] == r["target"]["target_id"]
 }
-fn visual(v: &Value, o: &Value, s: &Value) -> bool {
+pub(super) fn visual(v: &Value, o: &Value, s: &Value) -> bool {
     if !fields(v, &["version", "document_id", "revision", "source_proof", "source_size", "before_output_size", "after_output_size",
         "before", "after", "before_state_sha256", "candidate_state_sha256", "before_people_sha256", "candidate_people_sha256"])
         || v["version"].as_u64() != Some(1) || v["document_id"] != o["document"]["document_id"]
@@ -170,13 +170,13 @@ fn review(v: &Value, r: &Value) -> bool {
         && ["before_bank_sha256", "candidate_bank_sha256", "review_sha256"].iter().all(|key| hex(&v[*key], 64))
         && support_hashes(&v["support_sha256"], &v["target_face_refs"]) && visual(&v["visual"], &v["owner"], &v["source"])
 }
-fn diagnostic(v: &Value) -> bool {
+pub(super) fn diagnostic(v: &Value) -> bool {
     v.as_str().is_some_and(|s| !s.trim().is_empty() && s.len() <= 4096 && !s.contains('\0'))
 }
-fn availability(available: &Value, reason: &Value) -> bool {
+pub(super) fn availability(available: &Value, reason: &Value) -> bool {
     available.is_boolean() && if available == true { reason.is_null() } else { diagnostic(reason) }
 }
-fn face_box(v: &Value) -> bool {
+pub(super) fn face_box(v: &Value) -> bool {
     v.as_array().is_some_and(|items| items.len() == 4
         && items.iter().all(|n| n.as_f64().is_some_and(|n| n.is_finite() && (0.0..=1.0).contains(&n)))
         && v[0].as_f64() < v[2].as_f64() && v[1].as_f64() < v[3].as_f64()

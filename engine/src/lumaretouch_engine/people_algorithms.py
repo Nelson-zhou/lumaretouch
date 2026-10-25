@@ -15,6 +15,7 @@ from . import eye_symmetry_state as EYE_SYMMETRY
 from . import brow_enhance_state as BROW_ENHANCE
 from . import hair_unification_state as HAIR_UNIFICATION
 from . import skin_reference_match_state as SKIN_REFERENCE_MATCH
+from . import skin_reference_body_state as SKIN_REFERENCE_BODY
 from . import facial_sculpt_state as FACIAL_SCULPT
 from . import eye_makeup_enhance_state as EYE_MAKEUP_ENHANCE
 from . import body_face_match_state as BODY_FACE_MATCH
@@ -72,6 +73,7 @@ def specifications():
             HAIR.OPERATION: (HAIR.neutral(), HAIR.check),
             HAIR_UNIFICATION.OP: (HAIR_UNIFICATION.neutral(), HAIR_UNIFICATION.check),
             SKIN_REFERENCE_MATCH.OP: (SKIN_REFERENCE_MATCH.neutral(), SKIN_REFERENCE_MATCH.check),
+            SKIN_REFERENCE_BODY.OP: (SKIN_REFERENCE_BODY.neutral(), SKIN_REFERENCE_BODY.check),
             EYE_LIGHT.OPERATION: (EYE_LIGHT.neutral(), EYE_LIGHT.check),
             FACE_DECORATION.OP: (FACE_DECORATION.neutral(), FACE_DECORATION.check),
             BLUSH.OP: (BLUSH.neutral(), BLUSH.check), LIPSTICK.OP: (LIPSTICK.neutral(), LIPSTICK.check),

@@ -608,6 +608,7 @@ class PreviewPipeline:
         out = self.studio_background.apply(out)
         if PEOPLE_PIPE.active(self):
             out=PEOPLE_PIPE.source_effect(self,'skin_reference_match',out)
+            out=PEOPLE_PIPE.source_effect(self,'skin_reference_body_match',out)
             out=PEOPLE_PIPE.source_effect(self,'body_face_match',out)
             out=PEOPLE_PIPE.source_effect(self,'body_skin_evenness',out)
             out=PEOPLE_PIPE.source_effect(self,'collarbone',out)

@@ -21,6 +21,11 @@ actual same-photo face reference and reviewed measured targets. Automatic
 brightest ranking and instance/body segmentation remain unimplemented. It is
 not a complete reproduction of the externally described AI feature.
 
+The subsequent [body extension](BODY-INTEGRATION.md) uses independently reviewed
+BodyRef ownership and the same measured reference fit. This does not change the
+remaining automatic-reference and automatic instance-segmentation gaps or add
+an algorithm count. No additional upstream implementation was incorporated.
+
 ## darktable color mapping
 
 Primary references:

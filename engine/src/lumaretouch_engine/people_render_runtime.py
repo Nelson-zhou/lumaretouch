@@ -76,6 +76,10 @@ def prepare(state, asset_sha256, source, analyses, *, byte_budget, document_id=N
     UNIFY.validate_graph(state)
     from .skin_reference_match_project import validate_graph as validate_reference_match
     validate_reference_match(state)
+    from .skin_reference_body_project import validate_graph as validate_reference_body
+    validate_reference_body(state)
+    from .skin_reference_body_project import common_reference
+    common_reference(state,skin_reference_match_assets or {},asset_sha256,body_bank,analyses)
     from .hair_unification_assets import verify_graph as verify_unification_graph
     verify_unification_graph(state, hair_unification_assets or {}, hair_assets or {})
     A.FACE_DECORATION.validate_graph(state)
@@ -183,7 +187,7 @@ def prepare(state, asset_sha256, source, analyses, *, byte_budget, document_id=N
             face = state['faces'][key]; analysis = analyses[key]
             for asset in face['local_assets'].values():
                 stage = asset['kind']
-                if stage in ('skin_reference_match_relation','skin_colour_body_visibility','skin_finish_body_visibility','body_skin_evenness_visibility','body_face_match_visibility','collarbone_visibility','eye_bag_ridge_visibility','face_decoration_visibility','facial_sculpt_visibility','eye_makeup_enhance_visibility'):
+                if stage in ('skin_reference_match_body_visibility','skin_reference_match_relation','skin_colour_body_visibility','skin_finish_body_visibility','body_skin_evenness_visibility','body_face_match_visibility','collarbone_visibility','eye_bag_ridge_visibility','face_decoration_visibility','facial_sculpt_visibility','eye_makeup_enhance_visibility'):
                     # Separate operation-owned support, never generic recovery.
                     # Resolve each only when its own recipe is active below;
                     # dormant review cannot prevent disabling its own recipe.
@@ -492,17 +496,27 @@ def prepare(state, asset_sha256, source, analyses, *, byte_budget, document_id=N
     if failures: raise PeoplePreparationRefused(failures)
     geometry = combine(fields, (h,w), byte_budget=byte_budget)
     prepared=PreparedPeople(plan, geometry, tuple(effects), facts, owned_recovery,tuple(fields))
-    from .skin_reference_match_runtime import requests as reference_requests, prepare_bank as prepare_reference_match
-    if reference_requests(state,asset_sha256):
+    from .skin_reference_match_runtime import requests as reference_requests, prepare_bank as prepare_reference_match, _analysis_bytes as reference_analysis_bytes
+    from .skin_reference_body_runtime import requests as body_reference_requests, prepare_bank as prepare_reference_body
+    if reference_requests(state,asset_sha256) or body_reference_requests(state,asset_sha256):
         if not callable(skin_reference_match_source):
-            raise ValueError('Skin-reference matching needs authenticated full-source fitting, not the current display raster')
+            raise ValueError('Reference matching needs authenticated full-source fitting, not the current display raster')
         remaining=byte_budget-retained_bytes(prepared)-source.nbytes-(0 if repaired is None else repaired.nbytes)
-        captured=skin_reference_match_source(byte_budget=remaining,cancelled=lambda:False)
+        # Decode/freeze overlaps already resident semantic/landmark backing.
+        # Later fit admission charges its own input phases; do not subtract twice there.
+        capture_budget=max(0,remaining-reference_analysis_bytes(analyses))
+        captured=skin_reference_match_source(byte_budget=capture_budget,cancelled=lambda:False)
         reference_effects,reference_facts=prepare_reference_match(state,asset_sha256,captured,analyses,
             assets=skin_reference_match_assets or {},application_shape=(h,w),byte_budget=remaining)
+        # Body preparation charges these retained face records itself. Capture
+        # the immutable source once, fit independently, then publish neither on failure.
+        body_reference_effects,body_reference_facts=prepare_reference_body(state,asset_sha256,captured,analyses,
+            assets=skin_reference_match_assets or {},body_bank=body_bank,face_records=reference_effects,
+            application_shape=(h,w),byte_budget=remaining)
         del captured
         for key,fact in reference_facts.items():facts.setdefault(key,{})['skin_reference_match']=fact
-        prepared=PreparedPeople(plan,geometry,prepared.effects+reference_effects,facts,owned_recovery,tuple(fields))
+        for key,fact in body_reference_facts.items():facts.setdefault(key,{})['skin_reference_body_match']=fact
+        prepared=PreparedPeople(plan,geometry,prepared.effects+reference_effects+body_reference_effects,facts,owned_recovery,tuple(fields))
     if source_only:
         from .creative_derived_hair import needed
         if not needed(state,asset_sha256) and not UNIFY.needed(state,asset_sha256):return prepared
@@ -525,6 +539,6 @@ def retained_bytes(prepared,*,include_geometry=True):
     total=sum(field.resident_bytes() for field in (*prepared.face_fields,*prepared.body_fields))
     total+=sum(array.nbytes for record in prepared.effects for array in (record.delta,record.weights,record.chroma_shift,record.log_gain) if array is not None)
     total+=sum(record['weight'].nbytes for record in prepared.recovery.values())
-    total+=sum(record.amounts.resident_bytes() for record in prepared.effects if record.stage=='skin_reference_match')
+    total+=sum(record.amounts.resident_bytes() for record in prepared.effects if record.stage in ('skin_reference_match','skin_reference_body_match'))
     if include_geometry:total+=prepared.geometry.delta.nbytes+prepared.geometry.owner.nbytes
     return total

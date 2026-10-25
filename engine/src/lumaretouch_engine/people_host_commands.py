@@ -7,7 +7,7 @@ import json
 from . import people_state as S,people_algorithms as A,people_edit as EDIT
 from .people_command import validate_envelope
 from .people_graph_owner import affected_assets
-from .skin_reference_match_host import ACTIONS as SKIN_REFERENCE_ACTIONS, READS as SKIN_REFERENCE_READS
+from .people_reference_dispatch import ACTIONS as SKIN_REFERENCE_ACTIONS, READS as SKIN_REFERENCE_READS, WRITES as SKIN_REFERENCE_WRITES, module as reference_module
 
 
 FACE_STYLE_READS = frozenset(('face_style_catalog','face_style_preview','face_style_image'))
@@ -32,7 +32,7 @@ def face_style_read_only(raw):
 
 
 def skin_reference_match_read_only(raw):
-    from .skin_reference_match_host import read_only
+    from .people_reference_dispatch import read_only
     return read_only(raw)
 
 
@@ -98,7 +98,7 @@ def checked(engine,p):
     if (target['scope']=='face' and target['face_ref']['asset_sha256']!=asset) or (target['scope']=='all_people' and target['target_id']!=asset):
         raise ValueError('People command targets another source asset')
     if reference_action:
-        from .skin_reference_match_host import check_action
+        from .people_reference_dispatch import check_action
         check_action(p['action'],p.get('payload'),target)
     if style_action or eye_bag_action or decoration_action or sculpt_action or eye_makeup_action:
         if eye_makeup_action:
@@ -230,10 +230,9 @@ def apply(engine,raw,emit):
         skin_body.bound_receipt_payloads(records)
         frame=None
     elif action in SKIN_REFERENCE_READS:
-        from . import skin_reference_match_host as reference_review
-        method={'skin_reference_match_catalog':reference_review.catalogue,
-                'skin_reference_match_preview':reference_review.preview,
-                'skin_reference_match_image':reference_review.image}[action]
+        reference_review = reference_module(action)
+        method={'catalog':reference_review.catalogue, 'preview':reference_review.preview,
+                'image':reference_review.image}[action.rsplit('_',1)[1]]
         records[request]['payload']=method(engine,state,target,payload)
         frame=None
     elif action=='iris_reference':
@@ -312,8 +311,8 @@ def apply(engine,raw,emit):
         engine._people_sync();frame=None
     else:
         before_publish=None
-        if action in ('skin_reference_match_confirm','skin_reference_match_clear'):
-            from . import skin_reference_match_host as reference_review
+        if action in SKIN_REFERENCE_WRITES:
+            reference_review = reference_module(action)
             method=reference_review.confirm if action.endswith('_confirm') else reference_review.clear
             candidate,records[request]['payload']=method(engine,state,target,payload)
         elif action=='face_decoration_support_alias_confirm':
@@ -389,7 +388,7 @@ def apply(engine,raw,emit):
             frame=engine._people_publish_pending_review(candidate)
         else:
             try:
-                if action in ('skin_reference_match_confirm','skin_reference_match_clear'):
+                if action in SKIN_REFERENCE_WRITES:
                     batch_id,frame=reference_review.publish(engine,state,target,payload,candidate,records[request]['payload'],
                         request_id=request,mark_started=lambda:records[request].update(side_effects_started=True))
                 elif action=='face_decoration_support_alias_confirm':
@@ -424,7 +423,7 @@ def apply(engine,raw,emit):
             records[request]['face_decoration_support_alias_review']=status_summary(engine._batch_controller().ledger[batch_id])
             records[request]['alias_members']=deepcopy(records[request]['payload']['alias_members'])
         if action=='face_decoration_alias_confirm':decoration_alias.verify_after_publish(engine,candidate,records[request]['payload'])
-        if action in ('skin_reference_match_confirm','skin_reference_match_clear'):
+        if action in SKIN_REFERENCE_WRITES:
             reference_review.verify_after_publish(engine,candidate,records[request]['payload'])
         if action=='face_style_confirm':style_review.verify_after_publish(engine,candidate,records[request]['payload'])
         if action=='eye_bag_confirm':eye_bag_review.verify_after_publish(engine,candidate,records[request]['payload'])
@@ -457,7 +456,7 @@ def finish(engine,p,error,emit):
     if eye_bag_action:
         echo={'eye_bag_request':deepcopy({key:p.get(key) for key in ('action','document_id','document_epoch','document_revision','state_revision','association_revision','target','payload')})}
     if reference_action:
-        echo={'skin_reference_match_request':deepcopy({key:p.get(key) for key in ('action','document_id','document_epoch','document_revision','state_revision','association_revision','target','payload')})}
+        echo={('skin_reference_body_request' if p.get('action','').startswith('skin_reference_body_') else 'skin_reference_match_request'):deepcopy({key:p.get(key) for key in ('action','document_id','document_epoch','document_revision','state_revision','association_revision','target','payload')})}
     digest=hashlib.sha256(json.dumps({k:v for k,v in p.items() if k!='cmd'},sort_keys=True,allow_nan=False).encode()).hexdigest()
     if old.get('digest') not in (None,digest):
         emit({'event':'people_result','protocol':1,'action':p.get('action'),'request_id':p['request_id'],'document_id':p.get('document_id'),
@@ -512,7 +511,7 @@ def finish(engine,p,error,emit):
     if reference_action and not result['success']:
         result.pop('payload',None);result.pop('doc_state',None);result.pop('payload_released',None)
     records[p['request_id']]={'result':result,'digest':digest}
-    from .skin_reference_match_host import bound_receipt_images as bound_reference_images
+    from .people_reference_dispatch import bound_receipt_images as bound_reference_images
     bound_reference_images(records)
     from .facial_sculpt_host import bound_receipt_images as bound_sculpt_images
     bound_sculpt_images(records)

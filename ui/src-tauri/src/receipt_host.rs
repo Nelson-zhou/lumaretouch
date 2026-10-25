@@ -178,6 +178,12 @@ mod scalar_binding_tests {
 struct ReviewBinding { fields: Value, bytes: usize, read_only: bool, strict_failure_identity: bool }
 impl ReviewBinding {
     fn from_command(epoch: [u8;16], value: &Value) -> Result<Option<Self>, String> {
+        if let Some(fields) = crate::people_api::skin_reference_body::binding(value)? {
+            let bytes = fields.to_string().len();
+            if bytes > 256 * 1024 { return Err("body-reference identity exceeds people receipt budget".into()); }
+            return Ok(Some(Self { fields, bytes,
+                read_only: crate::people_api::skin_reference_body::read_only(value), strict_failure_identity: true }));
+        }
         if let Some(fields) = crate::people_api::skin_reference_match::binding(value)? {
             let bytes = fields.to_string().len();
             if bytes > 256 * 1024 { return Err("skin-reference identity exceeds people receipt budget".into()); }
@@ -371,13 +377,13 @@ impl ReviewBinding {
         }
     }
 }
-struct Receipt { id: String, action: String, document: Option<String>, review: Option<ReviewBinding>, result: Option<Value>, bytes: usize, native_unknown: bool, late_terminal_workspace: Option<String> }
+struct Receipt { id: String, action: String, document: Option<String>, review: Option<ReviewBinding>, result: Option<Value>, bytes: usize, native_unknown: bool, late_terminal_workspace: Option<String>, body_review_digest: Option<String> }
 impl Receipt {
     fn evictable(&self) -> bool {
         self.result.as_ref().is_some_and(|result| self.review.is_none() || result["outcome_unknown"] != true
             // Only explicitly classified head/collarbone preflight or paged
             // image reads may expire; an unknown commit remains guarded.
-            || (matches!(self.action.as_str(), "skin_reference_match_catalog" | "skin_reference_match_preview" | "skin_reference_match_image" | "face_decoration_support_alias_preview" | "face_decoration_support_alias_image" | "face_decoration_alias_preview" | "face_decoration_alias_image" | "face_decoration_cohort_visual" | "preflight" | "face_decoration_visual" | "collarbone_visual" | "eye_bag_visual" | "eye_bag_cohort_visual" | "face_style_visual" | "portrait_cohort_visual" | "face_style_catalog" | "face_style_preview" | "face_style_image" | "eye_bag_source_image" | "eye_bag_reference" | "eye_bag_preview" | "eye_bag_image" | "face_decoration_reference" | "facial_sculpt_reference" | "eye_makeup_enhance_reference") && self.review.as_ref().is_some_and(|review| review.read_only)))
+            || (matches!(self.action.as_str(), "skin_reference_body_catalog" | "skin_reference_body_preview" | "skin_reference_body_image" | "skin_reference_match_catalog" | "skin_reference_match_preview" | "skin_reference_match_image" | "face_decoration_support_alias_preview" | "face_decoration_support_alias_image" | "face_decoration_alias_preview" | "face_decoration_alias_image" | "face_decoration_cohort_visual" | "preflight" | "face_decoration_visual" | "collarbone_visual" | "eye_bag_visual" | "eye_bag_cohort_visual" | "face_style_visual" | "portrait_cohort_visual" | "face_style_catalog" | "face_style_preview" | "face_style_image" | "eye_bag_source_image" | "eye_bag_reference" | "eye_bag_preview" | "eye_bag_image" | "face_decoration_reference" | "facial_sculpt_reference" | "eye_makeup_enhance_reference") && self.review.as_ref().is_some_and(|review| review.read_only)))
     }
 }
 pub(crate) struct ReceiptHost<K: ReceiptKind> {
@@ -409,17 +415,34 @@ impl<K: ReceiptKind> ReceiptHost<K> {
         let id = command["request_id"].as_str().ok_or("missing receipt request ID")?;
         let action = command["action"].as_str().ok_or("missing receipt action")?;
         let review = ReviewBinding::from_command(epoch, command)?;
+        // This operation requires its original accepted preview and both actual
+        // image receipts. Reuse this ledger; no second token/plan store exists.
+        let body_review_digest = self.capture_body_confirmation(command)?;
         let late_terminal_workspace = review.as_ref().and_then(|review|
             crate::project_recovery_fence::support_history_workspace(epoch, &review.fields)
                 .or_else(|| crate::project_recovery_fence::decoration_preset_workspace(epoch, &review.fields)));
         self.begin_bound(epoch, id, action, bound)?;
         // begin_bound just appended this unique request, within the same lock.
         let record = self.records.back_mut().unwrap();
-        record.bytes = review.as_ref().map_or(0, |binding| binding.bytes) + late_terminal_workspace.as_ref().map_or(0, |workspace| workspace.len());
+        record.bytes = review.as_ref().map_or(0, |binding| binding.bytes) + late_terminal_workspace.as_ref().map_or(0, |workspace| workspace.len())
+            + body_review_digest.as_ref().map_or(0, String::len);
         record.review = review;
         record.late_terminal_workspace = late_terminal_workspace;
+        record.body_review_digest = body_review_digest;
         self.trim_bytes();
         Ok(())
+    }
+    fn capture_body_confirmation(&self, command: &Value) -> Result<Option<String>, String> {
+        if K::NAME != "people" || command["action"] != "skin_reference_body_confirm" { return Ok(None); }
+        let previews: Vec<&Value> = self.records.iter().filter_map(|record| record.result.as_ref())
+            .filter(|value| crate::people_api::skin_reference_body::confirmation_preview(command, value)).collect();
+        if previews.len() != 1 { return Err("身体肤色审核已失效或已释放，请重新预览；未重发确认".into()); }
+        let frozen = &previews[0]["payload"]["review"];
+        if !["before", "after"].iter().all(|side| self.records.iter().filter_map(|record| record.result.as_ref())
+            .any(|value| crate::people_api::skin_reference_body::confirmation_image(command, frozen, value, side))) {
+            return Err("身体肤色审核需要保留同一预览的完整前后图像回执，请重新加载审核；未提交修改".into());
+        }
+        Ok(Some(crate::people_api::skin_reference_body::frozen_digest(frozen)))
     }
     fn trim_bytes(&mut self) {
         while self.records.iter().map(|record| record.bytes).sum::<usize>() > MAX_BYTES {
@@ -437,7 +460,7 @@ impl<K: ReceiptKind> ReceiptHost<K> {
             let index = self.records.iter().position(Receipt::evictable).ok_or_else(|| format!("too many pending or uncertain {} requests", K::NAME))?;
             self.records.remove(index);
         }
-        self.records.push_back(Receipt { id: id.into(), action: action.into(), document: document.map(str::to_owned), review: None, result: None, bytes: 0, native_unknown: false, late_terminal_workspace: None });
+        self.records.push_back(Receipt { id: id.into(), action: action.into(), document: document.map(str::to_owned), review: None, result: None, bytes: 0, native_unknown: false, late_terminal_workspace: None, body_review_digest: None });
         Ok(())
     }
     fn unknown(record: &Receipt, error: &str) -> Value {
@@ -467,6 +490,13 @@ impl<K: ReceiptKind> ReceiptHost<K> {
                 && matches!(record.action.as_str(), "skin_reference_match_catalog" | "skin_reference_match_preview" | "skin_reference_match_image")
                 && record.review.as_ref().is_some_and(|review| review.read_only
                     && review.fields.get(crate::people_api::skin_reference_match::MARKER).is_some() && review.matches(value))
+                && value["event"] == "people_result" && value["outcome_unknown"] == false
+                && K::valid(value, record.document.as_deref()) && value.to_string().len() <= MAX_RESULT_BYTES;
+            // Body reads share transport reconciliation, never face/body write authority.
+            let body_read_reconciliation = K::NAME == "people" && previous["outcome_unknown"] == true
+                && matches!(record.action.as_str(), "skin_reference_body_catalog" | "skin_reference_body_preview" | "skin_reference_body_image")
+                && record.review.as_ref().is_some_and(|review| review.read_only
+                    && review.fields.get(crate::people_api::skin_reference_body::MARKER).is_some() && review.matches(value))
                 && value["event"] == "people_result" && value["outcome_unknown"] == false
                 && K::valid(value, record.document.as_deref()) && value.to_string().len() <= MAX_RESULT_BYTES;
             // The dedicated support protocol may reconcile a locally synthesized
@@ -502,13 +532,15 @@ impl<K: ReceiptKind> ReceiptHost<K> {
                 && K::valid(value, record.document.as_deref()) && value.to_string().len() <= MAX_RESULT_BYTES;
             let support_reconciliation = (bound_support_event || bound_support_history_event || bound_decoration_preset_event) && value["outcome_unknown"] == false;
             let support_engine_unknown = (bound_support_event || bound_support_history_event || bound_decoration_preset_event) && value["outcome_unknown"] == true;
-            if !read_reconciliation && !skin_read_reconciliation && !support_reconciliation && !support_engine_unknown { return; }
+            if !read_reconciliation && !skin_read_reconciliation && !body_read_reconciliation && !support_reconciliation && !support_engine_unknown { return; }
             // An exact engine unknown replaces the transport diagnostic, not
             // its authority: it closes late-terminal reconciliation and stays fenced.
             if support_engine_unknown { record.native_unknown = false; }
         }
         let invalid = !K::valid(value, record.document.as_deref())
             || record.review.as_ref().is_some_and(|review| !review.matches(value))
+            || (value["success"] == true && record.body_review_digest.as_ref().is_some_and(|expected|
+                crate::people_api::skin_reference_body::frozen_digest(&value["payload"]["review"]) != *expected))
             || value.to_string().len() > MAX_RESULT_BYTES;
         let mut result = if invalid {
             Self::unknown(record, &format!("invalid or oversized {} receipt; inspect actual state", K::NAME))
@@ -548,7 +580,8 @@ impl<K: ReceiptKind> ReceiptHost<K> {
         }
         record.native_unknown = result["outcome_unknown"] == true && record.native_unknown;
         record.bytes = result.to_string().len() + record.review.as_ref().map_or(0, |binding| binding.bytes)
-            + record.late_terminal_workspace.as_ref().map_or(0, |workspace| workspace.len());
+            + record.late_terminal_workspace.as_ref().map_or(0, |workspace| workspace.len())
+            + record.body_review_digest.as_ref().map_or(0, String::len);
         record.result = Some(result);
         if record.review.is_some() {
             // Use the retained, validated result, never the raw engine event.

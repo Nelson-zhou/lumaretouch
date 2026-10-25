@@ -69,11 +69,12 @@ export type PeopleView = {
   collarbone?: import('../skinColour/bodyReviewModel').SkinBodyReport | null;
   body_face_match?: import('../skinColour/bodyReviewModel').SkinBodyReport | null;
   skin_reference_match?: import('../skinReferenceMatch/model').SkinReferenceCurrent | null;
+  skin_reference_body_match?: import('../skinReferenceBody/model').SkinReferenceBodyCurrent | null;
   analysis_notice?: string; refusals?: {face_instance_id: string; reason: string}[];
 }
 export type PeopleAction = PeopleEnvelope & {
   // Support aliases are a distinct authority, never accepted by scalar alias receipts.
-  action: import('../skinReferenceMatch/model').SkinReferenceAction | 'eye_makeup_enhance_reference' | 'eye_makeup_enhance_review' | 'facial_sculpt_reference' | 'facial_sculpt_review' | 'face_decoration_support_alias_preview' | 'face_decoration_support_alias_image' | 'face_decoration_support_alias_confirm' | 'face_decoration_alias_preview' | 'face_decoration_alias_image' | 'face_decoration_alias_confirm' | 'eye_bag_source_image' | 'eye_bag_reference' | 'eye_bag_preview' | 'eye_bag_image' | 'eye_bag_confirm' | 'face_style_catalog' | 'face_style_preview' | 'face_style_image' | 'face_style_confirm' | 'patch' | 'link' | 'group' | 'face_status' | 'manual_add' | 'create_person' | 'select' | 'target' | 'analyse_face' | 'resolve_legacy' | 'eye_light_reference' | 'eye_light_review' | 'blush_palette' | 'blush_reference' | 'blush_review' | 'face_decoration_reference' | 'face_decoration_review' | 'lipstick_palette' | 'lipstick_reference' | 'lipstick_review' | 'eyeliner_palette' | 'eyeliner_reference' | 'eyeliner_review' | 'iris_reference' | 'iris_review' | 'eyelash_palette' | 'eyelash_reference' | 'eyelash_review' | 'brow_makeup_palette' | 'brow_makeup_reference' | 'brow_makeup_review' | 'skin_body_reference' | 'skin_body_preview' | 'skin_body_confirm' | 'skin_body_detach' | 'skin_finish_body_reference' | 'skin_finish_body_preview' | 'skin_finish_body_confirm' | 'skin_finish_body_detach' | 'body_skin_evenness_reference' | 'body_skin_evenness_preview' | 'body_skin_evenness_confirm' | 'body_skin_evenness_detach' | 'body_face_match_reference' | 'body_face_match_preview' | 'body_face_match_confirm' | 'body_face_match_detach' | 'collarbone_reference' | 'collarbone_preview' | 'collarbone_confirm' | 'collarbone_detach';
+  action: import('../skinReferenceBody/model').SkinReferenceBodyAction | import('../skinReferenceMatch/model').SkinReferenceAction | 'eye_makeup_enhance_reference' | 'eye_makeup_enhance_review' | 'facial_sculpt_reference' | 'facial_sculpt_review' | 'face_decoration_support_alias_preview' | 'face_decoration_support_alias_image' | 'face_decoration_support_alias_confirm' | 'face_decoration_alias_preview' | 'face_decoration_alias_image' | 'face_decoration_alias_confirm' | 'eye_bag_source_image' | 'eye_bag_reference' | 'eye_bag_preview' | 'eye_bag_image' | 'eye_bag_confirm' | 'face_style_catalog' | 'face_style_preview' | 'face_style_image' | 'face_style_confirm' | 'patch' | 'link' | 'group' | 'face_status' | 'manual_add' | 'create_person' | 'select' | 'target' | 'analyse_face' | 'resolve_legacy' | 'eye_light_reference' | 'eye_light_review' | 'blush_palette' | 'blush_reference' | 'blush_review' | 'face_decoration_reference' | 'face_decoration_review' | 'lipstick_palette' | 'lipstick_reference' | 'lipstick_review' | 'eyeliner_palette' | 'eyeliner_reference' | 'eyeliner_review' | 'iris_reference' | 'iris_review' | 'eyelash_palette' | 'eyelash_reference' | 'eyelash_review' | 'brow_makeup_palette' | 'brow_makeup_reference' | 'brow_makeup_review' | 'skin_body_reference' | 'skin_body_preview' | 'skin_body_confirm' | 'skin_body_detach' | 'skin_finish_body_reference' | 'skin_finish_body_preview' | 'skin_finish_body_confirm' | 'skin_finish_body_detach' | 'body_skin_evenness_reference' | 'body_skin_evenness_preview' | 'body_skin_evenness_confirm' | 'body_skin_evenness_detach' | 'body_face_match_reference' | 'body_face_match_preview' | 'body_face_match_confirm' | 'body_face_match_detach' | 'collarbone_reference' | 'collarbone_preview' | 'collarbone_confirm' | 'collarbone_detach';
   payload: Record<string, unknown>;
 }
 export type PeopleResult = {
@@ -85,6 +86,7 @@ export type PeopleResult = {
   eye_bag_request?: Omit<PeopleAction, 'request_id'>;
   face_style_request?: Omit<PeopleAction, 'request_id'>;
   skin_reference_match_request?: Omit<PeopleAction, 'request_id'>;
+  skin_reference_body_request?: Omit<PeopleAction, 'request_id'>;
   facial_sculpt_request?: Omit<PeopleAction, 'request_id'>;
   eye_makeup_enhance_request?: Omit<PeopleAction, 'request_id'>;
   face_decoration_request?: Omit<PeopleAction, 'request_id'>;
@@ -128,6 +130,7 @@ export function operationLabel(id: string): string {
     'lnx.lip_texture.v1': '唇纹修整（仅淡化已测得的窄暗纹）',
     'lnx.skin_evenness.v1': '脸部色度均匀（原片自参考）',
     'lnx.skin_reference_match.v1': '多人肤色与亮度匹配（同图指定参考脸）',
+    'lnx.skin_reference_body_match.v1': '身体肤色与亮度匹配（同图指定参考脸、独立手绘审核）',
     'lnx.body_skin_evenness.v1': '身体色度均匀（手绘审核、自身参考）',
     'lnx.collarbone.v1': '锁骨现有明暗增强（手绘审核）',
     'lnx.body_face_match.v1': '身体向本人脸部色度匹配（手绘审核）',

@@ -112,7 +112,7 @@ def raster(state,assets,asset_sha256,shape):
     for face in state['faces'].values():
         if face['asset_sha256']!=asset_sha256 or not face['enabled']:continue
         for target,descriptor in face['local_assets'].items():
-            if target in ('skin_reference_match_relation','skin_colour_body_visibility','skin_finish_body_visibility','body_skin_evenness_visibility','body_face_match_visibility','collarbone_visibility','hair_colour','hair_unification','eye_light_visibility','blush_makeup_visibility','face_decoration_visibility','facial_sculpt_visibility','eye_makeup_enhance_visibility','lipstick_visibility','eyeliner_visibility','eyelash_visibility','brow_makeup_visibility','iris_makeup_visibility','eye_bag_ridge_visibility'):continue # Dedicated support consumers, never facial recovery.
+            if target in ('skin_reference_match_body_visibility','skin_reference_match_relation','skin_colour_body_visibility','skin_finish_body_visibility','body_skin_evenness_visibility','body_face_match_visibility','collarbone_visibility','hair_colour','hair_unification','eye_light_visibility','blush_makeup_visibility','face_decoration_visibility','facial_sculpt_visibility','eye_makeup_enhance_visibility','lipstick_visibility','eyeliner_visibility','eyelash_visibility','brow_makeup_visibility','iris_makeup_visibility','eye_bag_ridge_visibility'):continue # Dedicated support consumers, never facial recovery.
             if target == 'face_decoration':
                 from . import face_decoration_state as D, people_algorithms as A, people_resolver as RESOLVER
                 if not D.active(A.recipes(RESOLVER.resolve(state,face['face_instance_id'],A.defaults()))[D.OP]): continue
@@ -139,6 +139,10 @@ def check_store(assets):
         if type(record) is not dict or set(record)!={'version','face_ref','source','row'} or record['version']!=1 or content_digest(record)!=key:
             raise ValueError('Portrait recovery asset content hash/schema mismatch')
         ref=S.check_ref(record['face_ref'])
+        if record.get('row',{}).get('target')=='skin_reference_match_body_visibility':
+            from .skin_reference_body_support import check_record
+            check_record(record)
+            continue
         if record.get('row',{}).get('target')=='skin_reference_match_relation':
             from .skin_reference_match_support import check_record
             check_record(record)

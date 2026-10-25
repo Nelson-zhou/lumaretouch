@@ -3,6 +3,11 @@
 Source-authored only. Numerical, native ABI, GUI, project reopen, undo/redo,
 export, resource usage and photographic acceptance are **UNRUN**.
 
+The following records the preserved face-only v1 integration. The separately
+consented body extension is now source-connected through [BODY-INTEGRATION.md](BODY-INTEGRATION.md);
+it reuses the same solver without changing old face recipes. Both remain partial
+and all runtime acceptance is UNRUN.
+
 ## Requirement and independent module
 
 Preserved requirement `control:PC-32465:19` describes automatic brightest-face

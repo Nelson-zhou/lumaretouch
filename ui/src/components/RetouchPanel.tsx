@@ -105,6 +105,7 @@ export interface RetouchProps {
   expressionPanel?: React.ReactNode;
   hairUnificationPanel?: React.ReactNode;
   skinReferencePanel?: React.ReactNode;
+  skinReferenceBodyPanel?: React.ReactNode;
   hairPort: HairPort;
   hairBusy: boolean;
   refreshHair: () => Promise<void>;
@@ -1448,6 +1449,7 @@ export default function RetouchPanel(props: RetouchProps) {
             <div className="pgBody">
               {f.id === "PC-32465" && <p className="muted">磨皮使用本照片皮肤蒙版，不随上方人物或分组范围切换。</p>}
               {f.id === "PC-32465" && props.skinReferencePanel}
+              {f.id === "PC-32465" && props.skinReferenceBodyPanel}
               {f.id === "PC-32465" && skinWhy && <div className="specEmpty" role="status">{skinWhy}</div>}
               {f.id === "PC-32455" && props.colorSamplePanel}
               {custom}

@@ -8,16 +8,19 @@ mod preset_alias;
 mod preset_alias_history;
 struct Pending { command: Value, composite_history: Option<Value> }
 impl Pending { fn composite(&self)->bool {preset_alias::applies(&self.command)||crate::people_api::decoration_alias::applies(&self.command)||crate::people_api::decoration_support_alias::applies(&self.command)||crate::effect_recovery_host::alias::applies(&self.command)||self.composite_history.is_some()} }
+// Body mutations retain the existing fence until a strict terminal or verified
+// workspace reopen. They do not become composite/alias history operations.
+impl Pending { fn guarded(&self) -> bool { self.composite() || crate::people_api::skin_reference_body::mutation(&self.command) } }
 fn pending()->&'static Mutex<HashMap<([u8;16],String),Pending>> {
     static STORE:OnceLock<Mutex<HashMap<([u8;16],String),Pending>>=OnceLock::new();
     STORE.get_or_init(||Mutex::new(HashMap::new()))
 }
 pub(crate) fn issued(epoch:[u8;16], command:&Value)->Result<(),String>{
     let mut store=pending().lock().map_err(|_|"恢复回执屏障锁不可用")?;
-    if store.iter().any(|((owner_epoch,_),request)|*owner_epoch==epoch&&request.composite()) {
+    if store.iter().any(|((owner_epoch,_),request)|*owner_epoch==epoch&&request.guarded()) {
         if command["request_id"].as_str().is_some_and(|id|store.contains_key(&(epoch,id.to_owned())))
             || !preset_alias::safe_during_pending(command) {
-            return Err("共享图层影响的全部照片尚未确认；请查询原请求或重新打开工程，不能继续编辑、撤销、保存、导出或重发".into());
+            return Err("原审核修改尚未确认；请查询原请求或重新打开工程，不能继续编辑、撤销、保存、导出或重发".into());
         }
         // These reads/recovery escapes cannot create a second uncertain-edit
         // fence or release the original composite request.
@@ -42,7 +45,7 @@ pub(crate) fn issued(epoch:[u8;16], command:&Value)->Result<(),String>{
     // Check a pending ID collision first: read-only status cannot release or
     // replace an already-issued mutation belonging to another receipt host.
     if crate::batch_api::read_only(command) || crate::torso_transfer_protocol::read_only_head_preflight(command) || crate::preset_api::read_only(command)
-        || crate::people_api::skin_reference_match::read_only(command)
+        || crate::people_api::skin_reference_body::read_only(command) || crate::people_api::skin_reference_match::read_only(command)
         || crate::people_api::face_style::read_only(command) || crate::people_api::eye_bag::read_only(command)
         || crate::people_api::face_decoration::read_only(command) || crate::people_api::facial_sculpt::read_only(command) || crate::people_api::eye_makeup_enhance::read_only(command) || crate::people_api::decoration_alias::read_only(command) || crate::people_api::decoration_support_alias::read_only(command) {return Ok(());}
     if store.len()>=4096{return Err("未确认请求超过恢复屏障容量，请查询原请求或重新打开工程".into());}
@@ -62,7 +65,7 @@ pub(crate) fn observed(epoch:[u8;16], value:&Value){
     if matches!(value["event"].as_str(),Some("project_opened"|"project_created")) {
         let reopened=preset_alias::reopened(value);
         if reopened {preset_alias_history::clear(epoch);}
-        store.retain(|(e,_),request|*e!=epoch||(request.composite()&&!reopened));return;
+        store.retain(|(e,_),request|*e!=epoch||(request.guarded()&&!reopened));return;
     }
     let Some(id)=value["request_id"].as_str() else{return;};
     let event=value["event"].as_str().unwrap_or("");
@@ -79,6 +82,8 @@ pub(crate) fn observed(epoch:[u8;16], value:&Value){
         let expected=format!("{}_result",command["cmd"].as_str().unwrap_or(""));
         if event!=expected||value["action"]!=command["action"] {return;}
     }
+    if crate::people_api::skin_reference_body::mutation(command)
+        && !crate::people_api::skin_reference_body::matches_request(command, value) { return; }
     if preset_alias::applies(command) {
         if preset_alias::matches_request(command,value) {preset_alias_history::observe_publication(epoch,value);}
         if !preset_alias::settled(command,value) {return;}

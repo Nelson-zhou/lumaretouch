@@ -11,6 +11,7 @@ import {createPeopleWorkflow} from './workflow';
 import {type PeopleAction, type PeopleMailbox, type PeopleTarget} from './model';
 import {useBatchWorkflow} from '../batch/useBatchWorkflow';
 import {isSkinReferenceAction} from '../skinReferenceMatch/model';
+import {isSkinReferenceBodyAction} from '../skinReferenceBody/model';
 
 /** App lifetime keeps the original request queryable when the panel is collapsed. */
 export function usePeopleWorkflow(status: EngineStatus | null, doc: DocState | null, refresh: () => Promise<void>) {
@@ -179,6 +180,8 @@ export function usePeopleWorkflow(status: EngineStatus | null, doc: DocState | n
   }
   const guard = (action?: PeopleAction['action']) => {
     if (historyBusy) throw Error('共享来源批次历史仍在处理或查询中，不能重发修改。');
+    if (action && isSkinReferenceBodyAction(action) && status?.ready_caps?.skin_reference_body_protocol !== 1)
+      throw Error('当前引擎未提供独立身体参考审核协议，不能借用脸部或其他身体功能提交。');
     if (action && isSkinReferenceAction(action) && status?.ready_caps?.skin_reference_match_protocol !== 1)
       throw Error('当前引擎未提供专用肤色参考匹配协议，不能使用其他操作代替。');
   };

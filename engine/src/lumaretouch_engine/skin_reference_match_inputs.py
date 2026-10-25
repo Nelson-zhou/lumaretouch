@@ -6,10 +6,15 @@ from . import skin_reference_match_project as PROJECT
 KEY = 'skin_reference_match_source_info'
 
 
+def needed(state, asset):
+    from .skin_reference_body_project import active_refs as body_refs
+    return bool(PROJECT.active_refs(state, asset) or body_refs(state, asset))
+
+
 def preview(engine, state, assets):
     source = deepcopy(engine._people_source())
     result = {'skin_reference_match_assets': assets}
-    if not PROJECT.active_refs(state, source['sha256']): return result
+    if not needed(state, source['sha256']): return result
     def full_source(*, byte_budget, cancelled):
         from .portrait_fit_source import capture
         return capture(engine, expected_source=source, byte_budget=byte_budget, cancelled=cancelled)
@@ -19,7 +24,7 @@ def preview(engine, state, assets):
 
 def freeze(snapshot, source, *, source_path=None):
     """Bind frozen export to its effective source, never to output bit depth."""
-    if not PROJECT.active_refs(snapshot['state'], snapshot['asset_sha256']): return snapshot
+    if not needed(snapshot['state'], snapshot['asset_sha256']): return snapshot
     if source is None or source['sha256'] != snapshot['asset_sha256']:
         raise ValueError('Skin-reference export needs its exact effective-source binding')
     if snapshot.get('creative_source') is not None:
@@ -55,7 +60,7 @@ def _verified_creative(source, binding, *, byte_budget, cancelled):
 
 def export_kwargs(snapshot, source):
     result = {'skin_reference_match_assets': snapshot.get('support_assets', {})}
-    if not PROJECT.active_refs(snapshot['state'], snapshot['asset_sha256']): return result
+    if not needed(snapshot['state'], snapshot['asset_sha256']): return result
     info = deepcopy(snapshot.get(KEY)); creative = snapshot.get('creative_source')
     if type(info) is not dict or type(info.get('source')) is not dict or info['source'].get('sha256') != snapshot['asset_sha256']:
         raise ValueError('Skin-reference frozen source fit proof is missing')
