@@ -53,7 +53,7 @@ export function ConfirmedPeopleTransfer({owner, targets, currentPath, enabled, o
   const resolved = view?.resolved;
   const matches = !named && !!source && !!resolved && sameFace(resolved.face_ref, source.face_ref)
     && resolved.state_revision === view?.revision && resolved.association_revision === view?.association_revision;
-  const operations = matches && resolved ? Object.entries(resolved.operations) : [];
+  const operations = matches && resolved ? Object.entries(resolved.operations).filter(([operation])=>operation!=='lnx.hair_unification.v1') : [];
   const selection: Record<string, string[]> = named ? faceStyleSelection() : {};
   const available = operations.flatMap(([operation, values]) => Object.entries(values).map(([path, record]) => ({
     operation, path, value: record.value, key: JSON.stringify([operation, path]),

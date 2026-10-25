@@ -13,6 +13,7 @@ from . import chin_length_state as CHIN_LENGTH
 from . import philtrum_state as PHILTRUM
 from . import eye_symmetry_state as EYE_SYMMETRY
 from . import brow_enhance_state as BROW_ENHANCE
+from . import hair_unification_state as HAIR_UNIFICATION
 from . import facial_sculpt_state as FACIAL_SCULPT
 from . import eye_makeup_enhance_state as EYE_MAKEUP_ENHANCE
 from . import body_face_match_state as BODY_FACE_MATCH
@@ -68,6 +69,7 @@ def specifications():
             LIP: (L.neutral(), L.check), DEFORM: (dict.fromkeys(D.KINDS, 0.0), D.check_amounts),
             ENHANCE: (check_enhance({}), check_enhance), WRINKLES: (W.check({}), W.check),
             HAIR.OPERATION: (HAIR.neutral(), HAIR.check),
+            HAIR_UNIFICATION.OP: (HAIR_UNIFICATION.neutral(), HAIR_UNIFICATION.check),
             EYE_LIGHT.OPERATION: (EYE_LIGHT.neutral(), EYE_LIGHT.check),
             FACE_DECORATION.OP: (FACE_DECORATION.neutral(), FACE_DECORATION.check),
             BLUSH.OP: (BLUSH.neutral(), BLUSH.check), LIPSTICK.OP: (LIPSTICK.neutral(), LIPSTICK.check),

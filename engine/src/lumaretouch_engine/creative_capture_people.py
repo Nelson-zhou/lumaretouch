@@ -16,7 +16,7 @@ from . import people_render_plan as P, people_resolver as R
 _CONTEXT_FIELDS = frozenset(('path', 'file_stamp', 'asset_sha256', 'document_id'))
 _SNAPSHOT_FIELDS = frozenset((
     'state', 'asset_sha256', 'analyses', 'document_id', 'support_assets',
-    'creative_source', 'hair_colour_assets', 'hair_colour_evidence',
+    'creative_source', 'hair_colour_assets', 'hair_unification_assets', 'hair_colour_evidence',
     'hair_colour_source_path', 'hair_colour_source_stamp',
 ))
 _ANALYSIS_REQUIRED = frozenset(('face_ref', 'evidence', 'landmarks', 'excluded', 'skin'))
@@ -153,6 +153,8 @@ def _snapshot_state(snapshot, document_id):
     validate_eye_makeup(state)
     supports = check_store(snapshot.get('support_assets', {}))
     hair = check_hair_store(snapshot.get('hair_colour_assets', {}))
+    from .hair_unification_assets import verify_graph as verify_unification
+    verify_unification(state, snapshot.get('hair_unification_assets', {}), hair)
     if type(snapshot['analyses']) is not dict or len(snapshot['analyses']) > S.MAX_FACES:
         raise ValueError('Neutral census analysis bank is invalid or oversized')
     return state, asset, supports, hair
@@ -160,7 +162,7 @@ def _snapshot_state(snapshot, document_id):
 
 def _plain_metadata(snapshot, state, asset, supports, hair):
     return not (
-        set(snapshot) - _SNAPSHOT_FIELDS or supports or hair
+        set(snapshot) - _SNAPSHOT_FIELDS or supports or hair or snapshot.get('hair_unification_assets')
         or snapshot.get('creative_source') is not None
         or state['persons'] or state['groups'] or state['links'] or state['unresolved_legacy']
         or any(face['local_assets'] or face['asset_sha256'] != asset for face in state['faces'].values())

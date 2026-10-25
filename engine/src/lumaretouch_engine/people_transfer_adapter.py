@@ -162,4 +162,6 @@ def stage(payload, target_state, *, eye_bag_review=None):
     for ref in payload['target_refs']:
         for parameter in payload['parameters']:
             out = S.set_override(out, 'face', ref['face_instance_id'], parameter['operation_id'], parameter['parameter_path'], parameter['value'])
+    from .hair_unification_project import require_unreviewed_transition
+    require_unreviewed_transition(target_state,out)
     return out

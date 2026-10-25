@@ -626,6 +626,7 @@ class PreviewPipeline:
             out=PEOPLE_PIPE.source_effect(self,'brow_makeup',out)
             out=PEOPLE_PIPE.source_effect(self,'iris_makeup',out)
             out=PEOPLE_PIPE.source_effect(self,'hair_colour',out)
+            out=PEOPLE_PIPE.source_effect(self,'hair_unification',out)
             out=PEOPLE_PIPE.source_effect(self,'eye_light',out)
         else:
             WLAYER.refresh_source(self)

@@ -39,6 +39,7 @@ import {useWaistLengthWorkflow} from './waistLength/useWaistLengthWorkflow';
 import {useHeadSizeWorkflow} from './headSize/useHeadSizeWorkflow';
 import {useBodySlimWorkflow} from './bodySlim/useBodySlimWorkflow';
 import {useHairColourPort} from './hairColour/useHairColourPort';
+import {useHairUnificationPort, HairUnificationPanel} from './hairUnification';
 import {useOriginalCompareKeys} from './components/useOriginalCompareKeys';
 import {useSampleLibraryHost} from './sampleLibrary/useSampleLibraryHost';
 import {SampleLibraryHost,SampleLibraryLaunch} from './sampleLibrary/SampleLibraryHost';
@@ -1834,6 +1835,7 @@ export default function App() {
   const hairBusy=hairToolBusy||!!status?.edit_queue?.in_flight||!!status?.edit_queue?.pending;
   const hair=useHairColourPort(peopleWorkflow.enabled&&status?.ready_caps?.hair_colour_protocol===1&&!hairBusy
     &&!!doc?.document_id&&status.image?.load_id===doc.document_id,refreshFromEngine);
+  const hairUnification=useHairUnificationPort(peopleWorkflow.enabled&&status?.ready_caps?.hair_unification_protocol===1&&!hairBusy&&!hair.state.pending&&!!doc?.document_id&&status.image?.load_id===doc.document_id,refreshFromEngine,doc?.people??null);
   const guideCategoryOpen=useGuideModeGuards();
   const creative=useCreativeWorkspace({sourceUid:doc?.source_uid??'',loadId:doc?.document_id??'',engineKey:String(pid??''),hostRevision:status?.doc_rev??-1,
     active:workspace==='creative',available:!!status?.engine_alive&&caps?.creative_document_protocol===1&&hasImage&&status.image?.load_id===doc?.document_id,
@@ -1853,7 +1855,7 @@ export default function App() {
   const glow=useGlowWorkspaceBinding({sourceUid:doc?.source_uid??'',loadId:doc?.document_id??'',engineKey:String(pid??''),hostRevision:status?.doc_rev??-1,active:workspace==='creative',
     available:!!status?.engine_alive&&hasImage&&status.image?.load_id===doc?.document_id&&caps?.light_glow_protocol===GLOW_PROTOCOL&&validGlowCapability(glowCapability)&&glowCapability.status==='available',
     externalBusy:imageToolBusy||idBackgroundBusy||creative.pending||expression.busy||expressionOpen||lens.busy||lensOpen||colorSampler.active||sampleLibrary.open,queueBusy:!!status?.edit_queue?.in_flight||!!status?.edit_queue?.pending},refreshFromEngine);
-  armBusyRef.current=armBusyRef.current||expression.busy||lens.busy||glow.busy;
+  armBusyRef.current=armBusyRef.current||expression.busy||lens.busy||glow.busy||hairUnification.state.open||hairUnification.state.pending||hairUnification.state.checking||hairUnification.state.preparing||hairUnification.state.refreshing;
   creativeRoute.current={active:workspace==='creative',pending:creative.pending,importPaths:creative.importPaths,history:creative.history};
   const guides=useCanvasGuides({loadId:doc?.document_id??'',report:doc?.canvas_guides,center:doc?.crop?[(doc.crop.rect[0]+doc.crop.rect[2])/2,(doc.crop.rect[1]+doc.crop.rect[3])/2]:undefined,
     contextKey:JSON.stringify([pid,doc?.document_id,doc?.crop,view,workspace]),modes:{
@@ -1871,7 +1873,7 @@ export default function App() {
   };
   // Keep uncertain arm/waist mutations and proposal cancellation from racing other UI edits.
   // Original-receipt checks, popup Close and the activity locator remain accessible.
-  const guardArmWork=(event:import('react').SyntheticEvent)=>guardCreativeWork(event,{glow:glow.busy||glowOpen,lens:lens.busy||lensOpen,expression:expression.busy||expressionOpen,background:fringe.active||fringe.pending||commonBackground.active||commonBackground.pending,heal:healBrush.pending,layers:creative.pending,selection:selection.busy,
+  const guardArmWork=(event:import('react').SyntheticEvent)=>guardCreativeWork(event,{hairUnification:hairUnification.state.open||hairUnification.state.pending||hairUnification.state.checking||hairUnification.state.preparing||hairUnification.state.refreshing,glow:glow.busy||glowOpen,lens:lens.busy||lensOpen,expression:expression.busy||expressionOpen,background:fringe.active||fringe.pending||commonBackground.active||commonBackground.pending,heal:healBrush.pending,layers:creative.pending,selection:selection.busy,
     idBackground:idBackgroundBusy,body:arms.busy||waist.busy||length.busy||neck.busy||torso.busy||waistLength.busy||headSize.busy||bodySlim.busy});
   return (
     <div className={"app ws-" + workspace} onClickCapture={guardArmWork} onPointerDownCapture={guardArmWork} onKeyDownCapture={guardArmWork}>
@@ -1906,7 +1908,7 @@ export default function App() {
                         note={setDragNote} onDone={requestPanelRefresh}
                         thumb={strip?.current ? thumbs[strip.current] : undefined}
                         people={peopleWorkflow}
-                        hairPort={hair.port} hairBusy={hairBusy} refreshHair={refreshFromEngine}
+                        hairUnificationPanel={<HairUnificationPanel port={hairUnification.port} engineAlive={engineAlive} onStartEngine={onStartEngine} busy={hairBusy||hair.state.pending} available={status?.ready_caps?.hair_unification_protocol===1}/>} hairPort={hair.port} hairBusy={hairBusy} refreshHair={refreshFromEngine}
                         brush={{ on: brushOn, mode: brushMode, radius: brushRadius }}
                         onBrush={(patch) => {
                           if(patch.on&&(patch.mode??brushMode)==="heal"){startReviewedHeal();return;}
@@ -1937,6 +1939,7 @@ export default function App() {
           {name:"上身长度",featureId:"PC-32473",path:"上身长度",active:false,pending:torso.busy,phase:torso.uncertain||torso.state.phase==='uncertain'?'uncertain':torso.state.phase,message:torso.message||torso.state.message,check:torso.check},
           {name:"腰部长度",featureId:"PC-32473",path:"腰部长度",active:false,pending:waistLength.busy,phase:waistLength.uncertain||waistLength.state.phase==='uncertain'?'uncertain':waistLength.state.phase,message:waistLength.message||waistLength.state.message,check:waistLength.check},
           {name:"小头",featureId:"PC-32473",path:"小头",active:false,pending:headSize.busy,phase:headSize.uncertain||headSize.state.phase==='uncertain'?'uncertain':headSize.state.phase,message:headSize.message||headSize.state.message,check:headSize.check},
+          {name:"发色统一",featureId:"PC-32472",path:"发色统一",active:hairUnification.state.open,pending:hairUnification.state.pending,phase:hairUnification.state.phase,message:hairUnification.state.message,check:hairUnification.check},
           {name:"发色与光泽",featureId:"PC-32472",path:"发色选择",active:false,pending:hair.state.pending,phase:hair.state.uncertain?'uncertain':'idle',message:hair.state.message,check:hair.check},
           {name:"修复画笔",featureId:"PC-32482",path:"污点修复画笔",active:healBrush.active,pending:healBrush.pending,phase:healBrush.state.phase,message:healBrush.state.message,check:healBrush.workflow.check},
           {name:"效果恢复画笔",featureId:"PC-32481",active:recovery.active,pending:recovery.pending,phase:recovery.state.phase,message:recovery.state.message,check:recovery.workflow.check},

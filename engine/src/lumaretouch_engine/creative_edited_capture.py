@@ -31,7 +31,7 @@ def _plain_graph_candidate(graph, context, asset):
     if (graph['persons'] or graph['groups'] or graph['links']
             or graph['unresolved_legacy'] or set(graph['analysis_runs']) - {asset}
             or any(context[key] for key in (
-                'people_support_assets', 'hair_colour_assets', 'hair_colour_evidence'))):
+                'people_support_assets', 'hair_colour_assets', 'hair_unification_assets', 'hair_colour_evidence'))):
         return False
     for face in graph['faces'].values():
         evidence = face['evidence']

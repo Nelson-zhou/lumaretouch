@@ -70,8 +70,12 @@ def verify_analysis(face, analysis, shape):
 
 
 def prepare(state, asset_sha256, source, analyses, *, byte_budget, document_id=None, max_faces=32, recovery_assets=None, repaired=None,
-            creative_source=None, creative_repair_evidence=None, hair_assets=None, hair_evidence=None, hair_source_path=None, force_hair_prompted=False, eye_light_assets=None, blush_makeup_assets=None, face_decoration_assets=None,facial_sculpt_assets=None,eye_makeup_enhance_assets=None, lipstick_assets=None,eyeliner_assets=None,eyelash_assets=None,brow_makeup_assets=None,iris_makeup_assets=None,skin_colour_body_assets=None,skin_finish_body_assets=None,body_skin_evenness_assets=None,body_face_match_assets=None,collarbone_assets=None,eye_bag_preserve_assets=None,body_bank=None):
+            creative_source=None, creative_repair_evidence=None, hair_assets=None, hair_unification_assets=None, hair_evidence=None, hair_source_path=None, force_hair_prompted=False, eye_light_assets=None, blush_makeup_assets=None, face_decoration_assets=None,facial_sculpt_assets=None,eye_makeup_enhance_assets=None, lipstick_assets=None,eyeliner_assets=None,eyelash_assets=None,brow_makeup_assets=None,iris_makeup_assets=None,skin_colour_body_assets=None,skin_finish_body_assets=None,body_skin_evenness_assets=None,body_face_match_assets=None,collarbone_assets=None,eye_bag_preserve_assets=None,body_bank=None):
     state = S.check(state)
+    from . import hair_unification_project as UNIFY
+    UNIFY.validate_graph(state)
+    from .hair_unification_assets import verify_graph as verify_unification_graph
+    verify_unification_graph(state, hair_unification_assets or {}, hair_assets or {})
     A.FACE_DECORATION.validate_graph(state)
     A.FACIAL_SCULPT.validate_graph(state)
     from .eye_makeup_enhance_project import validate_graph as validate_eye_makeup_enhance
@@ -91,6 +95,7 @@ def prepare(state, asset_sha256, source, analyses, *, byte_budget, document_id=N
             verify_evidence(creative_repair_evidence,creative_source,source,repaired)
         from .creative_derived_hair import validate as validate_hair
         validate_hair(state,hair_assets or {},hair_evidence,creative_source)
+        UNIFY.validate_derived(state,hair_unification_assets or {},hair_assets or {},hair_evidence,creative_source)
         from .creative_derived_makeup import validate_supports
         # Each port carries the same canonical bank, but validate against its
         # actual supplied bank below rather than trusting that caller convention.
@@ -211,7 +216,7 @@ def prepare(state, asset_sha256, source, analyses, *, byte_budget, document_id=N
                     from .eye_light_support import resolve as resolve_eye_support
                     resolve_eye_support(state,eye_light_assets or {},entry['face_ref'])
                     continue
-                if stage=='hair_colour':continue # Dedicated source-owned consumer, not recovery.
+                if stage in ('hair_colour','hair_unification'):continue # Dedicated source-owned consumer, not recovery.
                 if stage not in E.STAGES:
                     raise ValueError('Source-owned local support requires an explicit consumer: ' + stage)
                 recovery = (recovery_assets or {}).get((key,stage))
@@ -487,13 +492,20 @@ def prepare(state, asset_sha256, source, analyses, *, byte_budget, document_id=N
     prepared=PreparedPeople(plan, geometry, tuple(effects), facts, owned_recovery,tuple(fields))
     if source_only:
         from .creative_derived_hair import needed
-        if not needed(state,asset_sha256):return prepared
+        if not needed(state,asset_sha256) and not UNIFY.needed(state,asset_sha256):return prepared
     from .hair_colour_runtime import prepare_bank
     hair, hair_facts=prepare_bank(state,asset_sha256,effect_source,plan,evidence=hair_evidence,assets=hair_assets,
         byte_budget=byte_budget-retained_bytes(prepared)-source.nbytes-(0 if repaired is None else repaired.nbytes),
         source_path=hair_source_path,force_prompted=force_hair_prompted)
     for key,fact in hair_facts.items():facts.setdefault(key,{})['hair_colour']=fact
-    return PreparedPeople(plan,geometry,tuple(effects)+hair,facts,owned_recovery,tuple(fields))
+    prepared=PreparedPeople(plan,geometry,tuple(effects)+hair,facts,owned_recovery,tuple(fields))
+    from .hair_unification_runtime import prepare_bank as prepare_unification
+    unified, unify_facts=prepare_unification(state,asset_sha256,source,plan,
+        evidence=hair_evidence,assets=hair_unification_assets,hair_assets=hair_assets,
+        byte_budget=byte_budget-retained_bytes(prepared)-source.nbytes-(0 if repaired is None else repaired.nbytes),
+        source_path=hair_source_path,force_prompted=force_hair_prompted)
+    for key,fact in unify_facts.items():facts.setdefault(key,{})['hair_unification']=fact
+    return PreparedPeople(plan,geometry,prepared.effects+unified,facts,owned_recovery,tuple(fields))
 
 
 def retained_bytes(prepared,*,include_geometry=True):

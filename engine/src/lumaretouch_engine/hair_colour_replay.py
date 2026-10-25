@@ -8,6 +8,7 @@ import numpy as np
 from . import hair_colour_state as H, hair_colour_assets as ASSETS, hair_colour_evidence as FIELDS
 from . import people_state as P, people_algorithms as A, people_resolver as R
 from . import people_retained_analysis as RA, people_binding as B
+from . import hair_unification_state as U, hair_unification_assets as UA
 
 
 def analyses(engine, state, binding):
@@ -28,10 +29,15 @@ def analyses(engine, state, binding):
         resolved = R.resolve(state, face['face_instance_id'], defaults)
         if resolved['conflicts']: return None
         recipes = A.recipes(resolved)
-        if any(value != specs[operation][0] for operation, value in recipes.items() if operation != H.OPERATION): return None
-        if any(kind != ASSETS.KIND for kind in face['local_assets']): return None
+        if any(value != specs[operation][0] for operation, value in recipes.items() if operation not in (H.OPERATION, U.OP)): return None
+        if any(kind not in (ASSETS.KIND, UA.KIND) for kind in face['local_assets']): return None
+        if UA.KIND in face['local_assets']:
+            reference = UA.resolve(state, engine.__dict__.get('_hair_unification_assets', {}), P.face_ref(face), engine.__dict__.get('_hair_colour_assets', {}))
+            if reference['semantic_evidence_sha256'] != semantic_id:
+                raise ValueError('Retained hair-unification replay evidence differs from reviewed samples')
+        if U.active(recipes[U.OP]) and UA.KIND not in face['local_assets']: return None
         recipe = recipes[H.OPERATION]
-        wanted = H.active(recipe) or ASSETS.KIND in face['local_assets'] or recipe != H.neutral()
+        wanted = U.active(recipes[U.OP]) or UA.KIND in face['local_assets'] or H.active(recipe) or ASSETS.KIND in face['local_assets'] or recipe != H.neutral()
         if not wanted: continue
         has_hair = True; ref = P.face_ref(face)
         ASSETS.verify_face(state, ref, binding)

@@ -19,6 +19,7 @@ FIELDS = {
     'people_cursors': '_people_cursors',
     'people_targets': '_people_targets',
     'hair_colour_assets': '_hair_colour_assets',
+    'hair_unification_assets': '_hair_unification_assets',
     'hair_colour_evidence': '_hair_colour_evidence',
 }
 
@@ -44,6 +45,11 @@ def current_row(engine):
 
 
 def check(value):
+    # Old saved contexts predate this independent append-only reference bank.
+    # Missing bank is admitted only as empty; graph validation still rejects
+    # any active reference which cannot actually be resolved.
+    if type(value) is dict and 'hair_unification_assets' not in value:
+        value = {**value, 'hair_unification_assets': {}}
     required = {'version', 'people_graph', *FIELDS}
     if type(value) is not dict or set(value) != required or type(value['version']) is not int or value['version'] != 1:
         raise ValueError('Invalid virtual-copy portrait context')
@@ -51,6 +57,8 @@ def check(value):
     from .hair_colour_project import validate
     validate_records(value)
     validate(value)
+    from .hair_unification_project import validate as validate_unification
+    validate_unification(value)
     graph = S.check(value['people_graph'])
     for key in ('people_cursors', 'people_targets'):
         if type(value[key]) is not dict or len(value[key]) > 8192:
@@ -289,7 +297,7 @@ def save_project(engine, project):
     # Landmark keys include face/reanalysis revision, not document identity.
     # Their banks stay in their exact contexts rather than being unioned: two
     # independent copies may explicitly reanalyse the same retained face.
-    for key in ('people_support_assets', 'hair_colour_assets', 'hair_colour_evidence'):
+    for key in ('people_support_assets', 'hair_colour_assets', 'hair_unification_assets', 'hair_colour_evidence'):
         merged = {}
         for context in contexts:
             for identity, value in context[key].items():
@@ -298,10 +306,12 @@ def save_project(engine, project):
                 merged[identity] = deepcopy(value)
         base[key] = merged
     for key in ('people_graph', 'people_support_assets', 'people_landmarks', 'people_cursors',
-                'hair_colour_assets', 'hair_colour_evidence'):
+                'hair_colour_assets', 'hair_unification_assets', 'hair_colour_evidence'):
         project[key] = base[key]
     from .hair_colour_project import validate
     validate(project)
+    from .hair_unification_project import validate as validate_unification
+    validate_unification(project)
 
 
 def loaded(engine):

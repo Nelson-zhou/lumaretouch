@@ -233,6 +233,11 @@ mkdir -p "$stage/lumaretouch_engine/third_party/semantic_colour/batch"
 cp "$here/../docs/semantic_colour_batch/"*.md "$stage/lumaretouch_engine/third_party/semantic_colour/batch/"
 
 # Original source-domain hair colour and measured-highlight operator, no weights.
+# Independent manually referenced hair unification. Source only, build UNRUN.
+bash "$here/../core/hair_unification/build_hair_unification.sh" "$stage/lumaretouch_engine/bin/liblrt_hair_unification.so"
+mkdir -p "$stage/lumaretouch_engine/third_party/hair_unification"
+cp "$here/../core/hair_unification/"{lib.rs,tests.rs,hair_unification.h,Cargo.toml,build_hair_unification.sh} "$here/../LICENSE" "$stage/lumaretouch_engine/third_party/hair_unification/"
+cp "$here/../docs/hair-unification/"{CORE.md,ABI.md,NUMERICS.md} "$stage/lumaretouch_engine/third_party/hair_unification/"
 bash "$here/build-hair-colour.sh" "$stage/lumaretouch_engine/bin/liblrt_hair_colour.so"
 mkdir -p "$stage/lumaretouch_engine/third_party/hair_colour/core/hair_colour"
 cp "$here/../core/hair_colour/lib.rs" "$here/../core/hair_colour/README.md" "$stage/lumaretouch_engine/third_party/hair_colour/core/hair_colour/"

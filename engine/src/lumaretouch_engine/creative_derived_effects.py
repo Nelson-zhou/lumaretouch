@@ -16,7 +16,7 @@ OPERATIONS = frozenset((
     'lnx.body_face_match.v1', 'lnx.body_skin_evenness.v1', 'lnx.collarbone.v1', 'lnx.skin_evenness.v1', 'lnx.skin_texture.v1', 'lnx.face_contour.v1', 'lnx.slim_face.v2', 'lnx.face_size.v1', 'lnx.lower_face.v1', 'lnx.mid_face.v1', 'lnx.chin_shape.v1', 'lnx.chin_length.v1', 'lnx.philtrum.v1', 'lnx.eye_symmetry.v1', 'lnx.brow_enhance.v1', 'lnx.lip_texture.v1',
     'lnx.brow_shape.v1', 'lnx.nose_shape.v1', 'lnx.eye_shape.v1',
     'lnx.mouth_shape.v1', 'lnx.lip_makeup.v1', 'lnx.eye_light.v1',
-)) | MAKEUP.OPERATIONS | {HAIR.OPERATION}
+)) | MAKEUP.OPERATIONS | {HAIR.OPERATION, 'lnx.hair_unification.v1'}
 LEGACY = {name: 'lnx.' + name + '.v1' for name in (
     'deform', 'enhance', 'brow_shape', 'nose_shape', 'eye_shape', 'mouth_shape', 'lip_makeup')}
 _CONTEXT = {'document_id','document_epoch','document_revision','state_revision','association_revision','target'}
@@ -112,6 +112,12 @@ def _request(name, request):
     from . import people_state as S, people_algorithms as A
     if type(request) is not dict or request.get('cmd') != name:
         raise ValueError('Invalid derived portrait command')
+    if name == 'hair_unification':
+        from .hair_unification_controller import check_request
+        check_request(request)
+        context = _context(request['people_context'])
+        if context['target']['scope'] != 'face':raise ValueError('Hair-unification review requires an exact local face')
+        return context
     if name == 'hair_colour':
         HAIR.request(request)
         context = _context(request['people_context'])
@@ -249,7 +255,7 @@ def require_graph(state, binding, *, document_id=None):
         raise ValueError('Derived portrait graph cannot inherit shared person/group inputs')
     for key,face in faces.items():
         for kind,descriptor in face['local_assets'].items():
-            if kind not in MAKEUP.SUPPORT_KINDS | {'hair_colour','skin_colour_body_visibility','skin_finish_body_visibility','body_skin_evenness_visibility','body_face_match_visibility','collarbone_visibility','eye_bag_ridge_visibility'} | set(TARGETS) or descriptor['kind'] != kind or descriptor['owner'] != S.face_ref(face):
+            if kind not in MAKEUP.SUPPORT_KINDS | {'hair_colour','hair_unification','skin_colour_body_visibility','skin_finish_body_visibility','body_skin_evenness_visibility','body_face_match_visibility','collarbone_visibility','eye_bag_ridge_visibility'} | set(TARGETS) or descriptor['kind'] != kind or descriptor['owner'] != S.face_ref(face):
                 raise ValueError('Derived portrait graph cannot replay unadapted support/recovery assets')
         evidence = face['evidence']
         if (evidence['source_width'],evidence['source_height']) != (owned['width'],owned['height']):

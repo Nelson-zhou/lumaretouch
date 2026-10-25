@@ -40,10 +40,11 @@ def identity(engine,row,candidate_state,document_id,revision,*,people_graph=None
     if staged_people_context is not None:
         staged=V.check(staged_people_context)
         for key in context:
-            if key not in ('people_graph','people_support_assets') and fingerprint(staged[key])!=fingerprint(context[key]):
+            if key not in ('people_graph','people_support_assets','hair_unification_assets') and fingerprint(staged[key])!=fingerprint(context[key]):
                 raise ValueError('Staged portrait context changed an unrelated ownership bank')
-        if any(staged['people_support_assets'].get(key)!=value for key,value in context['people_support_assets'].items()):
-            raise ValueError('Staged portrait support cannot replace immutable existing assets')
+        for bank in ('people_support_assets', 'hair_unification_assets'):
+            if any(staged[bank].get(key)!=value for key,value in context[bank].items()):
+                raise ValueError('Staged portrait support cannot replace immutable existing assets')
         if people_graph is None or staged['people_graph']!=people_graph:
             raise ValueError('Staged portrait support requires its exact explicit candidate graph')
         context=staged

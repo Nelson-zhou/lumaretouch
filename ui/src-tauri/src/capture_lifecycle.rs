@@ -25,6 +25,7 @@ impl AppState {
 
     pub(crate) fn reset_capture_hosts(&self, epoch: [u8; 16]) {
         crate::background_material_api::reset(epoch);
+        crate::hair_unification_api::reset(epoch);
         crate::light_glow_api::reset(epoch);
         crate::lens_blur_api::reset(epoch);
         crate::expression_replacement_api::reset(epoch);

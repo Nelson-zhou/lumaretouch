@@ -247,6 +247,9 @@ def validate(p: object) -> None:
     from .hair_colour_project import validate as validate_hair
     try:validate_hair(p,allowed=(sv in (HAIR_SCHEMA,CUBE_SCHEMA,TONE_SCHEMA,GRADING_SCHEMA,SELECTIVE_SCHEMA,PRIMARY_SCHEMA,DETAIL_SCHEMA,GRAIN_SCHEMA,COLOUR_EDITOR_SCHEMA,SCHEMA)))
     except (ValueError,TypeError,KeyError) as error:raise ProjectError(str(error)) from error
+    from .hair_unification_project import validate as validate_hair_unification
+    try:validate_hair_unification(p,allowed=(sv == SCHEMA))
+    except (ValueError,TypeError,KeyError) as error:raise ProjectError(str(error)) from error
     try:validate_body_pose(p,allowed=(sv in (BODY_SCHEMA,HAIR_SCHEMA,CUBE_SCHEMA,TONE_SCHEMA,GRADING_SCHEMA,SELECTIVE_SCHEMA,PRIMARY_SCHEMA,DETAIL_SCHEMA,GRAIN_SCHEMA,COLOUR_EDITOR_SCHEMA,SCHEMA)))
     except (ValueError,TypeError,KeyError) as error:raise ProjectError(str(error)) from error
     if sv not in (LEGACY_SCHEMA, WB_SCHEMA, REPAIR_SCHEMA, MASK_SCHEMA, GRADE_SCHEMA, RECOVERY_SCHEMA, MANUAL_SCHEMA, STUDIO_SCHEMA, OPTICS_SCHEMA, SKY_SCHEMA, SEMANTIC_SKY_SCHEMA, SEMANTIC_COLOUR_SCHEMA, BODY_SCHEMA, HAIR_SCHEMA, CUBE_SCHEMA, TONE_SCHEMA, GRADING_SCHEMA, SELECTIVE_SCHEMA, PRIMARY_SCHEMA, DETAIL_SCHEMA, GRAIN_SCHEMA, COLOUR_EDITOR_SCHEMA, SCHEMA):

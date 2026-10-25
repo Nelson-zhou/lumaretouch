@@ -37,6 +37,8 @@ def validate_records(value):
                 validate_brow_makeup_graph(value[key])
                 from .brow_enhance_project import validate_graph as validate_brow_enhance_graph
                 validate_brow_enhance_graph(value[key])
+                from .hair_unification_project import validate_graph as validate_hair_unification_graph
+                validate_hair_unification_graph(value[key])
                 from .facial_sculpt_project import validate_graph as validate_facial_sculpt_graph
                 validate_facial_sculpt_graph(value[key])
                 from .eye_makeup_enhance_project import validate_graph as validate_eye_makeup_enhance_graph

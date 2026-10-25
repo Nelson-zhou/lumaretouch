@@ -245,6 +245,8 @@ class PeopleHostMixin:
         from .people_project import validate_records
         from .people_history_persistence import prepare
         validate_records(project);HAIR.validate(project)
+        from .hair_unification_project import validate as validate_unification
+        validate_unification(project)
         from .people_cross_owner_project import validate_project
         validate_project(project)
         return prepare(project,rows,self.HISTORY_MAX)
@@ -258,6 +260,10 @@ class PeopleHostMixin:
         self._collarbone_reference=None;self._collarbone_preview=None
         self._body_face_match_reference=None;self._body_face_match_preview=None
         HAIR.load(self,project)
+        from .hair_unification_project import load as load_unification
+        load_unification(self,project)
+        from .hair_unification_controller import invalidate_after_reload
+        invalidate_after_reload(self)
         self._people_graph_owner=PeopleGraphOwner(project.get('people_graph'))
         self._people_support=SUPPORT.check_store(project.get('people_support_assets',{}))
         self._people_landmarks=RA.check_store(project.get('people_landmarks',{}))
@@ -305,8 +311,13 @@ class PeopleHostMixin:
             require_graph(graph,source,document_id=document_id)
             result['creative_source'] = source
             from .creative_derived_hair import capture as capture_hair
-            return capture_hair(retained_host,state,result,pc,source)
-        return result if binding is None else HAIR.capture(retained_host,result,pc,binding,source_path=source_path)
+            capture_hair(retained_host,state,result,pc,source)
+            from .hair_unification_project import capture_derived as capture_unification
+            return capture_unification(retained_host,state,result,pc,source)
+        if binding is None:return result
+        HAIR.capture(retained_host,result,pc,binding,source_path=source_path)
+        from .hair_unification_project import capture as capture_unification
+        return capture_unification(retained_host,result,pc,binding,source_path=source_path)
 
     def cmd_people(self,p):
         from .people_host_commands import apply
@@ -329,6 +340,8 @@ class PeopleHostMixin:
         require_decoration_transition(self,before,candidate,authority=decoration_authority)
         from .facial_sculpt_project import require_transition as require_sculpt_transition
         require_sculpt_transition(self,before,candidate)
+        from .hair_unification_project import require_transition as require_hair_unification_transition
+        require_hair_unification_transition(self,before,candidate)
         from .eye_makeup_enhance_project import require_transition as require_eye_makeup_enhance_transition
         require_eye_makeup_enhance_transition(self,before,candidate)
         def signature(state,asset):

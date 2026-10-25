@@ -11,6 +11,8 @@ def preview(engine, state=None, *, body_bank=_MISSING, body_source=None, support
     state = engine._people_owner().snapshot() if state is None else state
     support_bank=engine._people_support if support_bank is _MISSING else support_bank
     document_id=engine._people_binding()['document_id']
+    from . import hair_unification_project as UNIFY
+    unification_inputs={**UNIFY.preview_kwargs(engine,state),**UNIFY.shared_preview(engine,state)}
     from .people_cross_owner import validate_owner
     validate_owner(state,engine._people_source()['sha256'],document_id)
     from .creative_derived_source import record, binding, analysis_rgb, verify_precompute
@@ -39,7 +41,7 @@ def preview(engine, state=None, *, body_bank=_MISSING, body_source=None, support
         # The runtime
         # checks the pipeline RGB against this owned inference/display proxy.
         return {'document_id':document_id,'creative_source':owned,'creative_proxy':analysis_rgb(engine),
-                **input_banks(support_bank),**hair_inputs,
+                **input_banks(support_bank),**hair_inputs,**unification_inputs,
                 'skin_colour_body_assets':support_bank,
                 'skin_finish_body_assets':support_bank,
                 'body_skin_evenness_assets':support_bank,
@@ -48,7 +50,7 @@ def preview(engine, state=None, *, body_bank=_MISSING, body_source=None, support
                 'eye_bag_preserve_assets':support_bank,
                 'body_bank':body,'body_source':owned,'body_source_pixels':body_pixels}
     from .hair_colour_project import preview_kwargs
-    return {'document_id':document_id,**preview_kwargs(engine, state),
+    return {'document_id':document_id,**preview_kwargs(engine, state),**unification_inputs,
             'eye_light_assets': support_bank,
             'blush_makeup_assets': support_bank,
             'face_decoration_assets': support_bank,

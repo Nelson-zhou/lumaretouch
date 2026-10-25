@@ -10,5 +10,7 @@ def validate(engine,row,candidate,*,decoration_authority=None):
     require_sculpt_transition(engine,row_snapshot(engine,row),candidate,row=row)
     from .eye_makeup_enhance_project import require_transition as require_eye_makeup_enhance_transition
     require_eye_makeup_enhance_transition(engine,row_snapshot(engine,row),candidate,row=row)
+    from .hair_unification_project import require_transition as require_hair_unification_transition
+    require_hair_unification_transition(engine,row_snapshot(engine,row),candidate,row=row)
     version=engine._document_versions().version(row)
     render(engine,row,row['state'],version.document_id,str(version.revision),people_graph=candidate)

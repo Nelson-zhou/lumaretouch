@@ -1101,7 +1101,7 @@ export interface EngineStatus {
     arm_shape_protocol?: number;
     semantic_colour_protocol?: number;
     semantic_colour_workflow_protocol?: number;
-    hair_colour_protocol?: number;
+    hair_unification_protocol?: number; hair_unification_capability?: {available:boolean;reason?:string|null}; hair_colour_protocol?: number;
     sample_library_protocol?: number;
     effect_recovery_protocol?: number;
     optics_protocol?: number;

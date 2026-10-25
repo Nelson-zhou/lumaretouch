@@ -1,0 +1,391 @@
+{
+  "schema_version": 1,
+  "baseline_commit": "050508e0d3c75681f17a77834221f62e52579eae",
+  "baseline_tree": "e327fc62f2c8b19e57996af7f1fc8f14b61b7da8",
+  "date": "2026-10-25",
+  "status": "SOURCE_CONNECTED_MANUAL_REFERENCE_PARTIAL_ALL_RUNTIME_ACCEPTANCE_UNRUN",
+  "scope": "Independent original Rust root/tip chromatic hair unification, manually source-owned samples, complete current-photo image review, canonical original/derived render/history/project/export, bounded immutable receipts and explicit unknown recovery.",
+  "requirements": [
+    "LNX-REF-PC-32472-C-fb2fe59a22",
+    "control:PC-32472:13"
+  ],
+  "manifest_policy": "Exact 71 payload files plus this self-excluded manifest, 72 total. All skin_reference_match and docs/skin-reference-match parallel files excluded; historical unrelated manifests and old sparse directory untouched.",
+  "source_checks": {
+    "python_ast": 36,
+    "json_parse": 0,
+    "toml_parse": 1,
+    "file_lines": {
+      "ui/src/App.tsx": 2160,
+      "ui/src-tauri/src/main.rs": 2015,
+      "engine/src/lumaretouch_engine/server.py": 7047
+    },
+    "whitespace": "All new and modified payload text including EOF checked; git diff --check separately inspected.",
+    "independent_review": "Numerical binding/composition and integration/unknown recovery source audits completed; findings corrected. No runtime acceptance."
+  },
+  "remaining": [
+    "All builds, tests, typechecks, numerical/image quality/performance/packaging/history/crash acceptance UNRUN. Missing ABI remains unavailable without fallback.",
+    "Manual root/tip references plus independently reviewed person hair support, not automatic root/tip or instance segmentation; brightness-only differences and clipped/mixed-illumination samples remain limited.",
+    "Current-photo independent face ownership only; active generic presets/batch/cohorts/shared aliases remain refused. No dedicated effect-recovery brush; neutral reset and canonical undo distinct.",
+    "Chosen sample footprint protected exactly from this operator; no seamless-boundary or final edited-reference RGB equivalence claim. Existing hair palette/gloss and old recipes preserved.",
+    "Bounded RGB8 review views, no native-size/high-bit display or ordinary24MP performance claim. Original retouch HDR/alpha limitations remain; no clipping workaround.",
+    "Unknown recovery needs explicit saved-project reopen and native confirmation; unsaved session is discarded only by explicit choice, old result stays unknown. In-process unknown archive32entries/16MiB, read-image receipts32MiB, host identities1024; no cross-app receipt persistence claim.",
+    "Independent selected multi-person skin-reference core/native work excluded and not user-feature-complete."
+  ],
+  "files": [
+    {
+      "path": "core/hair_unification/Cargo.toml",
+      "sha256": "a5ed2c9c211dfc7edfe4ce5ebdef738277d4b351ee4a9428b01527c456017165",
+      "bytes": 175
+    },
+    {
+      "path": "core/hair_unification/build_hair_unification.sh",
+      "sha256": "e8c68e99207d8415f9f776739072c61342410df9b3912fd031cc243408c45246",
+      "bytes": 444
+    },
+    {
+      "path": "core/hair_unification/hair_unification.h",
+      "sha256": "7fcdb78c683a38052787db94c1d406c9b918f3e1f545be6c09d6dd405128d790",
+      "bytes": 3806
+    },
+    {
+      "path": "core/hair_unification/lib.rs",
+      "sha256": "a41cabc154a167707218cba0395e423f2f24eba265518decc3030eaca4232730",
+      "bytes": 18426
+    },
+    {
+      "path": "core/hair_unification/tests.rs",
+      "sha256": "31be9fba20a9fe9c729e5a5b9abebf411e50bb7b6ea59321c82fa522ae28eb9c",
+      "bytes": 9618
+    },
+    {
+      "path": "docs/hair-unification/ABI.md",
+      "sha256": "4abb575992a0ab92f6013ab563f75f77cc18eb2209e4fe3c90f3b2a88d221967",
+      "bytes": 6649
+    },
+    {
+      "path": "docs/hair-unification/ACCEPTANCE-UNRUN.md",
+      "sha256": "e04d8e9f9ef74cedcd3bc6a8d8669772b5d0428b500f62b34e56dc08c2b82d3c",
+      "bytes": 4063
+    },
+    {
+      "path": "docs/hair-unification/CORE.md",
+      "sha256": "ed661a404e4b15bbf08219509018892792f42f707f8b7e1aa9e6501464726555",
+      "bytes": 5140
+    },
+    {
+      "path": "docs/hair-unification/HOST.md",
+      "sha256": "408c373609a21036180422f1d7c7cd6a602430e1e8903467f06d4589ebcde3ad",
+      "bytes": 11499
+    },
+    {
+      "path": "docs/hair-unification/INTEGRATED-STATUS.md",
+      "sha256": "e4a09802371221c2f6ef1fdb9957fb9cf9b04404ff20d5e6567d51e1fb0821d7",
+      "bytes": 5637
+    },
+    {
+      "path": "docs/hair-unification/NATIVE.md",
+      "sha256": "151f4589d9d918b8550c94059266e3b0e8888c575ee9ef743d8c5536cc122486",
+      "bytes": 9199
+    },
+    {
+      "path": "docs/hair-unification/NUMERICS.md",
+      "sha256": "70f089f5ffcdce321db3864093dd15aac5abf6ea159ca414e87882a021d1e32c",
+      "bytes": 6538
+    },
+    {
+      "path": "docs/hair-unification/UI.md",
+      "sha256": "8aa5f7d79f700abf750e29ecd0755cab6e9b908561d2871d667c222f1a80f6d3",
+      "bytes": 11825
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/command_registry.py",
+      "sha256": "58015ec89a2975ed7e5f63831e71cd4a1725b5b768d2bc29103c54db59911ba8",
+      "bytes": 2731
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/creative_capture_people.py",
+      "sha256": "571c96258647e598768033b07b66f994c3685a796eaf3fce494c904ec52a40d5",
+      "bytes": 14771
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/creative_capture_routes.py",
+      "sha256": "8f2c8468f453b85268c76c048b19efac42679deb08e25502b52f4327084ccd0f",
+      "bytes": 2024
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/creative_derived_effects.py",
+      "sha256": "ca558e0d1ccc1558d8c8460c01362d8b84c1e0f801fa7b74fdb3f49a79d38ea2",
+      "bytes": 17456
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/creative_derived_makeup.py",
+      "sha256": "edc7d69303c465a9fdba597808784cd467ccfc6c7e53c8ba27b170b3aa9037c4",
+      "bytes": 7450
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/creative_document_host.py",
+      "sha256": "6d56301e6ecba924ce048cc661b97b1af04d4e940d16be0c2c46d39ac5d346d4",
+      "bytes": 25990
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/creative_edited_capture.py",
+      "sha256": "e16d67edcca751ea287c47f82ca251286e0e35dd13a274e840ac4c3332cf7077",
+      "bytes": 14356
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/full_candidate_render.py",
+      "sha256": "2b5fb1c8aa26b7371b353e7539cec963130accf3854ffcd777a8d130dd2db1ac",
+      "bytes": 9666
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/hair_colour_replay.py",
+      "sha256": "67cd8a58fdf95fc531606ceebf05478c2140b2aa4236b3b7629a2de4ad6d4ceb",
+      "bytes": 4511
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/hair_unification_assets.py",
+      "sha256": "72ac61bab5b23dc4422517ee8e4999005fee955c98e2616e7bd1d6078e607ad0",
+      "bytes": 7094
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/hair_unification_composition.py",
+      "sha256": "00797fe58829fa8ce4b007604b751c507d5927f01b41f018096dcd262c405626",
+      "bytes": 5483
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/hair_unification_controller.py",
+      "sha256": "5ab4b3430500ccf8900f305ed8026beba43160ad4490a5745cd8b9b2d257b809",
+      "bytes": 28037
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/hair_unification_native.py",
+      "sha256": "9db73cab2f56342d5e6903b730d35edf0b6d1945716399dfcc56a3a33f3afac8",
+      "bytes": 11130
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/hair_unification_project.py",
+      "sha256": "a2068c01218aca09e3496081a9409699b4280289162a22d26cb7e24f67ff0c00",
+      "bytes": 12383
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/hair_unification_runtime.py",
+      "sha256": "969405e7b78ce6c8065f31946ce81d6667607094f80fabafc87be31655322f37",
+      "bytes": 8118
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/hair_unification_state.py",
+      "sha256": "ace3854d3922ee57068421f73749774abe6563e6ca525747201e46bf40983de8",
+      "bytes": 1502
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_algorithms.py",
+      "sha256": "f86456a420c8ba84598c278826ed11bdc3cb351de3af5ec08f8753caf6787283",
+      "bytes": 7091
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_candidate_render.py",
+      "sha256": "60e85dca4360bcf8ed132e42ee0f352b5a3b51a169a7ab5df22b5d227f4e6432",
+      "bytes": 1119
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_effects.py",
+      "sha256": "eeb5cf7166b7ea7e82ec4395b8f43338cc9a72e01509f816eaec50c732587e42",
+      "bytes": 10541
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_engine_runtime.py",
+      "sha256": "4cec66dd7be88cc1ddca5fb274167eb4b515b26bb1fb1b274fd6214ff0b01ee7",
+      "bytes": 14083
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_host.py",
+      "sha256": "5c0cdd70d4110035b96c967fd1713031aa63b4847c9f4994ad933f1da785d64b",
+      "bytes": 26992
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_owned_inputs.py",
+      "sha256": "149e58ab0222c84756c7cb868205d4c515c1b72557f1cbb3b78c984b2b67452d",
+      "bytes": 4269
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_pipeline.py",
+      "sha256": "16b5b105ae2eff67eb6e8018d78178472fb76b172c48813f2b1a51c854096c65",
+      "bytes": 8804
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_project.py",
+      "sha256": "8f1b82b757e68f83b11dd1ca93b311544fe9ede77d028cac17427e637b663bef",
+      "bytes": 6781
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_render_runtime.py",
+      "sha256": "7149433fcd33a4b3e5705f9677df0a67f2bda04c60a701c984037707e713abd7",
+      "bytes": 39413
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_scope.py",
+      "sha256": "2115b39c0a125f692125aafa8a0195b11b18f925269300e98c26b16d495c4cd3",
+      "bytes": 46817
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_source_context.py",
+      "sha256": "ccadcfbe290fd06bbfae7ad39e46d0c27b48ff0cb78515f0fc93fe8559368b85",
+      "bytes": 1968
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_support_assets.py",
+      "sha256": "5a5cc813cf58d9f15beb307db4c474cd51d0c59232b7737da6d99430e356c7b3",
+      "bytes": 12734
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_transfer_adapter.py",
+      "sha256": "f518ab3cef9687841ab6b7e6d04db90e5ecc04c1eec85d53eb30581354b8d4be",
+      "bytes": 11030
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/project.py",
+      "sha256": "9053c92bb4eb0f0f572efdfc7d8eb30388b1fd1ed347b93304203ae32e06b86a",
+      "bytes": 78227
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/project_recovery_runtime.py",
+      "sha256": "baba2b012dd8273990fb48629afe62b2ceed482bd584e7ddc6d56062f26a8659",
+      "bytes": 11539
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/server.py",
+      "sha256": "c352e2708625c3df197595da5dedf1eb4e425f990d5d5996b86091717982f80c",
+      "bytes": 471641
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/virtual_copy_people.py",
+      "sha256": "a958e55fe1fe7d02d68fb78edf45648d04aacc22839f108cfa3b3f37f15817c0",
+      "bytes": 13756
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/vram.py",
+      "sha256": "c10303f36ae59259ea395b52f3248fd10d156f547cafd7f7f2a268a51d9688d6",
+      "bytes": 136590
+    },
+    {
+      "path": "engine/tests/test_hair_unification_contract_unrun.py",
+      "sha256": "61b0cb1a0d543b3493c7d59449882a0aaabf06bdd044d84e5061e351c79f9e98",
+      "bytes": 10774
+    },
+    {
+      "path": "engine/tests/test_hair_unification_integration_unrun.py",
+      "sha256": "f8219f887b133983940f71341bcd7f94bb594f9b174c792b69ef1811431a3276",
+      "bytes": 5295
+    },
+    {
+      "path": "packaging/stage-engine.sh",
+      "sha256": "c9917d2f30d8b5ec97942d7cc1c601b508a87646097540fbb41aaafbb0b28050",
+      "bytes": 30618
+    },
+    {
+      "path": "ui/src-tauri/src/capture_lifecycle.rs",
+      "sha256": "5de44b536b203d4d7196d0001de5419372fffb34fa67dd4ed8bf39112a38e95f",
+      "bytes": 3944
+    },
+    {
+      "path": "ui/src-tauri/src/engine.rs",
+      "sha256": "363e04d8d9ccfab3a84eea29b3ce202cd02d8c4f014a66e8c0568b94d8256e87",
+      "bytes": 50508
+    },
+    {
+      "path": "ui/src-tauri/src/hair_unification_api.rs",
+      "sha256": "11f05c6a880ee181e21956f4f924e039c012a863e46a6fb426b24e45f54e6cd1",
+      "bytes": 45545
+    },
+    {
+      "path": "ui/src-tauri/src/main.rs",
+      "sha256": "426927a046514212f8c124eae74c5b3bafce3db494cbb381a8bb2b3116da71c1",
+      "bytes": 100654
+    },
+    {
+      "path": "ui/src-tauri/src/native_dispatch.rs",
+      "sha256": "9572432d1ad32aba569237691d061c454e4a9f5756da21b1cab12a1df9fda594",
+      "bytes": 13360
+    },
+    {
+      "path": "ui/src/App.tsx",
+      "sha256": "07748ee74fcde490737c23a76cdb4168445b57e3a79023b20d390564f60bb540",
+      "bytes": 157282
+    },
+    {
+      "path": "ui/src/components/RetouchPanel.tsx",
+      "sha256": "175075701c673ecb988cdf540c6530a3dd15b529410f0b8cc3f4307da2dcaff4",
+      "bytes": 90147
+    },
+    {
+      "path": "ui/src/hairUnification/HairRecovery.tsx",
+      "sha256": "036c3da1d51f5886eb8c3a2832c94a0856e1a3a8db19a2f2aee6b1128f455ecd",
+      "bytes": 2897
+    },
+    {
+      "path": "ui/src/hairUnification/HairSampleEditor.tsx",
+      "sha256": "3d98abdf6e24c3a8c21bd5c85abd8dd2d449d8ae4920061ab3f9403f6ba2df15",
+      "bytes": 9425
+    },
+    {
+      "path": "ui/src/hairUnification/HairUnificationPanel.tsx",
+      "sha256": "49ed28130ac217f63cb2a36f0127b9d7cf07ac40fc0eb57c7d6ab198dcdad367",
+      "bytes": 12882
+    },
+    {
+      "path": "ui/src/hairUnification/ReviewImages.tsx",
+      "sha256": "7981d620ed68e3dabbd7c7d5a519f9922f5ffa2143b9263f9163b2f0eb1cb83f",
+      "bytes": 5172
+    },
+    {
+      "path": "ui/src/hairUnification/hairUnification.css",
+      "sha256": "322ed7badfaf1969610ab7e0661726c73406818e53993688d18213db5188097f",
+      "bytes": 3083
+    },
+    {
+      "path": "ui/src/hairUnification/index.ts",
+      "sha256": "6d2bf095ac2b55043bcadc1267276f07385bd3b6fbab610b5103bd8cf109cbf6",
+      "bytes": 474
+    },
+    {
+      "path": "ui/src/hairUnification/model.ts",
+      "sha256": "d0d73b877e7db3cb6035898bab5b9afbf6f88e9aa66e4909216fbe23a3c52e00",
+      "bytes": 16008
+    },
+    {
+      "path": "ui/src/hairUnification/model.unrun.test.ts",
+      "sha256": "dd15f55edd4307e806966bf6f42ad4a6ca996ef854b91d78906cabb4d40c1d22",
+      "bytes": 9947
+    },
+    {
+      "path": "ui/src/hairUnification/nativePort.ts",
+      "sha256": "fe4807d85a99e5f265cc63d7a6e04a6ba9ac03fea2b6ed5540e5b2f9854dec74",
+      "bytes": 18140
+    },
+    {
+      "path": "ui/src/hairUnification/useHairUnificationPort.ts",
+      "sha256": "7513f234f877eea976f979526318a0583d8e90e2ad3681dfb8ec30b5c105752f",
+      "bytes": 923
+    },
+    {
+      "path": "ui/src/native.ts",
+      "sha256": "3db72651b5db5186493635a339e1e99dabc38d54df7bc81655f9325a34bff643",
+      "bytes": 115979
+    },
+    {
+      "path": "ui/src/people/ConfirmedPeopleTransfer.tsx",
+      "sha256": "6a73d81c8342d75b24c17cf7ab7607b1332ba4bb649c68f307b49e1ca367b1d2",
+      "bytes": 32464
+    },
+    {
+      "path": "ui/src/people/model.ts",
+      "sha256": "6220b59394b2bd1ae50a5bde36aa3755160346472087000d435ee95c897191f6",
+      "bytes": 11777
+    },
+    {
+      "path": "ui/src/workspaces/guardCreativeWork.ts",
+      "sha256": "5f3f4e28a86789548175f81499496891563c3c44fd0d1723b0f2d37cd1f92164",
+      "bytes": 1666
+    }
+  ]
+}

@@ -103,6 +103,7 @@ export interface RetouchProps {
   sampleLibraryPanel?: React.ReactNode;
   shoulderPanel?: React.ReactNode;
   expressionPanel?: React.ReactNode;
+  hairUnificationPanel?: React.ReactNode;
   hairPort: HairPort;
   hairBusy: boolean;
   refreshHair: () => Promise<void>;
@@ -1378,6 +1379,7 @@ export default function RetouchPanel(props: RetouchProps) {
     if (fid === "PC-32468") return props.expressionPanel;
     if (fid === "PC-32473") return props.shoulderPanel;
     if (fid === "PC-32472") return <>
+      {props.hairUnificationPanel}
       {status?.ready_caps?.hair_colour_protocol!==1&&<p role="status">当前引擎未提供头发范围审核，请使用配套版本。</p>}
       <HairColourPanel people={doc?.people??null} port={props.hairPort}
         busy={dim||props.hairBusy||!props.people.enabled||status?.ready_caps?.hair_colour_protocol!==1||portraitRequestsBusy()}

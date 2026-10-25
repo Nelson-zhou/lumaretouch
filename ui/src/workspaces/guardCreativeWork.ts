@@ -3,12 +3,13 @@ import type {SyntheticEvent} from 'react';
 
 /** UI affordance only. Native/engine exact owners remain authoritative. */
 export interface CreativeWorkGuards {
-  selection: boolean; glow: boolean; lens: boolean; expression: boolean; background: boolean;
+  hairUnification: boolean; selection: boolean; glow: boolean; lens: boolean; expression: boolean; background: boolean;
   heal: boolean; layers: boolean; idBackground: boolean; body: boolean;
 }
 export function guardCreativeWork(event: SyntheticEvent, guards: CreativeWorkGuards): void {
   if (!(event.target instanceof Element)) return;
   const rules: [boolean, string][] = [
+    [guards.hairUnification, '[data-hair-unification-workflow],.retouchToolActivity'],
     [guards.selection, '.creative-selection'],
     [guards.glow, '[data-light-glow-workflow]'],
     [guards.lens, '[data-lens-blur-workflow]'],

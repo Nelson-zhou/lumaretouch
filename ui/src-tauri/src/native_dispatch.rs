@@ -33,7 +33,7 @@ impl AppState {
 
     /// Owned receipts must never dispatch into a replacement engine epoch.
     pub(crate) fn send_to_engine_at_epoch(&self, cmd: Value, expected_epoch: [u8; 16]) -> Result<(), String> {
-        if !matches!(cmd["cmd"].as_str(), Some("ingest_session" | "workflow_owner" | "creative_selection")) {
+        if !matches!(cmd["cmd"].as_str(), Some("ingest_session" | "workflow_owner" | "creative_selection" | "hair_unification")) {
             return Err("Epoch-bound dispatch is restricted to owned ingestion protocols".into());
         }
         self.send_to_engine_bound(cmd, Some(expected_epoch))
@@ -62,6 +62,12 @@ impl AppState {
         if crate::preset_api::read_only(&cmd) {
             let guard=self.engine.lock().map_err(|_|"引擎锁中毒".to_string())?;
             return crate::preset_api::enqueue(self,guard.as_ref().ok_or("引擎未启动")?,cmd);
+        }
+        if crate::hair_unification_api::read_only(&cmd) {
+            let guard = self.engine.lock().map_err(|_| "引擎锁不可用")?;
+            let handle = guard.as_ref().ok_or("引擎未启动")?;
+            require_dispatch_epoch(handle, expected_epoch)?;
+            return crate::hair_unification_api::enqueue(handle, cmd);
         }
         if crate::batch_api::read_only(&cmd) {
             let guard=self.engine.lock().map_err(|_|"引擎锁中毒".to_string())?;
@@ -139,6 +145,7 @@ impl AppState {
             "arm_shape" => crate::arm_shape_api::enqueue(handle, cmd)?,
             "people" => crate::people_api::enqueue(handle, cmd)?,
             "hair_colour" => crate::hair_colour_api::enqueue(handle, cmd)?,
+            "hair_unification" => crate::hair_unification_api::enqueue(handle, cmd)?,
             "brow_shape" => crate::brow_shape_api::enqueue(handle, cmd)?,
             "nose_shape" => crate::nose_shape_api::enqueue(handle, cmd)?,
             "eye_shape" => crate::eye_shape_api::enqueue(handle, cmd)?,

@@ -141,7 +141,7 @@ export function operationLabel(id: string): string {
     'lnx.brow_shape.v1': '眉形', 'lnx.nose_shape.v1': '鼻形',
     'lnx.eye_shape.v1': '眼形', 'lnx.mouth_shape.v1': '嘴形',
     'lnx.eye_symmetry.v1': '眼睛对称（独立水平与大小，参考眼仅用于大小）',
-    'lnx.eye_makeup_enhance.v1': '原有眼妆增强（独立左右审核）', 'lnx.facial_sculpt.v1': '高光与阴影立体（源图结构）', 'lnx.hair_colour.v1': '发色与已有高光光泽', 'lnx.eye_light.v1': '眼神光素材', 'lnx.face_decoration.v1': '脸部装饰（原创雀斑与点痣，目标独立审核）', 'lnx.blush_makeup.v1': '腮红', 'lnx.lipstick.v1': '口红', 'lnx.eyeliner.v1': '眼线', 'lnx.iris_makeup.v1': '美瞳', 'lnx.eyelash.v1': '睫毛（上下/左右独立）', 'lnx.brow_makeup.v1': '眉妆'} as Record<string, string>)[id] ?? id;
+    'lnx.eye_makeup_enhance.v1': '原有眼妆增强（独立左右审核）', 'lnx.facial_sculpt.v1': '高光与阴影立体（源图结构）', 'lnx.hair_unification.v1': '发色统一（手动发根/发尾参考）', 'lnx.hair_colour.v1': '发色与已有高光光泽', 'lnx.eye_light.v1': '眼神光素材', 'lnx.face_decoration.v1': '脸部装饰（原创雀斑与点痣，目标独立审核）', 'lnx.blush_makeup.v1': '腮红', 'lnx.lipstick.v1': '口红', 'lnx.eyeliner.v1': '眼线', 'lnx.iris_makeup.v1': '美瞳', 'lnx.eyelash.v1': '睫毛（上下/左右独立）', 'lnx.brow_makeup.v1': '眉妆'} as Record<string, string>)[id] ?? id;
 }
 export function bindingKey(binding: PeopleBinding): string {
   return `${binding.document_epoch}:${binding.document_id}:${binding.asset_sha256}`;

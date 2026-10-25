@@ -63,6 +63,7 @@ mod diagnostic_env_api;
 mod sample_library_api;
 mod semantic_colour_api;
 mod hair_colour_api;
+mod hair_unification_api;
 mod portrait_api;
 mod preset_host;
 mod spill_transfer_protocol;
@@ -1959,7 +1960,7 @@ fn main() {
             light_glow_api::light_glow_request, light_glow_api::light_glow_status, light_glow_api::light_glow_cancel, light_glow_api::light_glow_capability,
             lens_blur_api::lens_blur_request, lens_blur_api::lens_blur_status, lens_blur_api::lens_blur_cancel, lens_blur_api::lens_blur_capability,
             expression_replacement_api::expression_replacement_request, expression_replacement_api::expression_replacement_status, expression_replacement_api::expression_replacement_cancel, expression_replacement_api::expression_replacement_capability,
-            people_api::people, shoulder_shape_api::shoulder_shape, leg_shape_api::leg_shape, waist_shape_api::waist_shape, leg_length_api::leg_length, torso_length_api::torso_length, waist_length_api::waist_length, head_size_api::head_size, body_slim_api::body_slim, neck_shape_api::neck_shape, arm_shape_api::arm_shape, body_pose_model_api::body_pose_model, body_pose_model_api::body_pose_model_status, semantic_colour_api::semantic_colour, hair_colour_api::hair_colour,
+            people_api::people, shoulder_shape_api::shoulder_shape, leg_shape_api::leg_shape, waist_shape_api::waist_shape, leg_length_api::leg_length, torso_length_api::torso_length, waist_length_api::waist_length, head_size_api::head_size, body_slim_api::body_slim, neck_shape_api::neck_shape, arm_shape_api::arm_shape, body_pose_model_api::body_pose_model, body_pose_model_api::body_pose_model_status, semantic_colour_api::semantic_colour, hair_colour_api::hair_colour, hair_unification_api::hair_unification, hair_unification_api::hair_unification_status,
             sample_library_api::sample_library, sample_library_api::sample_library_choose,
             color_capture_api::capture_arm, color_capture_api::capture_status, color_capture_api::capture_frame,
             color_capture_api::capture_presented, color_capture_api::capture_sample, color_capture_api::capture_cancel,
