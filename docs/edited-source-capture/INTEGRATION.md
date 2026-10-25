@@ -4,6 +4,8 @@ This records the version1 slice. The later explicit capture strategy2 is
 documented in [GEOMETRY-INTEGRATION.md](GEOMETRY-INTEGRATION.md); it adds bounded
 arbitrary-angle sampling only for a proven-neutral finishing cohort. Version1
 defaults and the broader limitations recorded below are not silently changed.
+Strategy3 additionally supplies [bounded native colour finishing](FINISHING-INTEGRATION.md)
+for the admitted float32 cohort, without changing either colour algorithm.
 
 Requirement: LNX-REF-WF-165438-165adae6a7. Status remains
 `partial_source_connected_unrun`; this is a source-working-set improvement to

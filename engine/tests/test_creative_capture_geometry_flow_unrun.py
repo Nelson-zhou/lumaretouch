@@ -62,7 +62,9 @@ class _GeometryFlow:
         self.geometry_arguments = None
         self.source_context = None
 
-    def classify(self, snapshot, *, geometry_version=0):
+    def classify(self, snapshot, *, geometry_version=0, finishing_version=0):
+        if finishing_version != 0:
+            raise AssertionError('This geometry fixture does not model bounded colour finishing')
         self.events.append('classify')
         self.versions.append(('classify', geometry_version))
         return SimpleNamespace(eligible=self.eligible)
@@ -77,7 +79,9 @@ class _GeometryFlow:
         # rather than a stale pre-decode estimate or the entire capture budget.
         return SimpleNamespace(geometry_max_bytes=self.geometry_budget if 'spec' in kwargs else 123_456)
 
-    def validate(self, spec, snapshot, *, skipped=(), geometry_version=0):
+    def validate(self, spec, snapshot, *, skipped=(), geometry_version=0, finishing_version=0):
+        if finishing_version != 0:
+            raise AssertionError('This geometry fixture does not model bounded colour finishing')
         self.events.append('validate')
         self.versions.append(('validate', geometry_version))
 
@@ -341,10 +345,10 @@ class GeometryVersionSourceContracts(unittest.TestCase):
             function = self._function(bridge, name)
             self.assertEqual(ast.literal_eval(self._defaults(function)['geometry_version']), 0)
 
-    def test_only_explicit_capture_version_two_maps_to_new_geometry_mode(self):
+    def test_only_explicit_capture_versions_two_and_three_map_to_new_geometry_mode(self):
         capture = self._function(base, 'capture_current_asset')
         mappings = [node for node in ast.walk(capture) if isinstance(node, ast.IfExp)
-                    and ast.unparse(node.test) == 'edited_capture_version == 2'
+                    and ast.unparse(node.test) == 'edited_capture_version in (2, 3)'
                     and isinstance(node.body, ast.Constant) and node.body.value == 1
                     and isinstance(node.orelse, ast.Constant) and node.orelse.value == 0]
         self.assertTrue(mappings)

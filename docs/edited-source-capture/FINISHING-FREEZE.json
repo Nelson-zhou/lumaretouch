@@ -1,0 +1,141 @@
+{
+  "schema_version": 1,
+  "baseline_commit": "d8f88af9a5e220e2d6e31e0c39fd1cade5a3aba8",
+  "baseline_tree": "0ede5e2c65c16107ecd9c8deb7f94e70b5d31bd7",
+  "date": "2026-10-25",
+  "requirement_ids": [
+    "LNX-REF-WF-165438-165adae6a7"
+  ],
+  "status": "SOURCE_CONNECTED_BOUNDED_PARTIAL_ALL_RUNTIME_ACCEPTANCE_UNRUN",
+  "scope": "Explicit capture strategy3 uses existing CG then SC stages/native kernels on bounded owning float32 blocks, one private result and exact request/source/recipe/extent proof at the established exporter site. No colour algorithm or model added.",
+  "manifest_policy": "Exact18 payload files below plus this manifest,19 total. Older manifests and old sparse directory untouched.",
+  "source_checks": {
+    "python_ast": 13,
+    "json": "parsed",
+    "whitespace": "All18 payload files including new files checked; git diff --check clean",
+    "independent_review": "Actual stage-major math reuse/non-overlap/ownership, phase cap, early request validation, recursion exclusion, generic default path and final source/publication fences reviewed; no concrete open blocker found",
+    "unchanged_numeric_sources_sha256": {
+      "engine/src/lumaretouch_engine/colour_grading_stage.py": "63a580c61169c533bf7810875cb08b6c9f78344c46c9d59ac9d798aeaa879b4e",
+      "engine/src/lumaretouch_engine/selective_colour_stage.py": "7b429f18484ec4d411b9cfd51cb25d4e05a345adaed0f49658f86c7c671f177c",
+      "engine/src/lumaretouch_engine/colour_grading_native.py": "c547de5dc880a49b9157354c1dc6e0031b43cd8011fa456941a4d4e95f6ae5ce",
+      "engine/src/lumaretouch_engine/selective_colour_native.py": "3a6ca50ae1575bfbfd02fb8f98542f0c8a742652122518755c40bd099ccfa577",
+      "core/colour_grading/lib.rs": "6d5be81be97aa8fba02c4bbb3acac2e6c99859cf8c30d6d62dc1b005e39f67dc",
+      "core/selective_colour/lib.rs": "d1296ebf83902bdc6cfcf01d7a347680cbfa69a12f23cf91fc5f73bfed63abd3"
+    },
+    "new_fixture_functions": {
+      "bounded_finishing": 22,
+      "finishing_bridge": 24,
+      "admission_additions": 8
+    },
+    "file_lines": {
+      "App.tsx": 2152,
+      "main.rs": 2054,
+      "server.py": 7050
+    }
+  },
+  "remaining": [
+    "All real native bit-parity, full export/decoder/photo/new-copy/reopen and cancellation acceptance are UNRUN",
+    "Declared phase reductions are not measured process RSS or universal24MP throughput; decoder/tile/output storage can dominate",
+    "Unsnapped arbitrary-angle geometry plus active CG/SC remains unadmitted; no implicit float32 cast or reordered active effect",
+    "Generic float64 neutral-PhotoDetail mismatch remains separate; generic no-request behaviour is preserved",
+    "Active portrait/body/local/background/repair,custom LUTs,RAW/TIFF optimization,transparent/HDR photo return,automatic lens depth,batch/editable lens reopen remain incomplete"
+  ],
+  "unrun": [
+    "Product imports/execution",
+    "Tests/build/compiler/typecheck",
+    "Model download/inference",
+    "Numerical/performance/RSS/photo/export/reopen acceptance"
+  ],
+  "files": [
+    {
+      "path": "docs/development/handbook-traceability.json",
+      "bytes": 485699,
+      "sha256": "bd0e42ea58bad6a45e26ff061dfa95291897e287a4ab2473f94e4a806def57da"
+    },
+    {
+      "path": "docs/edited-source-capture/ADMISSION.md",
+      "bytes": 14417,
+      "sha256": "6aad6c2dac0c5015711f4deab494bc8d5dda2e5e5e236ea79f87e3c8f7a4ef75"
+    },
+    {
+      "path": "docs/edited-source-capture/FINISHING-INTEGRATION.md",
+      "bytes": 3939,
+      "sha256": "5fea4f4c5ac7a3ac8525e67ca7987eec4cd9f3e0cd56dc1db017254651b18b25"
+    },
+    {
+      "path": "docs/edited-source-capture/FINISHING.md",
+      "bytes": 12186,
+      "sha256": "96ddc0fcdc864bd1b9bcf95f6723df68ffd80cd246c2e6db4fea271c07f1538b"
+    },
+    {
+      "path": "docs/edited-source-capture/INTEGRATION.md",
+      "bytes": 6353,
+      "sha256": "24a7001240ef954ad7a9dc4b812674ede7581d9638feb23eef67cad127606044"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/creative_capture_finishing.py",
+      "bytes": 12566,
+      "sha256": "926043a5b68a60b9372a45ac7b7ebf18ff36036a08bbab4b5199b9c31ab46d1c"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/creative_capture_finishing_export.py",
+      "bytes": 4576,
+      "sha256": "f058082ffa8a068e34cb51552edbfbfa756c68b4a961a12b3e708302dae17b06"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/creative_document_base.py",
+      "bytes": 23781,
+      "sha256": "d50d07b2e651e6893590ce14123ab2868d125115dc0abb1238bd1f8797b2dc90"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/creative_edited_capture.py",
+      "bytes": 14329,
+      "sha256": "f14c35a9ed71e70a5403ce0a017535a39f7b64464bebb6eddd18d9e65edb4861"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/creative_edited_capture_admission.py",
+      "bytes": 45768,
+      "sha256": "31946b157f8dc8519d283519d86f5f3c4a03100e7d9f56793712cc639a596a39"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/export.py",
+      "bytes": 133190,
+      "sha256": "f94f7b193e33c2a388e52e4ed563ed25888b82f760d4445a7deb1de879f03ed9"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/lens_blur_admission.py",
+      "bytes": 3455,
+      "sha256": "d7aa19f189e0b6d8ab743965ec7d20d7fc9356513b49f42d9189cc32a8bee851"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/lens_blur_host.py",
+      "bytes": 33509,
+      "sha256": "d1dd5050828c47168486ebd34de37eededa144164a7f88511bbedca946aa8e27"
+    },
+    {
+      "path": "engine/tests/test_creative_capture_finishing_flow_unrun.py",
+      "bytes": 26313,
+      "sha256": "eaefa5e12307bb2b6989429133f0de142e8babaf45af80a0014a6c226d4f9a2e"
+    },
+    {
+      "path": "engine/tests/test_creative_capture_finishing_unrun.py",
+      "bytes": 17562,
+      "sha256": "b157abb19d81b13fbbc06adfed1e7fabb344e6dbbed3cdc323b6c951c2309566"
+    },
+    {
+      "path": "engine/tests/test_creative_capture_geometry_flow_unrun.py",
+      "bytes": 21094,
+      "sha256": "698701a23b5b49e759caa6ad821bdacfe7bfdbe8a9288442a8961ba5418f369a"
+    },
+    {
+      "path": "engine/tests/test_creative_edited_capture_admission_unrun.py",
+      "bytes": 34555,
+      "sha256": "77059f04453e36b12498262cf4f861d675522ccab2eb38f423d70005e739a685"
+    },
+    {
+      "path": "engine/tests/test_creative_edited_capture_flow_unrun.py",
+      "bytes": 25525,
+      "sha256": "6f2a810167c57964bece50e8af104749567ee8cdcf67f7888b411d700ceb0d82"
+    }
+  ]
+}

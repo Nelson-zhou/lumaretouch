@@ -61,8 +61,8 @@ class _MockFlow:
         self.plan_error = None
         self.skipped = []
 
-    def classify(self, snapshot, *, geometry_version=0):
-        if geometry_version != 0:
+    def classify(self, snapshot, *, geometry_version=0, finishing_version=0):
+        if geometry_version != 0 or finishing_version != 0:
             raise AssertionError('This legacy bridge fixture does not model bounded geometry')
         self.events.append('classify')
         return SimpleNamespace(eligible=self.eligible)
@@ -485,7 +485,7 @@ class BaseIntegrationSourceContracts(unittest.TestCase):
                               and child.func.id == 'prepare_edited'
                               for statement in node.body for child in ast.walk(statement)))
         self.assertEqual(ast.unparse(branch.test),
-                         'edited_capture_version in (1, 2) and record is None and (not neutral)')
+                         'edited_capture_version in (1, 2, 3) and record is None and (not neutral)')
 
 
 if __name__ == '__main__':

@@ -714,11 +714,12 @@ def export_image(src_u8: np.ndarray, spec: ExportSpec, *, device: str = "cuda",
                        progress=progress, bits=8, geometry=geometry)
 
 
-def export_float(src, spec, *, geometry, progress=None, provenance=True):
+def export_float(src, spec, *, geometry, progress=None, provenance=True, capture_finishing=None):
     """Internal actual fully edited original-resolution RGB and provenance tap."""
     spec.float_output=True;spec.provenance_output=bool(provenance)
     return _run_export(src,spec,device='cpu',tile=DEFAULT_TILE,progress=progress,
-                       bits=16 if src.dtype==np.uint16 else 8,geometry=geometry)
+                       bits=16 if src.dtype==np.uint16 else 8,geometry=geometry,
+                       capture_finishing=capture_finishing)
 
 
 def export_image16(src_u16: np.ndarray, spec: ExportSpec, *, device: str = "cuda",
@@ -733,7 +734,7 @@ def export_image16(src_u16: np.ndarray, spec: ExportSpec, *, device: str = "cuda
                        progress=progress, bits=16, geometry=(crop_rect, rotation_degrees))
 
 
-def _run_export(source, spec, *, device, tile, progress, bits, geometry):
+def _run_export(source, spec, *, device, tile, progress, bits, geometry, capture_finishing=None):
     """Resolve a creative source once, outside recursive full-frame prepasses.
 
     Source precision and file precision are independent. Creative pixels remain
@@ -741,9 +742,11 @@ def _run_export(source, spec, *, device, tile, progress, bits, geometry):
     here only after an explicit alpha/HDR admissibility check. Internal float
     captures preserve extended results instead of quantizing them for display.
     """
+    if capture_finishing is not None and spec.creative_base is not None:
+        raise ExportError('Private finishing cannot resolve a creative source')
     if spec.creative_base is None:
         return _export_image_impl(source, spec, device=device, tile=tile,
-            progress=progress, bits=bits, geometry=geometry)
+            progress=progress, bits=bits, geometry=geometry, capture_finishing=capture_finishing)
     from copy import copy
     from .creative_document_base import export_source, require_rebound_spec
     require_rebound_spec(spec)
@@ -815,7 +818,10 @@ def _run_export(source, spec, *, device, tile, progress, bits, geometry):
 
 
 def _export_image_impl(src_u8: np.ndarray, spec: ExportSpec, *, device: str,
-                       tile: int, progress, bits: int, geometry=None) -> tuple:
+                       tile: int, progress, bits: int, geometry=None, capture_finishing=None) -> tuple:
+    if capture_finishing is not None:
+        from .creative_capture_finishing_export import validate_request
+        validate_request(capture_finishing, spec, geometry=geometry, device=device, tile=tile)
     t_function = time.perf_counter()
     if geometry is not None:
         from .ops.geometry import check as check_geometry
@@ -1272,8 +1278,13 @@ def _export_image_impl(src_u8: np.ndarray, spec: ExportSpec, *, device: str,
         if fringe_guide is not None:fringe_guide=np.ascontiguousarray(fringe_guide,dtype=np.float32)
     out=reference_stage.apply_np(out)
     out=semantic_stage.apply_np(out)
-    out=colour_grading_stage.apply_np(out,cancelled=tone_cancelled)
-    out=selective_colour_stage.apply_np(out,cancelled=tone_cancelled)
+    if capture_finishing is None:
+        out=colour_grading_stage.apply_np(out,cancelled=tone_cancelled)
+        out=selective_colour_stage.apply_np(out,cancelled=tone_cancelled)
+    else:
+        from .creative_capture_finishing_export import apply_request
+        out=apply_request(capture_finishing,out,colour_grading_stage,selective_colour_stage,
+                          cancelled=tone_cancelled)
     if editor_needed and not tone_prepass:
         from .colour_editor_stage import ColourEditorStage
         editor=ColourEditorStage(editor_recipe)

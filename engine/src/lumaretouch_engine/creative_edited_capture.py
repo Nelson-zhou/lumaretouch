@@ -53,7 +53,7 @@ def _plain_graph_candidate(graph, context, asset):
     return True
 
 
-def preflight_snapshot(engine, row, state, *, max_bytes, geometry_version=0):
+def preflight_snapshot(engine, row, state, *, max_bytes, geometry_version=0, finishing_version=0):
     """Select this family, then admit prospective copies before deepcopy.
 
     The diagnostic mapping is never passed to a renderer. Unsupported sources,
@@ -84,7 +84,8 @@ def preflight_snapshot(engine, row, state, *, max_bytes, geometry_version=0):
         channel=None, precompute=None, crop_rect=(0., 0., 1., 1.), crop_rotation=0.)
     for key, value in defaults.items():
         diagnostic.setdefault(key, value)
-    if not classify_snapshot(diagnostic, geometry_version=geometry_version).eligible or _neutral_snapshot(diagnostic):
+    if not classify_snapshot(diagnostic, geometry_version=geometry_version,
+                             finishing_version=finishing_version).eligible or _neutral_snapshot(diagnostic):
         return False
     VP._remember_active(engine)
     context = VP._context(engine, row)
@@ -117,7 +118,7 @@ class PendingEditedRGB:
 
 def prepare(engine, row, snapshot, *, retained_roots, source_stamp,
             document_id, max_bytes, persistent_roots=(), cancelled=lambda: False,
-            geometry_version=0):
+            geometry_version=0, finishing_version=0):
     """Return full RGB, or None before decoding an unsupported family.
 
     None means the unchanged complete legacy path, never a partial overlay.
@@ -135,7 +136,8 @@ def prepare(engine, row, snapshot, *, retained_roots, source_stamp,
     from .export import export_float
     if type(max_bytes) is not int or not 1 <= max_bytes <= MAX_WORK_BYTES:
         raise ValueError('Edited capture requires the unchanged bounded working budget')
-    if not classify_snapshot(snapshot, geometry_version=geometry_version).eligible:
+    if not classify_snapshot(snapshot, geometry_version=geometry_version,
+                             finishing_version=finishing_version).eligible:
         return None
     # The engine's raw analysis/support banks remain alive even after its
     # exported copies are released. They are real distinct owners, not freed
@@ -165,7 +167,8 @@ def prepare(engine, row, snapshot, *, retained_roots, source_stamp,
     if metadata['orientation'] != metadata['working_orientation']:
         return None  # Do not reinterpret either legacy PNG16 canvas.
     plan_capture(metadata, snapshot, max_bytes=max_bytes, retained_bytes=held,
-                 persistent_retained_bytes=persistent, geometry_version=geometry_version)
+                 persistent_retained_bytes=persistent, geometry_version=geometry_version,
+                 finishing_version=finishing_version)
     width, height = metadata['width'], metadata['height']
     source = _working_source(path, original, max_pixels=width * height, device='cpu')
     if source.shape[:2] != (height, width) or LM.file_stamp(path) != source_stamp:
@@ -179,7 +182,8 @@ def prepare(engine, row, snapshot, *, retained_roots, source_stamp,
     snapshot, for_document = engine._prepare_export_snapshot(path, snapshot, True)
     _verify_inputs(snapshot, path, source_stamp, source.shape[:2])
     spec, skipped = build_export_spec(snapshot, *source.shape[:2], for_document=for_document)
-    validate_spec(spec, snapshot, skipped=skipped, geometry_version=geometry_version)
+    validate_spec(spec, snapshot, skipped=skipped, geometry_version=geometry_version,
+                  finishing_version=finishing_version)
     if skipped:
         raise ValueError('Edited capture cannot omit current edits: ' + ', '.join(map(str, skipped)))
     spec._creative_capture_original_source = {
@@ -188,7 +192,8 @@ def prepare(engine, row, snapshot, *, retained_roots, source_stamp,
     }
     plan = plan_capture(metadata, snapshot, spec=spec, max_bytes=max_bytes,
         retained_bytes=retained_bytes((retained_roots, persistent_roots, snapshot, spec)),
-        persistent_retained_bytes=persistent, geometry_version=geometry_version)
+        persistent_retained_bytes=persistent, geometry_version=geometry_version,
+        finishing_version=finishing_version)
     def progress(*_args):
         _poll(cancelled)
     geometry = (snapshot['crop_rect'], snapshot['crop_rotation'])
@@ -198,9 +203,14 @@ def prepare(engine, row, snapshot, *, retained_roots, source_stamp,
     # stage. Generic export and every old saved recipe keep their original path.
     # This also avoids feeding legacy f64 geometry into neutral PhotoDetail's
     # f32-only validator; no cast/rounding is introduced to hide that mismatch.
+    finishing_options = {}
+    if finishing_version == 1 and plan.finishing_max_bytes:
+        from .creative_capture_finishing_export import make_request
+        finishing_options['capture_finishing'] = make_request(spec,
+            max_bytes=plan.finishing_max_bytes, width=plan.output_width, height=plan.output_height)
     rgb, _facts = export_float(source, spec,
         geometry=None if deferred else geometry,
-        progress=progress, provenance=False)
+        progress=progress, provenance=False, **finishing_options)
     if deferred:
         import numpy as np
         from .creative_capture_geometry import crop_rotate_np_bounded

@@ -70,6 +70,8 @@ class CaptureMemoryPlan:
     max_bytes: int
     geometry_max_bytes: int = 0
     geometry_version: int = 0
+    finishing_max_bytes: int = 0
+    finishing_version: int = 0
     bounds_kind: str = 'application-working-set-with-conservative-native-reserves'
     runtime_verified: bool = False
 
@@ -287,8 +289,9 @@ def _cube_fingerprint(cube):
     return (_freeze(metadata), digest.hexdigest()), int(grid.size) * 8
 
 
-def _classify(snapshot, *, geometry_version=0):
+def _classify(snapshot, *, geometry_version=0, finishing_version=0):
     _integer(geometry_version, 'geometry version', maximum=1)
+    _integer(finishing_version, 'finishing version', maximum=1)
     from . import white_balance_recipe as WB
     from .ops import curves as CURVES, levels as LEVELS, geometry as G
     from .ops.exposure import check_params as check_exposure
@@ -459,7 +462,7 @@ def _classify(snapshot, *, geometry_version=0):
     return Eligibility(not reasons, tuple(dict.fromkeys(reasons)), tuple(features), fingerprint)
 
 
-def classify_snapshot(snapshot, *, geometry_version=0):
+def classify_snapshot(snapshot, *, geometry_version=0, finishing_version=0):
     """Before preparation, reject optimization without changing selected effects.
 
     Neutral people candidates still need definitive original source proof in the
@@ -467,15 +470,18 @@ def classify_snapshot(snapshot, *, geometry_version=0):
     version 1 also permits bounded arbitrary geometry after unchanged export,
     only when every postgeometry effect is neutral. This result never authorizes
     skipping preparation itself or changing the generic export geometry path.
+    Finishing version 1 separately opts into bounded native colour buffers; it
+    does not expand the recipe cohort or admit native finishing after f64 geometry.
     """
     try:
-        return _classify(snapshot, geometry_version=geometry_version)
+        return _classify(snapshot, geometry_version=geometry_version, finishing_version=finishing_version)
     except (ValueError, TypeError, KeyError, AttributeError, OverflowError) as error:
         return Eligibility(False, ('snapshot admission: ' + str(error),))
 
 
-def snapshot_eligible(snapshot, *, geometry_version=0):
-    return classify_snapshot(snapshot, geometry_version=geometry_version).eligible
+def snapshot_eligible(snapshot, *, geometry_version=0, finishing_version=0):
+    return classify_snapshot(snapshot, geometry_version=geometry_version,
+                             finishing_version=finishing_version).eligible
 
 
 # Frozen source-audited field inventory. Future fields fail closed.
@@ -531,7 +537,7 @@ def _snapshot_from_spec(data, snapshot):
     return result
 
 
-def validate_spec(spec, snapshot=None, *, skipped=(), geometry_version=0):
+def validate_spec(spec, snapshot=None, *, skipped=(), geometry_version=0, finishing_version=0):
     """Return eligible Eligibility or raise on postbuild recipe/resource drift.
 
     Does not call mutating ExportSpec.check or replace downstream validation.
@@ -539,6 +545,7 @@ def validate_spec(spec, snapshot=None, *, skipped=(), geometry_version=0):
     authorizes bypassing the definitive neutral-people gate.
     """
     _integer(geometry_version, 'geometry version', maximum=1)
+    _integer(finishing_version, 'finishing version', maximum=1)
     if skipped:
         raise AdmissionError('Edited capture cannot omit export effects')
     data = _spec_data(spec)
@@ -562,11 +569,13 @@ def validate_spec(spec, snapshot=None, *, skipped=(), geometry_version=0):
             raise AdmissionError('Unaccounted postbuild private owner: ' + key)
     if '_creative_capture_original_source' in data:
         _check_source_context(data['_creative_capture_original_source'])
-    result = classify_snapshot(_snapshot_from_spec(data, snapshot), geometry_version=geometry_version)
+    result = classify_snapshot(_snapshot_from_spec(data, snapshot), geometry_version=geometry_version,
+                               finishing_version=finishing_version)
     if not result.eligible:
         raise AdmissionError('Postbuild edited capture rejected: ' + '; '.join(result.reasons))
     if snapshot is not None:
-        original = classify_snapshot(snapshot, geometry_version=geometry_version)
+        original = classify_snapshot(snapshot, geometry_version=geometry_version,
+                                     finishing_version=finishing_version)
         if not original.eligible or result.fingerprint != original.fingerprint:
             raise AdmissionError('Postbuild export differs from admitted colour recipe')
         if (data['people'] is None) != (snapshot.get('people') is None):
@@ -576,7 +585,7 @@ def validate_spec(spec, snapshot=None, *, skipped=(), geometry_version=0):
 
 def plan_capture(metadata, snapshot=None, *, spec=None, max_bytes,
                  retained_bytes=0, persistent_retained_bytes=0,
-                 host_lease_bytes=0, tile=DEFAULT_TILE, geometry_version=0):
+                 host_lease_bytes=0, tile=DEFAULT_TILE, geometry_version=0, finishing_version=0):
     """Named conservative phases before genuine decode and again after build.
 
     Use public inspect_encoded_source metadata. retained_bytes includes all
@@ -587,11 +596,14 @@ def plan_capture(metadata, snapshot=None, *, spec=None, max_bytes,
     Geometry version 1 is explicit deferred bounded sampling, not a change to
     generic export. geometry_max_bytes covers geometry's source backing, output
     and scratch after subtracting every nongeometry live owner from max_bytes.
+    Finishing version 1 replaces only active native colour's whole-frame buffer
+    phase; finishing_max_bytes similarly excludes every nonfinishing live owner.
     """
     from .creative_document_assets import MAX_PIXELS, MAX_ORIGINAL_BYTES
     from .creative_document_import_bounded import ImportMemoryPlan
     from .ops import geometry as G
     _integer(geometry_version, 'geometry version', maximum=1)
+    _integer(finishing_version, 'finishing version', maximum=1)
     _integer(max_bytes, 'capture budget', minimum=1, maximum=MAX_WORK_BYTES)
     _integer(retained_bytes, 'retained capture bytes')
     _integer(persistent_retained_bytes, 'persistent retained capture bytes')
@@ -626,14 +638,16 @@ def plan_capture(metadata, snapshot=None, *, spec=None, max_bytes,
     if n > MAX_PIXELS:
         raise AdmissionError('Source exceeds canonical pixel limit')
     if spec is None:
-        eligibility = classify_snapshot(snapshot, geometry_version=geometry_version)
+        eligibility = classify_snapshot(snapshot, geometry_version=geometry_version,
+                                        finishing_version=finishing_version)
         if not eligibility.eligible:
             raise AdmissionError('Snapshot not eligible: ' + '; '.join(eligibility.reasons))
         params = snapshot['params']
         margin = 2 * params['texture_radius'] + 6 * params['radius']
         cube = snapshot['lut']
     else:
-        eligibility = validate_spec(spec, snapshot, geometry_version=geometry_version)
+        eligibility = validate_spec(spec, snapshot, geometry_version=geometry_version,
+                                    finishing_version=finishing_version)
         data = _spec_data(spec)
         from .export import ExportSpec
         margin = ExportSpec.margin_px(spec)
@@ -667,6 +681,7 @@ def plan_capture(metadata, snapshot=None, *, spec=None, max_bytes,
     last_tile = ('last-export-rgb-tile', 12 * t)
     block = min(BLOCK_PIXELS, m)
     geometry_max_bytes = 0  # no deferred sampler for default/snapped geometry
+    finishing_max_bytes = 0  # neutral/default finishing never requests this hook
     owners = [
         ('snapshot-recipe-validation', render + (
              ('retained-array-validation', census.validation_scratch_bytes), native)),
@@ -700,9 +715,26 @@ def plan_capture(metadata, snapshot=None, *, spec=None, max_bytes,
         owners.append(('crop-quarter-turn', render + (integer, ('stitched-rgb-backing', 12 * n),
             ('integer-crop-copy', 12 * c), ('quarter-turn-output', 12 * m), last_tile, native)))
     if 'native-full-colour' in eligibility.features:
-        owners.append(('native-colour-finishing', render + (integer,
-            ('retained-stitch-backing', 12 * n), ('native-input-output', 24 * m),
-            ('validation-contiguous-return-reserve', 36 * m), last_tile, native)))
+        if finishing_version == 1:
+            from . import creative_capture_finishing as bounded_finishing
+            if (bounded_finishing.FINISHING_VERSION != 'edited-capture-colour-finishing-v1'
+                    or bounded_finishing.BLOCK_PIXELS != BLOCK_PIXELS):
+                raise AdmissionError('Bounded finishing strategy changed since capture admission audit')
+            finishing_live = render + (integer, last_tile, native)
+            finishing_max_bytes = max_bytes - sum(amount for _, amount in finishing_live)
+            scratch = tuple(('finishing-' + name, multiplier * block)
+                            for name, multiplier in bounded_finishing.SCRATCH_PER_PIXEL)
+            owners.append(('bounded-colour-finishing', finishing_live + (
+                # Only one postgeometry RGB source owner survives assignment.
+                # A contiguous small crop may still retain the full 12N backing.
+                ('finishing-source-backing', max(12 * n, 12 * m)),
+                ('private-finishing-rgb', 12 * m), *scratch,
+                ('finishing-array-workspace', bounded_finishing.ARRAY_WORKSPACE_RESERVE),
+                ('finishing-metadata', bounded_finishing.METADATA_RESERVE))))
+        else:
+            owners.append(('native-colour-finishing', render + (integer,
+                ('retained-stitch-backing', 12 * n), ('native-input-output', 24 * m),
+                ('validation-contiguous-return-reserve', 36 * m), last_tile, native)))
     # A small contiguous crop can still retain 12N original backing. Deferred
     # arbitrary geometry owns f64 output; never price that result as f32.
     owners.extend((
@@ -715,7 +747,8 @@ def plan_capture(metadata, snapshot=None, *, spec=None, max_bytes,
     phases = tuple((name, sum(amount for _, amount in entries)) for name, entries in owners)
     plan = CaptureMemoryPlan(width, height, ow, oh, bits, margin, t, retained,
                              phases, tuple(owners), max_bytes,
-                             geometry_max_bytes=geometry_max_bytes, geometry_version=geometry_version)
+                             geometry_max_bytes=geometry_max_bytes, geometry_version=geometry_version,
+                             finishing_max_bytes=finishing_max_bytes, finishing_version=finishing_version)
     if plan.peak_bytes > max_bytes:
         raise CaptureBudgetExceeded('%s requires declared working set %d bytes; budget is %d' %
                                    (plan.peak_phase, plan.peak_bytes, max_bytes))

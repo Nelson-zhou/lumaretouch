@@ -7,11 +7,13 @@ imports, test execution, builds, typechecks, inference or downloads were run.
 
 ## Public interfaces
 
-- `classify_snapshot(snapshot, *, geometry_version=0) -> Eligibility` is the pre-preparation gate.
+- `classify_snapshot(snapshot, *, geometry_version=0, finishing_version=0) -> Eligibility`
+  is the pre-preparation gate.
   `snapshot_eligible` is its Boolean wrapper. Unknown/incomplete fields, malformed
   records and unsupported recipe families return not eligible. Keep the complete
   recipe and select the existing legacy path. Never neutralize actual inputs.
-- `validate_spec(spec, snapshot=None, *, skipped=(), geometry_version=0) -> Eligibility` accepts only
+- `validate_spec(spec, snapshot=None, *, skipped=(), geometry_version=0,
+  finishing_version=0) -> Eligibility` accepts only
   an ordinary `ExportSpec`, checks its explicit audited field inventory and
   normalized colour fingerprint, and raises `AdmissionError` on rejection. It
   neither mutates the spec nor calls the mutating `ExportSpec.check` method.
@@ -31,7 +33,7 @@ imports, test execution, builds, typechecks, inference or downloads were run.
   retrospectively admit a host `_capture_state()` already performed upstream.
 - `plan_capture(metadata, snapshot=None, *, spec=None, max_bytes,
   retained_bytes=0, persistent_retained_bytes=0, host_lease_bytes=0, tile=1024,
-  geometry_version=0)`
+  geometry_version=0, finishing_version=0)`
   returns an immutable plan or raises `CaptureBudgetExceeded`. Call before real
   decode, then again with the built spec and actual retained roots. Metadata is
   the public `inspect_encoded_source` result, never its private parser source.
@@ -54,7 +56,7 @@ lease. Do not confuse any of these ledgers with process RSS.
 The unchanged export chain handles exposure, white balance including picked
 gains and algorithm identity, legacy tone and global grade, HSL, levels, supported
 curve recipes, validated ordinary CubeLut and primary calibration. Colour grading
-and selective colour use a separately reserved whole-frame finishing phase.
+and selective colour use a separately reserved finishing phase.
 Crop and strictly snapped quarter turns retain the common geometry functions.
 Geometry version 0 remains the default and rejects unsnapped arbitrary angles.
 Explicit integer version 1 also admits the separately budgeted bounded sampler;
@@ -63,6 +65,16 @@ unknown versions, including Boolean values, fail closed. The Boolean
 generic export defaults or source-family eligibility.
 See [GEOMETRY-INTEGRATION.md](GEOMETRY-INTEGRATION.md) for the explicit capture
 strategy boundary; the admission keyword is independent of saved recipe versions.
+
+Finishing version 0 likewise remains the default, with the existing native
+whole-frame phase unchanged. Explicit integer version 1 replaces only active
+colour-grading/selective-colour allocation with bounded finishing, in the same
+CG-then-SC order and using the unchanged native stages. It does not expand the
+eligible recipe cohort. Neutral stages do not import or request the bounded
+helper through admission, and `finishing_max_bytes` stays zero. Unknown versions,
+including Booleans, fail closed. All four admission functions accept the keyword.
+The exporter receives an exact private request argument, not a spec field or
+general plugin; saved recipes and ordinary export defaults are unchanged.
 
 For unsnapped angles only, the explicit capture strategy runs unchanged export
 with no geometry, then applies bounded geometry after all neutral finishing
@@ -129,6 +141,18 @@ the actual radii even when smoothing strength is zero. Tile size is not tuned.
 - Whole-frame native colour finishing retains source and stitch backing 12N,
   input/output 24M plus conservative validation/contiguity/return reserve 36M,
   the last tile and named native reserve.
+- Opted-in active bounded colour finishing replaces only that phase. It retains
+  one postgeometry RGB backing owner conservatively sized `max(12N, 12M)`, one
+  private 12M result, `64B` scratch and 8 MiB helper reserves. The named scratch
+  tuple and two 4 MiB reserves are imported from the same module as its actual-
+  array inspector. A contiguous crop can retain 12N, while an owned quarter-turn
+  result retains 12M; this cohort has no separate surviving old stitch owner.
+  Integer source, retained snapshot/banks/spec, original/ICC, last tile, native,
+  metadata and host reserves remain outside the helper's `finishing_max_bytes`
+  sub-budget. That cap is the total budget minus these nonfinishing owners.
+  The actual source-backing inspector must admit it before allocating output.
+  No full-canvas CG intermediate is added before SC; native block input/output
+  must remain non-overlapping. Arbitrary-angle active CG/SC remains rejected.
 - Transfer assumes render-only owners have ended, but preserves caller-owned
   persistent state, original/ICC, the actual possible 12N RGB crop backing,
   private RGBA 16M and bounded staging 48B, B <= 65,536 pixels.
@@ -157,6 +181,10 @@ orientation disagreement and persistent state through freeze.
 Versioned geometry fixtures additionally cover default rejection, strict snap
 boundaries, opt-in admission, unsupported versions, neutral-only postgeometry
 finishing, unchanged tile calibration, geometry sub-budgets and float64 tails.
+Versioned finishing fixtures cover CG only, SC only and both; unchanged default
+and unrelated phases; exact actual-crop backing and shared scratch accounting;
+one-byte budget boundaries; neutral no-helper behavior; unsupported versions;
+and continued rejection of arbitrary-angle active finishing and private fields.
 
 They are authored specifications, not executed evidence. See [INTEGRATION.md](INTEGRATION.md)
 for the recovered slice's actual integration boundaries and verification limits.
@@ -171,6 +199,9 @@ Separately authorized future runtime acceptance must include:
   Separately compare deferred arbitrary geometry against the legacy sampler on
   unchanged pregeometry export, including singleton axes, borders, half-degree
   boundaries and blocked gather sizes; do not label this old-full-flow parity.
+  Compare bounded CG/SC against the ordinary whole-frame native sequence for
+  each stage and both together, including native chunk edges, signed/HDR working
+  values, cropped backing, cancellation and invalid-input failure boundaries.
 - Verify genuine decoder opacity, precision and original-byte provenance; test
   cancellation, file/document races and failure cleanup without publishing a
   partial asset or silently dropping an edit.

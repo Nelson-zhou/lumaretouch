@@ -526,3 +526,150 @@ def test_snapped_geometry_version_one_preserves_existing_phase_and_native_finish
     assert opted.owners == original.owners
     assert opted.geometry_max_bytes == original.geometry_max_bytes == 0
     assert 'native-colour-finishing' in dict(opted.phases)
+
+
+def finishing_recipe(grading=True, selective=True):
+    recipe = snapshot()
+    recipe.update(colour_grading=CG.neutral(), selective_colour=SC.neutral())
+    if grading:
+        recipe['colour_grading']['global']['saturation'] = 10.
+    if selective:
+        recipe['selective_colour']['ranges']['reds']['cyan'] = 8.
+    return recipe
+
+
+@pytest.mark.parametrize('grading,selective', ((True, False), (False, True), (True, True)))
+def test_bounded_finishing_replaces_only_the_explicit_active_phase(grading, selective):
+    recipe = finishing_recipe(grading, selective)
+    recipe.update(crop_rect=(.1, .2, .9, .8), crop_rotation=89.9)
+    before = deepcopy(recipe)
+    plain = A.classify_snapshot(recipe)
+    opted = A.classify_snapshot(recipe, finishing_version=1)
+    assert plain == opted and opted.eligible
+    assert A.snapshot_eligible(recipe, finishing_version=1)
+    spec = build(recipe)
+    assert A.validate_spec(spec, recipe, finishing_version=1) == A.validate_spec(spec, recipe)
+    original = A.plan_capture(metadata(), recipe, max_bytes=A.MAX_WORK_BYTES)
+    bounded = A.plan_capture(metadata(), recipe, finishing_version=1, max_bytes=A.MAX_WORK_BYTES)
+    old, new = dict(original.owners), dict(bounded.owners)
+    assert 'native-colour-finishing' in old and 'native-colour-finishing' not in new
+    assert 'bounded-colour-finishing' not in old and 'bounded-colour-finishing' in new
+    assert {key: value for key, value in old.items() if key != 'native-colour-finishing'} == {
+        key: value for key, value in new.items() if key != 'bounded-colour-finishing'}
+    assert original.finishing_version == original.finishing_max_bytes == 0
+    assert bounded.finishing_version == 1 and bounded.finishing_max_bytes > 0
+    assert bounded.geometry_max_bytes == original.geometry_max_bytes == 0
+    assert recipe == before
+
+
+@pytest.mark.parametrize('grading,selective', ((True, False), (False, True), (True, True)))
+def test_finishing_phase_matches_actual_crop_backing_inspector(grading, selective):
+    from lumaretouch_engine import creative_capture_finishing as F
+    from lumaretouch_engine.colour_grading_stage import ColourGradingStage
+    from lumaretouch_engine.selective_colour_stage import SelectiveColourStage
+    recipe = finishing_recipe(grading, selective)
+    recipe['crop_rect'] = (0., 0., 1., .1)
+    info = metadata(width=160, height=120)
+    plan = A.plan_capture(info, recipe, finishing_version=1, max_bytes=A.MAX_WORK_BYTES,
+                          retained_bytes=1_000_000, persistent_retained_bytes=400_000)
+    parts = dict(dict(plan.owners)['bounded-colour-finishing'])
+    source = np.zeros((120, 160, 3), np.float32)
+    crop = source[:12]
+    actual = F.inspect_colour_finishing(crop, ColourGradingStage(recipe['colour_grading']),
+        SelectiveColourStage(recipe['selective_colour']), max_bytes=plan.finishing_max_bytes)
+    assert crop.nbytes < source.nbytes
+    assert parts['finishing-source-backing'] == actual.source_storage_bytes == source.nbytes
+    assert parts['private-finishing-rgb'] == actual.output_allocation_bytes == crop.nbytes
+    for name, amount in actual.scratch_components:
+        assert parts['finishing-' + name] == amount
+    assert parts['finishing-array-workspace'] == actual.array_workspace_reserve
+    assert parts['finishing-metadata'] == actual.metadata_reserve
+    other = sum(parts[name] for name in ('host-lease', 'metadata-allocator',
+        'encoded-original', 'retained-icc', 'capture-snapshot-owners',
+        'integer-working-source', 'last-export-rgb-tile', 'native-allocator-reserve'))
+    assert plan.finishing_max_bytes == plan.max_bytes - other
+    assert dict(plan.phases)['bounded-colour-finishing'] == other + actual.peak_bytes
+
+
+def test_bounded_finishing_exact_budget_boundary_and_no_render_in_planning(monkeypatch):
+    from lumaretouch_engine import creative_capture_finishing as F
+    from lumaretouch_engine import colour_grading_native as CGN, selective_colour_native as SCN
+    def forbidden(*_args, **_kwargs):
+        raise AssertionError('Planning must not manufacture a raster, load native code or render')
+    monkeypatch.setattr(F, 'inspect_colour_finishing', forbidden)
+    monkeypatch.setattr(F, 'finish_colour_np_bounded', forbidden)
+    monkeypatch.setattr(CGN, 'native', forbidden)
+    monkeypatch.setattr(SCN, 'native', forbidden)
+    recipe = finishing_recipe()
+    options = dict(finishing_version=1, retained_bytes=17_000_000,
+                   persistent_retained_bytes=8_000_000, host_lease_bytes=7_000_000)
+    plan = A.plan_capture(metadata(), recipe, max_bytes=A.MAX_WORK_BYTES, **options)
+    boundary = A.plan_capture(metadata(), recipe, max_bytes=plan.peak_bytes, **options)
+    assert boundary.peak_bytes == plan.peak_bytes and boundary.finishing_max_bytes > 0
+    for phase, total in plan.phases:
+        assert total == sum(amount for _, amount in dict(plan.owners)[phase])
+    with pytest.raises(A.CaptureBudgetExceeded):
+        A.plan_capture(metadata(), recipe, max_bytes=plan.peak_bytes - 1, **options)
+
+
+def test_neutral_finishing_version_never_imports_or_requests_the_helper(monkeypatch):
+    import builtins
+    original_import = builtins.__import__
+    def guarded(name, globals=None, locals=None, fromlist=(), level=0):
+        if name.endswith('creative_capture_finishing') or 'creative_capture_finishing' in (fromlist or ()):
+            raise AssertionError('Neutral plans must not import finishing implementation')
+        return original_import(name, globals, locals, fromlist, level)
+    recipe = finishing_recipe(False, False)
+    original = A.plan_capture(metadata(), recipe, max_bytes=A.MAX_WORK_BYTES)
+    monkeypatch.setattr(builtins, '__import__', guarded)
+    opted = A.plan_capture(metadata(), recipe, finishing_version=1, max_bytes=A.MAX_WORK_BYTES)
+    assert opted.phases == original.phases and opted.owners == original.owners
+    assert opted.finishing_version == 1 and opted.finishing_max_bytes == 0
+    assert not any('colour-finishing' in name for name, _ in opted.phases)
+
+
+@pytest.mark.parametrize('version', (-1, 2, True, False, 1., '1', None))
+def test_unknown_finishing_versions_fail_closed_on_every_public_gate(version):
+    recipe = finishing_recipe()
+    assert not A.classify_snapshot(recipe, finishing_version=version).eligible
+    assert not A.snapshot_eligible(recipe, finishing_version=version)
+    with pytest.raises(A.AdmissionError, match='finishing version'):
+        A.validate_spec(build(recipe), recipe, finishing_version=version)
+    with pytest.raises(A.AdmissionError, match='finishing version'):
+        A.plan_capture(metadata(), recipe, finishing_version=version, max_bytes=A.MAX_WORK_BYTES)
+
+
+@pytest.mark.parametrize('grading,selective', ((True, False), (False, True), (True, True)))
+def test_bounded_finishing_never_admits_active_colour_after_arbitrary_geometry(grading, selective):
+    recipe = finishing_recipe(grading, selective)
+    recipe['crop_rotation'] = 13.
+    before = deepcopy(recipe)
+    assert not A.snapshot_eligible(recipe, geometry_version=1, finishing_version=1)
+    with pytest.raises(A.AdmissionError):
+        A.validate_spec(build(recipe), recipe, geometry_version=1, finishing_version=1)
+    with pytest.raises(A.AdmissionError):
+        A.plan_capture(metadata(), recipe, geometry_version=1, finishing_version=1,
+                       max_bytes=A.MAX_WORK_BYTES)
+    assert recipe == before
+
+
+def test_neutral_finishing_preserves_opted_arbitrary_geometry_phases():
+    recipe = finishing_recipe(False, False)
+    recipe['crop_rotation'] = 13.
+    old = A.plan_capture(metadata(), recipe, geometry_version=1, max_bytes=A.MAX_WORK_BYTES)
+    new = A.plan_capture(metadata(), recipe, geometry_version=1, finishing_version=1,
+                         max_bytes=A.MAX_WORK_BYTES)
+    assert new.phases == old.phases and new.owners == old.owners
+    assert new.geometry_max_bytes == old.geometry_max_bytes > 0
+    assert new.finishing_max_bytes == 0
+
+
+def test_finishing_version_never_adds_private_spec_fields_or_widens_the_cohort():
+    recipe = finishing_recipe()
+    recipe['strength'] = .1
+    assert not A.snapshot_eligible(recipe, finishing_version=1)
+    recipe['strength'] = 0.
+    spec = build(recipe)
+    spec._creative_capture_finishing = {'version': 1, 'max_bytes': 100_000_000}
+    with pytest.raises(A.AdmissionError, match='Unknown/missing'):
+        A.validate_spec(spec, recipe, finishing_version=1)
