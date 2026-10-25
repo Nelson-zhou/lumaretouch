@@ -32,6 +32,8 @@ def observe(event):
 def begin(engine, message, handler):
     boundary = {'failed': False, 'returned': False, 'started': False, 'message': message, 'engine': engine}
     _local.boundary = boundary
+    if message.get('cmd') == 'hair_volume':
+        boundary['hair_volume_before_fence'] = engine._people_owner().fence
     def wrapped(payload):
         boundary['started'] = True
         value = handler(payload)
@@ -47,6 +49,8 @@ def finish(engine, boundary, error=None):
     message = boundary['message']
     from .portrait_crop_recovery import finish as crop_finish
     if crop_finish(engine, boundary, error): return
+    from .hair_volume_recovery import finish as hair_volume_finish
+    if hair_volume_finish(engine, boundary, error): return
     if message.get('cmd') in ('ingest_session', 'workflow_owner', 'background_material_library', 'background_material_library_cancel'):
         # The lease owns pending/unknown copy receipts. Only the existing atomic
         # managed transaction writes the saved project; readback cannot bless a
@@ -86,6 +90,8 @@ def finish(engine, boundary, error=None):
     if face_style_read_only(message) or eye_bag_read_only(message) or facial_sculpt_read_only(message) or eye_makeup_enhance_read_only(message):return  # Private read failures cannot taint committed project state.
     from .people_reference_dispatch import read_only as skin_reference_read_only
     if skin_reference_read_only(message): return
+    from .hair_volume_controller import read_only as hair_volume_read_only
+    if hair_volume_read_only(message): return
     from .hair_unification_controller import read_only as hair_unification_read_only
     if hair_unification_read_only(message): return
     if not boundary['started'] or message.get('cmd') in ('project_recovery', 'canvas_guides'):
@@ -107,7 +113,7 @@ def finish(engine, boundary, error=None):
         runtime.reason = '上次命令未确认完整提交；请保存前检查，或重新打开已确认的工程'
     elif message.get('cmd') in engine.EDIT_CMDS or message.get('cmd') in (
         'project','session','history','virtual_copy','managed_import','source_relocation',
-        'people','batch','primary_calibration','colour_editor','selective_colour','colour_grading',
+        'people','hair_volume','batch','primary_calibration','colour_editor','selective_colour','colour_grading',
         'photo_grain','photo_detail','extended_tone','shoulder_shape','leg_shape','arm_shape',
         'waist_shape','leg_length','neck_shape','torso_length','waist_length','head_size','body_slim','custom_lut','semantic_colour','creative_document','common_background','expression_replacement','lens_blur','light_glow'):
         if message.get('action') not in ('state','query','status','receipt','list','context'):
@@ -145,6 +151,8 @@ class Runtime:
         if self.tainted:
             raise RecoveryError(self.reason)
         e = self.engine
+        if e.__dict__.get('_hair_volume_uncertain') is not None:
+            raise RecoveryError('发量原提交尚未确认，请查询原请求或重新打开已确认的工程')
         for name, owner in tuple(e.__dict__.items()):
             if name.startswith('_project_recovery') or owner is None:
                 continue

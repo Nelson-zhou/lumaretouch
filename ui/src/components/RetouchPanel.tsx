@@ -104,6 +104,8 @@ export interface RetouchProps {
   shoulderPanel?: React.ReactNode;
   expressionPanel?: React.ReactNode;
   hairUnificationPanel?: React.ReactNode;
+  hairVolumePanel?: React.ReactNode;
+  hairWorkflowBusy?: boolean;
   skinReferencePanel?: React.ReactNode;
   skinReferenceBodyPanel?: React.ReactNode;
   hairPort: HairPort;
@@ -585,7 +587,7 @@ const ARCHIVE_IDS = new Set([
 
 export default function RetouchPanel(props: RetouchProps) {
   const { doc, status } = props;
-  const dim = !props.hasImage||props.hairPort.pending()||!!props.colorActions?.owner.pending||(props.people.state.pending && props.people.state.pendingAction !== 'patch')||props.people.state.uncertain;
+  const dim = !props.hasImage||!!props.hairWorkflowBusy||props.hairPort.pending()||!!props.colorActions?.owner.pending||(props.people.state.pending && props.people.state.pendingAction !== 'patch')||props.people.state.uncertain;
   const capturedPeople = peopleContext(doc?.people);
   const skinReady = skinMaskReady(status?.precompute?.mask_channels, status?.precompute?.mask_nonzero_pixels);
   const skinWhy = skinReady ? "" : "尚无有效皮肤掩膜，请先完成人像分析";
@@ -1381,6 +1383,7 @@ export default function RetouchPanel(props: RetouchProps) {
     if (fid === "PC-32468") return props.expressionPanel;
     if (fid === "PC-32473") return props.shoulderPanel;
     if (fid === "PC-32472") return <>
+      {props.hairVolumePanel}
       {props.hairUnificationPanel}
       {status?.ready_caps?.hair_colour_protocol!==1&&<p role="status">当前引擎未提供头发范围审核，请使用配套版本。</p>}
       <HairColourPanel people={doc?.people??null} port={props.hairPort}
@@ -1465,6 +1468,8 @@ export default function RetouchPanel(props: RetouchProps) {
                     if(f.id==='PC-32455'&&['滤镜/我的/CUBE导入','滤镜/我的','滤镜/推荐'].includes(leaf.path))return null;
                     if(f.id==='PC-32452'&&leaf.path==='AI追色/批量同步&保存预设')return <SemanticColourWorkflowLaunch enabled={props.hasImage&&props.status?.ready_caps?.semantic_colour_workflow_protocol===1}/>;
                     if(f.id==='PC-32472'&&['发色选择','头发光泽'].includes(leaf.path))return null;
+                    if(f.id==='PC-32472'&&props.hairVolumePanel&&['颅顶调整&颅顶调整（头顶）','发量调整'].includes(leaf.path))return null;
+                    if(f.id==='PC-32472'&&props.hairUnificationPanel&&leaf.path==='发色统一')return null;
                     if (f.id === "PC-32481" && leaf.path === "背景调整涂抹笔" && props.studioBackgroundPanel)
                       return <div className="toolRouteNote"><button className="toolRouteLink" onClick={()=>navigateTool("PC-32474")}>背景调整恢复画笔</button><p>进入背景调整，在编辑范围中选择对应的恢复目标。</p></div>;
                     if (f.id === "PC-32481" && leaf.path === "换天空涂抹笔" && props.skyReplacementPanel)

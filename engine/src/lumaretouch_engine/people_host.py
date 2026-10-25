@@ -251,6 +251,8 @@ class PeopleHostMixin:
         validate_records(project);HAIR.validate(project)
         from .hair_unification_project import validate as validate_unification
         validate_unification(project)
+        from .hair_volume_project import validate as validate_volume
+        validate_volume(project)
         from .skin_reference_match_project import validate as validate_reference_match
         validate_reference_match(project)
         from .skin_reference_body_project import validate as validate_reference_body
@@ -262,6 +264,8 @@ class PeopleHostMixin:
     def _people_load(self,project,prepared_history=None):
         from .people_project import validate_records
         validate_records(project)
+        from .hair_volume_project import validate as validate_volume
+        validate_volume(project)
         from .people_cross_owner_project import validate_project
         validate_project(project)
         self._body_skin_evenness_reference=None;self._body_skin_evenness_preview=None
@@ -272,6 +276,8 @@ class PeopleHostMixin:
         load_unification(self,project)
         from .hair_unification_controller import invalidate_after_reload
         invalidate_after_reload(self)
+        from .hair_volume_controller import invalidate_after_reload as invalidate_volume
+        invalidate_volume(self)
         from .portrait_crop_routes import invalidate_after_reload as invalidate_portrait_crop
         invalidate_portrait_crop(self)
         self.__dict__.pop('_skin_reference_match_reviews',None)
@@ -327,13 +333,17 @@ class PeopleHostMixin:
             from .creative_derived_hair import capture as capture_hair
             capture_hair(retained_host,state,result,pc,source)
             from .hair_unification_project import capture_derived as capture_unification
-            return capture_unification(retained_host,state,result,pc,source)
+            capture_unification(retained_host,state,result,pc,source)
+            from .hair_volume_project import capture_derived as capture_volume
+            return capture_volume(retained_host,state,result,pc,source)
         if binding is None:return result
         from .skin_reference_match_inputs import freeze as freeze_reference_match
         freeze_reference_match(result,binding,source_path=source_path)
         HAIR.capture(retained_host,result,pc,binding,source_path=source_path)
         from .hair_unification_project import capture as capture_unification
-        return capture_unification(retained_host,result,pc,binding,source_path=source_path)
+        capture_unification(retained_host,result,pc,binding,source_path=source_path)
+        from .hair_volume_project import capture as capture_volume
+        return capture_volume(retained_host,result,pc,binding,source_path=source_path)
 
     def cmd_people(self,p):
         from .people_host_commands import apply
@@ -358,6 +368,8 @@ class PeopleHostMixin:
         require_sculpt_transition(self,before,candidate)
         from .hair_unification_project import require_transition as require_hair_unification_transition
         require_hair_unification_transition(self,before,candidate)
+        from .hair_volume_project import require_transition as require_hair_volume_transition
+        require_hair_volume_transition(self,before,candidate)
         from .skin_reference_match_project import require_transition as require_reference_transition
         require_reference_transition(self,before,candidate)
         from .skin_reference_body_project import require_transition as require_body_reference_transition

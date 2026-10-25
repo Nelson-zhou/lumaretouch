@@ -39,6 +39,8 @@ def validate_records(value):
                 validate_brow_enhance_graph(value[key])
                 from .hair_unification_project import validate_graph as validate_hair_unification_graph
                 validate_hair_unification_graph(value[key])
+                from .hair_volume_project import validate_graph as validate_hair_volume_graph
+                validate_hair_volume_graph(value[key])
                 from .skin_reference_match_project import validate_graph as validate_reference_match_graph
                 validate_reference_match_graph(value[key])
                 from .skin_reference_body_project import validate_graph as validate_reference_body_graph

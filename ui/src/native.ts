@@ -1105,6 +1105,8 @@ export interface EngineStatus {
     skin_reference_match_protocol?: number; skin_reference_match_available?: boolean; skin_reference_match_reason?: string | null;
     portrait_crop?: {version:number;operation_id:string;available:boolean;reason?:string|null};
     hair_unification_protocol?: number; hair_unification_capability?: {available:boolean;reason?:string|null}; hair_colour_protocol?: number;
+    hair_volume_protocol?: number;
+    hair_volume_capability?: {available:boolean;protocol:number;operation_id:string;reason:string|null};
     sample_library_protocol?: number;
     effect_recovery_protocol?: number;
     optics_protocol?: number;

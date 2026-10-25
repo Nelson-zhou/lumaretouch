@@ -164,6 +164,8 @@ def stage(payload, target_state, *, eye_bag_review=None):
             out = S.set_override(out, 'face', ref['face_instance_id'], parameter['operation_id'], parameter['parameter_path'], parameter['value'])
     from .hair_unification_project import require_unreviewed_transition
     require_unreviewed_transition(target_state,out)
+    from .hair_volume_project import require_unreviewed_transition as require_hair_volume_transition
+    require_hair_volume_transition(target_state,out)
     from .skin_reference_match_project import require_unreviewed_transition as require_reference_transition
     require_reference_transition(target_state,out)
     from .skin_reference_body_project import require_unreviewed_transition as require_body_reference_transition

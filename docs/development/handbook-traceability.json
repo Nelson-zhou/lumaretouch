@@ -6344,9 +6344,19 @@
       "source_url": "https://www.pixcakeai.com/guide/32472",
       "source_child_index": 1,
       "title": "颅顶调整&颅顶调整（头顶）",
-      "status": "pending_independent_verification",
-      "implementation": [],
-      "verification": []
+      "status": "partial_source_connected_unrun",
+      "implementation": [
+        "core/hair_volume/lib.rs",
+        "engine/src/lumaretouch_engine/hair_volume_controller.py",
+        "engine/src/lumaretouch_engine/hair_volume_geometry.py",
+        "ui/src/hairVolume/HairVolumePanel.tsx"
+      ],
+      "verification": [
+        "docs/hair-volume/INTEGRATION.md",
+        "docs/hair-volume/RESEARCH.md",
+        "engine/tests/test_hair_volume_integration_unrun.py"
+      ],
+      "limitations": "Manual reviewed source contours and explicit face/ear/neck/person protection; existing six-class hair evidence is not instance, crown or occlusion segmentation. Current-photo original/opaque-SDR derived source only. No generative hair, automatic anatomy, vendor parity, preset/batch/cohort/alias or numerical/photo acceptance. Distinction between vendor crown labels remains unspecified."
     },
     {
       "id": "control:PC-32472:3",
@@ -6355,9 +6365,19 @@
       "source_url": "https://www.pixcakeai.com/guide/32472",
       "source_child_index": 2,
       "title": "发量调整",
-      "status": "pending_independent_verification",
-      "implementation": [],
-      "verification": []
+      "status": "partial_source_connected_unrun",
+      "implementation": [
+        "core/hair_volume/lib.rs",
+        "engine/src/lumaretouch_engine/hair_volume_controller.py",
+        "engine/src/lumaretouch_engine/hair_volume_geometry.py",
+        "ui/src/hairVolume/HairVolumePanel.tsx"
+      ],
+      "verification": [
+        "docs/hair-volume/INTEGRATION.md",
+        "docs/hair-volume/RESEARCH.md",
+        "engine/tests/test_hair_volume_integration_unrun.py"
+      ],
+      "limitations": "Manual reviewed source contours and explicit face/ear/neck/person protection; existing six-class hair evidence is not instance, crown or occlusion segmentation. Current-photo original/opaque-SDR derived source only. No generative hair, automatic anatomy, vendor parity, preset/batch/cohort/alias or numerical/photo acceptance. Distinction between vendor crown labels remains unspecified."
     },
     {
       "id": "control:PC-32472:4",

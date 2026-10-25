@@ -402,7 +402,7 @@ def guard_command(engine, name, request):
         'manual_liquify_preview', 'studio_background', 'studio_background_preview',
         'optics', 'optics_preview', 'sky_replacement', 'sky_replacement_preview',
         'sky_semantic', 'local_grade_live', 'semantic_colour', 'lip_makeup',
-        'brow_shape', 'nose_shape', 'eye_shape', 'mouth_shape', 'hair_colour', 'hair_unification',
+        'brow_shape', 'nose_shape', 'eye_shape', 'mouth_shape', 'hair_colour', 'hair_unification', 'hair_volume',
         'shoulder_shape', 'leg_shape', 'arm_shape', 'waist_shape', 'leg_length',
         'neck_shape', 'torso_length','waist_length','head_size','body_slim', 'sample_library',
     }

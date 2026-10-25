@@ -253,6 +253,9 @@ def validate(p: object) -> None:
     from .hair_colour_project import validate as validate_hair
     try:validate_hair(p,allowed=(sv in (HAIR_SCHEMA,CUBE_SCHEMA,TONE_SCHEMA,GRADING_SCHEMA,SELECTIVE_SCHEMA,PRIMARY_SCHEMA,DETAIL_SCHEMA,GRAIN_SCHEMA,COLOUR_EDITOR_SCHEMA,SCHEMA)))
     except (ValueError,TypeError,KeyError) as error:raise ProjectError(str(error)) from error
+    from .hair_volume_project import validate as validate_hair_volume
+    try:validate_hair_volume(p,allowed=(sv == SCHEMA))
+    except (ValueError,TypeError,KeyError) as error:raise ProjectError(str(error)) from error
     from .hair_unification_project import validate as validate_hair_unification
     try:validate_hair_unification(p,allowed=(sv == SCHEMA))
     except (ValueError,TypeError,KeyError) as error:raise ProjectError(str(error)) from error

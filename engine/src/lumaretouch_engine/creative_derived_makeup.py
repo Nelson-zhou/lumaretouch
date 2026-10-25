@@ -86,7 +86,7 @@ def validate_supports(state,assets,asset_sha256,*,only_kind=None):
     for face in state['faces'].values():
         if face['asset_sha256'] != asset_sha256: continue
         for kind in face['local_assets']:
-            if kind in ('skin_reference_match_body_visibility','skin_reference_match_relation','hair_colour','hair_unification','skin_colour_body_visibility','skin_finish_body_visibility','body_skin_evenness_visibility','body_face_match_visibility','collarbone_visibility','eye_bag_ridge_visibility') or kind in TARGETS:continue # Independent support owners.
+            if kind in ('skin_reference_match_body_visibility','skin_reference_match_relation','hair_colour','hair_unification','hair_volume','skin_colour_body_visibility','skin_finish_body_visibility','body_skin_evenness_visibility','body_face_match_visibility','collarbone_visibility','eye_bag_ridge_visibility') or kind in TARGETS:continue # Independent support owners.
             if kind not in modules: raise ValueError('Unadapted derived source support')
             if only_kind is not None and kind != only_kind: continue
             if kind == 'eye_makeup_enhance_visibility':

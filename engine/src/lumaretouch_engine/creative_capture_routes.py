@@ -6,6 +6,8 @@ This is a static registration boundary, not dynamic plugin loading.
 """
 
 def guard_other(engine, name, request):
+    from .hair_volume_controller import guard_other as volume_guard
+    volume_guard(engine, name, request)
     from .portrait_crop_routes import guard_other as crop_guard
     crop_guard(engine, name, request)
     from .lens_blur_host import guard_other as lens_guard
@@ -39,6 +41,9 @@ def rejected(engine, name, request, error, boundary, emit):
 
     elif name == 'creative_selection':
         from .creative_selection_host import dispatch_rejected
+        dispatch_rejected(engine, request, error, started, emit)
+    elif name == 'hair_volume':
+        from .hair_volume_controller import dispatch_rejected
         dispatch_rejected(engine, request, error, started, emit)
     elif name == 'hair_unification':
         from .hair_unification_controller import dispatch_rejected

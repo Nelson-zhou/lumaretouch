@@ -14,6 +14,7 @@ from . import philtrum_state as PHILTRUM
 from . import eye_symmetry_state as EYE_SYMMETRY
 from . import brow_enhance_state as BROW_ENHANCE
 from . import hair_unification_state as HAIR_UNIFICATION
+from . import hair_volume_state as HAIR_VOLUME
 from . import skin_reference_match_state as SKIN_REFERENCE_MATCH
 from . import skin_reference_body_state as SKIN_REFERENCE_BODY
 from . import facial_sculpt_state as FACIAL_SCULPT
@@ -71,6 +72,7 @@ def specifications():
             LIP: (L.neutral(), L.check), DEFORM: (dict.fromkeys(D.KINDS, 0.0), D.check_amounts),
             ENHANCE: (check_enhance({}), check_enhance), WRINKLES: (W.check({}), W.check),
             HAIR.OPERATION: (HAIR.neutral(), HAIR.check),
+            HAIR_VOLUME.OPERATION_ID: (HAIR_VOLUME.neutral(), HAIR_VOLUME.check),
             HAIR_UNIFICATION.OP: (HAIR_UNIFICATION.neutral(), HAIR_UNIFICATION.check),
             SKIN_REFERENCE_MATCH.OP: (SKIN_REFERENCE_MATCH.neutral(), SKIN_REFERENCE_MATCH.check),
             SKIN_REFERENCE_BODY.OP: (SKIN_REFERENCE_BODY.neutral(), SKIN_REFERENCE_BODY.check),
@@ -92,7 +94,11 @@ def leaves(value, prefix=''):
 
 
 def defaults():
-    return {op: leaves(neutral) for op, (neutral, _) in specifications().items()}
+    result = {op: leaves(neutral) for op, (neutral, _) in specifications().items()}
+    # This independently versioned family has nested schema tags, not controls.
+    result[HAIR_VOLUME.OPERATION_ID] = {key: value for key, value in result[HAIR_VOLUME.OPERATION_ID].items()
+        if key in ('/crown/amount', '/sides/linked', '/sides/left', '/sides/right')}
+    return result
 
 
 def recipes(resolved):

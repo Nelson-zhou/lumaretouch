@@ -13,6 +13,9 @@ def preview(engine, state=None, *, body_bank=_MISSING, body_source=None, support
     document_id=engine._people_binding()['document_id']
     from . import hair_unification_project as UNIFY
     unification_inputs={**UNIFY.preview_kwargs(engine,state),**UNIFY.shared_preview(engine,state)}
+    from .hair_volume_project import shared_preview as volume_shared
+    unification_inputs.update(volume_shared(engine,state))
+    unification_inputs['hair_volume_assets']=support_bank
     from .skin_reference_match_inputs import preview as reference_inputs
     unification_inputs.update(reference_inputs(engine,state,support_bank))
     from .people_cross_owner import validate_owner

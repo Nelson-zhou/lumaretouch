@@ -1,0 +1,43 @@
+.hair-volume-panel {display:flex;flex-direction:column;gap:.55rem}
+.hair-volume-panel h4 {margin:.25rem 0}
+.hair-volume-panel p,.hair-volume-workspace p {font-size:.83rem;line-height:1.55;margin:.35rem 0;color:var(--muted,#abb4c4)}
+.hair-volume-toolbar {display:flex;gap:.5rem;flex-wrap:wrap;align-items:center}
+.hair-volume-toolbar label,.hair-volume-controls label {display:flex;gap:.5rem;align-items:center;flex-wrap:wrap}
+.hair-volume-toolbar input[type=range] {width:10rem}
+.hair-volume-backdrop {position:fixed;inset:0;z-index:1200;background:#000b;display:flex;align-items:center;justify-content:center;padding:1rem}
+.hair-volume-workspace {width:min(1400px,98vw);max-height:94vh;overflow:auto;background:var(--panel,#20252d);color:var(--text,#e8edf5);border:1px solid var(--border,#4d596a);border-radius:.7rem;box-shadow:0 1rem 5rem #0008;padding:1rem;display:flex;flex-direction:column;gap:.75rem}
+.hair-volume-workspace header {display:flex;align-items:flex-start;justify-content:space-between;gap:1rem}
+.hair-volume-workspace header strong {font-size:1.08rem}
+.hair-volume-controls {display:flex;align-items:center;gap:1rem;flex-wrap:wrap;border:1px solid var(--border,#4d596a)}
+.hair-volume-controls input[type=range] {width:min(32rem,60vw)}
+.hair-volume-confirm {display:flex;gap:.6rem;align-items:flex-start;font-size:.9rem;line-height:1.6}
+.hair-volume-confirm input {flex:none;margin-top:.4rem}
+.hair-volume-source-details {border:1px solid var(--border,#4d596a);padding:.7rem}
+.hair-volume-source-details summary {cursor:pointer;margin-bottom:.5rem}
+.hair-volume-samples {display:flex;flex-direction:column;gap:.55rem}
+.hair-volume-source-viewport {max-height:52vh;overflow:auto;border:1px solid var(--border,#4d596a);background:#11161b}
+.hair-volume-source {position:relative;overflow:hidden;cursor:crosshair}
+.hair-volume-source img,.hair-volume-source svg {position:absolute;inset:0;width:100%;height:100%;display:block;object-fit:fill;pointer-events:none;user-select:none}
+.hair-volume-pictures {display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:.8rem;align-items:start}
+.hair-volume-pictures figure {margin:0;min-width:0;background:#11161b;border:1px solid var(--border,#4d596a)}
+.hair-volume-pictures figcaption {font-size:.82rem;line-height:1.5;padding:.45rem}
+.hair-volume-pictures img {display:block;width:100%;height:auto;max-height:35vh;object-fit:contain;user-select:none}
+.hair-volume-workspace button:focus-visible,.hair-volume-workspace input:focus-visible,.hair-volume-workspace select:focus-visible,.hair-volume-workspace summary:focus-visible {outline:2px solid #85d9ef;outline-offset:3px}
+.hair-volume-workspace [role=alert] {color:#ffb6b6}
+@media(max-width:650px) {.hair-volume-backdrop{padding:.3rem}.hair-volume-workspace{padding:.6rem;max-height:98vh}.hair-volume-pictures{gap:.25rem}.hair-volume-pictures figcaption{font-size:.72rem;padding:.2rem}}
+
+.hair-volume-controls {display:grid;grid-template-columns:repeat(2,minmax(0,1fr));align-items:start}
+.hair-volume-controls fieldset {min-width:0;display:flex;flex-direction:column;gap:.6rem}
+.hair-volume-slider {display:flex;flex-direction:column!important;align-items:stretch!important}
+.hair-volume-slider input[type=range] {width:100%}
+.hair-volume-slider output {font-variant-numeric:tabular-nums}
+.hair-volume-support {display:flex;flex-direction:column;gap:.6rem}
+.hair-volume-support fieldset,.hair-volume-consent {border:1px solid var(--border,#4d596a);padding:.7rem}
+.hair-volume-bound-grid {display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:.5rem}
+.hair-volume-bound-grid label {display:flex;flex-direction:column;gap:.3rem;min-width:0}
+.hair-volume-bound-grid input {min-width:0;width:100%;box-sizing:border-box}
+.hair-volume-toolbar input[type=number] {width:7rem}
+.hair-volume-consent {display:flex;flex-direction:column;gap:.6rem;font-size:.9rem;line-height:1.55}
+.hair-volume-consent label {display:flex;gap:.6rem;align-items:flex-start}
+.hair-volume-consent input {margin-top:.4rem;flex:none}
+@media(max-width:750px){.hair-volume-controls{grid-template-columns:1fr}.hair-volume-bound-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}

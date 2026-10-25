@@ -57,6 +57,8 @@ def check(value):
     from .hair_colour_project import validate
     validate_records(value)
     validate(value)
+    from .hair_volume_project import validate as validate_volume
+    validate_volume(value)
     from .hair_unification_project import validate as validate_unification
     validate_unification(value)
     graph = S.check(value['people_graph'])
@@ -310,6 +312,8 @@ def save_project(engine, project):
         project[key] = base[key]
     from .hair_colour_project import validate
     validate(project)
+    from .hair_volume_project import validate as validate_volume
+    validate_volume(project)
     from .hair_unification_project import validate as validate_unification
     validate_unification(project)
 

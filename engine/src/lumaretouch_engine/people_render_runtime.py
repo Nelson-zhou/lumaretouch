@@ -70,10 +70,12 @@ def verify_analysis(face, analysis, shape):
 
 
 def prepare(state, asset_sha256, source, analyses, *, byte_budget, document_id=None, max_faces=32, recovery_assets=None, repaired=None,
-            creative_source=None, creative_repair_evidence=None, skin_reference_match_assets=None, skin_reference_match_source=None, hair_assets=None, hair_unification_assets=None, hair_unification_source=None, full_source_verified=False, hair_evidence=None, hair_source_path=None, force_hair_prompted=False, eye_light_assets=None, blush_makeup_assets=None, face_decoration_assets=None,facial_sculpt_assets=None,eye_makeup_enhance_assets=None, lipstick_assets=None,eyeliner_assets=None,eyelash_assets=None,brow_makeup_assets=None,iris_makeup_assets=None,skin_colour_body_assets=None,skin_finish_body_assets=None,body_skin_evenness_assets=None,body_face_match_assets=None,collarbone_assets=None,eye_bag_preserve_assets=None,body_bank=None):
+            creative_source=None, creative_repair_evidence=None, skin_reference_match_assets=None, skin_reference_match_source=None, hair_assets=None, hair_volume_assets=None, hair_unification_assets=None, hair_unification_source=None, full_source_verified=False, hair_evidence=None, hair_source_path=None, force_hair_prompted=False, eye_light_assets=None, blush_makeup_assets=None, face_decoration_assets=None,facial_sculpt_assets=None,eye_makeup_enhance_assets=None, lipstick_assets=None,eyeliner_assets=None,eyelash_assets=None,brow_makeup_assets=None,iris_makeup_assets=None,skin_colour_body_assets=None,skin_finish_body_assets=None,body_skin_evenness_assets=None,body_face_match_assets=None,collarbone_assets=None,eye_bag_preserve_assets=None,body_bank=None):
     state = S.check(state)
     from . import hair_unification_project as UNIFY
     UNIFY.validate_graph(state)
+    from .hair_volume_project import validate_owned_graph as validate_volume_graph
+    validate_volume_graph(state,hair_volume_assets or {})
     from .skin_reference_match_project import validate_graph as validate_reference_match
     validate_reference_match(state)
     from .skin_reference_body_project import validate_graph as validate_reference_body
@@ -222,7 +224,7 @@ def prepare(state, asset_sha256, source, analyses, *, byte_budget, document_id=N
                     from .eye_light_support import resolve as resolve_eye_support
                     resolve_eye_support(state,eye_light_assets or {},entry['face_ref'])
                     continue
-                if stage in ('hair_colour','hair_unification'):continue # Dedicated source-owned consumer, not recovery.
+                if stage in ('hair_colour','hair_unification','hair_volume'):continue # Dedicated source-owned consumer, not recovery.
                 if stage not in E.STAGES:
                     raise ValueError('Source-owned local support requires an explicit consumer: ' + stage)
                 recovery = (recovery_assets or {}).get((key,stage))
@@ -494,6 +496,13 @@ def prepare(state, asset_sha256, source, analyses, *, byte_budget, document_id=N
         except (ValueError, RuntimeError, OSError, MemoryError) as error:
             failures.append({'face_instance_id':key,'reason':str(error)})
     if failures: raise PeoplePreparationRefused(failures)
+    from .hair_volume_project import recipes as volume_recipes
+    from .hair_volume_geometry import append_fields as append_volume_fields
+    fields, volume_facts = append_volume_fields(state,asset_sha256,fields,(h,w),
+        recipes=volume_recipes(state,asset_sha256),assets=hair_volume_assets or {},
+        evidence=hair_evidence,source_frame=creative_source or (hair_evidence or {}).get('source'),
+        byte_budget=byte_budget-sum(field.resident_bytes() for field in fields))
+    for key,fact in volume_facts.items():facts.setdefault(key,{})['hair_volume']=fact
     geometry = combine(fields, (h,w), byte_budget=byte_budget)
     prepared=PreparedPeople(plan, geometry, tuple(effects), facts, owned_recovery,tuple(fields))
     from .skin_reference_match_runtime import requests as reference_requests, prepare_bank as prepare_reference_match, _analysis_bytes as reference_analysis_bytes

@@ -152,6 +152,8 @@ def _snapshot_state(snapshot, document_id):
     A.FACIAL_SCULPT.validate_graph(state)
     validate_eye_makeup(state)
     supports = check_store(snapshot.get('support_assets', {}))
+    from .hair_volume_project import validate_owned_graph as validate_volume
+    validate_volume(state, supports)
     hair = check_hair_store(snapshot.get('hair_colour_assets', {}))
     from .hair_unification_assets import verify_graph as verify_unification
     verify_unification(state, snapshot.get('hair_unification_assets', {}), hair)

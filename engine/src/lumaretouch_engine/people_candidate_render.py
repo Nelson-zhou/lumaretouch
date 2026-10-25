@@ -12,6 +12,8 @@ def validate(engine,row,candidate,*,decoration_authority=None):
     require_eye_makeup_enhance_transition(engine,row_snapshot(engine,row),candidate,row=row)
     from .hair_unification_project import require_transition as require_hair_unification_transition
     require_hair_unification_transition(engine,row_snapshot(engine,row),candidate,row=row)
+    from .hair_volume_project import require_transition as require_hair_volume_transition
+    require_hair_volume_transition(engine,row_snapshot(engine,row),candidate,row=row)
     from .skin_reference_match_project import require_transition as require_reference_transition
     require_reference_transition(engine,row_snapshot(engine,row),candidate,row=row)
     from .skin_reference_body_project import require_transition as require_body_reference_transition

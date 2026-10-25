@@ -239,6 +239,12 @@ cp "$here/../core/portrait_crop/"{lib.rs,tests_unrun.rs,portrait_crop.h,Cargo.to
 cp "$here/../docs/portrait-crop/"{CORE.md,RESEARCH.md,HOST.md} "$stage/lumaretouch_engine/third_party/portrait_crop/"
 
 # Original source-domain hair colour and measured-highlight operator, no weights.
+# Independent reviewed crown/side geometry, common sampler, no new model.
+bash "$here/../core/hair_volume/build_hair_volume.sh" "$stage/lumaretouch_engine/bin/liblrt_hair_volume.so"
+mkdir -p "$stage/lumaretouch_engine/third_party/hair_volume"
+cp "$here/../core/hair_volume/"{lib.rs,tests.rs,hair_volume.h,Cargo.toml,build_hair_volume.sh} "$here/../LICENSE" "$stage/lumaretouch_engine/third_party/hair_volume/"
+cp "$here/../docs/hair-volume/"{CORE.md,SUPPORT.md,RESEARCH.md} "$stage/lumaretouch_engine/third_party/hair_volume/"
+
 # Independent manually referenced hair unification. Source only, build UNRUN.
 bash "$here/../core/hair_unification/build_hair_unification.sh" "$stage/lumaretouch_engine/bin/liblrt_hair_unification.so"
 mkdir -p "$stage/lumaretouch_engine/third_party/hair_unification"

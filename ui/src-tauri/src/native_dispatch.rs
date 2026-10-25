@@ -33,7 +33,7 @@ impl AppState {
 
     /// Owned receipts must never dispatch into a replacement engine epoch.
     pub(crate) fn send_to_engine_at_epoch(&self, cmd: Value, expected_epoch: [u8; 16]) -> Result<(), String> {
-        if !matches!(cmd["cmd"].as_str(), Some("ingest_session" | "workflow_owner" | "creative_selection" | "hair_unification")) {
+        if !matches!(cmd["cmd"].as_str(), Some("ingest_session" | "workflow_owner" | "creative_selection" | "hair_unification" | "hair_volume")) {
             return Err("Epoch-bound dispatch is restricted to owned ingestion protocols".into());
         }
         self.send_to_engine_bound(cmd, Some(expected_epoch))
@@ -68,6 +68,12 @@ impl AppState {
             let handle = guard.as_ref().ok_or("引擎未启动")?;
             require_dispatch_epoch(handle, expected_epoch)?;
             return crate::hair_unification_api::enqueue(handle, cmd);
+        }
+        if crate::hair_volume_api::read_only(&cmd) {
+            let guard = self.engine.lock().map_err(|_| "引擎锁不可用")?;
+            let handle = guard.as_ref().ok_or("引擎未启动")?;
+            require_dispatch_epoch(handle, expected_epoch)?;
+            return crate::hair_volume_api::enqueue(handle, cmd);
         }
         if crate::batch_api::read_only(&cmd) {
             let guard=self.engine.lock().map_err(|_|"引擎锁中毒".to_string())?;
@@ -120,6 +126,7 @@ impl AppState {
             && (name != "head_size" || cmd["action"] == "edit")
             && (name != "body_slim" || cmd["action"] == "edit")
             && (name != "arm_shape" || cmd["action"] == "execute")
+            && (name != "hair_volume" || matches!(cmd["action"].as_str(), Some("commit" | "clear")))
             && (name != "hair_colour" || matches!(cmd["action"].as_str(), Some("commit_support" | "commit_recovery" | "clear_recovery" | "clear_support")));
         let mut inspection=self.inspection.lock().map_err(|_| "inspection lock poisoned".to_string())?;
         if name!="hello" && name!="inspection_snapshot"{inspection.invalidate();}
@@ -147,6 +154,7 @@ impl AppState {
             "people" => crate::people_api::enqueue(handle, cmd)?,
             "hair_colour" => crate::hair_colour_api::enqueue(handle, cmd)?,
             "hair_unification" => crate::hair_unification_api::enqueue(handle, cmd)?,
+            "hair_volume" => crate::hair_volume_api::enqueue(handle, cmd)?,
             "brow_shape" => crate::brow_shape_api::enqueue(handle, cmd)?,
             "nose_shape" => crate::nose_shape_api::enqueue(handle, cmd)?,
             "eye_shape" => crate::eye_shape_api::enqueue(handle, cmd)?,

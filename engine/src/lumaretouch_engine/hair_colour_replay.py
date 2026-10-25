@@ -9,6 +9,7 @@ from . import hair_colour_state as H, hair_colour_assets as ASSETS, hair_colour_
 from . import people_state as P, people_algorithms as A, people_resolver as R
 from . import people_retained_analysis as RA, people_binding as B
 from . import hair_unification_state as U, hair_unification_assets as UA
+from . import hair_volume_state as V, hair_volume_support as VA, hair_volume_project as VP
 
 
 def analyses(engine, state, binding):
@@ -20,6 +21,9 @@ def analyses(engine, state, binding):
     """
     state = P.check(state); binding = ASSETS.source(binding)
     if H.OPERATION not in A.specifications(): return None  # Not integrated yet.
+    if (any(row['operation_id'] == V.OP for row in state['overrides'])
+            or any(VA.KIND in face['local_assets'] for face in state['faces'].values())):
+        VP.validate_graph(state)  # Volume has no group/person/batch admission.
     defaults = A.defaults(); specs = A.specifications(); result = {}; has_hair = False
     measured = FIELDS.for_source(engine.__dict__.get('_hair_colour_evidence', {}), binding)
     if measured is None: return None
@@ -29,15 +33,27 @@ def analyses(engine, state, binding):
         resolved = R.resolve(state, face['face_instance_id'], defaults)
         if resolved['conflicts']: return None
         recipes = A.recipes(resolved)
-        if any(value != specs[operation][0] for operation, value in recipes.items() if operation not in (H.OPERATION, U.OP)): return None
-        if any(kind not in (ASSETS.KIND, UA.KIND) for kind in face['local_assets']): return None
+        if any(value != specs[operation][0] for operation, value in recipes.items()
+               if operation not in (H.OPERATION, U.OP) and operation != V.OP): return None
+        if any(kind not in (ASSETS.KIND, UA.KIND, VA.KIND) for kind in face['local_assets']): return None
+        volume = recipes.get(V.OP, V.neutral())
+        if VA.KIND in face['local_assets']:
+            support = VA.resolve(state, engine.__dict__.get('_people_support', {}), P.face_ref(face))
+            if support['source'] != binding:
+                raise ValueError('Retained hair-volume replay belongs to another exact source')
+            VA.verify_evidence(support, measured)
+            VA.support_vector(support, volume)
+        elif V.active(volume):
+            raise ValueError('Retained hair-volume replay lacks its reviewed per-region support')
         if UA.KIND in face['local_assets']:
             reference = UA.resolve(state, engine.__dict__.get('_hair_unification_assets', {}), P.face_ref(face), engine.__dict__.get('_hair_colour_assets', {}))
             if reference['semantic_evidence_sha256'] != semantic_id:
                 raise ValueError('Retained hair-unification replay evidence differs from reviewed samples')
         if U.active(recipes[U.OP]) and UA.KIND not in face['local_assets']: return None
         recipe = recipes[H.OPERATION]
-        wanted = U.active(recipes[U.OP]) or UA.KIND in face['local_assets'] or H.active(recipe) or ASSETS.KIND in face['local_assets'] or recipe != H.neutral()
+        wanted = (V.active(volume) or VA.KIND in face['local_assets'] or U.active(recipes[U.OP])
+                  or UA.KIND in face['local_assets'] or H.active(recipe)
+                  or ASSETS.KIND in face['local_assets'] or recipe != H.neutral())
         if not wanted: continue
         has_hair = True; ref = P.face_ref(face)
         ASSETS.verify_face(state, ref, binding)
