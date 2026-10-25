@@ -4,7 +4,8 @@ import assert from 'node:assert/strict';
 import {createHash} from 'node:crypto';
 import {deflateSync} from 'node:zlib';
 import {createLensBlurWorkflow} from './workflow.ts';
-import {LENS_OPERATION, LENS_PROTOCOL, lensReviewKey, type LensBlurPort, type LensContext, type LensPng, type LensReview, type LensWriteCommand, type LensReceipt} from './model.ts';
+import {LENS_OPERATION, LENS_COHORT_OPERATION, LENS_COHORT_MATH, LENS_PROTOCOL, lensReviewKey, recipeForLensRenderer,
+  type LensBlurPort, type LensCapability, type LensContext, type LensPng, type LensReview, type LensPreviewCommand, type LensWriteCommand, type LensReceipt} from './model.ts';
 const sha = (bytes: Uint8Array) => createHash('sha256').update(bytes).digest('hex');
 function crc(bytes: Uint8Array): number {
   let value = 0xffffffff;
@@ -26,6 +27,14 @@ function context(): LensContext {
     raster: {format: 'u16-le', width: 2, height: 2, sha256: sha(raster), base64: raster.toString('base64')},
     provenance: {kind: 'manual', method: 'user_supplied_depth'}, subject_focus: null}};
 }
+function manualContext(): LensContext {
+  const c = context(), raster = Buffer.from([0,128,0,128,0,128,0,128]);
+  c.depth!.provenance = {kind: 'manual', method: 'user_defined_plane', depth_value: .5, acknowledgement_id: 'explicit-plane'};
+  c.depth!.raster = {format: 'u16-le', width: 2, height: 2, sha256: sha(raster), base64: raster.toString('base64')};
+  return c;
+}
+const capability = (renderers: LensCapability['renderers'] = ['direct-v1']): LensCapability => ({version: 2, operation_id: LENS_OPERATION,
+  status: 'available', kernels: ['circular_disk'], renderers, reason: ''});
 function identity(command: LensWriteCommand) {return {version: LENS_PROTOCOL, action: command.action, request_id: command.request_id, session_id: command.session_id, owner: command.owner, token: command.token, message: ''};}
 function applied(command: LensWriteCommand): LensReceipt {
   if (command.action !== 'apply') throw Error('wrong fixture');
@@ -33,19 +42,19 @@ function applied(command: LensWriteCommand): LensReceipt {
     before_sha256: command.before_sha256, after_sha256: command.after_sha256, return_mode: 'new_image', copied_original_document_id: command.owner.document_id,
     result_document_id: 'new-copy', result_revision: '1', result_source_sha256: command.result_source_sha256, no_change: false};
 }
-async function setup(options: NonNullable<Parameters<typeof createLensBlurWorkflow>[1]> = {}) {
+async function setup(options: NonNullable<Parameters<typeof createLensBlurWorkflow>[1]> = {}, sourceContext = context(), caps = capability()) {
   let serial = 0, receipt: unknown = null;
-  const sent: LensWriteCommand[] = [], queried: LensWriteCommand[] = [];
+  const sent: LensWriteCommand[] = [], queried: LensWriteCommand[] = [], previews: LensPreviewCommand[] = [];
   const port: LensBlurPort = {protocol: LENS_PROTOCOL,
-    async preview(command) {return {version: LENS_PROTOCOL, request_id: command.request_id, session_id: command.session_id, token: 'review', owner: command.owner,
+    async preview(command) {previews.push(command); return {version: LENS_PROTOCOL, request_id: command.request_id, session_id: command.session_id, token: 'review', owner: command.owner,
       recipe: command.recipe, recipe_sha256: '2'.repeat(64), before: png(), after: png(80), notes: [], result_source_sha256: '3'.repeat(64)} satisfies LensReview;},
     async submit(command) {sent.push(command); return receipt ?? {...identity(command), phase: 'pending', outcome_unknown: true};},
     async receipt(command) {queried.push(command); return receipt;}};
   const workflow = createLensBlurWorkflow(port, {requestId: () => `request-${++serial}`, ...options});
-  workflow.setCapability({version: 1, operation_id: LENS_OPERATION, status: 'available', kernels: ['circular_disk'], reason: ''});
-  await workflow.setContext(context());
-  const source = context().source_image; workflow.sourcePresented(source.sha256, source.width, source.height, true);
-  return {workflow, port, sent, queried, setReceipt(value: unknown) {receipt = value;}};
+  workflow.setCapability(caps);
+  await workflow.setContext(sourceContext);
+  const source = sourceContext.source_image; workflow.sourcePresented(source.sha256, source.width, source.height, true);
+  return {workflow, port, sent, queried, previews, setReceipt(value: unknown) {receipt = value;}};
 }
 function showBoth(w: ReturnType<typeof createLensBlurWorkflow>) {
   const r = w.snapshot().review!;
@@ -109,9 +118,82 @@ test('failed editor refresh preserves successful save and retries only the origi
 test('disabling module preserves recipe and neutral state but invalidates the review', async () => {
   const {workflow: w, sent} = await setup();
   w.edit({...w.snapshot().recipe!, max_radius_px: 12}); await w.preview(); showBoth(w); w.acknowledge(true);
-  w.setCapability({version: 1, operation_id: LENS_OPERATION, status: 'unavailable', kernels: [], reason: 'missing native module'});
+  w.setCapability({version: 2, operation_id: LENS_OPERATION, status: 'unavailable', kernels: [], renderers: [], reason: 'missing native module'});
   assert.equal(w.snapshot().recipe?.max_radius_px, 12); assert.equal(w.snapshot().review, null);
   await w.apply(); assert.equal(sent.length, 0);
+});
+test('an unavailable capability with an empty reason still blocks all rendering', async () => {
+  const {workflow: w, previews} = await setup();
+  w.setCapability({version: 2, operation_id: LENS_OPERATION, status: 'unavailable', kernels: [], renderers: [], reason: ''});
+  assert.equal(w.renderingAvailable(), false); assert.notEqual(w.rendererBlockReason(), '');
+  await w.preview(); assert.equal(previews.length, 0);
+});
+test('new manual session prefers v1; explicit renderer selection preserves controls and revokes old review', async () => {
+  const {workflow: w, previews, sent} = await setup({}, manualContext(), capability(['cohort-fft-v2', 'direct-v1']));
+  assert.equal(w.snapshot().recipe?.version, 1);
+  w.edit({...w.snapshot().recipe!, max_radius_px: 12, rotation_radians: .25});
+  w.addStroke({id: 'paint', mode: 'blur', amount: .8, flow: .5, feather: .6, radius: .02, points: [{x: .4, y: .6}]});
+  const v1 = structuredClone(w.snapshot().recipe!);
+  const converted = recipeForLensRenderer(v1, 'cohort-fft-v2');
+  assert.ok(converted); if (!converted) throw Error('missing v2 fixture');
+  assert.equal(w.edit(converted), false); // Ordinary edits cannot act as a silent version migration.
+  await w.preview(); showBoth(w); w.acknowledge(true);
+  assert.equal(w.selectRenderer('cohort-fft-v2'), true);
+  assert.equal(w.snapshot().recipe?.version, 2); assert.equal(w.snapshot().recipe?.operation_id, LENS_COHORT_OPERATION);
+  assert.equal(w.snapshot().review, null); assert.equal(w.snapshot().acknowledged, false); assert.equal(w.snapshot().renderer_acknowledged, false);
+  assert.deepEqual(w.snapshot().recipe?.refinements, v1.refinements); assert.equal(w.snapshot().recipe?.max_radius_px, v1.max_radius_px);
+  await w.preview(); assert.equal(previews.length, 1); await w.apply(); assert.equal(sent.length, 0);
+  w.acknowledgeRenderer(true); await w.preview(); assert.equal(previews.length, 2);
+  const r = w.snapshot().review!; assert.equal(r.version, 3);
+  assert.equal(r.recipe.version, 2); if (r.recipe.version !== 2) throw Error('wrong recipe fixture');
+  assert.equal(r.recipe.math_identity, LENS_COHORT_MATH);
+  showBoth(w); w.acknowledge(true); assert.equal(w.snapshot().acknowledged, true);
+  w.acknowledgeRenderer(false); assert.equal(w.snapshot().review, null); assert.equal(w.snapshot().acknowledged, false);
+  assert.equal(w.renderingAvailable(), false);
+  assert.equal(w.selectRenderer('direct-v1'), true); assert.deepEqual(w.snapshot().recipe, v1);
+});
+test('cohort-only new session still requires explicit v2 math acknowledgement and never falls back', async () => {
+  const {workflow: w, previews} = await setup({}, manualContext(), capability(['cohort-fft-v2']));
+  assert.equal(w.snapshot().recipe?.version, 2); assert.equal(w.snapshot().renderer_acknowledged, false);
+  await w.preview(); assert.equal(previews.length, 0);
+  w.acknowledgeRenderer(true); await w.preview(); assert.equal(previews.length, 1);
+  const retained = structuredClone(w.snapshot().recipe!);
+  w.setCapability(capability(['direct-v1']));
+  assert.deepEqual(w.snapshot().recipe, retained); assert.equal(w.snapshot().review, null);
+  assert.equal(w.snapshot().renderer_acknowledged, false); assert.equal(w.renderingAvailable(), false);
+  await w.preview(); assert.equal(previews.length, 1);
+  w.setCapability(capability(['direct-v1', 'cohort-fft-v2']));
+  assert.deepEqual(w.snapshot().recipe, retained); await w.preview(); assert.equal(previews.length, 1);
+  w.acknowledgeRenderer(true); await w.preview(); assert.equal(previews.length, 2);
+});
+test('capability changes do not reinterpret an existing v1 recipe as v2', async () => {
+  const {workflow: w, previews} = await setup({}, manualContext(), capability(['direct-v1']));
+  const v1 = structuredClone(w.snapshot().recipe!);
+  w.setCapability(capability(['cohort-fft-v2']));
+  assert.deepEqual(w.snapshot().recipe, v1); assert.equal(w.renderingAvailable(), false);
+  await w.preview(); assert.equal(previews.length, 0);
+  assert.equal(w.selectRenderer('cohort-fft-v2'), true); assert.equal(w.snapshot().recipe?.version, 2);
+});
+test('v2 selection refuses real supplied-depth provenance instead of relabeling it as a manual plane', async () => {
+  const {workflow: w, previews} = await setup({}, context(), capability(['direct-v1', 'cohort-fft-v2']));
+  const saved = structuredClone(w.snapshot().recipe!);
+  assert.equal(w.selectRenderer('cohort-fft-v2'), false); assert.deepEqual(w.snapshot().recipe, saved);
+  const {workflow: onlyV2, previews: onlyPreviews} = await setup({}, context(), capability(['cohort-fft-v2']));
+  assert.equal(onlyV2.renderingAvailable(), false); await onlyV2.preview(); assert.equal(onlyPreviews.length, 0);
+  await w.preview(); assert.equal(previews.length, 1);
+});
+test('unresolved v2 write retains original identity across attempted renderer changes', async () => {
+  const {workflow: w, previews, sent, queried, setReceipt} = await setup({}, manualContext(), capability(['direct-v1', 'cohort-fft-v2']));
+  assert.equal(w.selectRenderer('cohort-fft-v2'), true); w.acknowledgeRenderer(true);
+  await w.preview(); showBoth(w); w.acknowledge(true); await w.apply();
+  assert.equal(sent.length, 1); assert.equal(w.snapshot().phase, 'pending');
+  const original = structuredClone(w.snapshot().request), recipe = structuredClone(w.snapshot().recipe);
+  assert.equal(w.selectRenderer('direct-v1'), false); w.acknowledgeRenderer(false);
+  w.setCapability(capability(['direct-v1']));
+  assert.deepEqual(w.snapshot().request, original); assert.deepEqual(w.snapshot().recipe, recipe);
+  await w.preview(); await w.apply(); await w.cancel(); assert.equal(previews.length, 1); assert.equal(sent.length, 1);
+  setReceipt(applied(sent[0])); await w.check(); assert.equal(queried.length, 1);
+  assert.deepEqual(queried[0], original); assert.equal(w.snapshot().phase, 'applied');
 });
 test('cancel requires its matching terminal receipt, not a successful transport return', async () => {
   const {workflow: w, sent, setReceipt} = await setup();
@@ -137,4 +219,12 @@ test('manual plane requires the explicit preparation method and is not AI or mea
   assert.equal(w.snapshot().depth?.asset.provenance.kind, 'manual');
   assert.equal(w.snapshot().depth?.asset.subject_focus, null);
   assert.equal(w.snapshot().depth?.values.every(value => value === 32768), true);
+});
+
+test('session cancel does not depend on the expiring preview-image token', async () => {
+  const {workflow: w, sent} = await setup();
+  await w.preview(); assert.ok(w.snapshot().review);
+  await w.cancel(); assert.equal(sent.length, 1);
+  assert.equal(sent[0].action, 'cancel'); assert.equal(sent[0].token, null);
+  assert.equal(sent[0].session_id, context().session_id);
 });

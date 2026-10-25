@@ -25,7 +25,7 @@ import uuid
 import zlib
 
 OPERATION = 'lnx.lens_blur.v1'
-WIRE_PROTOCOL = 2  # Review/copy envelopes; saved numeric recipe/depth stay v1.
+WIRE_PROTOCOL = 3  # Renderer negotiation; version-1 numeric recipes/depth remain explicit.
 ORIENTATION = 'exif_normalized_once'
 MAPPING = 'normalized_full_frame_pixel_centres'
 CONVENTION = 'near-zero-far-one'
@@ -434,8 +434,18 @@ def _recipe(value, source, depth, raster_bytes):
     from .lens_aperture_native import normalize_settings
     required = ('version', 'operation_id', 'source', 'depth', 'aperture', 'max_radius_px', 'focus',
                 'depth_falloff', 'occlusion_tolerance', 'rotation_radians', 'refinements')
-    if (not _exact(value, required) or type(value['version']) is not int or value['version'] != 1
-            or value['operation_id'] != OPERATION or value['source'] != source.owner['source']):
+    version = value.get('version') if type(value) is dict else None
+    if type(version) is not int or version not in (1, 2):
+        raise ValueError('Unknown lens numeric recipe; no automatic migration')
+    if version == 2:
+        required += ('math_identity',)
+        if (value.get('operation_id') != 'lnx.lens_blur.cohort.v2'
+                or value.get('math_identity') != 'cohort-fft-f64-v2-00020001'
+                or depth['provenance'].get('method') != 'user_defined_plane'):
+            raise ValueError('Cohort renderer needs its explicit math identity and acknowledged manual plane')
+    elif value.get('operation_id') != OPERATION:
+        raise ValueError('Original lens recipe operation changed')
+    if not _exact(value, required) or value['source'] != source.owner['source']:
         raise ValueError('Lens recipe does not identify this source/operation')
     expected = {'token': depth['token'], 'sha256': depth['raster']['sha256'], 'provenance': depth['provenance']}
     if value['depth'] != expected:
@@ -565,6 +575,9 @@ def prepare(command, source, depth, *, budget, cancelled=lambda: False):
         raise ValueError('Lens preview identity changed during capture')
     depth_asset = _require_depth(depth, source, command['session_id'])
     settings = _recipe(command['recipe'], source, depth_asset, depth.raster_bytes)
+    if command['recipe']['version'] == 2:
+        from .lens_blur_cohort_stage import prepare_validated
+        return prepare_validated(command, source, depth, settings, budget=budget, cancelled=cancelled)
     from . import lens_aperture_native as aperture
     from . import lens_blur_refinement as refinement
     s = source.owner['source']

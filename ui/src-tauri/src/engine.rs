@@ -460,7 +460,7 @@ fn handle_event(state: &Arc<AppState>, line: &str,inspection_epoch:[u8;16]) {
             crate::torso_length_api::ready(inspection_epoch, v["torso_length_protocol"].as_u64() == Some(1));
             crate::waist_length_api::ready(inspection_epoch, v["waist_length_protocol"].as_u64() == Some(1));
             crate::head_size_api::ready(inspection_epoch, v["head_size_protocol"].as_u64() == Some(1));
-            crate::lens_blur_api::ready(inspection_epoch, if v["lens_blur_protocol"].as_u64()==Some(2) { &v["lens_blur_capability"] } else { &Value::Null });
+            crate::lens_blur_api::ready(inspection_epoch, if v["lens_blur_protocol"].as_u64()==Some(3) { &v["lens_blur_capability"] } else { &Value::Null });
             crate::expression_replacement_api::ready(inspection_epoch, v["expression_replacement_protocol"].as_u64()==Some(1) && v["expression_replacement_operation_id"]=="lnx.expression_replacement.v1" && v["expression_replacement_available"]==true);
             crate::body_slim_api::ready(inspection_epoch, v["body_slim_protocol"].as_u64() == Some(1));
             crate::neck_shape_api::ready(inspection_epoch, v["neck_shape_protocol"].as_u64() == Some(1));

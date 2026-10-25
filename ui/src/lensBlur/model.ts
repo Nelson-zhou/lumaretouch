@@ -1,7 +1,15 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-/** Source-only v2 new-copy wire contract; recipe/depth formats remain v1. */
-export const LENS_PROTOCOL = 2 as const;
+/** Wire v3, exact capability v2, independently discriminated recipes; depth stays v1. */
+export const LENS_PROTOCOL = 3 as const;
 export const LENS_OPERATION = 'lnx.lens_blur.v1' as const;
+export const LENS_COHORT_OPERATION = 'lnx.lens_blur.cohort.v2' as const;
+export const LENS_COHORT_MATH = 'cohort-fft-f64-v2-00020001' as const;
+export const LENS_RENDERERS = ['direct-v1', 'cohort-fft-v2'] as const;
+export type LensRenderer = typeof LENS_RENDERERS[number];
+export const LENS_RENDERER_LABELS: Record<LensRenderer, string> = {
+  'direct-v1': '直接渲染 v1（保留原配方数学）',
+  'cohort-fft-v2': '分组 FFT v2（新的数学版本）',
+};
 export const LENS_LIMITS = {imageEdge: 1280, imageBytes: 4 * 1024 * 1024, depthEdge: 1024,
   strokes: 64, points: 8192, pointsPerStroke: 2048, requestBytes: 512 * 1024} as const;
 export const LENS_APERTURES = ['circular_disk', 'rim_weighted_disk', 'regular_pentagon', 'regular_octagon', 'cat_eye_intersection'] as const;
@@ -11,8 +19,8 @@ export const LENS_APERTURE_LABELS: Record<LensAperture, string> = {
   regular_octagon: '正八边形', cat_eye_intersection: '猫眼交叠',
 };
 export interface LensCapability {
-  version: 1; operation_id: typeof LENS_OPERATION; status: 'available' | 'unavailable';
-  kernels: LensAperture[]; reason: string;
+  version: 2; operation_id: typeof LENS_OPERATION; status: 'available' | 'unavailable';
+  kernels: LensAperture[]; renderers: LensRenderer[]; reason: string;
 }
 export interface LensSource {sha256: string; width: number; height: number; orientation: 'exif_normalized_once'}
 export interface LensOwner {document_id: string; document_epoch: string; document_revision: string; source: LensSource}
@@ -35,38 +43,44 @@ export interface LensStroke {
   radius: number; points: LensPoint[];
 }
 export interface LensFocus {mode: 'interval' | 'point' | 'subject'; near: number; far: number; point: LensPoint | null}
-export interface LensRecipe {
-  version: 1; operation_id: typeof LENS_OPERATION; source: LensSource;
+export interface LensRecipeFields {
+  source: LensSource;
   depth: {token: string; sha256: string; provenance: LensDepthProvenance};
   aperture: LensAperture; max_radius_px: number; focus: LensFocus;
   depth_falloff: number; occlusion_tolerance: number; rotation_radians: number;
   refinements: LensStroke[];
 }
+/** V1's exact keys and numeric controls are preserved; no renderer/math field is appended. */
+export interface LensRecipeV1 extends LensRecipeFields {version: 1; operation_id: typeof LENS_OPERATION}
+export interface LensRecipeV2 extends LensRecipeFields {
+  version: 2; operation_id: typeof LENS_COHORT_OPERATION; math_identity: typeof LENS_COHORT_MATH;
+}
+export type LensRecipe = LensRecipeV1 | LensRecipeV2;
 export interface LensContext {
   session_id: string; owner: LensOwner; source_image: LensPng;
   depth: LensDepthAsset | null;
   depth_status: 'ready' | 'pending' | 'missing-model' | 'manual-required' | 'failed';
   message: string;
 }
-export interface LensPreviewCommand {version: 2; action: 'preview'; request_id: string; session_id: string; owner: LensOwner; recipe: LensRecipe}
+export interface LensPreviewCommand {version: typeof LENS_PROTOCOL; action: 'preview'; request_id: string; session_id: string; owner: LensOwner; recipe: LensRecipe}
 export interface LensManualPlaneCommand {
-  version: 2; action: 'prepare_manual_plane'; request_id: string; session_id: string; owner: LensOwner;
+  version: typeof LENS_PROTOCOL; action: 'prepare_manual_plane'; request_id: string; session_id: string; owner: LensOwner;
   depth_value: number; acknowledged_manual: true;
 }
 export interface LensReview {
-  version: 2; request_id: string; session_id: string; token: string; owner: LensOwner;
+  version: typeof LENS_PROTOCOL; request_id: string; session_id: string; token: string; owner: LensOwner;
   recipe: LensRecipe; recipe_sha256: string; before: LensPng; after: LensPng; notes: string[];
   /** Canonical full-resolution output asset identity, NOT the display PNG hash. */
   result_source_sha256: string;
 }
 export interface LensApplyCommand {
-  version: 2; action: 'apply'; request_id: string; session_id: string; owner: LensOwner;
+  version: typeof LENS_PROTOCOL; action: 'apply'; request_id: string; session_id: string; owner: LensOwner;
   token: string; recipe_sha256: string; before_sha256: string; after_sha256: string; reviewed: true;
   return_mode: 'new_image'; result_source_sha256: string;
 }
-export interface LensCancelCommand {version: 2; action: 'cancel'; request_id: string; session_id: string; owner: LensOwner; token: string | null}
+export interface LensCancelCommand {version: typeof LENS_PROTOCOL; action: 'cancel'; request_id: string; session_id: string; owner: LensOwner; token: string | null}
 export type LensWriteCommand = LensApplyCommand | LensCancelCommand;
-interface ReceiptIdentity {version: 2; request_id: string; session_id: string; action: 'apply' | 'cancel'; owner: LensOwner; token: string | null}
+interface ReceiptIdentity {version: typeof LENS_PROTOCOL; request_id: string; session_id: string; action: 'apply' | 'cancel'; owner: LensOwner; token: string | null}
 export type LensReceipt = ReceiptIdentity & (
   | {phase: 'pending' | 'unknown'; outcome_unknown: true; message: string}
   | {phase: 'done'; outcome_unknown: false; outcome: 'rejected' | 'cancelled'; message: string}
@@ -95,12 +109,20 @@ const integer = (v: unknown, min: number, max: number): v is number => typeof v 
 export const unit = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v) && v >= 0 && v <= 1;
 export const revision = (v: unknown): v is string => typeof v === 'string' && /^(0|[1-9][0-9]{0,19})$/.test(v) && BigInt(v) <= 18446744073709551615n;
 export function validLensCapability(v: unknown): v is LensCapability {
-  return object(v) && exact(v, ['version', 'operation_id', 'status', 'kernels', 'reason'])
-    && v.version === 1 && v.operation_id === LENS_OPERATION && ['available', 'unavailable'].includes(v.status as string)
+  return object(v) && exact(v, ['version', 'operation_id', 'status', 'kernels', 'renderers', 'reason'])
+    && v.version === 2 && v.operation_id === LENS_OPERATION && ['available', 'unavailable'].includes(v.status as string)
     && Array.isArray(v.kernels) && v.kernels.length <= LENS_APERTURES.length && new Set(v.kernels).size === v.kernels.length
     && v.kernels.every(k => LENS_APERTURES.includes(k as LensAperture)) && text(v.reason)
-    && (v.status === 'available' ? v.kernels.length > 0 : v.kernels.length === 0);
+    && Array.isArray(v.renderers) && v.renderers.length <= LENS_RENDERERS.length && new Set(v.renderers).size === v.renderers.length
+    && v.renderers.every(r => LENS_RENDERERS.includes(r as LensRenderer))
+    && (v.status === 'available' ? v.kernels.length > 0 && v.renderers.length > 0 : v.kernels.length === 0 && v.renderers.length === 0);
 }
+export const lensRecipeRenderer = (recipe: LensRecipe): LensRenderer => recipe.version === 1 ? 'direct-v1' : 'cohort-fft-v2';
+export const lensRendererSupportsDepth = (renderer: LensRenderer, provenance: LensDepthProvenance): boolean => renderer === 'direct-v1'
+  || renderer === 'cohort-fft-v2' && provenance.kind === 'manual' && provenance.method === 'user_defined_plane';
+/** A default for a NEW session only. Never apply this to a retained/stored recipe after capability changes. */
+export const initialLensRenderer = (capability: LensCapability): LensRenderer | null => capability.status !== 'available' ? null
+  : capability.renderers.includes('direct-v1') ? 'direct-v1' : capability.renderers.includes('cohort-fft-v2') ? 'cohort-fft-v2' : null;
 export function validLensSource(v: unknown): v is LensSource {
   return object(v) && exact(v, ['sha256', 'width', 'height', 'orientation']) && hash(v.sha256)
     && integer(v.width, 2, 1000000) && integer(v.height, 2, 1000000) && v.orientation === 'exif_normalized_once';
@@ -166,10 +188,14 @@ export function validLensStroke(v: unknown): v is LensStroke {
     && Array.isArray(v.points) && v.points.length > 0 && v.points.length <= LENS_LIMITS.pointsPerStroke && v.points.every(validLensPoint);
 }
 export function validLensRecipe(v: unknown, depth?: LensDepthAsset): v is LensRecipe {
-  if (!object(v) || !exact(v, ['version', 'operation_id', 'source', 'depth', 'aperture', 'max_radius_px', 'focus', 'depth_falloff', 'occlusion_tolerance', 'rotation_radians', 'refinements'])
-    || v.version !== 1 || v.operation_id !== LENS_OPERATION || !validLensSource(v.source)
+  if (!object(v)) return false;
+  const keys = ['version', 'operation_id', 'source', 'depth', 'aperture', 'max_radius_px', 'focus', 'depth_falloff', 'occlusion_tolerance', 'rotation_radians', 'refinements'];
+  if (!(v.version === 1 ? v.operation_id === LENS_OPERATION && exact(v, keys)
+    : v.version === 2 && v.operation_id === LENS_COHORT_OPERATION && v.math_identity === LENS_COHORT_MATH && exact(v, [...keys, 'math_identity']))
+    || !validLensSource(v.source)
     || !object(v.depth) || !exact(v.depth, ['token', 'sha256', 'provenance']) || !token(v.depth.token)
     || !hash(v.depth.sha256) || !validLensProvenance(v.depth.provenance)
+    || v.version === 2 && !lensRendererSupportsDepth('cohort-fft-v2', v.depth.provenance)
     || !LENS_APERTURES.includes(v.aperture as LensAperture) || typeof v.max_radius_px !== 'number'
     || !Number.isFinite(v.max_radius_px) || v.max_radius_px < 0 || v.max_radius_px > 128
     || !unit(v.depth_falloff) || v.depth_falloff <= 0 || !unit(v.occlusion_tolerance)
@@ -185,13 +211,23 @@ export function validLensRecipe(v: unknown, depth?: LensDepthAsset): v is LensRe
     || v.focus.mode === 'subject' && (!depth.subject_focus || v.focus.near !== depth.subject_focus.near || v.focus.far !== depth.subject_focus.far))) return false;
   return lensRequestFits(v);
 }
-export function initialLensRecipe(depth: LensDepthAsset): LensRecipe {
+export function initialLensRecipe(depth: LensDepthAsset): LensRecipeV1 {
   const f = depth.subject_focus;
   return {version: 1, operation_id: LENS_OPERATION, source: {...depth.owner.source},
     depth: {token: depth.token, sha256: depth.raster.sha256, provenance: {...depth.provenance}},
     aperture: 'circular_disk', max_radius_px: 0,
     focus: {mode: f ? 'subject' : 'interval', near: f?.near ?? 0, far: f?.far ?? 1, point: null},
     depth_falloff: .2, occlusion_tolerance: .02, rotation_radians: 0, refinements: []};
+}
+/** Explicit choice creates a new recipe identity without changing common controls, provenance or ordered strokes. */
+export function recipeForLensRenderer(recipe: LensRecipe, renderer: LensRenderer): LensRecipe | null {
+  if (!validLensRecipe(recipe) || !LENS_RENDERERS.includes(renderer) || !lensRendererSupportsDepth(renderer, recipe.depth.provenance)) return null;
+  const common: LensRecipeFields = {source: structuredClone(recipe.source), depth: structuredClone(recipe.depth),
+    aperture: recipe.aperture, max_radius_px: recipe.max_radius_px, focus: structuredClone(recipe.focus),
+    depth_falloff: recipe.depth_falloff, occlusion_tolerance: recipe.occlusion_tolerance, rotation_radians: recipe.rotation_radians,
+    refinements: structuredClone(recipe.refinements)};
+  return renderer === 'direct-v1' ? {...common, version: 1, operation_id: LENS_OPERATION}
+    : {...common, version: 2, operation_id: LENS_COHORT_OPERATION, math_identity: LENS_COHORT_MATH};
 }
 export function validLensReview(v: unknown, command: LensPreviewCommand): v is LensReview {
   return object(v) && exact(v, ['version', 'request_id', 'session_id', 'token', 'owner', 'recipe', 'recipe_sha256', 'before', 'after', 'notes', 'result_source_sha256'])

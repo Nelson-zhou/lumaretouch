@@ -6,11 +6,11 @@ fn owner_fixture()->Value {json!({"document_id":"source-document","document_epoc
     "source":{"sha256":sha('a'),"width":2,"height":2,"orientation":"exif_normalized_once"}})}
 fn command_fixture(action:&str)->Value {
     match action {
-        "prepare_manual_plane"=>json!({"version":2,"action":action,"request_id":"manual-plane","session_id":"session-one","owner":owner_fixture(),"depth_value":0.5,"acknowledged_manual":true}),
-        "preview"=>json!({"version":2,"action":action,"request_id":"preview-one","session_id":"session-one","owner":owner_fixture(),"recipe":recipe_fixture()}),
-        "apply"=>json!({"version":2,"action":action,"request_id":"apply-one","session_id":"session-one","owner":owner_fixture(),"token":"preview-token",
+        "prepare_manual_plane"=>json!({"version":PROTOCOL,"action":action,"request_id":"manual-plane","session_id":"session-one","owner":owner_fixture(),"depth_value":0.5,"acknowledged_manual":true}),
+        "preview"=>json!({"version":PROTOCOL,"action":action,"request_id":"preview-one","session_id":"session-one","owner":owner_fixture(),"recipe":recipe_fixture()}),
+        "apply"=>json!({"version":PROTOCOL,"action":action,"request_id":"apply-one","session_id":"session-one","owner":owner_fixture(),"token":"preview-token",
             "recipe_sha256":sha('c'),"before_sha256":image_fixture(10)["sha256"],"after_sha256":image_fixture(20)["sha256"],"reviewed":true,"return_mode":"new_image","result_source_sha256":sha('b')}),
-        "cancel"=>json!({"version":2,"action":action,"request_id":"cancel-one","session_id":"session-one","owner":owner_fixture(),"token":null}),
+        "cancel"=>json!({"version":PROTOCOL,"action":action,"request_id":"cancel-one","session_id":"session-one","owner":owner_fixture(),"token":null}),
         _=>panic!("fixture action"),
     }
 }
@@ -44,9 +44,9 @@ fn image_fixture(tone:u8)->Value {
     chunk(&mut bytes,b"IDAT",&zlib);chunk(&mut bytes,b"IEND",&[]);
     json!({"mime":"image/png","width":2,"height":2,"sha256":digest(&bytes),"base64":STANDARD.encode(bytes)})
 }
-fn review_fixture()->Value {json!({"version":2,"request_id":"preview-one","session_id":"session-one","token":"preview-token","owner":owner_fixture(),
+fn review_fixture()->Value {json!({"version":PROTOCOL,"request_id":"preview-one","session_id":"session-one","token":"preview-token","owner":owner_fixture(),
     "recipe":recipe_fixture(),"recipe_sha256":sha('c'),"result_source_sha256":sha('b'),"before":image_fixture(10),"after":image_fixture(20),"notes":["Manual plane, not AI depth"]})}
-fn receipt_fixture()->Value {let c=command_fixture("apply");json!({"version":2,"request_id":c["request_id"],"session_id":c["session_id"],"action":"apply","owner":c["owner"],"token":c["token"],
+fn receipt_fixture()->Value {let c=command_fixture("apply");json!({"version":PROTOCOL,"request_id":c["request_id"],"session_id":c["session_id"],"action":"apply","owner":c["owner"],"token":c["token"],
     "phase":"done","outcome_unknown":false,"outcome":"applied","message":"New image published with original provenance",
     "recipe_sha256":c["recipe_sha256"],"before_sha256":c["before_sha256"],"after_sha256":c["after_sha256"],"return_mode":"new_image",
     "copied_original_document_id":c["owner"]["document_id"],"result_document_id":"distinct-result","result_revision":"0","result_source_sha256":c["result_source_sha256"],"no_change":false})}
@@ -57,7 +57,7 @@ fn receipt_fixture()->Value {let c=command_fixture("apply");json!({"version":2,"
     }
     assert!(unique_json("{}",1).is_err());
 }
-#[test] fn exact_request_envelope_and_protocol_two_only() {
+#[test] fn exact_request_envelope_and_protocol_three_only() {
     for action in ["current","prepare_manual_plane","preview","apply","cancel"] {assert!(parse_request(&request_fixture(action).envelope).is_ok());}
     let mut v=request_fixture("preview").envelope;v["command"]["version"]=json!(1);assert!(parse_request(&v).is_err());
     v=request_fixture("apply").envelope;v["action"]=json!("apply");assert!(parse_request(&v).is_err());
@@ -71,10 +71,10 @@ fn receipt_fixture()->Value {let c=command_fixture("apply");json!({"version":2,"
     }
 }
 #[test] fn capability_requires_actual_known_unique_kernels_and_no_extra_claim() {
-    let mut v=json!({"version":1,"operation_id":OPERATION,"status":"available","kernels":["circular_disk"],"reason":"Native ABI verified"});assert!(capability(&v));
+    let mut v=json!({"version":2,"operation_id":OPERATION,"status":"available","kernels":["circular_disk"],"renderers":["direct-v1"],"reason":"Fixture capability only"});assert!(capability(&v));
     v["kernels"]=json!(["circular_disk","circular_disk"]);assert!(!capability(&v));
     v["kernels"]=json!(["unmeasured_lens"]);assert!(!capability(&v));
-    v["kernels"]=json!([]);assert!(!capability(&v));v["status"]=json!("unavailable");assert!(capability(&v));
+    v["kernels"]=json!([]);assert!(!capability(&v));v["status"]=json!("unavailable");assert!(!capability(&v));v["renderers"]=json!([]);assert!(capability(&v));
     v["ai_depth_ready"]=json!(true);assert!(!capability(&v));
 }
 #[test] fn source_grid_png_hash_crc_dimensions_and_complete_bytes_are_required() {
@@ -131,4 +131,12 @@ fn receipt_fixture()->Value {let c=command_fixture("apply");json!({"version":2,"
     assert!(!valid_result(&json!({"event":EVENT,"request_id":req.id,"status":"rejected","message":"Not an exact write receipt"}),&req));
     let mut v=receipt_fixture();v["outcome"]=json!("cancelled");assert!(!receipt(&v,req.inner()));
     let pending=pending(&req,"unknown","Transport outcome uncertain");assert!(valid_result(&pending,&req));assert!(!terminal(&pending));
+}
+
+#[test] fn cohort_recipe_requires_distinct_math_and_acknowledged_constant_plane() {
+    let old=recipe_fixture();assert!(recipe(&old));
+    let mut new=old.clone();new["version"]=json!(2);new["operation_id"]=json!("lnx.lens_blur.cohort.v2");
+    assert!(!recipe(&new));new["math_identity"]=json!("cohort-fft-f64-v2-00020001");assert!(recipe(&new));
+    new["depth"]["provenance"]=json!({"kind":"manual","method":"user_supplied_depth"});assert!(!recipe(&new));
+    let mut mixed=old;mixed["math_identity"]=json!("cohort-fft-f64-v2-00020001");assert!(!recipe(&mixed));
 }

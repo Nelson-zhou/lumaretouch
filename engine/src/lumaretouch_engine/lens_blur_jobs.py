@@ -205,14 +205,14 @@ class Jobs:
                 if request['action'] != 'current':
                     command = request['command']
                     if (type(command) is not dict or type(command.get('version')) is not int
-                            or command['version'] != 2 or command.get('action') != request['action']
+                            or command['version'] != 3 or command.get('action') != request['action']
                             or command.get('request_id') != request['request_id']):
                         return False
                 self.register(request.get('request_id'), command_hash(request))
             elif request.get('action') == 'submit' and set(request) == {'cmd', 'action', 'request_id', 'command'}:
                 command = request['command']
                 if (type(command) is dict and set(command) == {'version', 'action', 'request_id', 'session_id', 'owner', 'token'}
-                        and type(command['version']) is int and command['version'] == 2
+                        and type(command['version']) is int and command['version'] == 3
                         and command['action'] == 'cancel' and command['request_id'] == request['request_id']
                         and token(command['request_id']) and token(command['session_id'])
                         and (command['token'] is None or token(command['token']))):

@@ -1836,7 +1836,7 @@ export default function App() {
     available:!!status?.engine_alive&&caps?.expression_replacement_protocol===1&&hasImage&&status.image?.load_id===doc?.document_id,
     busy:hairToolBusy||idBackgroundBusy||creative.pending||colorSampler.active||sampleLibrary.open,queueBusy:!!status?.edit_queue?.in_flight||!!status?.edit_queue?.pending},refreshFromEngine);
   const lens=useLensBlur({sourceUid:doc?.source_uid??'',loadId:doc?.document_id??'',engineKey:String(pid??''),hostRevision:status?.doc_rev??-1,
-    active:workspace==='creative',available:!!status?.engine_alive&&caps?.lens_blur_protocol===2&&hasImage&&status.image?.load_id===doc?.document_id,
+    active:workspace==='creative',available:!!status?.engine_alive&&caps?.lens_blur_protocol===3&&hasImage&&status.image?.load_id===doc?.document_id,
     externalBusy:imageToolBusy||idBackgroundBusy||creative.pending||expression.busy||expressionOpen||colorSampler.active||sampleLibrary.open,queueBusy:!!status?.edit_queue?.in_flight||!!status?.edit_queue?.pending},refreshFromEngine);
   armBusyRef.current=armBusyRef.current||expression.busy||lens.busy;
   creativeRoute.current={active:workspace==='creative',pending:creative.pending,importPaths:creative.importPaths,history:creative.history};

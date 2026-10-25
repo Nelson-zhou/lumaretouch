@@ -1,7 +1,8 @@
 // AUTHORED / UNRUN. No product imports, tests, inference or typechecks executed for this slice.
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {LENS_OPERATION, LENS_PROTOCOL, initialLensRecipe, validLensCapability, validLensContext, validLensDepth, validLensRecipe,
+import {LENS_OPERATION, LENS_COHORT_OPERATION, LENS_COHORT_MATH, LENS_PROTOCOL, initialLensRecipe, initialLensRenderer, recipeForLensRenderer,
+  lensRecipeRenderer, validLensCapability, validLensContext, validLensDepth, validLensRecipe,
   validLensReview, validLensReceipt, validLensWriteCommand, lensReviewKey, type LensContext, type LensDepthAsset,
   type LensOwner, type LensPng, type LensPreviewCommand, type LensReview, type LensApplyCommand} from './model.ts';
 import {fitLensImage, lensDisplayToSource, lensSourceToDepth, sampleLensDepth} from './imagery.ts';
@@ -37,10 +38,37 @@ test('depth must belong to exact current document/source with explicit provenanc
   assert.equal(validLensContext({...context(), depth_status: 'missing-model', depth: null}), true);
 });
 test('capability is exact versioned operation, not presence of an optional model adapter', () => {
-  assert.equal(validLensCapability({version: 1, operation_id: LENS_OPERATION, status: 'available', kernels: ['circular_disk'], reason: ''}), true);
-  assert.equal(validLensCapability({version: 1, operation_id: LENS_OPERATION, status: 'unavailable', kernels: [], reason: 'not installed'}), true);
-  assert.equal(validLensCapability({version: 1, operation_id: LENS_OPERATION, status: 'available', kernels: [], reason: ''}), false);
-  assert.equal(validLensCapability({version: 1, operation_id: 'fake.lens', status: 'available', kernels: ['circular_disk'], reason: ''}), false);
+  const available = {version: 2, operation_id: LENS_OPERATION, status: 'available', kernels: ['circular_disk'], renderers: ['direct-v1'], reason: ''};
+  assert.equal(validLensCapability(available), true);
+  assert.equal(validLensCapability({...available, renderers: ['cohort-fft-v2']}), true);
+  assert.equal(validLensCapability({...available, renderers: ['direct-v1', 'cohort-fft-v2']}), true);
+  assert.equal(validLensCapability({...available, status: 'unavailable', kernels: [], renderers: [], reason: 'not installed'}), true);
+  for (const patch of [{version: 1}, {version: 3}, {operation_id: LENS_COHORT_OPERATION}, {kernels: []}, {renderers: []},
+    {renderers: undefined}, {renderers: ['direct-v1', 'direct-v1']}, {renderers: ['future-v3']},
+    {status: 'unavailable'}, {status: 'unavailable', kernels: []}, {status: 'unavailable', renderers: []}, {fallback: true}])
+    assert.equal(validLensCapability({...available, ...patch}), false);
+  assert.equal(initialLensRenderer({version: 2, operation_id: LENS_OPERATION, status: 'available', kernels: ['circular_disk'], renderers: ['cohort-fft-v2', 'direct-v1'], reason: ''}), 'direct-v1');
+  assert.equal(initialLensRenderer({version: 2, operation_id: LENS_OPERATION, status: 'available', kernels: ['circular_disk'], renderers: ['cohort-fft-v2'], reason: ''}), 'cohort-fft-v2');
+});
+test('v1 exact fields survive explicit v2 selection and return, without silent math migration', () => {
+  const d = depth(); d.provenance = {kind: 'manual', method: 'user_defined_plane', depth_value: .5, acknowledgement_id: 'explicit-plane'};
+  const v1 = {...initialLensRecipe(d), max_radius_px: 35.5, occlusion_tolerance: .17, rotation_radians: .37,
+    refinements: [{id: 'stroke-1', mode: 'blur' as const, amount: .8, flow: .5, feather: .6, radius: .03, points: [{x: .2, y: .7}]}]};
+  const saved = structuredClone(v1), v2 = recipeForLensRenderer(v1, 'cohort-fft-v2');
+  assert.ok(v2); if (!v2) throw Error('missing v2 fixture');
+  assert.equal(v2.version, 2); assert.equal(v2.operation_id, LENS_COHORT_OPERATION);
+  assert.equal(lensRecipeRenderer(v2), 'cohort-fft-v2'); assert.equal(validLensRecipe(v2, d), true);
+  assert.deepEqual(v1, saved); assert.deepEqual(v2.refinements, v1.refinements);
+  const restored = recipeForLensRenderer(v2, 'direct-v1');
+  assert.deepEqual(restored, v1); assert.equal(validLensRecipe(restored, d), true);
+  assert.deepEqual(Object.keys(restored!).sort(), Object.keys(v1).sort());
+  assert.equal(validLensRecipe({...v1, math_identity: LENS_COHORT_MATH}, d), false);
+  for (const patch of [{version: 1}, {version: 3}, {operation_id: LENS_OPERATION}, {math_identity: undefined},
+    {math_identity: 'cohort-fft-f64-v2-00020002'}, {renderer: 'cohort-fft-v2'}]) assert.equal(validLensRecipe({...v2, ...patch}, d), false);
+  assert.equal(recipeForLensRenderer(initialLensRecipe(depth()), 'cohort-fft-v2'), null);
+  assert.equal(validLensRecipe({...v2, depth: {...v2.depth, provenance: {kind: 'manual', method: 'user_supplied_depth'}}}), false);
+  assert.equal(validLensRecipe({...v2, depth: {...v2.depth, provenance: {kind: 'model', model_id: 'model', model_sha256: 'f'.repeat(64), inference_id: 'inference'}}}), false);
+  assert.equal(validLensRecipe({...v2, depth: {...v2.depth, provenance: {...d.provenance, acknowledgement_id: 'other-plane'}}}, d), false);
 });
 test('neutral recipe is explicit and refinements remain source/depth owned', () => {
   const d = depth(), r = initialLensRecipe(d);
@@ -83,15 +111,26 @@ test('review and acknowledgement identities bind recipe source and both actual i
   assert.equal(validLensReview({...r, owner: {...r.owner, document_epoch: 'reopened'}}, c), false);
   assert.equal(validLensReview({...r, after: {...r.after, width: 3}}, c), false);
   assert.equal(validLensReview({...r, version: 1}, c), false);
+  assert.equal(validLensReview({...r, version: 2}, c), false);
   assert.equal(validLensReview({...r, result_source_sha256: undefined}, c), false);
   assert.equal(validLensReview({...r, result_source_sha256: `sha256:${r.result_source_sha256}`}, c), false);
   assert.notEqual(lensReviewKey(r), lensReviewKey({...r, before: {...r.before, sha256: 'f'.repeat(64)}}));
   assert.notEqual(lensReviewKey(r), lensReviewKey({...r, recipe: {...r.recipe, max_radius_px: 1}}));
   assert.notEqual(lensReviewKey(r), lensReviewKey({...r, result_source_sha256: '1'.repeat(64)}));
 });
-test('new-copy commands are exact and cannot select original replacement or a v1 fallback', () => {
+test('v2 candidate correlation cannot reuse a v1 recipe or another math identity', () => {
+  const d = depth(); d.provenance = {kind: 'manual', method: 'user_defined_plane', depth_value: .5, acknowledgement_id: 'explicit-plane'};
+  const v1 = initialLensRecipe(d), v2 = recipeForLensRenderer(v1, 'cohort-fft-v2');
+  assert.ok(v2); if (!v2) throw Error('missing v2 fixture');
+  const command = {...preview(), recipe: v2}, candidate = review(command);
+  assert.equal(validLensReview(candidate, command), true);
+  assert.equal(validLensReview({...candidate, recipe: v1}, command), false);
+  assert.equal(validLensReview({...candidate, recipe: {...v2, math_identity: 'cohort-fft-f64-v2-00020002'}}, command), false);
+  assert.notEqual(lensReviewKey(candidate), lensReviewKey({...candidate, recipe: v1}));
+});
+test('wire-v3 new-copy commands are exact and reject original replacement or older wire packets', () => {
   const c = apply(); assert.equal(validLensWriteCommand(c), true);
-  for (const patch of [{version: 1}, {return_mode: 'update_original'}, {return_mode: undefined}, {result_source_sha256: undefined},
+  for (const patch of [{version: 1}, {version: 2}, {return_mode: 'update_original'}, {return_mode: undefined}, {result_source_sha256: undefined},
     {result_source_sha256: 'not-a-hash'}, {reviewed: false}, {history_entry_id: 'invented'}, {request_id: 'not valid'}])
     assert.equal(validLensWriteCommand({...c, ...patch}), false);
   const cancel = {version: LENS_PROTOCOL, action: 'cancel', request_id: 'cancel', session_id: c.session_id, owner: c.owner, token: null};
@@ -110,7 +149,7 @@ test('pending, unknown, rejected and independent-copy commits cannot be confused
   assert.equal(validLensReceipt(applied, command), true);
   // New document revisions are not an increment of the source's revision, nor the creative-layer revision.
   assert.equal(validLensReceipt({...applied, result_revision: '0'}, command), true);
-  for (const patch of [{version: 1}, {request_id: 'other'}, {result_revision: '-1'}, {result_revision: '01'}, {result_revision: '18446744073709551616'},
+  for (const patch of [{version: 1}, {version: 2}, {request_id: 'other'}, {result_revision: '-1'}, {result_revision: '01'}, {result_revision: '18446744073709551616'},
     {return_mode: 'update_original'}, {copied_original_document_id: 'other'}, {result_document_id: command.owner.document_id},
     {result_document_id: ''}, {result_source_sha256: command.after_sha256}, {no_change: true}, {document_revision: '8'},
     {history_entry_id: null}, {before_sha256: 'f'.repeat(64)}, {outcome_unknown: true}])

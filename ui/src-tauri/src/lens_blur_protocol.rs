@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-//! Exact protocol-2 lens wire validation. Native validates evidence; it never
+//! Exact protocol-3 lens wire validation. Native validates evidence; it never
 //! generates a preview, a depth inference, a result image or a history entry.
 use std::{collections::HashSet, fmt, io::{self, Write}};
 use base64::{engine::general_purpose::STANDARD, Engine as _};
@@ -7,7 +7,7 @@ use serde::{de::{self, MapAccess, SeqAccess, Visitor}, Deserialize, Deserializer
 use serde_json::{json, Map, Number, Value};
 use sha2::{Digest, Sha256};
 
-pub(crate) const PROTOCOL: u64 = 2;
+pub(crate) const PROTOCOL: u64 = 3;
 pub(crate) const OPERATION: &str = "lnx.lens_blur.v1";
 pub(crate) const EVENT: &str = "lens_blur_result";
 pub(crate) const COMMAND_BYTES: usize = 512 * 1024;
@@ -93,8 +93,12 @@ pub(crate) fn unique_json(raw: &str, cap: usize) -> Result<Value,String> {
     parser.end().map_err(|_|"镜头 JSON 含尾部内容".to_string())?; Ok(value)
 }
 pub(crate) fn capability(v:&Value)->bool {
-    fields(v,&["version","operation_id","status","kernels","reason"]) && v["version"] == 1 && v["operation_id"] == OPERATION
-        && message(&v["reason"]) && v["kernels"].as_array().is_some_and(|ks| ks.len()<=5
+    fields(v,&["version","operation_id","status","kernels","renderers","reason"]) && v["version"] == 2 && v["operation_id"] == OPERATION
+        && message(&v["reason"]) && v["renderers"].as_array().is_some_and(|rs| rs.len()<=2
+            && rs.iter().all(|r|matches!(r.as_str(),Some("direct-v1"|"cohort-fft-v2")))
+            && rs.iter().filter_map(Value::as_str).collect::<HashSet<_>>().len()==rs.len()
+            && ((v["status"]=="available" && !rs.is_empty()) || (v["status"]=="unavailable" && rs.is_empty())))
+        && v["kernels"].as_array().is_some_and(|ks| ks.len()<=5
             && ks.iter().all(|k| k.as_str().is_some_and(|k| KERNELS.contains(&k)))
             && ks.iter().filter_map(Value::as_str).collect::<HashSet<_>>().len()==ks.len()
             && ((v["status"]=="available" && !ks.is_empty()) || (v["status"]=="unavailable" && ks.is_empty())))
@@ -171,11 +175,16 @@ pub(crate) fn context(v:&Value)->bool {
 }
 fn point(v:&Value)->bool {fields(v,&["x","y"]) && unit(&v["x"]) && unit(&v["y"])}
 pub(crate) fn recipe(v:&Value)->bool {
-    if !fields(v,&["version","operation_id","source","depth","aperture","max_radius_px","focus","depth_falloff","occlusion_tolerance","rotation_radians","refinements"])
-        || v["version"]!=1 || v["operation_id"]!=OPERATION || !source(&v["source"]) || !fields(&v["depth"],&["token","sha256","provenance"])
+    let mut keys=vec!["version","operation_id","source","depth","aperture","max_radius_px","focus","depth_falloff","occlusion_tolerance","rotation_radians","refinements"];
+    if v["version"]==2 {
+        keys.push("math_identity");
+        if v["operation_id"]!="lnx.lens_blur.cohort.v2" || v["math_identity"]!="cohort-fft-f64-v2-00020001"
+            || v["depth"]["provenance"]["kind"]!="manual" || v["depth"]["provenance"]["method"]!="user_defined_plane" {return false;}
+    } else if v["version"]!=1 || v["operation_id"]!=OPERATION {return false;}
+    if !fields(v,&keys) || !source(&v["source"]) || !fields(&v["depth"],&["token","sha256","provenance"])
         || !token(&v["depth"]["token"]) || !hash(&v["depth"]["sha256"]) || !provenance(&v["depth"]["provenance"])
         || !v["aperture"].as_str().is_some_and(|k|KERNELS.contains(&k)) || !bounded(&v["max_radius_px"],0.0,128.0)
-        || !unit(&v["depth_falloff"]) || n(&v["depth_falloff"])<=0.0 || !unit(&v["occlusion_tolerance"])
+        || !bounded(&v["depth_falloff"],0.000001,1.0) || !unit(&v["occlusion_tolerance"])
         || !bounded(&v["rotation_radians"],-std::f64::consts::PI,std::f64::consts::PI) {return false;}
     let f=&v["focus"];
     if !fields(f,&["mode","near","far","point"]) || !unit(&f["near"]) || !unit(&f["far"]) || n(&f["near"])>n(&f["far"])

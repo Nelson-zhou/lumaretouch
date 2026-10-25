@@ -1,9 +1,24 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 """Honest early bounds for the current full-grid aperture path, not a fallback."""
 
-def source_admission(asset, budget, *, display_reserve):
+def source_admission(asset, budget, *, display_reserve, renderers=('direct-v1',), retained_limit=None):
     width,height=asset['width'],asset['height']
     pixels=width*height
+    if retained_limit is not None and (2*len(asset['content'])+len(asset['original'])+len(asset['icc'])+32*1024*1024 > retained_limit):
+        raise MemoryError('完整来源与实际新候选的保留数据超出会话预算；不会开始无法保留结果的涂抹')
+    if 'cohort-fft-v2' in renderers:
+        from .lens_cohort_native import memory_estimate
+        plan = memory_estimate(width, height)
+        retained_other = len(asset['original'])+len(asset['icc'])
+        if plan['peak_live_bytes']+retained_other+display_reserve+40*1024*1024 <= budget.max_bytes:
+            return
+        # Acquisition needs at least one feasible explicitly advertised path,
+        # not the largest scratch reservation of every installed renderer.
+        # The chosen preview still performs its own exact strict admission.
+        if 'direct-v1' not in renderers:
+            raise MemoryError('V2 完整来源与输出工作集仍超出预算；不会缩小最终图像')
+    if 'direct-v1' not in renderers:
+        raise ValueError('No explicitly advertised lens renderer can admit this source')
     # A definite lower bound of the existing stage's simultaneous reservation.
     # Reject impossible sources before presenting a painting session. This does
     # not replace the later exact source/depth/candidate allocation admission.
@@ -16,7 +31,10 @@ def source_admission(asset, budget, *, display_reserve):
         raise MemoryError('当前分辨率连最小实际镜头散焦也超过本版运算预算；高分辨率渲染仍待实现，不会以预览图代替')
 
 
-def source_notice(source,budget):
+def source_notice(source,budget,*,renderers=('direct-v1',)):
+    if 'cohort-fft-v2' in renderers:
+        return (' 可显式选择 v2 完整光圈渲染；仅人工恒定基准面。羽化残差、笔画扫描、FFT、保留数据和协作式截止均有独立预算，超过即拒绝，不简化或缩图。'
+                '非中性完整修图导出、RAW/TIFF 等仍受原有来源预算限制；不是任意 24MP 工作流或性能验收。')
     width,height=source['width'],source['height']
     pixels=width*height
     maximum=.5

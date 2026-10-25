@@ -1,0 +1,28 @@
+{
+  "schema": "lumaretouch.lens-fullresolution-design.freeze.v1",
+  "date_utc": "2026-10-25",
+  "status": "design_authored_frozen_for_integration",
+  "implementation_status": "not_implemented_in_this_lane",
+  "acceptance_status": "UNRUN",
+  "owned_scope": "docs/lens-fullresolution/ only",
+  "shared_source_changed": false,
+  "prototype_authored": false,
+  "third_party_code_copied": false,
+  "product_imports_execution_tests_build_typecheck_inference_downloads_git_writes": "NOT_PERFORMED",
+  "verification": "Source and document inspection; public primary-source research; shell file listing and SHA-256 hashing only. No numerical, runtime, integration or photographic acceptance.",
+  "first_module": "Separate core/lens_cohort v2 opaque-SDR constant-manual-depth exact-radius-cohort convolution, bounded original f64 radix-2 FFT, exact direct residuals, immutable bytes-backed source and private output tiles. Numerical implementation owner controls actual ABI/header.",
+  "non_negotiable_boundaries": [
+    "Preserve original v1 numerical identity and behavior; no automatic migration.",
+    "No global cap increase, final-image downsampling, aperture substitution, omitted paint/protection, or fabricated AI/optical quality claim.",
+    "Exact cohort membership; residual and repair candidate counts share the same direct-work ceiling.",
+    "Original import, RAW and non-neutral current-edit capture are separate prerequisites; existing AssetStore is not streaming.",
+    "Dense varying-depth and broad feather performance remain mandatory open capability gates."
+  ],
+  "files": [
+    {"path": "docs/lens-fullresolution/README.md", "sha256": "a77d0c83be390dfb8b0bded44b84880ed88d4070db0307cc01c1cb985aac6528"},
+    {"path": "docs/lens-fullresolution/FIRST-MODULE.md", "sha256": "4bec52c155882e285937220d284f4853cafe2ba644c956e3b29e576313ed7c68"},
+    {"path": "docs/lens-fullresolution/RENDERER-CONTRACT.md", "sha256": "ed4f491bdc6ffcc36dd9f45d54f27364bef3ff0251ba9613329bcc36d31c5cc5"},
+    {"path": "docs/lens-fullresolution/STORAGE-AND-INTEGRATION.md", "sha256": "8a45945f8d3f902ad67d5d84d48f3ea91f32d7681698d67f1242e6bae1035277"},
+    {"path": "docs/lens-fullresolution/RESEARCH-AND-ACCEPTANCE.md", "sha256": "82fc0e79cc22aa0523b15aba936f28a108db76dce22294a571cae13b43fc49d9"}
+  ]
+}

@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-import {initialLensRecipe, lensKey, lensReviewKey, lensRequestFits, validLensContext, validLensRecipe, validLensReview, validLensReceipt, validLensWriteCommand, validLensCapability, sameLensOwner, LENS_OPERATION, LENS_PROTOCOL,
+import {initialLensRecipe, initialLensRenderer, lensRecipeRenderer, lensRendererSupportsDepth, recipeForLensRenderer,
+  lensKey, lensReviewKey, lensRequestFits, validLensContext, validLensRecipe, validLensReview, validLensReceipt, validLensWriteCommand, validLensCapability, sameLensOwner, LENS_OPERATION, LENS_PROTOCOL, LENS_RENDERER_LABELS,
   type LensBlurPort, type LensContext, type LensPoint, type LensPreviewCommand, type LensRecipe, type LensReview,
-  type LensStroke, type LensWriteCommand, type LensReceipt, type LensCapability, type LensManualPlaneCommand} from './model';
+  type LensStroke, type LensWriteCommand, type LensReceipt, type LensCapability, type LensManualPlaneCommand, type LensRenderer} from './model';
 import {decodeLensDepth, sampleLensDepth, verifyLensPng, type DecodedLensDepth} from './imagery';
 
 export type LensPhase = 'empty' | 'loading' | 'editing' | 'previewing' | 'review' | 'applying' | 'cancelling' | 'pending' | 'unknown' | 'applied' | 'cancelled' | 'failed';
@@ -10,12 +11,14 @@ export interface LensState {
   phase: LensPhase; context: LensContext | null; depth: DecodedLensDepth | null; recipe: LensRecipe | null;
   review: LensReview | null; source_verified: boolean; source_presented: boolean;
   before_presented: boolean; after_presented: boolean; acknowledged: boolean;
+  /** Separate opt-in to v2 math, never inferred from available capability or an old review. */
+  renderer_acknowledged: boolean;
   stale: boolean; request: LensWriteCommand | null; checking: boolean; message: string;
   terminal_receipt: LensReceipt | null; terminal_refresh: 'none' | 'refreshing' | 'ready' | 'failed' | 'not-configured';
 }
-const empty = (): LensState => ({capability: {version: 1, operation_id: LENS_OPERATION, status: 'unavailable', kernels: [], reason: '尚未取得镜头虚化模块能力。'}, phase: 'empty', context: null, depth: null, recipe: null, review: null,
+const empty = (): LensState => ({capability: {version: 2, operation_id: LENS_OPERATION, status: 'unavailable', kernels: [], renderers: [], reason: '尚未取得镜头虚化模块能力。'}, phase: 'empty', context: null, depth: null, recipe: null, review: null,
   source_verified: false, source_presented: false, before_presented: false, after_presented: false,
-  acknowledged: false, stale: false, request: null, checking: false, message: '', terminal_receipt: null, terminal_refresh: 'none'});
+  acknowledged: false, renderer_acknowledged: false, stale: false, request: null, checking: false, message: '', terminal_receipt: null, terminal_refresh: 'none'});
 const errorText = (error: unknown) => error instanceof Error ? error.message : '操作未完成。';
 const contextKey = (v: LensContext) => lensKey([v.session_id, v.owner, v.source_image.sha256,
   v.depth_status, v.depth?.token, v.depth?.raster.sha256, v.depth?.provenance, v.depth?.subject_focus]);
@@ -39,17 +42,28 @@ export function createLensBlurWorkflow(port: LensBlurPort, options: {
   const publish = (patch: Partial<LensState>) => {state = {...state, ...patch}; listeners.forEach(listener => listener());};
   const unresolved = () => state.request !== null && ['applying', 'cancelling', 'pending', 'unknown'].includes(state.phase);
   const editable = () => !unresolved() && state.terminal_refresh !== 'refreshing' && !state.stale && !['loading', 'previewing', 'applied', 'cancelled'].includes(state.phase);
-  const renderingAvailable = () => port.protocol === LENS_PROTOCOL && state.capability.status === 'available' && !!state.recipe && state.capability.kernels.includes(state.recipe.aperture);
+  const rendererBlockReason = (): string => {
+    if (port.protocol !== LENS_PROTOCOL) return '镜头接口不是当前协议；不会按旧协议发送或回退。';
+    if (state.capability.status !== 'available') return state.capability.reason || '当前镜头模块不可用。';
+    if (!state.recipe) return '请先取得当前来源和明确选择的景深或人工基准面。';
+    const renderer = lensRecipeRenderer(state.recipe);
+    if (!state.capability.renderers.includes(renderer)) return `${LENS_RENDERER_LABELS[renderer]}当前不可用；配方保留，不会自动改用另一渲染器。`;
+    if (!state.capability.kernels.includes(state.recipe.aperture)) return '当前光斑核不可用；请明确选择可用光斑核，不会自动替换。';
+    if (!lensRendererSupportsDepth(renderer, state.recipe.depth.provenance)) return '分组 FFT v2 只接受明确选择的人工恒定基准面，不能使用导入或模型景深。';
+    if (state.recipe.version === 2 && !state.renderer_acknowledged) return '预览前请明确确认使用 v2 新数学；现有 v1 配方不会自动升级。';
+    return '';
+  };
+  const renderingAvailable = () => rendererBlockReason() === '';
   const manualPlaneAvailable = () => port.protocol === LENS_PROTOCOL && !!port.prepareManualPlane && state.capability.status === 'available'
     && editable() && !!state.context && !state.depth && state.source_presented;
   const invalidate = () => ({review: null, acknowledged: false, before_presented: false, after_presented: false});
   function setCapability(value: unknown): void {
     const capability: LensCapability = validLensCapability(value) ? structuredClone(value)
-      : {version: 1, operation_id: LENS_OPERATION, status: 'unavailable', kernels: [], reason: '模块能力协议无效。'};
+      : {version: 2, operation_id: LENS_OPERATION, status: 'unavailable', kernels: [], renderers: [], reason: '模块能力协议无效。'};
     if (lensKey(capability) === lensKey(state.capability)) return;
     if (state.phase === 'previewing') ++readGeneration;
     // Disabling/replacing a module invalidates review only; it never deletes the recipe or an outstanding write.
-    publish({capability, ...invalidate(), ...(state.phase === 'previewing' ? {phase: 'editing' as const} : {}),
+    publish({capability, renderer_acknowledged: false, ...invalidate(), ...(state.phase === 'previewing' ? {phase: 'editing' as const} : {}),
       message: capability.status === 'available' ? '模块能力已更新，请重新生成效果。' : `${capability.reason} 已保存的配方不会被删除。`});
   }
   async function setContext(value: unknown): Promise<void> {
@@ -77,7 +91,10 @@ export function createLensBlurWorkflow(port: LensBlurPort, options: {
       const [sourceOK, depth] = await Promise.all([verifyLensPng(context.source_image), context.depth ? decodeLensDepth(context.depth) : Promise.resolve(null)]);
       if (generation !== readGeneration) return;
       if (!sourceOK) throw Error('当前来源图校验失败，不能绘制选区或确认效果。');
-      publish({phase: 'editing', source_verified: true, depth, recipe: depth ? initialLensRecipe(depth.asset) : null,
+      const initial = depth ? initialLensRecipe(depth.asset) : null, renderer = initialLensRenderer(state.capability);
+      // Only a new context gets a default. Unsupported depth keeps its v1 identity, never masquerades as a v2 plane.
+      const recipe = initial && renderer ? recipeForLensRenderer(initial, renderer) ?? initial : initial;
+      publish({phase: 'editing', source_verified: true, depth, recipe, renderer_acknowledged: recipe?.version === 1,
         message: context.message || (depth ? '当前照片已核对。点选焦点或调整清晰区间，再生成真实前后对比。' : '没有当前照片的可用景深。不会自动下载模型或生成占位景深。')});
     } catch (error) {if (generation === readGeneration) publish({phase: 'failed', source_verified: false, depth: null, recipe: null, message: errorText(error)});}
   }
@@ -109,12 +126,33 @@ export function createLensBlurWorkflow(port: LensBlurPort, options: {
       await setContext(result);
     } catch (error) {if (generation === readGeneration) publish({phase: 'failed', message: errorText(error)});}
   }
-  function edit(value: LensRecipe): boolean {
+  function updateRecipe(value: LensRecipe, changedRenderer: boolean): boolean {
     if (!editable() || state.capability.status !== 'available' || !state.depth || !state.source_presented || !validLensRecipe(value, state.depth.asset)) return false;
     ++readGeneration;
     terminal = null;
-    publish({phase: 'editing', recipe: structuredClone(value), terminal_receipt: null, terminal_refresh: 'none', ...invalidate(), message: '参数已更改，之前的对比确认已作废。请重新生成效果。'});
+    publish({phase: 'editing', recipe: structuredClone(value), terminal_receipt: null, terminal_refresh: 'none',
+      renderer_acknowledged: changedRenderer ? value.version === 1 : state.renderer_acknowledged, ...invalidate(),
+      message: changedRenderer ? `已明确改选${LENS_RENDERER_LABELS[lensRecipeRenderer(value)]}，参数与笔画保留；旧对比和确认已作废。${value.version === 2 ? '请确认新数学版本后重新生成效果。' : '请重新生成效果。'}`
+        : '参数已更改，之前的对比确认已作废。请重新生成效果。'});
     return true;
+  }
+  function edit(value: LensRecipe): boolean {
+    // Ordinary slider/brush edits may not migrate recipe versions. Only the explicit selector can do that.
+    return !!state.recipe && lensRecipeRenderer(value) === lensRecipeRenderer(state.recipe) && updateRecipe(value, false);
+  }
+  function selectRenderer(renderer: LensRenderer): boolean {
+    if (!state.recipe || !state.capability.renderers.includes(renderer) || renderer === lensRecipeRenderer(state.recipe)) return false;
+    const recipe = recipeForLensRenderer(state.recipe, renderer);
+    return !!recipe && updateRecipe(recipe, true);
+  }
+  function acknowledgeRenderer(value: boolean): void {
+    if (!editable() || !state.recipe || state.recipe.version !== 2 || !state.depth || !state.source_presented
+      || state.capability.status !== 'available' || !state.capability.renderers.includes('cohort-fft-v2')
+      || !validLensRecipe(state.recipe, state.depth.asset) || state.renderer_acknowledged === value) return;
+    ++readGeneration;
+    terminal = null;
+    publish({phase: 'editing', renderer_acknowledged: value, terminal_receipt: null, terminal_refresh: 'none', ...invalidate(),
+      message: value ? '已明确选择分组 FFT v2 新数学。请生成实际效果并单独确认新副本。' : '已撤回 v2 新数学确认；之前对比作废，不能预览或保存。'});
   }
   function focusPoint(point: LensPoint): boolean {
     if (!state.recipe || !state.depth) return false;
@@ -213,7 +251,9 @@ export function createLensBlurWorkflow(port: LensBlurPort, options: {
   async function cancel(): Promise<void> {
     if (unresolved() || state.terminal_refresh === 'refreshing' || !state.context || ['applied', 'cancelled'].includes(state.phase)) return;
     await send({version: LENS_PROTOCOL, action: 'cancel', request_id: id(), session_id: state.context.session_id,
-      owner: structuredClone(state.context.owner), token: state.review?.token ?? null});
+      // Cancel owns the whole exact session, not an expiring image lease.
+      // Unknown writes were excluded above; this never revokes entered apply.
+      owner: structuredClone(state.context.owner), token: null});
   }
   async function check(): Promise<void> {
     if (!unresolved() || state.checking || !state.request || ['applying', 'cancelling'].includes(state.phase)) return;
@@ -224,7 +264,8 @@ export function createLensBlurWorkflow(port: LensBlurPort, options: {
     }
   }
   return {snapshot: () => state, subscribe: (listener: () => void) => {listeners.add(listener); return () => {listeners.delete(listener);};},
-    setContext, setCapability, sourcePresented, releasePresentation, prepareManualPlane, edit, focusPoint, addStroke, preview, presented, acknowledge, apply, cancel, check, refreshTerminal,
-    unresolved, editable, renderingAvailable, manualPlaneAvailable};
+    setContext, setCapability, sourcePresented, releasePresentation, prepareManualPlane, edit, selectRenderer, acknowledgeRenderer,
+    focusPoint, addStroke, preview, presented, acknowledge, apply, cancel, check, refreshTerminal,
+    unresolved, editable, renderingAvailable, rendererBlockReason, manualPlaneAvailable};
 }
 export type LensBlurWorkflow = ReturnType<typeof createLensBlurWorkflow>;

@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 import {useEffect, useRef, useState, useSyncExternalStore, type PointerEvent} from 'react';
-import {LENS_APERTURES, LENS_APERTURE_LABELS, LENS_LIMITS, lensReviewKey,
-  type LensAperture, type LensPoint, type LensRecipe, type LensStroke} from './model';
+import {LENS_APERTURES, LENS_APERTURE_LABELS, LENS_LIMITS, LENS_RENDERERS, LENS_RENDERER_LABELS,
+  initialLensRenderer, lensRecipeRenderer, lensRendererSupportsDepth, lensReviewKey,
+  type LensAperture, type LensPoint, type LensRecipeFields, type LensRenderer, type LensStroke} from './model';
 import {lensDisplayToSource, lensImageUrl, paintLensDepth} from './imagery';
 import type {LensBlurWorkflow} from './workflow';
 import './lensBlur.css';
@@ -22,6 +23,8 @@ export function LensBlurWorkspace({workflow, onExit, disabled = false}: {
   const drawingSurface = useRef<SVGSVGElement>(null), depthCanvas = useRef<HTMLCanvasElement>(null);
   const closedSession = useRef<string | null>(null);
   const context = state.context, recipe = state.recipe, source = context?.owner.source;
+  const renderer = recipe ? lensRecipeRenderer(recipe) : initialLensRenderer(state.capability);
+  const rendererReason = workflow.rendererBlockReason();
   const manualPlane = state.depth?.asset.provenance.kind === 'manual' && state.depth.asset.provenance.method === 'user_defined_plane';
   const locked = disabled || !workflow.editable() || state.capability.status !== 'available' || !state.source_presented || !state.depth || !recipe;
   const unresolved = workflow.unresolved();
@@ -43,7 +46,7 @@ export function LensBlurWorkspace({workflow, onExit, disabled = false}: {
     if (visualize && state.depth && recipe && depthCanvas.current
       && !paintLensDepth(depthCanvas.current, state.depth, recipe.focus.near, recipe.focus.far)) setPaintError('景深图无法显示；不会以示意图替代。');
   }, [visualize, state.depth, recipe?.focus.near, recipe?.focus.far]);
-  const edit = (patch: Partial<LensRecipe>) => {dropStroke(); if (recipe) workflow.edit({...recipe, ...patch});};
+  const edit = (patch: Partial<LensRecipeFields>) => {dropStroke(); if (recipe) workflow.edit({...recipe, ...patch});};
   const pointFromEvent = (event: PointerEvent<SVGSVGElement>): LensPoint | null => {
     if (!source) return null;
     const rect = event.currentTarget.getBoundingClientRect();
@@ -99,9 +102,11 @@ export function LensBlurWorkspace({workflow, onExit, disabled = false}: {
     <p className="lensBlurBoundary">不代表真实镜头焦距、光圈值或专有算法等效。模型未就绪时不会下载模型，也不会用渐变或人物轮廓冒充景深。</p>
     <p className="lensBlurBoundary">确认后仅在当前项目中新建独立照片副本，不覆盖原文档或原片文件；写出图片文件需另行导出。</p>
     {context && !state.depth && <div className="lensBlurManual"><p>也可明确选择人工散焦：使用恒定编辑基准面，靠清晰/虚化笔画控制效果。这不是照片景深分析。</p>
+      {renderer && <p>新配方将使用{LENS_RENDERER_LABELS[renderer]}。{renderer === 'cohort-fft-v2' ? '准备基准面不等于接受 v2；预览前还需明确确认新数学版本。' : '已有 v1 配方不会被自动升级为 v2。'}</p>}
       <button type="button" disabled={disabled || !workflow.manualPlaneAvailable()} onClick={() => void workflow.prepareManualPlane()}>人工散焦编辑（不做 AI 景深分析）</button></div>}
     {manualPlane && <p className="lensBlurBoundary">人工散焦模式：下方平面是你选择的恒定编辑基准，不反映照片远近。先调大虚化半径，再用橙色“虚化”笔画添加效果；青色“清晰”笔画保护区域。</p>}
     {state.capability.status !== 'available' && <p role="status">{state.capability.reason} 现有配方不会被删除；替换模块后须重新复核。</p>}
+    {state.capability.status === 'available' && state.capability.reason && <p className="lensBlurBoundary">当前模块范围：{state.capability.reason}</p>}
     <p className="lensBlurStatus" role={state.phase === 'unknown' || state.phase === 'failed' ? 'alert' : 'status'} aria-live="polite">{state.message}</p>
     {context && <div className="lensBlurProvenance"><span>{state.stale ? '原请求的旧来源' : '来源'} {context.owner.source.sha256.slice(0, 12)} · {source!.width} × {source!.height} · 已统一 EXIF 方向</span>
       {state.depth ? <span>{state.depth.asset.provenance.kind === 'manual' ? manualPlane ? '人工散焦恒定基准面，不是实测景深' : '手动深度输入，不是 AI 分析' : `已提供模型深度：${state.depth.asset.provenance.model_id}`}
@@ -137,6 +142,22 @@ export function LensBlurWorkspace({workflow, onExit, disabled = false}: {
       </div>
       <fieldset className="lensBlurControls" disabled={locked}>
         <legend>当前照片配方</legend>
+        <label>渲染器与配方版本<select aria-describedby="lens-renderer-differences" value={renderer ?? ''}
+          onChange={e => {dropStroke(); workflow.selectRenderer(e.target.value as LensRenderer);}}>
+          {!renderer && <option value="">等待可用渲染器</option>}
+          {LENS_RENDERERS.map(value => {
+            const available = state.capability.renderers.includes(value);
+            const compatible = !recipe || lensRendererSupportsDepth(value, recipe.depth.provenance);
+            return <option key={value} value={value} disabled={!available || !compatible}>{LENS_RENDERER_LABELS[value]}{!available ? '（模块未提供）' : !compatible ? '（仅限人工恒定基准面）' : ''}</option>;
+          })}
+        </select></label>
+        <p id="lens-renderer-differences">v1 保留旧计算规则。v2 是独立的新数学版本，相同参数不保证像素相同；明确切换才创建另一版本配方，并保留参数、来源和全部笔画。不可用时不会自动回退。</p>
+        {recipe?.version === 2 && <div className="lensBlurRendererNotice">
+          <p>v2 数学标识：{recipe.math_identity}。仅支持明确选择的人工恒定基准面及不透明 SDR 来源；不是模型或导入景深路径。</p>
+          <label className="lensBlurToggle"><input type="checkbox" checked={state.renderer_acknowledged}
+            disabled={!state.capability.renderers.includes('cohort-fft-v2')}
+            onChange={e => {dropStroke(); workflow.acknowledgeRenderer(e.target.checked);}}/>我明确选择分组 FFT v2 新数学，理解它不是 v1 的等效加速或自动升级</label>
+        </div>}
         <label>光斑核<select value={recipe?.aperture ?? 'circular_disk'} onChange={e => edit({aperture: e.target.value as LensAperture})}>
           {LENS_APERTURES.map(value => <option key={value} value={value} disabled={!state.capability.kernels.includes(value)}>{LENS_APERTURE_LABELS[value]}</option>)}
         </select></label>
@@ -166,15 +187,19 @@ export function LensBlurWorkspace({workflow, onExit, disabled = false}: {
             <input type="range" min={name === 'radius' ? '.002' : '0'} max={name === 'radius' ? '.25' : '1'} step=".001" value={brush[name]}
               onChange={e => {dropStroke(); setBrush({...brush, [name]: Number(e.target.value)});}}/></label>)}
           <p>青色保清晰，橙色加虚化。笔画仅属于当前来源；0 半径时不会制造虚化。</p>
+          {recipe?.version === 2 && <p className="lensBlurBoundary">羽化、低流量及重叠笔画可能产生大量中间虚化半径，需要额外残差计算。超出预算会明确拒绝；不会静默去掉羽化、截断笔画、改用 v1 或降低结果分辨率。可手动减小半径或减少密集笔画后重新预览。</p>}
           <button type="button" disabled={!recipe?.refinements.length} onClick={() => edit({refinements: recipe!.refinements.slice(0, -1)})}>撤销最后一笔</button>
           <button type="button" disabled={!recipe?.refinements.length} onClick={() => edit({refinements: []})}>清空本次笔画</button>
         </fieldset>
       </fieldset>
     </div>
+    {recipe && rendererReason && <p role="status" className="lensBlurBoundary">{rendererReason}</p>}
+    {recipe?.version === 2 && <p className="lensBlurBoundary">v2 仍受完整来源导入、规范化底图、全分辨率非中性渲染与资源预算限制，不代表任意 2400 万像素照片均可处理。RAW/TIFF、密集羽化和真实景深路径仍有限制；未作速度或画质基准承诺。</p>}
     <div className="lensBlurActions"><button type="button" disabled={locked || !workflow.renderingAvailable() || !!draft} onClick={() => void workflow.preview()}>生成真实前后对比</button>
       {unresolved && <button type="button" disabled={state.checking || ['applying', 'cancelling'].includes(state.phase)} onClick={() => void workflow.check()}>{state.checking ? '正在查询…' : '查询原请求，不重发'}</button>}
     </div>
     {review && <section className="lensBlurReview" aria-label="实际渲染的前后效果复核">
+      <p>本次实际候选：{LENS_RENDERER_LABELS[lensRecipeRenderer(review.recipe)]} · 配方 v{review.recipe.version}{review.recipe.version === 2 ? ` · ${review.recipe.math_identity}` : ''}</p>
       <div className="lensBlurCompare">{(['before', 'after'] as const).map(side => <figure key={`${reviewKey}:${side}`}>
         <figcaption>{side === 'before' ? '原文档（实际渲染，不覆盖）' : '新副本候选（当前配方实际渲染）'}</figcaption>
         <img src={lensImageUrl(review[side])} alt={side === 'before' ? '原文档完整效果' : '镜头虚化新副本候选完整效果'}
@@ -184,7 +209,7 @@ export function LensBlurWorkspace({workflow, onExit, disabled = false}: {
       {review.notes.length > 0 && <ul>{review.notes.map((note, index) => <li key={index}>{note}</li>)}</ul>}
       <label className="lensBlurToggle"><input type="checkbox" checked={state.acknowledged}
         disabled={disabled || !state.before_presented || !state.after_presented || state.phase !== 'review' || state.stale || !state.source_presented}
-        onChange={e => workflow.acknowledge(e.target.checked)}/>我已查看这两张实际效果图，确认当前照片、焦点范围和涂抹效果，并保存为独立新副本</label>
+        onChange={e => workflow.acknowledge(e.target.checked)}/>我已查看这两张实际效果图，确认当前照片、焦点范围、涂抹效果及{review.recipe.version === 2 ? '分组 FFT v2 新数学' : '直接渲染 v1'}，并保存为独立新副本</label>
       <button type="button" disabled={disabled || state.phase !== 'review' || !state.acknowledged || !workflow.renderingAvailable() || unresolved || !!draft}
         onClick={() => void workflow.apply()}>保存为新副本</button>
     </section>}

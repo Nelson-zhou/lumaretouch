@@ -1,0 +1,300 @@
+{
+  "schema_version": 1,
+  "baseline_commit": "8d9e5a3d465352f8e546221251a6ad3d00faccf2",
+  "requirement_ids": [
+    "LNX-REF-WF-165438-165adae6a7"
+  ],
+  "date": "2026-10-25",
+  "status": "SOURCE_CONNECTED_MANUAL_PARTIAL_ALL_RUNTIME_ACCEPTANCE_UNRUN",
+  "scope": "Explicit versioned full-resolution cohort aperture renderer, bounded neutral original JPEG/PNG import, native/UI negotiation and existing exact new-copy review/history path. No automatic depth or arbitrary mixed-edit 24MP claim.",
+  "manifest_policy": "Exact 51 files below plus this manifest (52 total). Excludes the three unrelated old manifests and concurrent docs/edited-source-capture research. Earlier design-only manifest is retained as historical evidence.",
+  "source_checks": {
+    "python_ast": 14,
+    "typescript_tsx_ast": "10 family files parsed by isolated UI reviewer; no typecheck",
+    "json": "parsed",
+    "whitespace": "all listed files checked, including untracked; git diff --check clean",
+    "core_manifest": "11 Rust/core payload hashes verified",
+    "independent_reviews": [
+      "FFT/kernel/cohort partition and FFI source review",
+      "PNG integer/ICC/orientation/alpha and memory-lifetime source review",
+      "Host/native/UI protocol, renderer admission and cancellation source review"
+    ],
+    "file_lines": {
+      "App.tsx": 2152,
+      "main.rs": 2054,
+      "server.py": 7050
+    }
+  },
+  "remaining": [
+    "Numerical FFT/direct parity, tile seams, full protection and endpoint policy acceptance are UNRUN",
+    "24MP runtime, performance, process RSS and photographic quality acceptance are UNRUN",
+    "Arbitrary mixed-edit large-image capture and optimized RAW/TIFF import remain incomplete",
+    "Dense feather residuals and repair work may exhaust explicit budgets; no pixels silently omitted",
+    "Variable/AI depth, automatic subject focus and transparent/HDR v2 return remain unavailable",
+    "Batch/presets and reopened editable lens recipes remain incomplete",
+    "Existing uncertain-write autosave taint remains conservative"
+  ],
+  "unrun": [
+    "Product imports/execution",
+    "Tests/build/compiler/typecheck",
+    "Model download/inference",
+    "Numerical/performance/RSS/photo/export/reopen acceptance"
+  ],
+  "files": [
+    {
+      "path": "core/lens_cohort/Cargo.toml",
+      "bytes": 220,
+      "sha256": "5136046ca2fcfee96b62b405931075fe1e158426d802b81d89ea3e902b89315a"
+    },
+    {
+      "path": "core/lens_cohort/README.md",
+      "bytes": 1020,
+      "sha256": "595c1212dd0b5fd6347649489be3f2627a58f1d1a20a4d785889ef4246f6922a"
+    },
+    {
+      "path": "core/lens_cohort/build_lens_cohort.sh",
+      "bytes": 591,
+      "sha256": "f5ecb5901511ec7427f8a00fdf857676dc74deb2d1d982e0013fddaee630033b"
+    },
+    {
+      "path": "core/lens_cohort/contract.rs",
+      "bytes": 1704,
+      "sha256": "d880eff7b0f365e8300a7482d867ac15f458b446d79fb251f7e3345c635f85c7"
+    },
+    {
+      "path": "core/lens_cohort/fft.rs",
+      "bytes": 2471,
+      "sha256": "a6b6addec92e023742ebe9523bef7b712b53355da28fbf85e709d6049b8573f2"
+    },
+    {
+      "path": "core/lens_cohort/kernel.rs",
+      "bytes": 3485,
+      "sha256": "5629b387e003420320b394384a694323cb099639b6175b525c1b33e77d23e556"
+    },
+    {
+      "path": "core/lens_cohort/lens_cohort.h",
+      "bytes": 4657,
+      "sha256": "8de6f92c5ec560586726c64635d26465a691c4520b24c9aaf413d6917d36c30e"
+    },
+    {
+      "path": "core/lens_cohort/lib.rs",
+      "bytes": 5730,
+      "sha256": "b9faa9753ff254214f6070404a4488d3d5881b8a38ce98864c4331630f6ee2c7"
+    },
+    {
+      "path": "core/lens_cohort/plan.rs",
+      "bytes": 7496,
+      "sha256": "236a96c9f5e8d76275d3c7b9342a001b8a4c7343992059d667571c05520ae039"
+    },
+    {
+      "path": "core/lens_cohort/render.rs",
+      "bytes": 12365,
+      "sha256": "af0a450701030283a0ecd80c7d3a2cdc92711de671b8caf63925821e611113eb"
+    },
+    {
+      "path": "core/lens_cohort/tests.rs",
+      "bytes": 15112,
+      "sha256": "12a54e5562cbcc1ba1a98dcabe3bad040639781fd2917622a08625133b8021db"
+    },
+    {
+      "path": "docs/development/handbook-traceability.json",
+      "bytes": 485058,
+      "sha256": "2904665ea30999015dcfce51e329735538feee0094d5d8cc64776e019195114b"
+    },
+    {
+      "path": "docs/lens-cohort/CORE-SOURCE.sha256",
+      "bytes": 1032,
+      "sha256": "43b429d102a64aac8792a98241729167a6f77cd5bd7b514509d1eac8ed02da89"
+    },
+    {
+      "path": "docs/lens-cohort/NATIVE-BRIDGE.md",
+      "bytes": 9280,
+      "sha256": "d2970c6e8a1c6cd422b1e42ebdfa7fc74764e15fbf9ba474ad96cd9006f52e0a"
+    },
+    {
+      "path": "docs/lens-cohort/README.md",
+      "bytes": 10434,
+      "sha256": "b7663cd78abf83dbdf997cf879dc5b4c2f22a80d3ab59614b43ecc57d4c391ac"
+    },
+    {
+      "path": "docs/lens-focus-ui/RENDERER-V2.md",
+      "bytes": 9349,
+      "sha256": "e5a2e9c67e418a40decb55411f924669f2d82263670ea3a154d49c50c092ea85"
+    },
+    {
+      "path": "docs/lens-fullresolution/BOUNDED-IMPORT.md",
+      "bytes": 13891,
+      "sha256": "217b08f5b8ea85fd806cc0aafb0935fdf8e30bbd409d64e00cca2e18c0e98c60"
+    },
+    {
+      "path": "docs/lens-fullresolution/FIRST-MODULE.md",
+      "bytes": 11933,
+      "sha256": "4bec52c155882e285937220d284f4853cafe2ba644c956e3b29e576313ed7c68"
+    },
+    {
+      "path": "docs/lens-fullresolution/FREEZE.json",
+      "bytes": 2294,
+      "sha256": "ed9953628ecb80dac1f33787cdba1fa13f38224f6be4ff142a18196285b6a016"
+    },
+    {
+      "path": "docs/lens-fullresolution/INTEGRATION.md",
+      "bytes": 4903,
+      "sha256": "cc5cea879d52d93727db4a51bb86dce617db9b150dc44510aa88367a8e4ebed1"
+    },
+    {
+      "path": "docs/lens-fullresolution/README.md",
+      "bytes": 5530,
+      "sha256": "a77d0c83be390dfb8b0bded44b84880ed88d4070db0307cc01c1cb985aac6528"
+    },
+    {
+      "path": "docs/lens-fullresolution/RENDERER-CONTRACT.md",
+      "bytes": 14490,
+      "sha256": "ed4f491bdc6ffcc36dd9f45d54f27364bef3ff0251ba9613329bcc36d31c5cc5"
+    },
+    {
+      "path": "docs/lens-fullresolution/RESEARCH-AND-ACCEPTANCE.md",
+      "bytes": 9724,
+      "sha256": "82fc0e79cc22aa0523b15aba936f28a108db76dce22294a571cae13b43fc49d9"
+    },
+    {
+      "path": "docs/lens-fullresolution/STORAGE-AND-INTEGRATION.md",
+      "bytes": 13699,
+      "sha256": "8a45945f8d3f902ad67d5d84d48f3ea91f32d7681698d67f1242e6bae1035277"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/creative_document_base.py",
+      "bytes": 22029,
+      "sha256": "8a7440ad034ecb1d5e845aae1b7425fd366f8c67f1596bc2938fe5115a1924e7"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/creative_document_import_bounded.py",
+      "bytes": 34576,
+      "sha256": "886868a4c01b6e7863afb8cf59aa536e0061dbe06c2ef5b4379fe1978210820d"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/lens_blur_admission.py",
+      "bytes": 3232,
+      "sha256": "437857b2255dc5e3152a91590a15cc0517de3b9d886c24c22f7d653d0b4c0647"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/lens_blur_cohort_stage.py",
+      "bytes": 5415,
+      "sha256": "2cff5a03239c24d0c1a0f4c0edccaf6ce6ce30674db3363858fcc7740dca4a52"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/lens_blur_host.py",
+      "bytes": 33395,
+      "sha256": "d7c1ee1c6d07832ccdc6a2c8c74b53206e1096ccef01ee182f52c0a889865d42"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/lens_blur_jobs.py",
+      "bytes": 10223,
+      "sha256": "2df10758adb4c2efde2e9c5226ae1b174d4481140ff1cb4ed85bae1f6adb562b"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/lens_blur_stage.py",
+      "bytes": 33991,
+      "sha256": "a7406ef66f2860ef1211103c50f3fbd8c997d6b44cfd391b199b02ac909d433b"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/lens_cohort_native.py",
+      "bytes": 23498,
+      "sha256": "990ae2a39121b6edf1e14c0573eac7beed3db14396a28b96ed498c4b441cd64c"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/lens_cohort_refinement.py",
+      "bytes": 4647,
+      "sha256": "ed3b91caaf3236f0f938e02ed5486f9e3059881202915899aaab4d9edc17489d"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/server.py",
+      "bytes": 472652,
+      "sha256": "552d845f9bbd0fa6540f9b6a54ec1442f3641110e70dd091b8e6a78e5ffdb4b4"
+    },
+    {
+      "path": "engine/tests/test_creative_import_bounded_unrun.py",
+      "bytes": 25362,
+      "sha256": "581211a6e482530db276224f41da031dd0a380f03a59d4ddb976895e521e90a7"
+    },
+    {
+      "path": "engine/tests/test_lens_cohort_native_unrun.py",
+      "bytes": 19394,
+      "sha256": "a17f923236ef5c522fa6047ef36f8546651e0a547885bd424ebc5ad865a3ae04"
+    },
+    {
+      "path": "engine/tests/test_lens_cohort_stage_unrun.py",
+      "bytes": 5069,
+      "sha256": "9f79d9caeb94f82b174464f6939a56c0537f1f53800f8ceab74e413861b9a4aa"
+    },
+    {
+      "path": "engine/tests/test_lens_integration_unrun.py",
+      "bytes": 2928,
+      "sha256": "c655770bec717f108917b5b86026dad7cba71735c6e829e48a201e2852ce7fe6"
+    },
+    {
+      "path": "packaging/stage-engine.sh",
+      "bytes": 29405,
+      "sha256": "4e6bc79bafc00d5c12f716a01ba9d0cb6d5d708729f5e7b5dfa81d378e94c079"
+    },
+    {
+      "path": "ui/src-tauri/src/engine.rs",
+      "bytes": 44965,
+      "sha256": "6ed5aa4ac68d98176dd245d6d7b75cdbe234724f5d75479d93255e65543c27cb"
+    },
+    {
+      "path": "ui/src-tauri/src/lens_blur_api.rs",
+      "bytes": 33836,
+      "sha256": "8a565e46d21daf72b8eb6295548eeb6fe8d28749496bddddb5028bb86585542b"
+    },
+    {
+      "path": "ui/src-tauri/src/lens_blur_protocol.rs",
+      "bytes": 22699,
+      "sha256": "cac988547b1dca9be9e334ccb0c9dc3ad8b25446e284f566587132ec8279502d"
+    },
+    {
+      "path": "ui/src-tauri/src/lens_blur_protocol_unrun.rs",
+      "bytes": 12124,
+      "sha256": "45d426f5145cd3ad4aac6750b93231680f58c80bfdc5c1a14c7c893ed816ec0e"
+    },
+    {
+      "path": "ui/src/App.tsx",
+      "bytes": 155060,
+      "sha256": "5697271f7f4139ab11a6c79b891b1165d84d6d638628890acc8d788deb51a371"
+    },
+    {
+      "path": "ui/src/lensBlur/LensBlurWorkspace.tsx",
+      "bytes": 23353,
+      "sha256": "c39b05807ed20e5b614f8c488eadd227949056435fbe53ec5336f22806ba74a2"
+    },
+    {
+      "path": "ui/src/lensBlur/lensBlur.css",
+      "bytes": 3720,
+      "sha256": "d7360948d2c2affaa3468d18aab7fe47b7b9f537ccd3b7e0ae650884a230a2d8"
+    },
+    {
+      "path": "ui/src/lensBlur/model.ts",
+      "bytes": 21488,
+      "sha256": "cb1bdc5f9a0718648bcf5f378c46c08174eddc870ae203124b2ca625a52a7675"
+    },
+    {
+      "path": "ui/src/lensBlur/model.unrun.test.ts",
+      "bytes": 15427,
+      "sha256": "bf1303e94ddcb3f3c609c5dbfa6b7898fe9fe7599436c1d5b440c8d0e445a0ef"
+    },
+    {
+      "path": "ui/src/lensBlur/nativePort.ts",
+      "bytes": 15650,
+      "sha256": "66de61201adc4a8ba2d85db7b8bc61279a8cbd88a8a88ee28d6b966fad70bf3c"
+    },
+    {
+      "path": "ui/src/lensBlur/workflow.ts",
+      "bytes": 22082,
+      "sha256": "e6793d0199b67d7562098f582472cd05306a5aba18012437fc4c033a5a7af938"
+    },
+    {
+      "path": "ui/src/lensBlur/workflow.unrun.test.ts",
+      "bytes": 18270,
+      "sha256": "ebc1422f83b31a869ce5ceb6c8948f9e2f5f2f0539c3ebdad71d2fe2be106b78"
+    }
+  ]
+}

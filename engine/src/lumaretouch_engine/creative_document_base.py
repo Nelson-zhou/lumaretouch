@@ -252,7 +252,8 @@ def _working_source(path, original, *, max_pixels, device):
 
 
 def capture_current_asset(engine, row, state, assets, *, cancelled=lambda: False,
-                          max_bytes=DEFAULT_WORK_BYTES):
+                          max_bytes=DEFAULT_WORK_BYTES, neutral_import_version=0,
+                          allow_legacy_import_budget_fallback=False):
     """Freeze current full-resolution edits into a real canonical base record.
 
     Same recipe/source guards, crop, effects and float output as file export.
@@ -270,6 +271,10 @@ def capture_current_asset(engine, row, state, assets, *, cancelled=lambda: False
     from .decode import is_raw
     if type(max_bytes) is not int or not 1 <= max_bytes <= MAX_WORK_BYTES:
         raise ValueError('Invalid creative full-capture memory budget')
+    if type(neutral_import_version) is not int or neutral_import_version not in (0, 1):
+        raise ValueError('Unknown explicit neutral-source import strategy')
+    if type(allow_legacy_import_budget_fallback) is not bool:
+        raise ValueError('Legacy import budget fallback must be explicitly selected')
     def poll(*_args):
         if cancelled():
             raise InterruptedError('Creative full-resolution capture cancelled')
@@ -285,11 +290,38 @@ def capture_current_asset(engine, row, state, assets, *, cancelled=lambda: False
     from .people_export import verify_source, isolated_snapshot
     verify_source(snap,path)
     snap=isolated_snapshot(snap,for_document=True)
+    neutral = _neutral_snapshot(snap)
     record = from_state(frozen)
     source = None
     if record is None:
         if not is_raw(path):
-            identity = import_file(path, assets, max_bytes=max_bytes, cancelled=cancelled)
+            importer = import_file
+            if neutral_import_version == 1 and neutral:
+                # Explicit new capture strategy only. Legacy callers and every
+                # non-neutral full-edit export keep their historical path.
+                with open(path, 'rb') as header:
+                    signature = header.read(8)
+                if signature.startswith(b'\xff\xd8') or signature == b'\x89PNG\r\n\x1a\n':
+                    from .creative_document_import_bounded import import_file as importer
+            legacy_budget_retry = False
+            if importer is import_file:
+                identity = importer(path, assets, max_bytes=max_bytes, cancelled=cancelled)
+            else:
+                from .creative_document_import_bounded import ImportBudgetExceeded
+                try:
+                    identity = importer(path, assets, max_bytes=max_bytes, cancelled=cancelled)
+                except ImportBudgetExceeded as error:
+                    # Only post-metadata, pre-pixel allocation refusal qualifies.
+                    # Invalid ICC/orientation/precision never reaches this retry.
+                    if not allow_legacy_import_budget_fallback:
+                        raise
+                    error.__traceback__ = None
+                    legacy_budget_retry = True
+                if legacy_budget_retry:
+                    # Leave the exception scope first: its frames must not retain
+                    # a second original-file snapshot during legacy allocation.
+                    poll()
+                    identity = import_file(path, assets, max_bytes=max_bytes, cancelled=cancelled)
             record = assets.get(identity, 'rgba')
         else:
             size = Path(path).stat().st_size
@@ -315,7 +347,7 @@ def capture_current_asset(engine, row, state, assets, *, cancelled=lambda: False
     poll()
     if LM.file_stamp(path) != before:
         raise ValueError('Original source changed during creative capture')
-    if _neutral_snapshot(snap):
+    if neutral:
         # No transfer roundtrip, quantization, alpha loss, or HDR clipping.
         result = deepcopy(record)
     else:

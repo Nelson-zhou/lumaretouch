@@ -19,7 +19,7 @@ import uuid
 from . import lens_blur_stage as stage
 from .lens_blur_jobs import canonical, command_hash, controller as jobs, digest, token
 
-PROTOCOL = 2
+PROTOCOL = 3
 MAX_RETAINED_BYTES = 1_000_000_000
 MAX_WORK_BYTES = 2_000_000_000
 MAX_READS = 256
@@ -133,25 +133,33 @@ class _Fence:
 
 
 def capability():
-    """Query real packaged native ABIs at runtime, not file-name availability."""
-    from .lens_aperture_native import capability as query
+    """Query separately versioned packaged renderers, never a filename fallback."""
+    from .lens_aperture_native import capability as direct_query
+    from .lens_cohort_native import capability as cohort_query
     from .creative_layer_native import native, CreativeLayerNativeUnavailable
-    result = query()
-    available = result['lens_aperture_available']
-    reason = result['lens_aperture_reason'] or ''
-    if available:
+    direct, cohort = direct_query(), cohort_query()
+    renderers, kernels, reasons = [], set(), []
+    if direct['lens_aperture_available']:
+        renderers.append('direct-v1'); kernels.update(direct['kernels'])
+    elif direct['lens_aperture_reason']:
+        reasons.append(direct['lens_aperture_reason'])
+    if cohort['available']:
+        renderers.append('cohort-fft-v2'); kernels.update(cohort['kernels'])
+    elif cohort['reason']:
+        reasons.append(cohort['reason'])
+    if renderers:
         try:
             native()
         except CreativeLayerNativeUnavailable as error:
-            available, reason = False, _text(error)
-    return {'version': 1, 'operation_id': stage.OPERATION,
-            'status': 'available' if available else 'unavailable',
-            'kernels': list(result['kernels']) if available else [], 'reason': reason}
+            renderers, kernels, reasons = [], set(), [_text(error)]
+    return {'version': 2, 'operation_id': stage.OPERATION,
+            'status': 'available' if renderers else 'unavailable', 'renderers': renderers,
+            'kernels': sorted(kernels), 'reason': _text('; '.join(reasons))}
 
 
 def _write(command):
     if type(command) is not dict or type(command.get('version')) is not int or command['version'] != PROTOCOL:
-        raise ValueError('Lens writes require explicit copy-review protocol 2')
+        raise ValueError('Lens writes require explicit copy-review protocol 3')
     action = command.get('action')
     keys = {'version', 'action', 'request_id', 'session_id', 'owner', 'token'}
     if action == 'apply':
@@ -232,7 +240,20 @@ class Service:
             self.candidate = None
 
     def _admit_retained(self, *values):
-        if LEDGER_RESERVE + sum(value.retained_bytes for value in values if value is not None) > MAX_RETAINED_BYTES:
+        total, seen = LEDGER_RESERVE, set()
+        for value in values:
+            if value is None:
+                continue
+            total += value.retained_bytes
+            # Immutable canonical records share actual original/ICC bytes; count
+            # physical object identity, never deduplicate merely equal contents.
+            for key in ('content', 'original', 'icc'):
+                data = getattr(value, key, None)
+                if type(data) is bytes:
+                    if id(data) in seen:
+                        total -= len(data)
+                    seen.add(id(data))
+        if total > MAX_RETAINED_BYTES:
             raise MemoryError('Lens retained source/depth/candidate lease exceeds one bounded session')
 
     def _budget(self):
@@ -257,7 +278,7 @@ class Service:
     def _context(self):
         result = stage.context(self.source, self.session_id, self.depth)
         from .lens_blur_admission import source_notice
-        result['message'] += ' 仅接受不透明 SDR 完整编辑结果；确认后另存新图，原图不改。'+source_notice(self.source.owner['source'],self._budget())
+        result['message'] += ' 仅接受不透明 SDR 完整编辑结果；确认后另存新图，原图不改。'+source_notice(self.source.owner['source'],self._budget(),renderers=capability()['renderers'])
         return result
 
     def current(self, request):
@@ -282,12 +303,15 @@ class Service:
             assets = AssetStore(max_bytes=min(MAX_RETAINED_BYTES, maximum.max_bytes))
             state = self.engine._capture_state()
             asset = capture_current_asset(self.engine, fence.row, state, assets,
-                                          max_bytes=maximum.max_bytes, cancelled=stopped)
+                                          max_bytes=maximum.max_bytes, cancelled=stopped,
+                                          neutral_import_version=1 if 'cohort-fft-v2' in cap['renderers'] else 0,
+                                          allow_legacy_import_budget_fallback='direct-v1' in cap['renderers'])
             del assets, state  # Release imported intermediates before display staging.
             _poll(stopped)
             require_photo_return(asset)  # Exact opaque SDR gate, never a clip.
             from .lens_blur_admission import source_admission
-            source_admission(asset,maximum,display_reserve=stage.DISPLAY_RESERVE)
+            source_admission(asset,maximum,display_reserve=stage.DISPLAY_RESERVE,renderers=cap['renderers'],
+                             retained_limit=MAX_RETAINED_BYTES-LEDGER_RESERVE)
             owner = {'document_id': fence.version.document_id, 'document_epoch': fence.epoch,
                      'document_revision': str(fence.version.revision),
                      'source': {'sha256': asset['id'][7:], 'width': asset['width'],

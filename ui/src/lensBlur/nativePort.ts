@@ -219,5 +219,5 @@ export function createLensNativePort(options: {
   };
 }
 
-export const unavailableLensCapability = (reason: string): LensCapability => ({version: 1, operation_id: LENS_OPERATION,
-  status: 'unavailable', kernels: [], reason: reason.slice(0, 4096).replaceAll('\0', '')});
+export const unavailableLensCapability = (reason: string): LensCapability => ({version: 2, operation_id: LENS_OPERATION,
+  status: 'unavailable', kernels: [], renderers: [], reason: reason.slice(0, 4096).replaceAll('\0', '')});

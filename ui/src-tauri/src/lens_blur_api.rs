@@ -43,7 +43,7 @@ fn mailbox()->&'static Mutex<Mailbox> {
     store
 }
 fn unavailable(id:&str)->Value {json!({"event":wire::EVENT,"request_id":id,"status":"unknown","message":"原请求未保留或身份不存在；不能认定未执行，也不会重新提交"})}
-fn unavailable_capability()->Value {json!({"version":1,"operation_id":wire::OPERATION,"status":"unavailable","kernels":[],"reason":"配套引擎尚未声明镜头协议 2 与可用原生光圈；不提供 AI 景深或占位效果"})}
+fn unavailable_capability()->Value {json!({"version":2,"operation_id":wire::OPERATION,"status":"unavailable","kernels":[],"renderers":[],"reason":"配套引擎尚未声明镜头协议 3 与可用原生光圈；不提供 AI 景深或占位效果"})}
 fn reservation(action:&str)->usize {match action {"current"|"prepare_manual_plane"=>wire::CONTEXT_BYTES,"preview"=>wire::RESULT_BYTES,_=>wire::SMALL_BYTES}}
 fn image_proof(image:&Value)->Value {json!({"sha256":image["sha256"],"width":image["width"],"height":image["height"]})}
 fn depth_proof(depth:&Value)->Value {json!({"token":depth["token"],"sha256":depth["raster"]["sha256"],"provenance":depth["provenance"]})}
@@ -91,7 +91,7 @@ impl Mailbox {
         } Ok(())
     }
     fn admission(&self,epoch:[u8;16],req:&wire::Request)->Result<Option<Value>,String> {
-        if epoch==[0;16] || self.epoch!=epoch || self.ended || !self.supported {return Err("原引擎不可用或未声明镜头协议 2；未执行".into());}
+        if epoch==[0;16] || self.epoch!=epoch || self.ended || !self.supported {return Err("原引擎不可用或未声明镜头协议 3；未执行".into());}
         if req.action=="receipt" {
             let Some(original)=self.rows.iter().find(|r|r.epoch==epoch && r.request.write() && r.request.id==req.inner()["request_id"]) else {
                 return Err("当前引擎未保留该原写入及其完整身份；不会向另一个引擎猜测或重发".into());
@@ -108,6 +108,10 @@ impl Mailbox {
         if req.action=="current" {return Ok(None);}
         let session=self.session.as_ref().filter(|s|s.epoch==epoch && same_session(s,req)).ok_or("缺少完全匹配的当前照片、原文档身份及有效会话租约")?;
         if req.action=="preview" {
+            let renderer=if req.inner()["recipe"]["version"]==2 {"cohort-fft-v2"} else {"direct-v1"};
+            if !self.capability["renderers"].as_array().is_some_and(|rs|rs.iter().any(|r|r.as_str()==Some(renderer))) {
+                return Err("原生宿主未声明所选数值版本；不会切换到另一种渲染器".into());
+            }
             if !session.depth.as_ref().is_some_and(|d|wire::same(d,&req.inner()["recipe"]["depth"])) {
                 return Err("配方未绑定本会话明确确认的人工散焦基准面；不会使用 AI 或占位景深".into());
             }
@@ -229,7 +233,7 @@ impl Mailbox {
             for r in self.rows.iter_mut().filter(|r|r.epoch==epoch && r.imagery()) {r.expires=Some(Instant::now());}
             self.expire(Instant::now());
         }
-        // Internal settlement only. Never replace the UI's exact protocol-2
+        // Internal settlement only. Never replace the UI's exact protocol-3
         // receipt with a fake history entry, document_id alias or success bit.
         settled.map(|original|json!({"event":wire::EVENT,"request_id":original,"phase":"done","outcome_unknown":false}))
     }
@@ -362,7 +366,7 @@ mod mailbox_unrun {
     fn apply_request()->wire::Request {
         let sha="a".repeat(64);
         wire::parse_request(&json!({"cmd":"lens_blur","action":"submit","request_id":"apply-fixture","command":{
-            "version":2,"action":"apply","request_id":"apply-fixture","session_id":"session-fixture","owner":{
+            "version":wire::PROTOCOL,"action":"apply","request_id":"apply-fixture","session_id":"session-fixture","owner":{
                 "document_id":"source-fixture","document_epoch":"document-epoch","document_revision":"12","source":{
                     "sha256":sha,"width":2,"height":2,"orientation":"exif_normalized_once"}},"token":"review-fixture",
             "recipe_sha256":sha,"before_sha256":sha,"after_sha256":sha,"reviewed":true,"return_mode":"new_image","result_source_sha256":"b".repeat(64)}})).unwrap()
@@ -373,7 +377,7 @@ mod mailbox_unrun {
     }
     fn applied_fixture(req:&wire::Request,outer:&str)->Value {
         let c=req.inner();json!({"event":wire::EVENT,"request_id":outer,"status":"ready","receipt":{
-            "version":2,"request_id":c["request_id"],"session_id":c["session_id"],"action":c["action"],"owner":c["owner"],"token":c["token"],
+            "version":wire::PROTOCOL,"request_id":c["request_id"],"session_id":c["session_id"],"action":c["action"],"owner":c["owner"],"token":c["token"],
             "phase":"done","outcome_unknown":false,"outcome":"applied","message":"Fixture authoritative return",
             "recipe_sha256":c["recipe_sha256"],"before_sha256":c["before_sha256"],"after_sha256":c["after_sha256"],"return_mode":"new_image",
             "copied_original_document_id":c["owner"]["document_id"],"result_document_id":"distinct-result-fixture","result_revision":"0",

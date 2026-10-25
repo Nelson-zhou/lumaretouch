@@ -9,7 +9,7 @@ ENGINE = ROOT / 'engine/src/lumaretouch_engine'
 
 def test_dedicated_source_admission_precedes_capture_session():
     text = (ENGINE / 'lens_blur_host.py').read_text()
-    assert 'source_admission(asset,maximum,display_reserve=stage.DISPLAY_RESERVE)' in text
+    assert 'source_admission(asset,maximum,display_reserve=stage.DISPLAY_RESERVE,renderers=' in text
     bounds = (ENGINE / 'lens_blur_admission.py').read_text()
     assert 'pixels*128' in bounds and 'budget.max_candidate_taps' in bounds
     assert 'raise MemoryError' in bounds
