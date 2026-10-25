@@ -4,9 +4,9 @@ import {CreativeLayersPanel} from './CreativeLayersPanel';
 import type {CreativeWorkspaceOwner} from './useCreativeWorkspace';
 
 /** Real layer workspace plus the existing tool catalogue, extracted without dropping tools. */
-export function CreativeWorkspace({owner, hasImage, available, onBack, onHeal, healBlocked}: {
+export function CreativeWorkspace({owner, hasImage, available, onBack, onHeal, healBlocked, onLens, lensBlocked}: {
   owner: CreativeWorkspaceOwner; hasImage: boolean; available: boolean;
-  onBack: () => void; onHeal: () => void; healBlocked: boolean;
+  onBack: () => void; onHeal: () => void; healBlocked: boolean; onLens: () => void; lensBlocked: boolean;
 }) {
   return <section className="creativeView">
     <div className="creativeHead"><div><h2>创意</h2><span>真实图片图层与可恢复的文档编辑</span></div>
@@ -27,9 +27,11 @@ export function CreativeWorkspace({owner, hasImage, available, onBack, onHeal, h
     <details className="creative-tool-catalogue"><summary>其他创意工具</summary><div className="creativeCards">
       {TOOL_CATEGORIES.map(category => <div className="cGroup" key={category}><h3>{category}</h3><div className="cCards">
         {TOOLS.filter(tool => tool.category === category).map(tool => {
-          const wired = tool.name.includes('智能消除');
-          return <button key={tool.id} className={`cCard${wired ? ' on' : ' off'}`} disabled={!wired || !hasImage || owner.pending || healBlocked}
-            title={wired ? '在画布上使用消除笔' : '该工具将在后续版本提供'} onClick={() => {if (wired && !healBlocked) onHeal();}}>
+          const lens = tool.id === '165438';
+          const heal = tool.name.includes('智能消除');
+          const wired = heal || lens;
+          return <button key={tool.id} className={`cCard${wired ? ' on' : ' off'}`} disabled={!wired || !hasImage || owner.pending || (lens ? lensBlocked : healBlocked)}
+            title={lens ? '人工镜头散焦与完整图像审核；AI 景深尚不可用' : wired ? '在画布上使用消除笔' : '该工具将在后续版本提供'} onClick={() => {if (lens && !lensBlocked) onLens(); else if (heal && !healBlocked) onHeal();}}>
             <b>{tool.name}</b><span>{(tool.interaction || tool.output || '').slice(0, 46)}</span></button>;
         })}
       </div></div>)}

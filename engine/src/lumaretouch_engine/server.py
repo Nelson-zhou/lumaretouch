@@ -457,6 +457,7 @@ class Engine(FringeRepairHostMixin, PresetOrganisationHostMixin, HairColourHostM
         from .lip_texture_state import capability as lip_texture_capability
         from .face_decoration_state import capability as face_decoration_capability
         from .facial_sculpt_state import capability as facial_sculpt_capability
+        from .lens_blur_host import capability as lens_blur_capability
         from .expression_replacement_native import capability as expression_capability
         from .eye_makeup_enhance_state import capability as eye_makeup_enhance_capability
         from .eye_bag_preserve_state import capability as eye_bag_preserve_capability
@@ -466,7 +467,7 @@ class Engine(FringeRepairHostMixin, PresetOrganisationHostMixin, HairColourHostM
               # 装机 UI 上显示的版本与真正在跑的引擎版本就是两句话。
               # 协议号不动（加键属兼容扩展，宿主只读不判）。
               "version": __version__, **skin_colour_capability(), **skin_finish_capability(), **skin_gloss_capability(), **skin_texture_capability(), **face_contour_capability(),**face_size_capability(), **lower_face_capability(), **mid_face_capability(), **chin_shape_capability(), **chin_length_capability(), **philtrum_capability(), **eye_symmetry_capability(), **brow_enhance_capability(), **lip_texture_capability(), **skin_evenness_capability(), **body_skin_evenness_capability(), **collarbone_capability(), **body_face_match_capability(),
-              "expression_replacement_protocol": 1, "expression_replacement_operation_id": "lnx.expression_replacement.v1", "expression_replacement_available": expression_capability()["available"], "eye_bags_protocol": 2, **eye_bag_preserve_capability(), **face_decoration_capability(), **facial_sculpt_capability(), **eye_makeup_enhance_capability(), "face_decoration_alias_protocol": 1, "face_decoration_support_alias_protocol": 1, "face_decoration_preset_alias_protocol": 1,
+              "lens_blur_protocol": 2, "lens_blur_capability": lens_blur_capability(), "expression_replacement_protocol": 1, "expression_replacement_operation_id": "lnx.expression_replacement.v1", "expression_replacement_available": expression_capability()["available"], "eye_bags_protocol": 2, **eye_bag_preserve_capability(), **face_decoration_capability(), **facial_sculpt_capability(), **eye_makeup_enhance_capability(), "face_decoration_alias_protocol": 1, "face_decoration_support_alias_protocol": 1, "face_decoration_preset_alias_protocol": 1,
               "runtime": runtime_report(),
               "privacy": policy_status(),
               # 内置预设清单（M3-b）：按钮上写什么字、按哪个名提交，全部由引擎说。
@@ -1376,6 +1377,10 @@ class Engine(FringeRepairHostMixin, PresetOrganisationHostMixin, HairColourHostM
 
     def _history_bind(self, row: dict | None) -> None:
         return self._history_controller().bind(row)
+
+    def cmd_lens_blur(self, p):
+        from .lens_blur_host import handle
+        return handle(self,p,emit)
 
     def cmd_expression_replacement(self, p):
         from .expression_replacement_host import handle
@@ -4758,39 +4763,12 @@ class Engine(FringeRepairHostMixin, PresetOrganisationHostMixin, HairColourHostM
         return self._custom_lut_service().execute(self, p, emit)
 
     def _custom_lut_reader_stop(self):
-        from .expression_replacement_jobs import controller as expression_jobs
-        expression_jobs(self).stop()
-        from .eye_bag_review_jobs import controller as eye_bag_jobs
-        eye_bag_jobs(self).stop()
-        self._photo_detail_service().stop()
-        self._extended_tone_service().stop()
-        self._photo_grain_service().stop()
-        self._colour_grading_service().stop()
-        self._primary_calibration_service().stop()
-        self._selective_colour_service().stop()
-        self._colour_editor_service().stop()
-        owner = self.__dict__.get("_custom_lut_owner")
-        if owner is not None:
-            with owner.lock:
-                for key, event in owner.events.items():
-                    if not (owner.active == key and owner.published): event.set()
-        self._owned_reader_stop()
+        from .read_job_ingress import stop
+        return stop(self)
 
     def _custom_lut_ingress(self, line):
-        from .expression_replacement_jobs import controller as expression_jobs
-        if expression_jobs(self).ingress(line): return True
-        from .eye_bag_review_jobs import controller as eye_bag_jobs
-        if eye_bag_jobs(self).ingress(line): return True  # Cancellation control cannot invalidate unrelated edit owners.
-        primary_consumed=self._primary_calibration_service().ingress(line)
-        selective_consumed=self._selective_colour_service().ingress(line)
-        editor_consumed=self._colour_editor_service().ingress(line)
-        grain_consumed=self._photo_grain_service().ingress(line)
-        grading_consumed=self._colour_grading_service().ingress(line)
-        detail_consumed=self._photo_detail_service().ingress(line)
-        tone_consumed=self._extended_tone_service().ingress(line)
-        lut_consumed=self._custom_lut_service().ingress(line)
-        owned_consumed=self._owned_command_ingress(line)
-        return editor_consumed or detail_consumed or primary_consumed or selective_consumed or grain_consumed or grading_consumed or tone_consumed or lut_consumed or owned_consumed
+        from .read_job_ingress import ingress
+        return ingress(self,line)
 
     def _resolve_lut_source(self, p: dict):
         """从命令里解析出那张表：path / text / preset 三个来源必给且只给一个。
@@ -6624,7 +6602,7 @@ class Engine(FringeRepairHostMixin, PresetOrganisationHostMixin, HairColourHostM
         lambda self: self._inspection_controller().error,
         lambda self, value: setattr(self._inspection_controller(), "error", value))
 
-    HANDLED = ("expression_replacement", "fringe_repair", "fringe_repair_preview", "common_background", "common_background_preview", "common_background_readback", "creative_document", "canvas_guides", "project_recovery", "managed_import", "project_package", "export_destination", "virtual_copy", "source_relocation", "preset_organisation", "colour_editor", "colour_editor_state", "colour_editor_sample", "photo_grain", "photo_grain_state", "photo_detail", "photo_detail_state", "photo_detail_receipt", "primary_calibration", "primary_calibration_state", "selective_colour", "selective_colour_state", "colour_grading", "colour_grading_state", "extended_tone", "extended_tone_state", "extended_tone_receipt", "hello", "hair_colour", "shoulder_shape", "leg_shape", "arm_shape", "waist_shape", "leg_length", "neck_shape", "torso_length", "waist_length", "head_size", "body_slim", "semantic_colour", "semantic_colour_cancel", "sample_library", "sample_library_cancel", "sky_semantic", "sky_replacement_preview", "optics_preview", "studio_background_preview", "manual_liquify_preview", "effect_recovery_preview", "local_grade_live", "inspection_snapshot", "color_scopes", "color_capture", "source_patch_capture", "prompted_masks", "white_balance_capture", "color_picker_capture", "color_picker_probe", "bench_start", "bench_stop", "set_device", "shutdown",
+    HANDLED = ("lens_blur", "expression_replacement", "fringe_repair", "fringe_repair_preview", "common_background", "common_background_preview", "common_background_readback", "creative_document", "canvas_guides", "project_recovery", "managed_import", "project_package", "export_destination", "virtual_copy", "source_relocation", "preset_organisation", "colour_editor", "colour_editor_state", "colour_editor_sample", "photo_grain", "photo_grain_state", "photo_detail", "photo_detail_state", "photo_detail_receipt", "primary_calibration", "primary_calibration_state", "selective_colour", "selective_colour_state", "colour_grading", "colour_grading_state", "extended_tone", "extended_tone_state", "extended_tone_receipt", "hello", "hair_colour", "shoulder_shape", "leg_shape", "arm_shape", "waist_shape", "leg_length", "neck_shape", "torso_length", "waist_length", "head_size", "body_slim", "semantic_colour", "semantic_colour_cancel", "sample_library", "sample_library_cancel", "sky_semantic", "sky_replacement_preview", "optics_preview", "studio_background_preview", "manual_liquify_preview", "effect_recovery_preview", "local_grade_live", "inspection_snapshot", "color_scopes", "color_capture", "source_patch_capture", "prompted_masks", "white_balance_capture", "color_picker_capture", "color_picker_probe", "bench_start", "bench_stop", "set_device", "shutdown",
                "load_image", "set_strength", "precompute", "inpaint", "source_patch", "clone_stamp", "local_masks", "effect_recovery", "manual_liquify", "studio_background", "optics", "sky_replacement", "light",
                "deform", "lut", "custom_lut", "grade", "export", "exposure", "white_balance", "color_picker", "hsl", "curves", "levels", "crop", "background",
                "compare", "session", "project", "task", "history", "preset", "batch",
@@ -6717,6 +6695,8 @@ class Engine(FringeRepairHostMixin, PresetOrganisationHostMixin, HairColourHostM
             package = self.__dict__.get("_project_package_controller")
             if package is not None and package.blocks(name, msg):
                 raise ValueError("便携包操作进行中，请等待或取消后查询结果")
+            from .lens_blur_host import guard_other as lens_guard_other
+            lens_guard_other(self,name,msg)
             from .expression_replacement_host import guard_other
             guard_other(self, name, msg)
             CDH.guard_command(self, name, msg)
@@ -6732,6 +6712,8 @@ class Engine(FringeRepairHostMixin, PresetOrganisationHostMixin, HairColourHostM
                           'success': False, 'outcome_unknown': False, 'error': reason})
                     return
                 raise ValueError(reason)
+            if name == 'lens_blur':
+                fn(msg); return  # The reviewed copy transaction owns source fences and history.
             if name == 'expression_replacement':
                 fn(msg); return  # Dedicated exact source/copy transaction owns its history and receipts.
             if name == 'creative_document' and msg.get('action') == 'state':
@@ -6901,6 +6883,9 @@ class Engine(FringeRepairHostMixin, PresetOrganisationHostMixin, HairColourHostM
             emit({"event": "error", "error": f"{type(e).__name__}: {e}"})
         finally:
             try:
+                if dispatch_error and name == 'lens_blur':
+                    from .lens_blur_host import dispatch_rejected as lens_rejected
+                    lens_rejected(msg,dispatch_error,bool(recovery_boundary and recovery_boundary['started']),emit,engine=self)
                 if dispatch_error and name == 'expression_replacement':
                     from .expression_replacement_host import dispatch_rejected as expression_rejected
                     expression_rejected(self,msg,dispatch_error,bool(recovery_boundary and recovery_boundary['started']),emit)

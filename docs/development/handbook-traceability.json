@@ -1301,10 +1301,18 @@
       "source_url": "https://www.pixcakeai.com/guide/165438",
       "title": "光影——镜头虚化",
       "phase": null,
-      "status": "pending_independent_verification",
-      "implementation": [],
-      "verification": [],
-      "scope_note": "原始需求全量保留；本条登记不等于实现或验收通过"
+      "status": "partial_source_connected_unrun",
+      "implementation": [
+        "core/lens_aperture/lib.rs",
+        "engine/src/lumaretouch_engine/lens_blur_host.py",
+        "ui/src/lensBlur/useLensBlur.ts"
+      ],
+      "verification": [
+        "docs/lens-blur/INTEGRATION.md",
+        "docs/lens-blur/ACCEPTANCE-UNRUN.md",
+        "engine/tests/test_lens_integration_unrun.py"
+      ],
+      "scope_note": "LNX-REF-WF-165438-165adae6a7：人工基准面、五种真实光圈核、来源专属清晰/虚化涂抹、完整候选对比与新副本路径源码接通，全部运行/数值/画质验收 UNRUN。自动 AI 景深/主体对焦、普通 24MP 完整编辑来源、批量预设、可重新编辑镜头配方仍未完成；不缩小最终结果，不把人工路径算作完整官方功能。"
     },
     {
       "id": "creative:uXo7tBdQwi",
