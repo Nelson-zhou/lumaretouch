@@ -199,6 +199,11 @@ class CreativeHost:
             fp,_ = fingerprint_for(source)
             row = e._new_row(source['path'],state=state,budget=source.get('budget'))
             row['source_asset_id'] = source['source_asset_id']; row['fingerprint'] = fp
+            # A derived copy retains the original physical-file family, but owns
+            # independent canonical pixels, recipe, people state and history.
+            row['root_document_id'] = source['root_document_id']
+            row['copy_number'] = 1 + max(r['copy_number'] for r in e._docs if r['root_document_id']==source['root_document_id'])
+            if row['copy_number'] > 9007199254740991: raise ValueError('Copy numbering exceeds protocol integer range')
             row['label'] = (source.get('label') or source.get('name') or '照片')+' · 创意新图'
             from . import virtual_copy_people as VP, people_state as PS
             row[VP.KEY] = {'version':1,'people_graph':PS.empty(),**{key:{} for key in VP.FIELDS}}

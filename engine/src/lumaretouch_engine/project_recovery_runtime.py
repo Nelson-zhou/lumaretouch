@@ -16,7 +16,8 @@ def observe(event):
         if (event.get('event') == 'error' or event.get('success') is False
             or event.get('outcome_unknown') or event.get('requires_reload')
             or event.get('status') in ('failed', 'unknown', 'partial', 'blocked')
-            or event.get('requires_readback')):
+            or event.get('requires_readback')
+            or (event.get('event')=='expression_replacement_result' and (event.get('receipt') or {}).get('phase')=='unknown')):
             boundary['failed'] = True
 
 
@@ -36,6 +37,8 @@ def finish(engine, boundary, error=None):
     if boundary is None:
         return
     message = boundary['message']
+    from .expression_replacement_host import read_only as expression_read_only
+    if expression_read_only(message):return
     # Spill preview renders isolated candidates only. Even a rejected or failed
     # preview cannot dirty/taint committed project state or advance autosave.
     if message.get('cmd') == 'background' and message.get('action') in ('id_spill_preview', 'id_spill_paint_source', 'id_original_shadow_paint_source','id_original_shadow_preview'):
@@ -74,7 +77,7 @@ def finish(engine, boundary, error=None):
         'project','session','history','virtual_copy','managed_import','source_relocation',
         'people','batch','primary_calibration','colour_editor','selective_colour','colour_grading',
         'photo_grain','photo_detail','extended_tone','shoulder_shape','leg_shape','arm_shape',
-        'waist_shape','leg_length','neck_shape','torso_length','waist_length','head_size','body_slim','custom_lut','semantic_colour','creative_document','common_background'):
+        'waist_shape','leg_length','neck_shape','torso_length','waist_length','head_size','body_slim','custom_lut','semantic_colour','creative_document','common_background','expression_replacement'):
         if message.get('action') not in ('state','query','status','receipt','list','context'):
             runtime.revision += 1
 
@@ -115,7 +118,7 @@ class Runtime:
             # implement the existing active/pending/uncertain/job conventions.
             if name in ('bench', '_export', '_thumbs', '_picks'):
                 if owner.is_alive(): raise RecoveryError('后台任务尚未完成：' + name)
-            if not (name.endswith(('_controller', '_owner', '_host')) or name == '_batch_sync'):
+            if not (name.endswith(('_controller', '_owner', '_host')) or name in ('_batch_sync','_expression_replacement_service')):
                 continue
             for field in ('active', 'uncertain', 'pending', 'job', 'worker_running'):
                 value = getattr(owner, field, None)

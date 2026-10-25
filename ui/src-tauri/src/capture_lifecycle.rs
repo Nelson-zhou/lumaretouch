@@ -24,6 +24,7 @@ impl AppState {
 
 
     pub(crate) fn reset_capture_hosts(&self, epoch: [u8; 16]) {
+        crate::expression_replacement_api::reset(epoch);
         crate::shoulder_shape_api::reset(epoch);
         crate::leg_shape_api::reset(epoch);
         crate::waist_shape_api::reset(epoch);

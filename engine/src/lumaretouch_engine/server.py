@@ -457,6 +457,7 @@ class Engine(FringeRepairHostMixin, PresetOrganisationHostMixin, HairColourHostM
         from .lip_texture_state import capability as lip_texture_capability
         from .face_decoration_state import capability as face_decoration_capability
         from .facial_sculpt_state import capability as facial_sculpt_capability
+        from .expression_replacement_native import capability as expression_capability
         from .eye_makeup_enhance_state import capability as eye_makeup_enhance_capability
         from .eye_bag_preserve_state import capability as eye_bag_preserve_capability
         emit({"event": "ready", "protocol": PROTOCOL_VERSION, "command_ack": 1, "inspection_protocol": 1, "color_capture_protocol": 1, "color_scopes_protocol": 1, "batch_preflight_protocol": 1, "preset_result_protocol": 1, "xmp_import_protocol": 1, "preset_organisation_protocol": 1, "source_relocation_protocol": 1, "managed_import_protocol": 1, "project_recovery_protocol": 1, "white_balance_result_protocol": 1, "color_picker_capture_protocol": 1, "color_picker_result_protocol": 1, "white_balance_capture_protocol": 1, "source_patch_capture_protocol": 1, "source_patch_result_protocol": 1, "clone_stamp_protocol": 1, "heal_vector_protocol": 1, "local_masks_result_protocol": 1, "effect_recovery_protocol": 1, "manual_liquify_protocol": 1, "manual_liquify_preview_protocol": 2, "optics_protocol": 1, "sky_replacement_protocol": 1, "sky_semantic_protocol": 1,"lip_makeup_protocol":1,"brow_shape_protocol":2,"nose_shape_protocol":2,"eye_shape_protocol":2,"mouth_shape_protocol":2,"people_protocol":1,"hair_colour_protocol":1,"eyeliner_protocol":int((Path(__file__).resolve().parent/"bin/liblrt_eyeliner.so").is_file()),"iris_makeup_protocol":int((Path(__file__).resolve().parent/"bin/liblrt_iris_makeup.so").is_file()),"eyelash_protocol":int((Path(__file__).resolve().parent/"bin/liblrt_eyelash.so").is_file()),"brow_makeup_protocol":int((Path(__file__).resolve().parent/"bin/liblrt_brow_makeup.so").is_file()),"lipstick_protocol":int((Path(__file__).resolve().parent/"bin/liblrt_lipstick.so").is_file()),"blush_makeup_protocol":int((Path(__file__).resolve().parent/"bin/liblrt_blush_makeup.so").is_file()),"eye_light_protocol":int((Path(__file__).resolve().parent/"bin/liblrt_eye_light.so").is_file()),"reference_color_protocol":1,"sample_library_protocol":1,"semantic_colour_protocol":1,"primary_calibration_protocol":int(self._primary_calibration_service().available()),"colour_editor_protocol":int((Path(__file__).parent/"bin/liblrt_colour_editor.so").is_file()),"selective_colour_protocol":int((Path(__file__).parent/"bin/liblrt_selective_colour.so").is_file()),"photo_grain_protocol":int(PGR.available()),"colour_grading_protocol":int((Path(__file__).parent/"bin/liblrt_colour_grading.so").is_file()),"photo_detail_protocol":int(PDH.available()),"fringe_repair_protocol":int(FRN.available()),"extended_tone_protocol":int((Path(__file__).parent/"bin/liblrt_extended_tone.so").is_file()),"semantic_colour_workflow_protocol":1,"shoulder_shape_protocol":1,"leg_shape_protocol":1,"arm_shape_protocol":1,"waist_shape_protocol":1,"neck_shape_protocol":int((Path(__file__).resolve().parent/"bin/liblrt_neck_shape.so").is_file()),"body_slim_protocol":1,"body_slim_available":body_slim_ready,"body_slim_unavailable_reason":None if body_slim_ready else "整体瘦身 Rust 核心未安装或 ABI 不匹配；不会用局部瘦腰或缩放预览替代","head_size_protocol":1,"head_size_available":head_size_ready,"head_size_unavailable_reason":None if head_size_ready else "头部大小 Rust 核心未安装或 ABI 不匹配；仍可查询、归零或停用，不会以脸框代替完整头发区域","waist_length_protocol":1,"waist_length_available":waist_length_ready,"waist_length_unavailable_reason":None if waist_length_ready else "腰部长度 Rust 核心未安装或 ABI 不匹配；仍可查询、归零或停用，不会替代算法","torso_length_protocol":1,"torso_length_available":torso_length_ready,"torso_length_unavailable_reason":None if torso_length_ready else "上身长度 Rust 核心未安装或 ABI 不匹配；仍可查询、归零或停用，不会替代算法","leg_length_protocol":int((Path(__file__).resolve().parent/"bin/liblrt_leg_length.so").is_file()), "studio_background_protocol": 1, "common_background_protocol": 1, "common_background_readback_protocol": 1, "id_background_protocol": 1, "local_grade_live_protocol": 1, "prompted_masks_protocol": 1, "curve_recipe_versions": [1, 2, 3], "pid": os.getpid(),
@@ -465,7 +466,7 @@ class Engine(FringeRepairHostMixin, PresetOrganisationHostMixin, HairColourHostM
               # 装机 UI 上显示的版本与真正在跑的引擎版本就是两句话。
               # 协议号不动（加键属兼容扩展，宿主只读不判）。
               "version": __version__, **skin_colour_capability(), **skin_finish_capability(), **skin_gloss_capability(), **skin_texture_capability(), **face_contour_capability(),**face_size_capability(), **lower_face_capability(), **mid_face_capability(), **chin_shape_capability(), **chin_length_capability(), **philtrum_capability(), **eye_symmetry_capability(), **brow_enhance_capability(), **lip_texture_capability(), **skin_evenness_capability(), **body_skin_evenness_capability(), **collarbone_capability(), **body_face_match_capability(),
-              "eye_bags_protocol": 2, **eye_bag_preserve_capability(), **face_decoration_capability(), **facial_sculpt_capability(), **eye_makeup_enhance_capability(), "face_decoration_alias_protocol": 1, "face_decoration_support_alias_protocol": 1, "face_decoration_preset_alias_protocol": 1,
+              "expression_replacement_protocol": 1, "expression_replacement_operation_id": "lnx.expression_replacement.v1", "expression_replacement_available": expression_capability()["available"], "eye_bags_protocol": 2, **eye_bag_preserve_capability(), **face_decoration_capability(), **facial_sculpt_capability(), **eye_makeup_enhance_capability(), "face_decoration_alias_protocol": 1, "face_decoration_support_alias_protocol": 1, "face_decoration_preset_alias_protocol": 1,
               "runtime": runtime_report(),
               "privacy": policy_status(),
               # 内置预设清单（M3-b）：按钮上写什么字、按哪个名提交，全部由引擎说。
@@ -1375,6 +1376,10 @@ class Engine(FringeRepairHostMixin, PresetOrganisationHostMixin, HairColourHostM
 
     def _history_bind(self, row: dict | None) -> None:
         return self._history_controller().bind(row)
+
+    def cmd_expression_replacement(self, p):
+        from .expression_replacement_host import handle
+        return handle(self, p, emit)
 
     def cmd_creative_document(self, p: dict):
         return CDH.handle(self, p, emit)
@@ -4753,6 +4758,8 @@ class Engine(FringeRepairHostMixin, PresetOrganisationHostMixin, HairColourHostM
         return self._custom_lut_service().execute(self, p, emit)
 
     def _custom_lut_reader_stop(self):
+        from .expression_replacement_jobs import controller as expression_jobs
+        expression_jobs(self).stop()
         from .eye_bag_review_jobs import controller as eye_bag_jobs
         eye_bag_jobs(self).stop()
         self._photo_detail_service().stop()
@@ -4770,6 +4777,8 @@ class Engine(FringeRepairHostMixin, PresetOrganisationHostMixin, HairColourHostM
         self._owned_reader_stop()
 
     def _custom_lut_ingress(self, line):
+        from .expression_replacement_jobs import controller as expression_jobs
+        if expression_jobs(self).ingress(line): return True
         from .eye_bag_review_jobs import controller as eye_bag_jobs
         if eye_bag_jobs(self).ingress(line): return True  # Cancellation control cannot invalidate unrelated edit owners.
         primary_consumed=self._primary_calibration_service().ingress(line)
@@ -6615,7 +6624,7 @@ class Engine(FringeRepairHostMixin, PresetOrganisationHostMixin, HairColourHostM
         lambda self: self._inspection_controller().error,
         lambda self, value: setattr(self._inspection_controller(), "error", value))
 
-    HANDLED = ("fringe_repair", "fringe_repair_preview", "common_background", "common_background_preview", "common_background_readback", "creative_document", "canvas_guides", "project_recovery", "managed_import", "project_package", "export_destination", "virtual_copy", "source_relocation", "preset_organisation", "colour_editor", "colour_editor_state", "colour_editor_sample", "photo_grain", "photo_grain_state", "photo_detail", "photo_detail_state", "photo_detail_receipt", "primary_calibration", "primary_calibration_state", "selective_colour", "selective_colour_state", "colour_grading", "colour_grading_state", "extended_tone", "extended_tone_state", "extended_tone_receipt", "hello", "hair_colour", "shoulder_shape", "leg_shape", "arm_shape", "waist_shape", "leg_length", "neck_shape", "torso_length", "waist_length", "head_size", "body_slim", "semantic_colour", "semantic_colour_cancel", "sample_library", "sample_library_cancel", "sky_semantic", "sky_replacement_preview", "optics_preview", "studio_background_preview", "manual_liquify_preview", "effect_recovery_preview", "local_grade_live", "inspection_snapshot", "color_scopes", "color_capture", "source_patch_capture", "prompted_masks", "white_balance_capture", "color_picker_capture", "color_picker_probe", "bench_start", "bench_stop", "set_device", "shutdown",
+    HANDLED = ("expression_replacement", "fringe_repair", "fringe_repair_preview", "common_background", "common_background_preview", "common_background_readback", "creative_document", "canvas_guides", "project_recovery", "managed_import", "project_package", "export_destination", "virtual_copy", "source_relocation", "preset_organisation", "colour_editor", "colour_editor_state", "colour_editor_sample", "photo_grain", "photo_grain_state", "photo_detail", "photo_detail_state", "photo_detail_receipt", "primary_calibration", "primary_calibration_state", "selective_colour", "selective_colour_state", "colour_grading", "colour_grading_state", "extended_tone", "extended_tone_state", "extended_tone_receipt", "hello", "hair_colour", "shoulder_shape", "leg_shape", "arm_shape", "waist_shape", "leg_length", "neck_shape", "torso_length", "waist_length", "head_size", "body_slim", "semantic_colour", "semantic_colour_cancel", "sample_library", "sample_library_cancel", "sky_semantic", "sky_replacement_preview", "optics_preview", "studio_background_preview", "manual_liquify_preview", "effect_recovery_preview", "local_grade_live", "inspection_snapshot", "color_scopes", "color_capture", "source_patch_capture", "prompted_masks", "white_balance_capture", "color_picker_capture", "color_picker_probe", "bench_start", "bench_stop", "set_device", "shutdown",
                "load_image", "set_strength", "precompute", "inpaint", "source_patch", "clone_stamp", "local_masks", "effect_recovery", "manual_liquify", "studio_background", "optics", "sky_replacement", "light",
                "deform", "lut", "custom_lut", "grade", "export", "exposure", "white_balance", "color_picker", "hsl", "curves", "levels", "crop", "background",
                "compare", "session", "project", "task", "history", "preset", "batch",
@@ -6708,6 +6717,8 @@ class Engine(FringeRepairHostMixin, PresetOrganisationHostMixin, HairColourHostM
             package = self.__dict__.get("_project_package_controller")
             if package is not None and package.blocks(name, msg):
                 raise ValueError("便携包操作进行中，请等待或取消后查询结果")
+            from .expression_replacement_host import guard_other
+            guard_other(self, name, msg)
             CDH.guard_command(self, name, msg)
             relocation = self.__dict__.get('_source_relocation_controller')
             if name == 'virtual_copy' and relocation is not None:
@@ -6721,6 +6732,8 @@ class Engine(FringeRepairHostMixin, PresetOrganisationHostMixin, HairColourHostM
                           'success': False, 'outcome_unknown': False, 'error': reason})
                     return
                 raise ValueError(reason)
+            if name == 'expression_replacement':
+                fn(msg); return  # Dedicated exact source/copy transaction owns its history and receipts.
             if name == 'creative_document' and msg.get('action') == 'state':
                 fn(msg); return  # Read-only polling must not revoke capture/edit owners.
             if name in ('project_recovery', 'managed_import', 'project_package', 'source_relocation', 'virtual_copy', 'canvas_guides'):
@@ -6888,6 +6901,9 @@ class Engine(FringeRepairHostMixin, PresetOrganisationHostMixin, HairColourHostM
             emit({"event": "error", "error": f"{type(e).__name__}: {e}"})
         finally:
             try:
+                if dispatch_error and name == 'expression_replacement':
+                    from .expression_replacement_host import dispatch_rejected as expression_rejected
+                    expression_rejected(self,msg,dispatch_error,bool(recovery_boundary and recovery_boundary['started']),emit)
                 if dispatch_error and name == 'batch':
                     from .batch_dispatch_receipt import rejected as batch_rejected
                     batch_rejected(msg, dispatch_error, recovery_boundary, emit)

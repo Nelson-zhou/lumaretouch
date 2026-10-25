@@ -1,0 +1,40 @@
+{
+  "status": "SOURCE_AUTHORED_RUNTIME_UNRUN",
+  "requirement_id": "LNX-REF-PC-32468-C-0e5f836ef1",
+  "reference": "https://wiki.pixcakeai.com/guide/9406.html",
+  "host_port_version": 1,
+  "operation_id": "lnx.expression_replacement.v1",
+  "source_only_checks": {
+    "typescript_ast_files": 9,
+    "parse_diagnostics": 0,
+    "trailing_whitespace_files": 0,
+    "scope": "Initial isolated nine-file parser results; integrated source syntax/typecheck/runtime acceptance not implied."
+  },
+  "not_run": [
+    "Product imports or execution",
+    "Tests including authored UNRUN fixtures",
+    "Typecheck or build",
+    "Native inference",
+    "Runtime UI and naturalness review",
+    "Integrated backend/native/UI runtime acceptance"
+  ],
+  "scope": "Current expression UI source including App-lifetime native port and bounded integration corrections. Aggregate authoritative snapshot: docs/expression-replacement/FREEZE.json.",
+  "sha256": {
+    "ui/src/expressionReplacement/ExpressionReplacementPanel.tsx": "dbd4e99eccb6cb6c62fe9d126da72a51dddef8840d4991336caffd3c166d3cf3",
+    "ui/src/expressionReplacement/ExpressionWorkspaceHost.tsx": "13d97681424439541ab72fcc422163cdcbdc8b0925a55483c7257da8bfcc383c",
+    "ui/src/expressionReplacement/FusionMaskEditor.tsx": "f5bb6a35317f973a68dadcdb8cb14a3e404c55c3588850d83b882e5d683b0fdf",
+    "ui/src/expressionReplacement/VerifiedImage.tsx": "4cff39ef8bfe8bc78b9692487ece9977c22737eb8ba8f07a1ee5d0ad00d4ba6f",
+    "ui/src/expressionReplacement/controller.ts": "cdea840e03dc7d71f824dd26942dcb6c43e56fddc64df95189e15f48817db3e5",
+    "ui/src/expressionReplacement/controller.unrun.test.ts": "368d812c1da13dd0f9390c51f142ad60387cf85e5dd59cb1e72367b04f23c3c9",
+    "ui/src/expressionReplacement/expressionReplacement.css": "4f3818300af494761b422523dfe4bf353518a45cea8de6452348e9545566fe75",
+    "ui/src/expressionReplacement/fixtures.unrun.ts": "49d0a48f6da021098052e334b6b6b0feb30030d40e6670724dfa403d0affef66",
+    "ui/src/expressionReplacement/index.ts": "edba6acabf8a57fed107ea8d98d89923d5f7300201310f95cce2fe3db50bb15a",
+    "ui/src/expressionReplacement/model.ts": "5363c84c00ced52b184a7fb75e3c060aaab57be21a7f456c794aa0fd5570bc4c",
+    "ui/src/expressionReplacement/model.unrun.test.ts": "c1447fb8fd095fde4317dedb62ade2786048a612599c5250364dfccc92b630b2",
+    "ui/src/expressionReplacement/nativePort.ts": "7a1c0c6f0aa0deece7bae38e20d7aa2d1290ad5fb434f2986369699898efc8a5",
+    "ui/src/expressionReplacement/useExpressionReplacement.ts": "19577d2dbf4086cdccb32a651316ac3f985d059443fd26bedeb1003053c79d4e",
+    "docs/expression-review-ui/ACCEPTANCE-UNRUN.md": "b64ca9fc0306f68573f6558b97c32836647fa1922a6052dcbd57a82e6fe58851",
+    "docs/expression-review-ui/CONTRACT.md": "dc98113362703adc9e506c14036af16fcb5a9c21270a61cd1a7cad750e76f0f0",
+    "docs/expression-review-ui/HOST-PORT.md": "c8cdb16fafdf87621a69bd106e68f0c120a42d74b4df561477af109865f22d19"
+  }
+}

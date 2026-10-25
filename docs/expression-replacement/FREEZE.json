@@ -1,0 +1,296 @@
+{
+  "schema_version": 1,
+  "baseline_commit": "9b667d89d60a1a9a17bb8e5e0a330205f2db7a5b",
+  "requirement_id": "LNX-REF-PC-32468-C-0e5f836ef1",
+  "status": "FROZEN_SOURCE_CONNECTED_MANUAL_PARTIAL_ALL_RUNTIME_UNRUN",
+  "date": "2026-10-25",
+  "scope": "Current-photo manual donor/fusion/full-image review/new-copy path; original automatic/default feature incomplete",
+  "manifest_policy": "Exact payload below plus this manifest itself; no lens-family files or excluded older manifests",
+  "excluded": [
+    "docs/colour-grading/FREEZE.json",
+    "docs/eye-light/FREEZE.json",
+    "docs/iris-makeup/isolated-manifest.json"
+  ],
+  "source_checks": {
+    "python_ast_selected": 10,
+    "previous_workspace_python_ast_count": 1469,
+    "whitespace": "all payload files clean",
+    "caps": {
+      "ui/src/App.tsx": 2143,
+      "ui/src-tauri/src/main.rs": 2051,
+      "engine/src/lumaretouch_engine/server.py": 7065
+    },
+    "independent_static_review": "No remaining fatal registration/receipt mismatch found in bounded source-read pass; not runtime acceptance",
+    "rust_numeric_core_unchanged_from_isolated_freeze": true
+  },
+  "unrun": [
+    "product imports/execution",
+    "tests",
+    "build/compiler/typecheck",
+    "inference",
+    "photo quality/numerical acceptance",
+    "performance and memory measurements",
+    "save/reopen/export runtime QA"
+  ],
+  "remaining": [
+    "automatic bad-expression detection, person matching and best-donor ranking",
+    "group automation",
+    "native face crops larger than1024",
+    "transparent/HDR photo return",
+    "reopened parametrically editable donor/fusion session",
+    "update-original/preset/batch/optional aliases",
+    "process-loss uncertain-write reconciliation beyond known project recovery"
+  ],
+  "files": [
+    {
+      "path": "core/expression_blend/ABI.md",
+      "bytes": 15411,
+      "sha256": "61dc987e93f8a8995dd9f50089603d4e8a5cdd2f5957dce9fe76e68d06cbd4ae"
+    },
+    {
+      "path": "core/expression_blend/Cargo.toml",
+      "bytes": 175,
+      "sha256": "1a9c25ad4ae43c8b3815de7f9b7d88ed6ab9ba3313bb26154d41ae484b6ae1d3"
+    },
+    {
+      "path": "core/expression_blend/build_expression_blend.sh",
+      "bytes": 598,
+      "sha256": "2d19c0f6d4f674a4e212573d47399a3a4b553ea0578085f64dcfd2040b704669"
+    },
+    {
+      "path": "core/expression_blend/expression_blend.h",
+      "bytes": 2438,
+      "sha256": "f1f99a535d5a61374629e4030ee022d2b084322619c7cdc9356c912ede1cfcd0"
+    },
+    {
+      "path": "core/expression_blend/lib.rs",
+      "bytes": 26656,
+      "sha256": "bfc291895d9fb6441fb7cb55f2cc02e4c297d0cc707935948c14bde53f2fd40a"
+    },
+    {
+      "path": "core/expression_blend/tests.rs",
+      "bytes": 9764,
+      "sha256": "1b1df3ed9e07b5c30af8a00d1cd7a130ef6f340b7f5e3d4506ef876f0e3ffb8a"
+    },
+    {
+      "path": "docs/development/handbook-traceability.json",
+      "bytes": 484041,
+      "sha256": "5c5d1883a09c8db85ef2a18f3b054e53b72056231d2f11dd6f26d74ae09aa322"
+    },
+    {
+      "path": "docs/expression-native/ACCEPTANCE-UNRUN.md",
+      "bytes": 2758,
+      "sha256": "ca694fea247fc083b20e67988e0d24e5a0684bf9bf4b294dfedf01014385a861"
+    },
+    {
+      "path": "docs/expression-native/CONTRACT.md",
+      "bytes": 10518,
+      "sha256": "dcfa0fc3ce4ceadaa9cd9be0fc5daffad1bf114469e10de9a67d912076f6c48b"
+    },
+    {
+      "path": "docs/expression-replacement/IMPLEMENTATION.md",
+      "bytes": 6185,
+      "sha256": "a6764d6629161268eaa6d6b61c15c6b8d332568b34fdc4ab26aa339fd456a5d3"
+    },
+    {
+      "path": "docs/expression-replacement/INTEGRATION.md",
+      "bytes": 5568,
+      "sha256": "9cd6046bdb50df6b596a3a196e74d87bc7d111b2be7bbba8a3168847fd568c43"
+    },
+    {
+      "path": "docs/expression-replacement/SOURCES_AND_LICENSES.md",
+      "bytes": 2677,
+      "sha256": "20cbe519e00b6b08e37086024d13818d1f0cee35146921e36c7f97f894191914"
+    },
+    {
+      "path": "docs/expression-replacement/capability.json",
+      "bytes": 1592,
+      "sha256": "d33d803bf8657b2039e8a692ddb66849c72074ed4894295f93231018e28e0be1"
+    },
+    {
+      "path": "docs/expression-review-ui/ACCEPTANCE-UNRUN.md",
+      "bytes": 3969,
+      "sha256": "b64ca9fc0306f68573f6558b97c32836647fa1922a6052dcbd57a82e6fe58851"
+    },
+    {
+      "path": "docs/expression-review-ui/CONTRACT.md",
+      "bytes": 13681,
+      "sha256": "dc98113362703adc9e506c14036af16fcb5a9c21270a61cd1a7cad750e76f0f0"
+    },
+    {
+      "path": "docs/expression-review-ui/HOST-PORT.md",
+      "bytes": 8820,
+      "sha256": "c8cdb16fafdf87621a69bd106e68f0c120a42d74b4df561477af109865f22d19"
+    },
+    {
+      "path": "docs/expression-review-ui/SOURCE-FREEZE.json",
+      "bytes": 2907,
+      "sha256": "aa7cbeba1b6544a82ee1dd15d1af02197ea97d6bb1f151c863b9e0d102ef64d9"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/creative_document_host.py",
+      "bytes": 25970,
+      "sha256": "9d9863f73159980d7fad6a3afd80e0e8b3c6acd9156a982e7186169f7ad86604"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/expression_replacement_geometry.py",
+      "bytes": 7544,
+      "sha256": "4d21bd33d266c74f36ffe2ea13bb8f041edcb3c42e32cff69a31e98aef337e5b"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/expression_replacement_host.py",
+      "bytes": 15950,
+      "sha256": "d6c3e45b72e6d2fbf73d09315e0d7f2a0f15f384b63e46f5020d59bc3613e98a"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/expression_replacement_jobs.py",
+      "bytes": 5388,
+      "sha256": "d24aa64e520dafd0521042f8046bb413443baa7adcac01e3d0e36e9c42d945b0"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/expression_replacement_native.py",
+      "bytes": 6125,
+      "sha256": "4c003e24d467b445ab2756a6fbf3e35aa8435a03371438e79020e3b56fae58ca"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/expression_replacement_source.py",
+      "bytes": 9790,
+      "sha256": "703885491341305e5ad6f3684b481110f1f7ff1dbdd349618c19e646626f06bc"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/expression_replacement_stage.py",
+      "bytes": 12340,
+      "sha256": "23e560f0d3cd97a1a9096fc65b7f8caafe75463f3f2f9e5a3d5388e7ef387c21"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/project_recovery_runtime.py",
+      "bytes": 9542,
+      "sha256": "1473fcba5dedce83ab7fcac5ff6e622c5af71a976764aa150953e557f41e53f4"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/server.py",
+      "bytes": 473656,
+      "sha256": "447d1c6b0bd6717a2c89397861df7f30681ca083461c421f6449258664bc625e"
+    },
+    {
+      "path": "engine/tests/test_expression_integration_unrun.py",
+      "bytes": 2360,
+      "sha256": "541200b03f00784a61d807b5d4042ffda8d5e5f05b8b7cd0cf843c8295ebd88f"
+    },
+    {
+      "path": "packaging/stage-engine.sh",
+      "bytes": 28934,
+      "sha256": "b9b6bfe647f8e8cf42acfecd58b509b6a0f4f200cb3a76a1ef68654088d1e80e"
+    },
+    {
+      "path": "ui/src-tauri/src/capture_lifecycle.rs",
+      "bytes": 3750,
+      "sha256": "7e9293148d24933a67d79b9c0cc6aa46bcad741d25a6ba84200e73f97f85b1fa"
+    },
+    {
+      "path": "ui/src-tauri/src/engine.rs",
+      "bytes": 43394,
+      "sha256": "f9ae0306e0b60eab8203fa737b4b40d4b626776f620c9ec094ae39120c73c2f3"
+    },
+    {
+      "path": "ui/src-tauri/src/expression_replacement_api.rs",
+      "bytes": 22867,
+      "sha256": "be1e696bad4fe924bf31a1d9a14573ec373041888e2982ea8a49c7121cacd6b7"
+    },
+    {
+      "path": "ui/src-tauri/src/expression_replacement_protocol.rs",
+      "bytes": 23812,
+      "sha256": "af439911ce9d2b648f518f8b778b666917f14267c236d3b563ea9251086b9cd6"
+    },
+    {
+      "path": "ui/src-tauri/src/expression_replacement_protocol_unrun.rs",
+      "bytes": 10792,
+      "sha256": "83cd3dfdab69254634d5c417f2642e33c0f346e9fdb76c9ab3c77def1c47aa0b"
+    },
+    {
+      "path": "ui/src-tauri/src/main.rs",
+      "bytes": 101946,
+      "sha256": "97d55d35a556fb7943f81185aa213183a2a5fa646f25dab193fbc78350a5222f"
+    },
+    {
+      "path": "ui/src-tauri/src/native_dispatch.rs",
+      "bytes": 11565,
+      "sha256": "6d2d79c62876b1047503044ad5dd2f0d62e469a8b510572501ef11515f477513"
+    },
+    {
+      "path": "ui/src/App.tsx",
+      "bytes": 153870,
+      "sha256": "3aa14aef7e4da3e380fabcccf8e71e1490f404dbeef40c1ff38c1d2b808a3590"
+    },
+    {
+      "path": "ui/src/components/RetouchPanel.tsx",
+      "bytes": 90070,
+      "sha256": "7e5435b82005f6bfadd4a93b4f005a00d3e255861fd0929fd15da35306176558"
+    },
+    {
+      "path": "ui/src/expressionReplacement/ExpressionReplacementPanel.tsx",
+      "bytes": 9864,
+      "sha256": "dbd4e99eccb6cb6c62fe9d126da72a51dddef8840d4991336caffd3c166d3cf3"
+    },
+    {
+      "path": "ui/src/expressionReplacement/ExpressionWorkspaceHost.tsx",
+      "bytes": 1657,
+      "sha256": "13d97681424439541ab72fcc422163cdcbdc8b0925a55483c7257da8bfcc383c"
+    },
+    {
+      "path": "ui/src/expressionReplacement/FusionMaskEditor.tsx",
+      "bytes": 6258,
+      "sha256": "f5bb6a35317f973a68dadcdb8cb14a3e404c55c3588850d83b882e5d683b0fdf"
+    },
+    {
+      "path": "ui/src/expressionReplacement/VerifiedImage.tsx",
+      "bytes": 1804,
+      "sha256": "4cff39ef8bfe8bc78b9692487ece9977c22737eb8ba8f07a1ee5d0ad00d4ba6f"
+    },
+    {
+      "path": "ui/src/expressionReplacement/controller.ts",
+      "bytes": 19009,
+      "sha256": "cdea840e03dc7d71f824dd26942dcb6c43e56fddc64df95189e15f48817db3e5"
+    },
+    {
+      "path": "ui/src/expressionReplacement/controller.unrun.test.ts",
+      "bytes": 7698,
+      "sha256": "368d812c1da13dd0f9390c51f142ad60387cf85e5dd59cb1e72367b04f23c3c9"
+    },
+    {
+      "path": "ui/src/expressionReplacement/expressionReplacement.css",
+      "bytes": 2869,
+      "sha256": "4f3818300af494761b422523dfe4bf353518a45cea8de6452348e9545566fe75"
+    },
+    {
+      "path": "ui/src/expressionReplacement/fixtures.unrun.ts",
+      "bytes": 2633,
+      "sha256": "49d0a48f6da021098052e334b6b6b0feb30030d40e6670724dfa403d0affef66"
+    },
+    {
+      "path": "ui/src/expressionReplacement/index.ts",
+      "bytes": 520,
+      "sha256": "edba6acabf8a57fed107ea8d98d89923d5f7300201310f95cce2fe3db50bb15a"
+    },
+    {
+      "path": "ui/src/expressionReplacement/model.ts",
+      "bytes": 18666,
+      "sha256": "5363c84c00ced52b184a7fb75e3c060aaab57be21a7f456c794aa0fd5570bc4c"
+    },
+    {
+      "path": "ui/src/expressionReplacement/model.unrun.test.ts",
+      "bytes": 4239,
+      "sha256": "c1447fb8fd095fde4317dedb62ade2786048a612599c5250364dfccc92b630b2"
+    },
+    {
+      "path": "ui/src/expressionReplacement/nativePort.ts",
+      "bytes": 11958,
+      "sha256": "7a1c0c6f0aa0deece7bae38e20d7aa2d1290ad5fb434f2986369699898efc8a5"
+    },
+    {
+      "path": "ui/src/expressionReplacement/useExpressionReplacement.ts",
+      "bytes": 11705,
+      "sha256": "19577d2dbf4086cdccb32a651316ac3f985d059443fd26bedeb1003053c79d4e"
+    }
+  ]
+}

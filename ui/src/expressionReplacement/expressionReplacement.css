@@ -1,0 +1,17 @@
+.expression-replacement{display:flex;flex-direction:column;gap:12px;padding:14px;color:var(--text,#eee);background:var(--panel,#202328);border:1px solid #50535b;border-radius:10px;max-width:1100px}
+.expression-replacement header,.expression-actions,.expression-face-choices,.expression-mask-tools{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.expression-replacement header{justify-content:space-between}.expression-replacement h3,.expression-replacement h4,.expression-replacement p{margin:0}
+.expression-replacement fieldset{border:1px solid #555b64;border-radius:6px;padding:10px;display:flex;flex-direction:column;gap:9px}
+.expression-replacement label{display:flex;align-items:center;gap:8px;line-height:1.45}.expression-replacement label input[type=checkbox]{flex-shrink:0}
+.expression-replacement button,.expression-replacement select{min-height:32px}.expression-replacement button[aria-pressed=true]{outline:2px solid #54e8cc}
+.expression-replacement button:disabled,.expression-replacement input:disabled{opacity:.55}.expression-replacement :focus-visible{outline:2px solid #f3c66d;outline-offset:3px}
+.expression-image{margin:0;min-width:0;flex:1 1 320px}.expression-image figcaption{padding:6px 0;font-weight:600}.expression-image-stage{position:relative;isolation:isolate}
+.expression-image-stage>img{display:block;width:100%;height:auto;object-fit:contain;user-select:none;background:#16181c}
+.expression-fusion-overlay,.expression-face-overlay{position:absolute;inset:0;width:100%;height:100%;touch-action:none;user-select:none}.expression-face-overlay{pointer-events:none}
+.expression-mask-editor{display:flex;flex-direction:column;gap:8px}.expression-mask-tools{position:relative;margin-top:10px;line-height:1.4}.expression-mask-tools p{flex-basis:100%;font-size:12px;color:#bdc5cf}
+.expression-image-pair{display:flex;flex-wrap:wrap;gap:14px;align-items:flex-start}.expression-review{display:flex;flex-direction:column;gap:10px;border:1px solid #788a87;padding:10px;border-radius:6px}
+.expression-policy{font-size:12px;color:#bdc5cf;line-height:1.5}.expression-replacement [role=alert]{color:#ffc4b0}.expression-replacement [role=status]{line-height:1.5}
+@media(max-width:700px){.expression-replacement{padding:10px}.expression-image-pair{flex-direction:column}.expression-image-pair>.expression-image{flex-basis:auto;width:100%}.expression-replacement label{flex-wrap:wrap}}
+.expression-host{position:fixed;inset:4vh 4vw;z-index:120;background:var(--panel-bg,#202327);color:var(--text,#eee);overflow:auto;padding:20px;border:1px solid #667;border-radius:10px;box-shadow:0 8px 48px #000a}
+.expression-host>header{display:flex;justify-content:space-between;align-items:center;gap:12px}
+[data-expression-workflow]>aside{position:fixed;right:18px;bottom:18px;z-index:121;background:#242830;padding:12px;border:1px solid #778;border-radius:8px}

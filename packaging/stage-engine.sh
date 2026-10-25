@@ -107,6 +107,7 @@ bash "$here/../core/body_slim/build.sh" "$stage/lumaretouch_engine/bin/liblrt_bo
 mkdir -p "$stage/lumaretouch_engine/third_party/body_slim"
 cp "$here/../core/body_slim/"*.rs "$here/../core/body_slim/"*.h "$here/../core/body_slim/Cargo.toml" "$here/../core/body_slim/ABI.md" "$here/../LICENSE" "$stage/lumaretouch_engine/third_party/body_slim/"
 bash "$here/../core/eye_makeup_enhance/build_eye_makeup_enhance.sh" "$stage/lumaretouch_engine/bin/liblrt_eye_makeup_enhance.so"
+bash "$here/../core/expression_blend/build_expression_blend.sh" "$stage/lumaretouch_engine/bin/liblrt_expression_blend.so"
 mkdir -p "$stage/lumaretouch_engine/third_party/eye_makeup_enhance"
 cp "$here/../core/eye_makeup_enhance/"*.rs "$here/../core/eye_makeup_enhance/"*.h "$here/../core/eye_makeup_enhance/Cargo.toml" "$here/../core/eye_makeup_enhance/README.md" "$here/../core/eye_makeup_enhance/THIRD_PARTY.md" "$here/../LICENSE" "$stage/lumaretouch_engine/third_party/eye_makeup_enhance/"
 bash "$here/build-facial-sculpt.sh" "$stage/lumaretouch_engine/bin/liblrt_facial_sculpt.so"

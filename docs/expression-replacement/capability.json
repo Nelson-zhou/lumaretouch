@@ -1,0 +1,45 @@
+{
+  "schema_version": 1,
+  "requirement_id": "LNX-REF-PC-32468-C-0e5f836ef1",
+  "module_id": "expression_blend",
+  "algorithm_id": "contour-nose-similarity-multiband-v1",
+  "recipe_version": 1,
+  "native_abi": 1,
+  "status": "SOURCE_ONLY_UNRUN_NOT_PRODUCT_AVAILABLE",
+  "declared_feature_bits": 63,
+  "max_native_crop_side": 1024,
+  "max_native_crop_pixels": 1048576,
+  "max_pyramid_levels": 5,
+  "required_review_bits": 127,
+  "working_pixels": "opaque linear-sRGB D65 float32 RGBA SDR",
+  "neutral": "validated density-zero or zero effective mask preserves target bits",
+  "missing_backend": "preserve active recipe, refuse silently incomplete render/export, expose unavailable",
+  "disable": "explicit layer disable preserves editable recipe and source references",
+  "replacement": "probe versioned ABI and required symbols; no silent algorithm migration or arbitrary hot plugin loading",
+  "owns": [
+    "bounded immutable-input numerical call",
+    "call-local temporary buffers"
+  ],
+  "does_not_own": [
+    "source identity",
+    "detector or model",
+    "pose or occlusion inference",
+    "same-person review",
+    "candidate search",
+    "UI",
+    "history",
+    "project persistence",
+    "export",
+    "preview/apply lease"
+  ],
+  "verification": {
+    "fixture_count": 16,
+    "fixture_status": "AUTHORED_UNRUN",
+    "compile": "UNRUN",
+    "runtime": "UNRUN",
+    "photographic": "UNRUN",
+    "performance": "UNRUN",
+    "integration": "UNRUN"
+  },
+  "integration_scope": "Current-photo manual workflow source-connected; automatic/default mode incomplete; see INTEGRATION.md"
+}

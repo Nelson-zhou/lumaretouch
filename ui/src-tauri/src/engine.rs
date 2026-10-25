@@ -45,6 +45,8 @@ pub struct EngineHandle {
 impl EngineHandle {
     pub fn epoch(&self)->[u8;16]{self.epoch}
     pub fn send(&self, cmd: Value) -> Result<(), String> {
+        crate::expression_replacement_api::blocks_mutation(self.epoch, &cmd)?;
+        if crate::expression_replacement_api::read_only(&cmd) { return self.dispatcher.enqueue(None, cmd); }
         if !crate::torso_length_api::read_only(&cmd) && !crate::waist_length_api::read_only(&cmd) && !crate::head_size_api::read_only(&cmd) && !crate::body_slim_api::read_only(&cmd) { crate::project_recovery_fence::issued(self.epoch, &cmd)?; }
         if crate::common_background_readback::read_only(&cmd) { return self.dispatcher.enqueue(None, cmd); }
         // Fringe review/presentation/cancellation never mutate the document or
@@ -66,6 +68,16 @@ impl EngineHandle {
 
     /// Cancellation is the only out-of-band command. It must reach the Python
     /// reader while the acknowledged command is still rendering/importing.
+    pub(crate) fn cancel_expression_replacement(&self, request_id: &str, command_sha256: &str) -> Result<(), String> {
+        if !self.is_alive() { return Err("原引擎已结束；取消结果未确认".into()); }
+        let mut line=serde_json::to_vec(&json!({"cmd":"expression_replacement_cancel","request_id":request_id,"command_sha256":command_sha256})).map_err(|e|e.to_string())?;
+        line.push(b'\n');
+        if let Err(error)=self.input.with_writer(|writer|writer.write_all(&line).and_then(|_|writer.flush())) {
+            self.dispatcher.close(); self.input.close();
+            return Err(format!("取消请求写入未获确认，不会重发：{error}"));
+        }
+        Ok(())
+    }
     pub(crate) fn cancel_eye_bag_read(&self,request_id:&str)->Result<(),String>{self.cancel_owned_request("eye_bag_cancel",request_id)}
     pub(crate) fn cancel_sample_library(&self,request_id:&str)->Result<(),String>{self.cancel_owned_request("sample_library_cancel",request_id)}
     pub(crate) fn cancel_semantic_colour(&self,request_id:&str)->Result<(),String>{self.cancel_owned_request("semantic_colour_cancel",request_id)}
@@ -83,6 +95,7 @@ impl EngineHandle {
     }
 
     pub fn send_interactive(&self, key: String, cmd: Value) -> Result<(), String> {
+        crate::expression_replacement_api::blocks_mutation(self.epoch, &cmd)?;
         if !crate::torso_length_api::read_only(&cmd) && !crate::waist_length_api::read_only(&cmd) && !crate::head_size_api::read_only(&cmd) && !crate::body_slim_api::read_only(&cmd) { crate::project_recovery_fence::issued(self.epoch, &cmd)?; }
         if cmd["cmd"] != "preset_organisation" && crate::sample_library_api::invalidates_capture(&cmd) && !crate::semantic_colour_api::read_only(&cmd) && !crate::shoulder_shape_api::read_only(&cmd) && !crate::leg_shape_api::read_only(&cmd) && !crate::waist_shape_api::read_only(&cmd) && !crate::leg_length_api::read_only(&cmd) && !crate::torso_length_api::read_only(&cmd) && !crate::waist_length_api::read_only(&cmd) && !crate::head_size_api::read_only(&cmd) && !crate::body_slim_api::read_only(&cmd) && !crate::neck_shape_api::read_only(&cmd) && !crate::arm_shape_api::read_only(&cmd) {
             crate::sample_library_api::invalidate_captures(self)?;
@@ -190,6 +203,7 @@ pub fn spawn(py: &str, engine_src: &str, session: &str, state: Arc<AppState>,
         let d = dispatcher.clone();
         thread::spawn(move || {
             while let Ok(line) = rx.recv() {
+                if let Some(marker)=crate::expression_replacement_api::observe_line(inspection_epoch, &line) { crate::project_recovery_fence::observed(inspection_epoch, &marker); }
                 if let Ok(v)=serde_json::from_str::<Value>(&line) {
                     // Reviewed outcomes settle only after exact original validation.
                     // Scalar preset/batch identities are retained by the existing
@@ -202,8 +216,9 @@ pub fn spawn(py: &str, engine_src: &str, session: &str, state: Arc<AppState>,
                             || st.effect_recovery.lock().map(|h|h.guards_review(inspection_epoch,id)).unwrap_or(true)
                             || crate::people_api::guards_review(inspection_epoch,id)
                             || crate::body_slim_api::guards_result(inspection_epoch,id)
+                            || crate::expression_replacement_api::guards_result(inspection_epoch,id)
                     });
-                    if !scalar_review && v["event"] != "common_background_result" && v["event"] != "fringe_repair_result" && v["event"] != "id_background_result" && v["event"] != "torso_length_result" && v["event"] != "waist_length_result" && v["event"] != "head_size_result" && v["event"] != "body_slim_result" {
+                    if !scalar_review && v["event"] != "expression_replacement_result" && v["event"] != "common_background_result" && v["event"] != "fringe_repair_result" && v["event"] != "id_background_result" && v["event"] != "torso_length_result" && v["event"] != "waist_length_result" && v["event"] != "head_size_result" && v["event"] != "body_slim_result" {
                         crate::project_recovery_fence::observed(inspection_epoch, &v);
                     }
                     if v["event"]=="ready" && v["command_ack"].as_u64()!=Some(1) {
@@ -228,6 +243,7 @@ pub fn spawn(py: &str, engine_src: &str, session: &str, state: Arc<AppState>,
             crate::waist_length_api::ended(inspection_epoch);
             crate::head_size_api::ended(inspection_epoch);
             crate::body_slim_api::ended(inspection_epoch);
+            crate::expression_replacement_api::ended(inspection_epoch);
             crate::neck_shape_api::ended(inspection_epoch);
             crate::arm_shape_api::ended(inspection_epoch);
             crate::people_api::ended(inspection_epoch);
@@ -427,6 +443,7 @@ fn handle_event(state: &Arc<AppState>, line: &str,inspection_epoch:[u8;16]) {
             crate::torso_length_api::ready(inspection_epoch, v["torso_length_protocol"].as_u64() == Some(1));
             crate::waist_length_api::ready(inspection_epoch, v["waist_length_protocol"].as_u64() == Some(1));
             crate::head_size_api::ready(inspection_epoch, v["head_size_protocol"].as_u64() == Some(1));
+            crate::expression_replacement_api::ready(inspection_epoch, v["expression_replacement_protocol"].as_u64()==Some(1) && v["expression_replacement_operation_id"]=="lnx.expression_replacement.v1" && v["expression_replacement_available"]==true);
             crate::body_slim_api::ready(inspection_epoch, v["body_slim_protocol"].as_u64() == Some(1));
             crate::neck_shape_api::ready(inspection_epoch, v["neck_shape_protocol"].as_u64() == Some(1));
             crate::arm_shape_api::ready(inspection_epoch, v["arm_shape_protocol"].as_u64() == Some(1));

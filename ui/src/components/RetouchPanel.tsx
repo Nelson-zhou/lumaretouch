@@ -102,6 +102,7 @@ export interface RetouchProps {
   presetPanel?: React.ReactNode;
   sampleLibraryPanel?: React.ReactNode;
   shoulderPanel?: React.ReactNode;
+  expressionPanel?: React.ReactNode;
   hairPort: HairPort;
   hairBusy: boolean;
   refreshHair: () => Promise<void>;
@@ -1374,6 +1375,7 @@ export default function RetouchPanel(props: RetouchProps) {
   );
 
   const blockFor = (fid: string): React.ReactNode => {
+    if (fid === "PC-32468") return props.expressionPanel;
     if (fid === "PC-32473") return props.shoulderPanel;
     if (fid === "PC-32472") return <>
       {status?.ready_caps?.hair_colour_protocol!==1&&<p role="status">当前引擎未提供头发范围审核，请使用配套版本。</p>}
@@ -1452,6 +1454,7 @@ export default function RetouchPanel(props: RetouchProps) {
                 <SpecNodes nodes={withoutCoveredLeaves(tree, f.id, f.id === "PC-32455" ? !!props.opticsPanel : !!custom)}
                   openPaths={openPathsFor(f)} renderExtra={node=>renderExtra(node,f.id)}
                   renderLeaf={(leaf, name) => {
+                    if(f.id==='PC-32468'&&leaf.path==='AI完美表情'&&props.expressionPanel)return <p className="toolRouteNote">上方接通同场次真实素材的手动替换与融合审核；自动识别人选、最佳表情选择仍未提供。</p>;
                     if (f.id === 'PC-32466' && ['脸型预设/少年', '脸型预设/圆脸适用', '脸型预设/长脸适用', '脸型预设/方脸适用', '脸型预设/程度'].includes(leaf.path)) return null; // New versioned chooser above; legacy routes remain untouched.
                     if(f.id==='PC-32455'&&['滤镜/我的/CUBE导入','滤镜/我的','滤镜/推荐'].includes(leaf.path))return null;
                     if(f.id==='PC-32452'&&leaf.path==='AI追色/批量同步&保存预设')return <SemanticColourWorkflowLaunch enabled={props.hasImage&&props.status?.ready_caps?.semantic_colour_workflow_protocol===1}/>;

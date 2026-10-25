@@ -4841,9 +4841,18 @@
       "source_url": "https://www.pixcakeai.com/guide/32468",
       "source_child_index": 0,
       "title": "AI完美表情",
-      "status": "pending_independent_verification",
-      "implementation": [],
-      "verification": []
+      "status": "partial_source_connected_unrun",
+      "implementation": [
+        "core/expression_blend/lib.rs",
+        "engine/src/lumaretouch_engine/expression_replacement_host.py",
+        "ui/src/expressionReplacement/ExpressionWorkspaceHost.tsx",
+        "docs/expression-replacement/INTEGRATION.md"
+      ],
+      "verification": [
+        "Static source/AST/hash review only; numerical, runtime, photographic and end-to-end acceptance UNRUN"
+      ],
+      "requirement_id": "LNX-REF-PC-32468-C-0e5f836ef1",
+      "scope_note": "仅接通同场次真实供体的人工身份/可见性审核、全来源融合预览及独立副本。自动默认模式、最佳表情排序、自动身份匹配、大脸原生裁片超过1024、HDR/透明来源及整项AI验收仍未完成；不计为自动AI完成。"
     },
     {
       "id": "control:PC-32468:2",
