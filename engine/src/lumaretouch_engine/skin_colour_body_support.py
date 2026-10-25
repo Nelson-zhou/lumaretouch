@@ -34,7 +34,7 @@ FACE_MATCH_KIND = 'body_face_match_visibility'
 FACE_MATCH_OPERATION = 'lnx.body_face_match.v1'
 COLLARBONE_KIND = 'collarbone_visibility'
 COLLARBONE_OPERATION = 'lnx.collarbone.v1'
-FAMILIES = ('skin_colour', 'skin_finish', 'body_skin_evenness', 'body_face_match', 'collarbone')
+FAMILIES = ('skin_colour', 'skin_finish', 'body_skin_evenness', 'body_face_match', 'collarbone', 'neck_wrinkle')
 FLAGS = ('visible', 'unoccluded', 'ownership_confirmed')
 MAX_RECORD_BYTES = 4 * 1024 * 1024
 
@@ -47,7 +47,8 @@ def family_spec(family='skin_colour', operation_id=None):
                        'skin_finish': (FINISH_KIND, FINISH_OPERATION),
                        'body_skin_evenness': (EVENNESS_KIND, EVENNESS_OPERATION),
                        'body_face_match': (FACE_MATCH_KIND, FACE_MATCH_OPERATION),
-                       'collarbone': (COLLARBONE_KIND, COLLARBONE_OPERATION)}[family]
+                       'collarbone': (COLLARBONE_KIND, COLLARBONE_OPERATION),
+                       'neck_wrinkle': ('neck_wrinkle_visibility', 'lnx.neck_wrinkle.v1')}[family]
     if operation_id is not None and (type(operation_id) is not str or operation_id != operation):
         raise ValueError('Body-skin family cannot authorize another operation')
     return kind, operation
@@ -58,6 +59,8 @@ def _review(value, *, family='skin_colour'):
     keys = {'body_ref', 'points_sha256', 'recipe', *FLAGS}
     if family == 'collarbone':
         keys.add('clavicle')
+    if family == 'neck_wrinkle':
+        keys.add('neck')
     if type(value) is not dict or set(value) != keys:
         raise ValueError('Body-skin review must name its exact body, points and manual region')
     E.ref(value['body_ref']); E.digest(value['points_sha256'])
@@ -73,6 +76,9 @@ def _review(value, *, family='skin_colour'):
     if family == 'collarbone':
         from .collarbone_support import check as check_clavicle
         check_clavicle(value['clavicle'])
+    if family == 'neck_wrinkle':
+        from .neck_wrinkle_support import check_neck_review
+        check_neck_review(value['neck'])
     return {**deepcopy(value), 'recipe': recipe}
 
 
@@ -134,6 +140,9 @@ def check_record(record, *, family='skin_colour', operation_id=None):
     if family == 'collarbone':
         from .collarbone_support import check as check_clavicle
         check_clavicle(review['clavicle'], source=source)
+    if family == 'neck_wrinkle':
+        from .neck_wrinkle_support import check_neck_review
+        check_neck_review(review['neck'], source=source)
     if body_ref['asset_sha256'] != source['sha256']:
         raise ValueError('Body-skin review belongs to another source body')
     evidence = S.check_evidence(row['face_evidence'])
@@ -366,7 +375,7 @@ def raster(state, assets, face_ref, body_bank, analysis, shape, *, byte_budget=N
     E.whole_source_shape({**record['source'], 'orientation': E.ORIENTATION}, shape)
     SEM.check_analysis_fields(analysis, shape)
     excluded = None
-    if family in ('body_skin_evenness', 'body_face_match', 'collarbone'):
+    if family in ('body_skin_evenness', 'body_face_match', 'collarbone', 'neck_wrinkle'):
         # One admission field for both the real solver and the review overlay.
         # This is known-occluder protection, not complete instance segmentation.
         excluded = analysis.get('excluded')

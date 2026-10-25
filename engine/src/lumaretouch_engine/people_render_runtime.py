@@ -70,7 +70,7 @@ def verify_analysis(face, analysis, shape):
 
 
 def prepare(state, asset_sha256, source, analyses, *, byte_budget, document_id=None, max_faces=32, recovery_assets=None, repaired=None,
-            creative_source=None, creative_repair_evidence=None, skin_reference_match_assets=None, skin_reference_match_source=None, hair_assets=None, hair_volume_assets=None, hair_unification_assets=None, hair_unification_source=None, full_source_verified=False, hair_evidence=None, hair_source_path=None, force_hair_prompted=False, eye_light_assets=None, blush_makeup_assets=None, face_decoration_assets=None,facial_sculpt_assets=None,eye_makeup_enhance_assets=None, lipstick_assets=None,eyeliner_assets=None,eyelash_assets=None,brow_makeup_assets=None,iris_makeup_assets=None,skin_colour_body_assets=None,skin_finish_body_assets=None,body_skin_evenness_assets=None,body_face_match_assets=None,collarbone_assets=None,eye_bag_preserve_assets=None,body_bank=None):
+            creative_source=None, creative_repair_evidence=None, skin_reference_match_assets=None, skin_reference_match_source=None, hair_assets=None, hair_volume_assets=None, hair_unification_assets=None, hair_unification_source=None, full_source_verified=False, hair_evidence=None, hair_source_path=None, force_hair_prompted=False, eye_light_assets=None, blush_makeup_assets=None, face_decoration_assets=None,facial_sculpt_assets=None,eye_makeup_enhance_assets=None, lipstick_assets=None,eyeliner_assets=None,eyelash_assets=None,brow_makeup_assets=None,iris_makeup_assets=None,skin_colour_body_assets=None,skin_finish_body_assets=None,body_skin_evenness_assets=None,body_face_match_assets=None,collarbone_assets=None,neck_wrinkle_assets=None,neck_wrinkle_source=None,eye_bag_preserve_assets=None,body_bank=None):
     state = S.check(state)
     from . import hair_unification_project as UNIFY
     UNIFY.validate_graph(state)
@@ -167,6 +167,8 @@ def prepare(state, asset_sha256, source, analyses, *, byte_budget, document_id=N
                      and type(row['value']) is bool)
             for row in state['overrides']):
         raise ValueError('Requested photograph-wide portrait parameters have no retained face; add or analyse a face before rendering')
+    from .neck_wrinkle_project import validate_graph as validate_neck_graph
+    validate_neck_graph(state)
     h,w = source.shape[:2]
     if source_only:
         from .creative_derived_recovery import validate_fields
@@ -189,7 +191,7 @@ def prepare(state, asset_sha256, source, analyses, *, byte_budget, document_id=N
             face = state['faces'][key]; analysis = analyses[key]
             for asset in face['local_assets'].values():
                 stage = asset['kind']
-                if stage in ('skin_reference_match_body_visibility','skin_reference_match_relation','skin_colour_body_visibility','skin_finish_body_visibility','body_skin_evenness_visibility','body_face_match_visibility','collarbone_visibility','eye_bag_ridge_visibility','face_decoration_visibility','facial_sculpt_visibility','eye_makeup_enhance_visibility'):
+                if stage in ('skin_reference_match_body_visibility','skin_reference_match_relation','skin_colour_body_visibility','skin_finish_body_visibility','body_skin_evenness_visibility','body_face_match_visibility','collarbone_visibility','neck_wrinkle_visibility','eye_bag_ridge_visibility','face_decoration_visibility','facial_sculpt_visibility','eye_makeup_enhance_visibility'):
                     # Separate operation-owned support, never generic recovery.
                     # Resolve each only when its own recipe is active below;
                     # dormant review cannot prevent disabling its own recipe.
@@ -368,6 +370,19 @@ def prepare(state, asset_sha256, source, analyses, *, byte_budget, document_id=N
                     values[A.BODY_FACE_MATCH.OP], people_state=state,
                     body_assets=body_face_match_assets or {}, body_bank=body_bank,
                     byte_budget=byte_budget-owned))
+            if A.NECK_WRINKLE.active(values[A.NECK_WRINKLE.OP]):
+                from .neck_wrinkle_layer import prepare as prepare_neck
+                seen = set(); owned = source.nbytes + (0 if repaired is None else repaired.nbytes)
+                for row in analyses.values():
+                    for array in row.values():
+                        if isinstance(array, np.ndarray) and id(array) not in seen:
+                            seen.add(id(array)); owned += array.nbytes
+                owned += sum(f.resident_bytes() for f in fields) + field.resident_bytes()
+                owned += sum(a.nbytes for r in (*effects, *local)
+                             for a in (r.delta, r.weights, r.chroma_shift, r.log_gain) if a is not None)
+                local.extend(prepare_neck(entry['face_ref'], analysis, values[A.NECK_WRINKLE.OP],
+                    people_state=state, body_assets=neck_wrinkle_assets or {}, body_bank=body_bank,
+                    full_source=neck_wrinkle_source, byte_budget=byte_budget-owned, render_shape=(h,w)))
             if A.COLLARBONE.active(values[A.COLLARBONE.OP]):
                 from .collarbone_layer import prepare as prepare_collarbone
                 seen = set(); owned = 0
@@ -475,6 +490,8 @@ def prepare(state, asset_sha256, source, analyses, *, byte_budget, document_id=N
             if resident+h*w*256+128*1024*1024 > byte_budget: raise ValueError('Accumulated portrait fields exceed memory budget')
             fields.append(field); effects.extend(local)
             facts[key] = {record.stage:record.facts for record in local}
+            neck_facts = [record.facts for record in local if record.stage == 'neck_wrinkle']
+            if neck_facts: facts[key]['neck_wrinkle'] = neck_facts
             if slim_facts is not None: facts[key]['slim_face_v2'] = slim_facts
             if size_facts is not None: facts[key]['face_size'] = size_facts
             if lower_facts is not None: facts[key]['lower_face'] = lower_facts

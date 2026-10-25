@@ -96,7 +96,7 @@ def _merge_chroma(pipe, stage):
 
 def source_effect(pipe,stage,pixels):
     import torch
-    if stage not in ('skin_reference_body_match','skin_reference_match','body_face_match','body_skin_evenness','collarbone','skin_evenness','skin_colour','facial_wrinkles','facial_sculpt','eye_makeup_enhance','lip_texture','lip_makeup','hair_colour','hair_unification','eye_light','blush_makeup','face_decoration','lipstick','eyeliner','eyelash','brow_enhance','brow_makeup','iris_makeup'):raise ValueError('This effect belongs after common geometry')
+    if stage not in ('skin_reference_body_match','skin_reference_match','body_face_match','body_skin_evenness','collarbone','neck_wrinkle','skin_evenness','skin_colour','facial_wrinkles','facial_sculpt','eye_makeup_enhance','lip_texture','lip_makeup','hair_colour','hair_unification','eye_light','blush_makeup','face_decoration','lipstick','eyeliner','eyelash','brow_enhance','brow_makeup','iris_makeup'):raise ValueError('This effect belongs after common geometry')
     if stage == 'skin_reference_body_match':
         from .skin_reference_body_composition import apply_records_t
         return apply_records_t(pixels, pipe.people_prepared.effects,
@@ -107,7 +107,7 @@ def source_effect(pipe,stage,pixels):
         return apply_records_t(pixels, pipe.people_prepared.effects,
             pipe.people_prepared.recovery, source_shape=pipe.people_prepared.geometry.delta.shape[1:3],
             origin=pipe.people_origin)
-    if stage in ('body_face_match', 'body_skin_evenness', 'collarbone', 'skin_evenness', 'brow_enhance', 'lip_texture', 'face_decoration', 'facial_sculpt', 'eye_makeup_enhance') and not any(r.stage == stage for r in pipe.people_prepared.effects):
+    if stage in ('body_face_match', 'body_skin_evenness', 'collarbone', 'neck_wrinkle', 'skin_evenness', 'brow_enhance', 'lip_texture', 'face_decoration', 'facial_sculpt', 'eye_makeup_enhance') and not any(r.stage == stage for r in pipe.people_prepared.effects):
         return pixels  # Exact neutral: no new full-frame scratch or native work.
     if stage == 'hair_unification':
         from .hair_unification_composition import apply_records_t
@@ -116,6 +116,11 @@ def source_effect(pipe,stage,pixels):
             origin=pipe.people_origin)
     if stage == 'facial_sculpt':
         from .facial_sculpt_composition import apply_records_t
+        return apply_records_t(pixels, pipe.people_prepared.effects,
+            pipe.people_prepared.recovery, source_shape=pipe.people_prepared.geometry.delta.shape[1:3],
+            origin=pipe.people_origin)
+    if stage == 'neck_wrinkle':
+        from .neck_wrinkle_composition import apply_records_t
         return apply_records_t(pixels, pipe.people_prepared.effects,
             pipe.people_prepared.recovery, source_shape=pipe.people_prepared.geometry.delta.shape[1:3],
             origin=pipe.people_origin)

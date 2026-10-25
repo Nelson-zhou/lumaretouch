@@ -18,5 +18,7 @@ def validate(engine,row,candidate,*,decoration_authority=None):
     require_reference_transition(engine,row_snapshot(engine,row),candidate,row=row)
     from .skin_reference_body_project import require_transition as require_body_reference_transition
     require_body_reference_transition(engine,row_snapshot(engine,row),candidate,row=row)
+    from .neck_wrinkle_project import require_parked_transition
+    require_parked_transition(row_snapshot(engine,row),candidate)
     version=engine._document_versions().version(row)
     render(engine,row,row['state'],version.document_id,str(version.revision),people_graph=candidate)

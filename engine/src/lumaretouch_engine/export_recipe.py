@@ -166,11 +166,10 @@ def build_export_spec(snap: dict, eh: int, ew: int, *, for_document: bool):
     validate_repair_ops(snap["repair_ops"])
     from .creative_derived_repairs import validate_stacks
     validate_stacks(snap)
-    spec.repair = [RepairOp(op_id=op.op_id,
-                            weight=resample_field(op.weight, (eh, ew), uint8=True),
-                            kind=op.kind, params=check_repair_params(op.kind, op.params),
-                            source_binding=deepcopy(op.source_binding))
-                   for op in snap["repair_ops"]]
+    from .repair_source_materialization import materialize as materialize_repairs
+    spec.repair = materialize_repairs(snap["repair_ops"], (eh, ew))
+    # Private frozen fitting input; never a persisted raster or alternate stack.
+    spec._neck_wrinkle_repair_inputs = tuple(snap["repair_ops"])
     spec.light = [LightOp(op_id=op.op_id,
                           weight=resample_field(op.weight, (eh, ew), uint8=True),
                           sign=op.sign) for op in snap["light_ops"]]

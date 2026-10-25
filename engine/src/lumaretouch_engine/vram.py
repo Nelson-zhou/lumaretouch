@@ -612,6 +612,7 @@ class PreviewPipeline:
             out=PEOPLE_PIPE.source_effect(self,'body_face_match',out)
             out=PEOPLE_PIPE.source_effect(self,'body_skin_evenness',out)
             out=PEOPLE_PIPE.source_effect(self,'collarbone',out)
+            out=PEOPLE_PIPE.source_effect(self,'neck_wrinkle',out)
             out=PEOPLE_PIPE.source_effect(self,'skin_evenness',out)
             out=PEOPLE_PIPE.source_effect(self,'skin_colour',out)
             out=PEOPLE_PIPE.source_effect(self,'facial_wrinkles',out)

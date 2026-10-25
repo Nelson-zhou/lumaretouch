@@ -1,3 +1,5 @@
+import type {NeckReceipt} from '../neckWrinkle/model';
+import {createNeckWrinkleReviewGuard,isNeckWrinkleRead,neckWrinkleReceiptCurrent} from '../neckWrinkle/useNeckWrinklePort';
 import {echoMatches as eyeMakeupEchoMatches,referenceReceiptValid as eyeMakeupReferenceReceiptValid,reviewReceiptValid as eyeMakeupReviewReceiptValid,releasedReferenceReceiptValid as eyeMakeupReleasedReferenceValid} from '../eyeMakeupEnhance/model';
 // SPDX-License-Identifier: GPL-3.0-or-later
 import {echoMatches as sculptEchoMatches,referenceReceiptValid as sculptReferenceReceiptValid,reviewReceiptValid as sculptReviewReceiptValid,releasedReferenceReceiptValid as sculptReleasedReferenceValid} from '../facialSculpt/model';
@@ -28,7 +30,7 @@ import {receiptCurrent as skinReferenceBodyReceiptCurrent, validReleasedReceipt 
   type SkinReferenceBodyReceipt} from '../skinReferenceBody/model';
 
 type DecorationAliasCommit = {batchId:string;documentEpoch:string;review:DecorationAliasReview;reviewSha256:string};
-type View = {lastDecorationSupportAliasResult:SupportAliasReceipt|null;lastDecorationAliasResult:DecorationAliasReceipt|null;lastDecorationAliasCommit:DecorationAliasCommit|null;eyeMakeupEnhanceReleasedRequestId: string | null;facialSculptReleasedRequestId: string | null;faceDecorationReleasedRequestId: string | null; eyeBagCancel: 'none' | 'requested' | 'stopped' | 'completed' | 'released'; pending: boolean; pendingAction: PeopleAction['action'] | null; uncertain: boolean; message: string;
+type View = {lastNeckWrinkleResult: NeckReceipt | null; neckWrinkleRefreshRequired: boolean;lastDecorationSupportAliasResult:SupportAliasReceipt|null;lastDecorationAliasResult:DecorationAliasReceipt|null;lastDecorationAliasCommit:DecorationAliasCommit|null;eyeMakeupEnhanceReleasedRequestId: string | null;facialSculptReleasedRequestId: string | null;faceDecorationReleasedRequestId: string | null; eyeBagCancel: 'none' | 'requested' | 'stopped' | 'completed' | 'released'; pending: boolean; pendingAction: PeopleAction['action'] | null; uncertain: boolean; message: string;
   lastSkinReferenceResult: SkinReferenceReceipt | null; skinReferenceRefreshRequired: boolean;
   lastSkinReferenceChoiceResult: SkinReferenceChoiceReceipt | null;
   lastSkinReferenceBodyResult: SkinReferenceBodyReceipt | null; skinReferenceBodyRefreshRequired: boolean;
@@ -47,6 +49,7 @@ export function createPeopleWorkflow(ports: Ports) {
   const decorationSupport=createDecorationSupportQueue();
   const skinReference = createSkinReferenceReviewGuard();
   const skinReferenceBody = createSkinReferenceBodyReviewGuard();
+  const neckWrinkle = createNeckWrinkleReviewGuard();
   const skinReferenceChoice = createSkinReferenceChoiceGuard();
   let current: PeopleView | null = null, enabled = false;
   let pending: PeopleAction | null = null, checking: Promise<void> | null = null;
@@ -60,7 +63,7 @@ export function createPeopleWorkflow(ports: Ports) {
   const eyeRead = (command: PeopleAction) => isEyeBagAction(command.action) && command.action !== 'eye_bag_confirm';
   let queued: {key: string; patches: Map<string, ParameterPatch>} | null = null;
   let waitFor: {key: string; revision: number; documentRevision: number} | null = null;
-  let view: View = {lastSkinReferenceChoiceResult:null,lastSkinReferenceBodyResult:null,skinReferenceBodyRefreshRequired:false,lastSkinReferenceResult:null,skinReferenceRefreshRequired:false,lastDecorationSupportAliasResult:null,lastDecorationAliasResult:null,lastDecorationAliasCommit:null,eyeMakeupEnhanceReleasedRequestId: null,facialSculptReleasedRequestId: null,faceDecorationReleasedRequestId: null, eyeBagCancel: 'none', pending: false, pendingAction: null, uncertain: false, message: '', lastEyeBagResult: null, lastEyeBagAliasCommit: null, lastBodyResult: null, lastFaceStyleResult: null, lastAliasCommit: null};
+  let view: View = {lastNeckWrinkleResult:null,neckWrinkleRefreshRequired:false,lastSkinReferenceChoiceResult:null,lastSkinReferenceBodyResult:null,skinReferenceBodyRefreshRequired:false,lastSkinReferenceResult:null,skinReferenceRefreshRequired:false,lastDecorationSupportAliasResult:null,lastDecorationAliasResult:null,lastDecorationAliasCommit:null,eyeMakeupEnhanceReleasedRequestId: null,facialSculptReleasedRequestId: null,faceDecorationReleasedRequestId: null, eyeBagCancel: 'none', pending: false, pendingAction: null, uncertain: false, message: '', lastEyeBagResult: null, lastEyeBagAliasCommit: null, lastBodyResult: null, lastFaceStyleResult: null, lastAliasCommit: null};
   const listeners = new Set<() => void>();
   const publish = (patch: Partial<View>) => {view = {...view, ...patch}; listeners.forEach(listener => listener());};
   const targetKey = (value: PeopleView) => `${bindingKey(value.binding)}:${value.association_revision}:${JSON.stringify(value.editing_target)}`;
@@ -95,8 +98,9 @@ export function createPeopleWorkflow(ports: Ports) {
           await decorationSupport.validate(command,result,()=>current);
           await skinReference.validate(command, result, () => current);
           await skinReferenceBody.validate(command, result, () => current);
+          await neckWrinkle.validate(command, result, () => current);
           await skinReferenceChoice.validate(command, result, () => current);
-          const skinRead = isSkinReferenceRead(command) || isSkinReferenceBodyRead(command) || isSkinReferenceChoiceRead(command);
+          const skinRead = isNeckWrinkleRead(command) || isSkinReferenceRead(command) || isSkinReferenceBodyRead(command) || isSkinReferenceChoiceRead(command);
           const skinReleased = skinReferenceReleasedReceipt(command, result);
           const skinBodyReleased = skinReferenceBodyReleasedReceipt(command, result);
           const decorationAlias=isDecorationAliasAction(command.action);
@@ -247,6 +251,7 @@ export function createPeopleWorkflow(ports: Ports) {
           decorationSupport.complete(command);
           skinReference.complete(command);
           skinReferenceBody.complete(command);
+          neckWrinkle.complete(command);
           skinReferenceChoice.complete(command);
           pending = null;
           pendingAliasReview = null;
@@ -259,7 +264,8 @@ export function createPeopleWorkflow(ports: Ports) {
           if (aliasCommit) aliasReview = null;
           const bodyFamily = skinBodyActionFamily(command.action);
           const bodyPayloadInvalid = !!bodyFamily && !result.payload_released && !skinBodyFamilyMatches(result.payload, bodyFamily);
-          publish({lastSkinReferenceChoiceResult:skinReferenceChoiceReceiptCurrent(command,result,current)?{command,result}:null,
+          publish({lastNeckWrinkleResult:neckWrinkleReceiptCurrent(command,result,current)?{command,result} as NeckReceipt:null,
+            neckWrinkleRefreshRequired:neckWrinkle.needsRefresh(current),lastSkinReferenceChoiceResult:skinReferenceChoiceReceiptCurrent(command,result,current)?{command,result}:null,
             lastSkinReferenceBodyResult:skinReferenceBodyReceiptCurrent(command,result,current)?{command,result}:null,
             skinReferenceBodyRefreshRequired:skinReferenceBody.needsRefresh(current),
             lastSkinReferenceResult:skinReferenceReceiptCurrent(command,result,current)?{command,result}:null,
@@ -273,7 +279,7 @@ export function createPeopleWorkflow(ports: Ports) {
             ...(eyeBagAliasCommit ? {lastEyeBagAliasCommit: eyeBagAliasCommit} : {}),
             lastBodyResult: skinBodyReceiptCurrent(command, result, current)
               ? {command, result} : null,
-            message: isSkinReferenceChoiceRead(command) && result.success ? (result.payload_released ? '原亮度测量建议已释放，请重新读取当前来源；照片未修改。' : skinReferenceChoiceReceiptCurrent(command,result,current) ? '已测量当前保留人脸的来源亮度，请明确选择参考；照片尚未修改。' : '原照片测量已结束，过期建议未套用到当前照片。') : skinBodyReleased ? '原身体参考只读内容已释放，请重新读取当前来源；未重发修改。' : skinReleased ? '原肤色匹配只读内容已释放，请重新读取当前来源；未重发修改。' : eyeMakeupReleased ? refreshError || (owns(command) ? '原只读眼妆参考已释放，请重新读取当前人物原图；未提交修改。' : '原照片只读眼妆参考已结束，过期图像未套用到当前照片。') : sculptReleased ? refreshError || (owns(command) ? '原只读面部立体参考已释放，请重新读取当前人物原图；未提交修改。' : '原照片只读参考已结束，过期图像未套用到当前照片。') : decorationReleased ? refreshError || (owns(command) ? '原只读参考图缓存已释放，请重新读取当前人物原图；未提交装饰修改。' : '原照片的只读参考请求已结束，过期图像已释放；未套用到当前照片。') : discardedRead ? (cancelled ? '引擎已确认只读审核停止；草稿保留，未应用任何候选。' : '原只读请求已结束；迟到结果已丢弃，不表示解码曾被中断。草稿保留。') : !result.success ? (result.error ?? '人物修改被拒绝，未重试。')
+            message: isNeckWrinkleRead(command) && result.success ? (result.payload_released ? '原颈纹审核图已释放，请重新读取当前来源；照片未修改。' : neckWrinkleReceiptCurrent(command,result,current) ? '颈纹只读审核内容已就绪，尚未应用到照片。' : '原照片颈纹读取已结束，过期图像未套用到当前照片。') : isSkinReferenceChoiceRead(command) && result.success ? (result.payload_released ? '原亮度测量建议已释放，请重新读取当前来源；照片未修改。' : skinReferenceChoiceReceiptCurrent(command,result,current) ? '已测量当前保留人脸的来源亮度，请明确选择参考；照片尚未修改。' : '原照片测量已结束，过期建议未套用到当前照片。') : skinBodyReleased ? '原身体参考只读内容已释放，请重新读取当前来源；未重发修改。' : skinReleased ? '原肤色匹配只读内容已释放，请重新读取当前来源；未重发修改。' : eyeMakeupReleased ? refreshError || (owns(command) ? '原只读眼妆参考已释放，请重新读取当前人物原图；未提交修改。' : '原照片只读眼妆参考已结束，过期图像未套用到当前照片。') : sculptReleased ? refreshError || (owns(command) ? '原只读面部立体参考已释放，请重新读取当前人物原图；未提交修改。' : '原照片只读参考已结束，过期图像未套用到当前照片。') : decorationReleased ? refreshError || (owns(command) ? '原只读参考图缓存已释放，请重新读取当前人物原图；未提交装饰修改。' : '原照片的只读参考请求已结束，过期图像已释放；未套用到当前照片。') : discardedRead ? (cancelled ? '引擎已确认只读审核停止；草稿保留，未应用任何候选。' : '原只读请求已结束；迟到结果已丢弃，不表示解码曾被中断。草稿保留。') : !result.success ? (result.error ?? '人物修改被拒绝，未重试。')
               : bodyPayloadInvalid ? '请求结果已收到，但身体皮肤审核回执的功能身份不匹配。请重新读取来源参考；已发送的修改不会重发。'
               : refreshError || (owns(command) ? (command.action === 'eye_bag_confirm' ? eyeBagAliasCommit ? '引擎已确认全部共享来源成员；通过受保护批次历史撤销或重做。' : '引擎已确认应用卧蚕保护候选；通过现有照片历史撤销或重做。' : '') : '原照片请求已确认，未将编辑范围或参数套用到当前照片。')});
           if (!result.success && !discardedRead) throw new ConfirmedFailure(result.error ?? '人物修改被拒绝。');
@@ -305,7 +311,9 @@ export function createPeopleWorkflow(ports: Ports) {
     if (skinReference.needsRefresh(current)) throw Error('肤色匹配结果已确认但当前照片尚未刷新，不能用旧版本继续修改。');
     if (skinReferenceBody.needsRefresh(current)) throw Error('身体参考匹配已确认但当前照片尚未刷新，不能用旧版本继续修改。');
     skinReference.prepare(command, current);
+    if (neckWrinkle.needsRefresh(current)) throw Error("颈纹结果已确认，须刷新来源后再修改。");
     skinReferenceBody.prepare(command, current);
+    neckWrinkle.prepare(command, current);
     skinReferenceChoice.prepare(command, current);
     decorationSupport.prepare(command,current);
     pendingDecorationAliasReview=null;
@@ -340,7 +348,7 @@ export function createPeopleWorkflow(ports: Ports) {
     pending = command;
     decorationSupport.sent(command);
     cancelIntent = null;
-    publish({lastSkinReferenceChoiceResult:null,lastSkinReferenceBodyResult:null,lastSkinReferenceResult:null,lastDecorationSupportAliasResult:null,lastDecorationAliasResult:null,eyeMakeupEnhanceReleasedRequestId: null,facialSculptReleasedRequestId: null,faceDecorationReleasedRequestId: null, eyeBagCancel: 'none', pending: true, pendingAction: command.action, uncertain: false, lastEyeBagResult: null, lastBodyResult: null, lastFaceStyleResult: null, message: isSkinReferenceChoiceRead(command) ? '正在测量当前已保留人脸的来源亮度，仅生成参考建议，尚未修改照片。' : isSkinReferenceBodyRead(command) ? '正在读取独立身体参考审核，尚未修改照片。' : isSkinReferenceRead(command) ? '正在读取肤色匹配审核内容，尚未修改照片。' : '正在提交人物修改，等待引擎确认。'});
+    publish({lastNeckWrinkleResult:null,lastSkinReferenceChoiceResult:null,lastSkinReferenceBodyResult:null,lastSkinReferenceResult:null,lastDecorationSupportAliasResult:null,lastDecorationAliasResult:null,eyeMakeupEnhanceReleasedRequestId: null,facialSculptReleasedRequestId: null,faceDecorationReleasedRequestId: null, eyeBagCancel: 'none', pending: true, pendingAction: command.action, uncertain: false, lastEyeBagResult: null, lastBodyResult: null, lastFaceStyleResult: null, message: isNeckWrinkleRead(command) ? '正在读取颈纹来源或完整候选对比，尚未修改照片。' : isSkinReferenceChoiceRead(command) ? '正在测量当前已保留人脸的来源亮度，仅生成参考建议，尚未修改照片。' : isSkinReferenceBodyRead(command) ? '正在读取独立身体参考审核，尚未修改照片。' : isSkinReferenceRead(command) ? '正在读取肤色匹配审核内容，尚未修改照片。' : '正在提交人物修改，等待引擎确认。'});
     try {await bounded(ports.send(command), 10000);}
     catch (error) {if (pending === command) publish({uncertain: true, message: `${String(error)}。正在查询原请求，不重发修改。`});}
     if (pending === command) await check();
@@ -388,7 +396,7 @@ export function createPeopleWorkflow(ports: Ports) {
   }
   function flush() {
     if (pending || checking || !queued || !current?.editing_target || !enabled || view.uncertain) return;
-    if (skinReference.needsRefresh(current) || skinReferenceBody.needsRefresh(current)) return;
+    if (neckWrinkle.needsRefresh(current) || skinReference.needsRefresh(current) || skinReferenceBody.needsRefresh(current)) return;
     const key = targetKey(current);
     if (queued.key !== key) {
       queued = null; waitFor = null;
@@ -410,6 +418,11 @@ export function createPeopleWorkflow(ports: Ports) {
       decorationSupport.update(value);
       skinReference.update(value);
       skinReferenceBody.update(value);
+      neckWrinkle.update(value);
+      if (view.neckWrinkleRefreshRequired !== neckWrinkle.needsRefresh(value))
+        publish({neckWrinkleRefreshRequired:neckWrinkle.needsRefresh(value)});
+      if (view.lastNeckWrinkleResult && !neckWrinkleReceiptCurrent(view.lastNeckWrinkleResult.command,view.lastNeckWrinkleResult.result,value))
+        publish({lastNeckWrinkleResult:null});
       skinReferenceChoice.update(value);
       if (view.lastSkinReferenceChoiceResult && !skinReferenceChoiceReceiptCurrent(view.lastSkinReferenceChoiceResult.command, view.lastSkinReferenceChoiceResult.result, value))
         publish({lastSkinReferenceChoiceResult: null});
@@ -465,6 +478,7 @@ export function createPeopleWorkflow(ports: Ports) {
     patch(patches: ParameterPatch[]) {
       if (!current?.editing_target || !enabled || view.uncertain) throw Error('请先选择可编辑的人物范围并确认上一请求。');
       if (skinReference.needsRefresh(current)) throw Error('肤色匹配结果已确认，等待照片状态刷新后才能继续调整。');
+      if (neckWrinkle.needsRefresh(current)) throw Error('颈纹结果已确认，等待当前来源状态刷新。');
       if (skinReferenceBody.needsRefresh(current)) throw Error('身体参考匹配已确认，等待照片状态刷新后才能继续调整。');
       if (pending && (pending.action !== 'patch' || !owns(pending)
         || JSON.stringify(pending.target) !== JSON.stringify(current.editing_target))) throw Error('人物范围修改仍在确认，请稍候调整。');

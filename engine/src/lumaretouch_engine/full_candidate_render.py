@@ -130,10 +130,19 @@ def render(engine,row,candidate_state,document_id,revision,*,people_graph=None,s
     import numpy as np
     geometry=(snap['crop_rect'],snap['crop_rotation']);expected=out_size(w,h,*geometry)
     if expected[0]*expected[1]>limit:raise ValueError('Expanded crop exceeds complete preparation budget')
-    rgb,_=export_float(pixels,spec,geometry=geometry,progress=checkpoint)
+    rgb,stats=export_float(pixels,spec,geometry=geometry,progress=checkpoint)
+    neck_measurements=[]
+    people_stats=stats.get("people") or {}
+    for face_id, facts in sorted(people_stats.get("facts",{}).items()):
+        for fact in facts.get("neck_wrinkle",[]):
+            if fact.get("review_authority") is not True or fact.get("display_projection") is not None:
+                raise ValueError("Full neck comparison cannot authorize a projected display field")
+            neck_measurements.append({"face_ref":deepcopy(fact["face_ref"]),
+                                      "measurement_key":fact["measurement_key"]})
     checkpoint()
     if rgb.ndim!=3 or rgb.shape[2]!=3 or (rgb.shape[1],rgb.shape[0])!=expected or not np.issubdtype(rgb.dtype,np.floating) or not np.isfinite(rgb).all():
         raise ValueError('Complete candidate is not finite float RGB at its exact geometry')
     latest,_,_=identity(engine,row,candidate_state,document_id,revision,people_graph=people_graph,staged_people_context=staged_people_context)
     if M.file_stamp(path)!=stamp or latest!=proof:raise ValueError('Target changed during complete preparation')
-    return rgb,{**proof,'source_size':[w,h],'output_size':list(expected)}
+    return rgb,{**proof,'source_size':[w,h],'output_size':list(expected),
+                'neck_wrinkle_measurements':neck_measurements}

@@ -184,6 +184,12 @@ impl ReviewBinding {
             return Ok(Some(Self { fields, bytes,
                 read_only: crate::people_api::skin_reference_choice::read_only(value), strict_failure_identity: true }));
         }
+        if let Some(fields) = crate::people_api::neck_wrinkle::binding(value)? {
+            let bytes = fields.to_string().len();
+            if bytes > 256 * 1024 { return Err("neck review identity exceeds people receipt budget".into()); }
+            return Ok(Some(Self { fields, bytes,
+                read_only: crate::people_api::neck_wrinkle::read_only(value), strict_failure_identity: true }));
+        }
         if let Some(fields) = crate::people_api::skin_reference_body::binding(value)? {
             let bytes = fields.to_string().len();
             if bytes > 256 * 1024 { return Err("body-reference identity exceeds people receipt budget".into()); }

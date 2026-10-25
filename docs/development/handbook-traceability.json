@@ -2951,9 +2951,20 @@
       "source_url": "https://www.pixcakeai.com/guide/32464",
       "source_child_index": 18,
       "title": "面部祛瑕疵/祛颈纹",
-      "status": "pending_independent_verification",
-      "implementation": [],
-      "verification": []
+      "status": "partial_source_connected_unrun",
+      "implementation": [
+        "core/neck_wrinkle/lib.rs",
+        "engine/src/lumaretouch_engine/neck_wrinkle_host.py",
+        "engine/src/lumaretouch_engine/neck_wrinkle_source.py",
+        "ui/src/neckWrinkle/NeckWrinkleControl.tsx"
+      ],
+      "verification": [
+        "docs/neck-wrinkle/INTEGRATION.md",
+        "docs/neck-wrinkle/REQUIREMENT-AND-DESIGN.md",
+        "engine/tests/test_neck_wrinkle_numeric_unrun.py",
+        "engine/tests/test_neck_wrinkle_host_unrun.py"
+      ],
+      "limitations": "Manual-reviewed neck/context and hard protection with exact FaceRef/BodyRef, not automatic neck or instance segmentation. AGPL RapidRetouch derivative full-source method, native-crop/full mixed review, opaque SDR only. No preset/batch/cohort/alias/recovery transfer, no numerical/runtime/photo/performance acceptance; full-grid memory limits remain explicit."
     },
     {
       "id": "control:PC-32464:20",

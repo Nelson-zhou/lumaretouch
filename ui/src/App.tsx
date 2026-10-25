@@ -1,3 +1,4 @@
+import {NeckWrinkleControl, useNeckWrinklePort} from './neckWrinkle';
 import {PortraitCropWorkspaceHost} from './portraitCrop';
 import {createStartEngineAction} from './engine/startEngineAction';
 import {SkinReferenceMatchPanel} from './skinReferenceMatch/SkinReferenceMatchPanel';
@@ -1849,6 +1850,8 @@ export default function App() {
     externalBusy:imageToolBusy||idBackgroundBusy||creative.pending||expression.busy||expressionOpen||lens.busy||lensOpen||colorSampler.active||sampleLibrary.open,queueBusy:!!status?.edit_queue?.in_flight||!!status?.edit_queue?.pending},refreshFromEngine);
   const hairFamily=useHairFamily({status,doc,peopleEnabled:peopleWorkflow.enabled,refresh:refreshFromEngine,engineAlive,onStartEngine,
     externalBusy:hairToolBusy||portraitCropBusy||idBackgroundBusy||creative.pending||expression.busy||expressionOpen||lens.busy||lensOpen||glow.busy||glowOpen||colorSampler.active||sampleLibrary.open});
+  const neckWrinklePort=useNeckWrinklePort({people:peopleWorkflow,capability:{protocol:caps?.neck_wrinkle_protocol,available:caps?.neck_wrinkle_available,reason:caps?.neck_wrinkle_reason},
+    blocked:hairBusy||portraitCropBusy||hairFamily.workflowBusy||idBackgroundBusy||creative.pending||expression.busy||expressionOpen||lens.busy||lensOpen||glow.busy||glowOpen||colorSampler.active||sampleLibrary.open||!!status?.edit_queue?.closed});
   armBusyRef.current=armBusyRef.current||portraitCropBusy||expression.busy||lens.busy||glow.busy||hairFamily.workflowBusy;
   creativeRoute.current={active:workspace==='creative',pending:creative.pending,importPaths:creative.importPaths,history:creative.history};
   const guides=useCanvasGuides({loadId:doc?.document_id??'',report:doc?.canvas_guides,center:doc?.crop?[(doc.crop.rect[0]+doc.crop.rect[2])/2,(doc.crop.rect[1]+doc.crop.rect[3])/2]:undefined,
@@ -1904,6 +1907,7 @@ export default function App() {
                         thumb={strip?.current ? thumbs[strip.current] : undefined}
                         people={peopleWorkflow}
                         skinReferencePanel={<SkinReferenceMatchPanel choiceAvailable={status?.ready_caps?.skin_reference_choice_protocol===1} people={peopleWorkflow} available={status?.ready_caps?.skin_reference_match_protocol===1} blocked={hairBusy||hairFamily.workflowBusy||!!status?.edit_queue?.in_flight||!!status?.edit_queue?.pending||!!status?.edit_queue?.closed}/> }
+                        neckWrinklePanel={<NeckWrinkleControl port={neckWrinklePort}/>}
                         skinReferenceBodyPanel={<SkinReferenceBodyPanel choiceAvailable={status?.ready_caps?.skin_reference_choice_protocol===1} people={peopleWorkflow} available={status?.ready_caps?.skin_reference_body_protocol===1} blocked={hairBusy||hairFamily.workflowBusy||!!status?.edit_queue?.in_flight||!!status?.edit_queue?.pending||!!status?.edit_queue?.closed}/> }
                         {...hairFamily.slots}
                         brush={{ on: brushOn, mode: brushMode, radius: brushRadius }}

@@ -1,6 +1,15 @@
 LumaRetouch — 第三方资产与署名声明（NOTICE）
 ================================================================
 
+Manual-assisted neck fine-wrinkle correction
+  core/neck_wrinkle/lib.rs is an AGPL-3.0-only derivative of Chris Cork's
+  RapidRetouch, pinned to 5e9d9c1d2770ff29d11a3879e5a90aad5887e028.
+  It is not relicensed as original GPL code. Exact upstream paths, modification
+  notes and the unchanged full licence are in core/neck_wrinkle/NOTICE and
+  core/neck_wrinkle/LICENSE. Corresponding Rust source, header, manifest and
+  notices are staged under the engine's third_party/neck_wrinkle directory.
+  Source and combined-work obligations remain as recorded by those licences.
+
 本文件随发行包分发。它列出的义务**不因本软件自身采用 GPL-3.0-or-later
 而被吸收**：每个第三方组件按它自己的许可提要求，代码许可管不到模型权重。
 

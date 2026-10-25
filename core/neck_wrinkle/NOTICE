@@ -1,0 +1,39 @@
+RapidRetouch-derived manual-assisted neck fine-wrinkle numerics
+Original author: Chris Cork
+Copyright Chris Cork. Adapted for LumaRetouch, 2026-10-25.
+License: GNU Affero General Public License version 3 only (AGPL-3.0-only).
+Upstream: https://github.com/crispin81/RapidRetouch
+Pinned revision: 5e9d9c1d2770ff29d11a3879e5a90aad5887e028
+Full licence: LICENSE in this directory, copied without modification from the
+already archived pinned RapidRetouch licence in the engine distribution.
+
+Derivative: lib.rs (including line/depth/lightness and transfer functions).
+Original code paths:
+  engine/src/rapidretouch_engine/tools/eyes.py
+    _smoothstep, _line_strength, _wrinkle_lift, _lab_l_to_y, _relight
+    Git blob: 5e743fc551fb284815675252735d10ca8fc2bbbc
+  engine/src/rapidretouch_engine/tools/colour.py
+    sRGB-to-linear transfer
+    Git blob: 52725cdcbce8d0fac0b1286285c3c59beececc1d
+Method context, not copied neck ownership or reduced-resolution implementation:
+  engine/src/rapidretouch_engine/tools/skin.py (_neck_lines)
+    Git blob: c23391ec338417cc79387c73c5e90adf54d0f6a4
+  engine/src/rapidretouch_engine/tools/filters.py
+    Git blob: b3fd98ffb2324989c8c9ea800e3aff239e97f8db
+
+Modifications:
+- Rust translation with dependency-free bounded finite source-grid kernels.
+- User-observed pixel half-width, no eye/face scale or inferred neck contour.
+- Square separable closing/max footprints instead of upstream ellipse closing.
+- Full composed dependency erosion of independently owned skin/protection.
+- No adaptive masked blur, chroma borrowing, reduced-grid solve or RGB patch.
+- Positive scalar log gain, 6 L* lift and 1.25x gain caps; current linear-RGB
+  headroom through a common gain without independent channel clipping.
+- Explicit memory admission, checked C ABI, cancellable private calculation,
+  immutable Python evidence, no runtime compilation or alternate algorithm.
+- All runtime, numerical and representative-photo acceptance remains UNRUN.
+
+This translation is not original GPL code and does not relicense RapidRetouch.
+Preserve this notice, the licence and corresponding source when redistributing.
+The existing GPLv3 section 13 / AGPLv3 combined-work and source obligations apply.
+No warranty; no new licence clearance or proprietary-relicensing claim.

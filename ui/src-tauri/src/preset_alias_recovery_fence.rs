@@ -46,7 +46,7 @@ pub(super) fn safe_during_pending(command: &Value) -> bool {
     // Do not trust generic action names or suffixes: an exposure command with
     // action=status must not bypass the fence. Use owned read predicates.
     if crate::preset_api::read_only(command) || crate::batch_api::read_only(command)
-        || crate::people_api::skin_reference_choice::read_only(command) || crate::people_api::skin_reference_body::read_only(command) || crate::people_api::skin_reference_match::read_only(command)
+        || crate::people_api::neck_wrinkle::read_only(command) || crate::people_api::skin_reference_choice::read_only(command) || crate::people_api::skin_reference_body::read_only(command) || crate::people_api::skin_reference_match::read_only(command)
         || crate::torso_transfer_protocol::read_only_head_preflight(command)
         || crate::people_api::eye_bag::read_only(command) || crate::people_api::face_style::read_only(command)
         || crate::people_api::face_decoration::read_only(command) || crate::people_api::facial_sculpt::read_only(command) || crate::people_api::eye_makeup_enhance::read_only(command) || crate::people_api::decoration_alias::read_only(command) || crate::people_api::decoration_support_alias::read_only(command)

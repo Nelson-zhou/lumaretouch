@@ -182,6 +182,8 @@ export function usePeopleWorkflow(status: EngineStatus | null, doc: DocState | n
     if (historyBusy) throw Error('共享来源批次历史仍在处理或查询中，不能重发修改。');
     if (action === 'skin_reference_choice' && status?.ready_caps?.skin_reference_choice_protocol !== 1)
       throw Error('当前引擎未提供已测人脸亮度建议协议，不会以旧图或人物置信度代替。');
+    if (action?.startsWith('neck_wrinkle_') && status?.ready_caps?.neck_wrinkle_protocol !== 1)
+      throw Error('当前引擎未提供颈部细纹审核协议。');
     if (action && isSkinReferenceBodyAction(action) && status?.ready_caps?.skin_reference_body_protocol !== 1)
       throw Error('当前引擎未提供独立身体参考审核协议，不能借用脸部或其他身体功能提交。');
     if (action && isSkinReferenceAction(action) && status?.ready_caps?.skin_reference_match_protocol !== 1)

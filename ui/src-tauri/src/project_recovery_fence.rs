@@ -8,9 +8,9 @@ mod preset_alias;
 mod preset_alias_history;
 struct Pending { command: Value, composite_history: Option<Value> }
 impl Pending { fn composite(&self)->bool {preset_alias::applies(&self.command)||crate::people_api::decoration_alias::applies(&self.command)||crate::people_api::decoration_support_alias::applies(&self.command)||crate::effect_recovery_host::alias::applies(&self.command)||self.composite_history.is_some()} }
-// Body mutations retain the existing fence until a strict terminal or verified
+// Body and neck mutations retain the existing fence until a strict terminal or verified
 // workspace reopen. They do not become composite/alias history operations.
-impl Pending { fn guarded(&self) -> bool { self.composite() || crate::people_api::skin_reference_body::mutation(&self.command) } }
+impl Pending { fn guarded(&self) -> bool { self.composite() || crate::people_api::skin_reference_body::mutation(&self.command) || crate::people_api::neck_wrinkle::mutation(&self.command) } }
 fn pending()->&'static Mutex<HashMap<([u8;16],String),Pending>> {
     static STORE:OnceLock<Mutex<HashMap<([u8;16],String),Pending>>=OnceLock::new();
     STORE.get_or_init(||Mutex::new(HashMap::new()))
@@ -45,7 +45,7 @@ pub(crate) fn issued(epoch:[u8;16], command:&Value)->Result<(),String>{
     // Check a pending ID collision first: read-only status cannot release or
     // replace an already-issued mutation belonging to another receipt host.
     if crate::batch_api::read_only(command) || crate::torso_transfer_protocol::read_only_head_preflight(command) || crate::preset_api::read_only(command)
-        || crate::people_api::skin_reference_choice::read_only(command) || crate::people_api::skin_reference_body::read_only(command) || crate::people_api::skin_reference_match::read_only(command)
+        || crate::people_api::neck_wrinkle::read_only(command) || crate::people_api::skin_reference_choice::read_only(command) || crate::people_api::skin_reference_body::read_only(command) || crate::people_api::skin_reference_match::read_only(command)
         || crate::people_api::face_style::read_only(command) || crate::people_api::eye_bag::read_only(command)
         || crate::people_api::face_decoration::read_only(command) || crate::people_api::facial_sculpt::read_only(command) || crate::people_api::eye_makeup_enhance::read_only(command) || crate::people_api::decoration_alias::read_only(command) || crate::people_api::decoration_support_alias::read_only(command) {return Ok(());}
     if store.len()>=4096{return Err("未确认请求超过恢复屏障容量，请查询原请求或重新打开工程".into());}
@@ -84,6 +84,8 @@ pub(crate) fn observed(epoch:[u8;16], value:&Value){
     }
     if crate::people_api::skin_reference_body::mutation(command)
         && !crate::people_api::skin_reference_body::matches_request(command, value) { return; }
+    if crate::people_api::neck_wrinkle::mutation(command)
+        && !crate::people_api::neck_wrinkle::matches_request(command, value) { return; }
     if preset_alias::applies(command) {
         if preset_alias::matches_request(command,value) {preset_alias_history::observe_publication(epoch,value);}
         if !preset_alias::settled(command,value) {return;}
@@ -126,6 +128,28 @@ pub(crate) fn proof(epoch:[u8;16])->Result<Value,String>{
 #[cfg(test)]
 mod tests {
     use super::*;
+    // AUTHORED / UNRUN. Neck confirmation remains a single-photo request;
+    // strict recovery protection must not manufacture composite history.
+    #[test] fn neck_write_requires_exact_terminal_or_verified_reopen() {
+        let epoch=[231;16];
+        let request=json!({"action":"neck_wrinkle_detach","payload":{},"document_id":"doc","document_epoch":"epoch",
+            "document_revision":1,"state_revision":1,"association_revision":0,
+            "target":{"scope":"face","target_id":"face","face_ref":{"asset_sha256":"a".repeat(64),"face_instance_id":"face","analysis_revision":1}}});
+        let mut command=request.clone(); command["cmd"]=json!("people"); command["request_id"]=json!("neck-fence");
+        issued(epoch,&command).unwrap();
+        assert!(issued(epoch,&json!({"cmd":"exposure","value":1})).is_err());
+        let mut failure=json!({"event":"people_result","protocol":1,"request_id":"neck-fence","action":"neck_wrinkle_detach",
+            "document_id":"doc","success":false,"outcome_unknown":false,"error":"refused","neck_wrinkle_request":request});
+        failure["neck_wrinkle_request"]["document_revision"]=json!(2);
+        observed(epoch,&failure); assert!(proof(epoch).is_err());
+        observed(epoch,&json!({"event":"project_opened"})); assert!(proof(epoch).is_err());
+        failure["neck_wrinkle_request"]["document_revision"]=json!(1);
+        observed(epoch,&failure); assert!(proof(epoch).is_ok());
+        issued(epoch,&command).unwrap(); failure["outcome_unknown"]=json!(true);
+        observed(epoch,&failure); assert!(proof(epoch).is_err());
+        observed(epoch,&json!({"event":"project_opened","open":true,"path":"/fixture/project","project_id":"project","docs":1,"dirty":false}));
+        assert!(proof(epoch).is_ok());
+    }
     // AUTHORED / UNRUN. Read-only exception must never admit shadow apply.
     #[test] fn isolated_shadow_preview_does_not_fence_recovery_but_apply_does() {
         let epoch=[219;16];

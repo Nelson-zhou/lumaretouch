@@ -18,6 +18,8 @@ def preview(engine, state=None, *, body_bank=_MISSING, body_source=None, support
     unification_inputs['hair_volume_assets']=support_bank
     from .skin_reference_match_inputs import preview as reference_inputs
     unification_inputs.update(reference_inputs(engine,state,support_bank))
+    from .neck_wrinkle_inputs import preview as neck_inputs
+    unification_inputs.update(neck_inputs(engine,state,support_bank))
     from .people_cross_owner import validate_owner
     validate_owner(state,engine._people_source()['sha256'],document_id)
     from .creative_derived_source import record, binding, analysis_rgb, verify_precompute

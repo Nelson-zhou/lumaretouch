@@ -10,7 +10,7 @@ from .facial_wrinkle_layer import FacialWrinkleLayer, bounds as wrinkle_bounds
 from .under_eye_layer import UnderEyeLayer, bounds as eye_bounds, KEYS as EYE_KEYS
 from .ops import enhance as H
 
-STAGES = ('skin_reference_match', 'skin_reference_body_match', 'body_face_match', 'body_skin_evenness', 'collarbone', 'skin_evenness', 'skin_colour', 'facial_wrinkles', 'facial_sculpt', 'eye_makeup_enhance', 'eye_detail', 'eye_bag_preserve', 'lip_texture', 'lip_makeup', 'enhance', 'hair_colour', 'hair_unification', 'eye_light', 'blush_makeup', 'face_decoration', 'lipstick','eyeliner','eyelash','brow_enhance','brow_makeup','iris_makeup')
+STAGES = ('skin_reference_match', 'skin_reference_body_match', 'body_face_match', 'body_skin_evenness', 'collarbone', 'neck_wrinkle', 'skin_evenness', 'skin_colour', 'facial_wrinkles', 'facial_sculpt', 'eye_makeup_enhance', 'eye_detail', 'eye_bag_preserve', 'lip_texture', 'lip_makeup', 'enhance', 'hair_colour', 'hair_unification', 'eye_light', 'blush_makeup', 'face_decoration', 'lipstick','eyeliner','eyelash','brow_enhance','brow_makeup','iris_makeup')
 
 
 @dataclass(frozen=True)
@@ -123,6 +123,9 @@ def apply(stage, current, records, *, recovery=None):
         return apply_records_np(current, records, recovery)
     if stage == 'facial_sculpt':
         from .facial_sculpt_composition import apply_records_np
+        return apply_records_np(current, records, recovery)
+    if stage == 'neck_wrinkle':
+        from .neck_wrinkle_composition import apply_records_np
         return apply_records_np(current, records, recovery)
     if stage == 'collarbone':
         from .collarbone_composition import apply_records_np

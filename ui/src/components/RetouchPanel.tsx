@@ -108,6 +108,7 @@ export interface RetouchProps {
   hairWorkflowBusy?: boolean;
   skinReferencePanel?: React.ReactNode;
   skinReferenceBodyPanel?: React.ReactNode;
+  neckWrinklePanel?: React.ReactNode;
   hairPort: HairPort;
   hairBusy: boolean;
   refreshHair: () => Promise<void>;
@@ -1451,6 +1452,7 @@ export default function RetouchPanel(props: RetouchProps) {
             </summary>
             <div className="pgBody">
               {f.id === "PC-32465" && <p className="muted">磨皮使用本照片皮肤蒙版，不随上方人物或分组范围切换。</p>}
+              {f.id === "PC-32464" && props.neckWrinklePanel}
               {f.id === "PC-32465" && props.skinReferencePanel}
               {f.id === "PC-32465" && props.skinReferenceBodyPanel}
               {f.id === "PC-32465" && skinWhy && <div className="specEmpty" role="status">{skinWhy}</div>}
@@ -1463,6 +1465,7 @@ export default function RetouchPanel(props: RetouchProps) {
                 <SpecNodes nodes={withoutCoveredLeaves(tree, f.id, f.id === "PC-32455" ? !!props.opticsPanel : !!custom)}
                   openPaths={openPathsFor(f)} renderExtra={node=>renderExtra(node,f.id)}
                   renderLeaf={(leaf, name) => {
+                    if(f.id==='PC-32464'&&leaf.path==='面部祛瑕疵/祛颈纹'&&props.neckWrinklePanel)return <p className="toolRouteNote">上方提供独立颈部细纹审核；须手绘可见颈部及首饰、衣领等保护区，不是自动颈部识别。</p>;
                     if(f.id==='PC-32468'&&leaf.path==='AI完美表情'&&props.expressionPanel)return <p className="toolRouteNote">上方接通同场次真实素材的手动替换与融合审核；自动识别人选、最佳表情选择仍未提供。</p>;
                     if (f.id === 'PC-32466' && ['脸型预设/少年', '脸型预设/圆脸适用', '脸型预设/长脸适用', '脸型预设/方脸适用', '脸型预设/程度'].includes(leaf.path)) return null; // New versioned chooser above; legacy routes remain untouched.
                     if(f.id==='PC-32455'&&['滤镜/我的/CUBE导入','滤镜/我的','滤镜/推荐'].includes(leaf.path))return null;

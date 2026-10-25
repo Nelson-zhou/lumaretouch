@@ -23,9 +23,10 @@ def _assets_require_analysis(face, resolved):
     from . import body_skin_evenness_state as EVENNESS, body_face_match_state as MATCH, collarbone_state as COLLARBONE
     from . import skin_reference_match_state as REFERENCE_MATCH, skin_reference_body_state as REFERENCE_BODY
     from . import hair_volume_state as HAIR_VOLUME
+    from . import neck_wrinkle_state as NECK_WRINKLE
     from . import eye_bag_preserve_state as EYE_BAGS, face_decoration_state as DECORATION, facial_sculpt_state as SCULPT, eye_makeup_enhance_state as EYE_MAKEUP_ENHANCE
     families = {'hair_volume': HAIR_VOLUME, 'skin_reference_match_body_visibility': REFERENCE_BODY, 'skin_reference_match_relation': REFERENCE_MATCH, 'body_skin_evenness_visibility': EVENNESS, 'body_face_match_visibility': MATCH,
-                'collarbone_visibility': COLLARBONE, 'eye_bag_ridge_visibility': EYE_BAGS,
+                'collarbone_visibility': COLLARBONE, 'neck_wrinkle_visibility': NECK_WRINKLE, 'eye_bag_ridge_visibility': EYE_BAGS,
                 'face_decoration_visibility': DECORATION, 'face_decoration': DECORATION, 'facial_sculpt_visibility': SCULPT, 'eye_makeup_enhance_visibility': EYE_MAKEUP_ENHANCE}
     if set(assets) - set(families): return True
     from .people_resolver import materialize
