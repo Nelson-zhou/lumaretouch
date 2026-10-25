@@ -52,6 +52,8 @@ impl EngineHandle {
         crate::portrait_crop_api::blocks_mutation(self.epoch, &cmd)?;
         crate::lens_blur_api::blocks_mutation(self.epoch, &cmd)?;
         crate::expression_replacement_api::blocks_mutation(self.epoch, &cmd)?;
+        if crate::fabric_sweat_api::read_only(&cmd) { return self.dispatcher.enqueue(None, cmd); }
+        if crate::limb_vein_api::read_only(&cmd) { return self.dispatcher.enqueue(None, cmd); }
         if crate::background_material_api::read_only(&cmd) { return self.dispatcher.enqueue(None, cmd); }
         if crate::hair_unification_api::read_only(&cmd) { return self.dispatcher.enqueue(None, cmd); }
         if crate::hair_volume_api::read_only(&cmd) { return self.dispatcher.enqueue(None, cmd); }
@@ -160,6 +162,8 @@ impl EngineHandle {
         crate::portrait_crop_api::blocks_mutation(self.epoch, &cmd)?;
         crate::lens_blur_api::blocks_mutation(self.epoch, &cmd)?;
         crate::expression_replacement_api::blocks_mutation(self.epoch, &cmd)?;
+        if crate::fabric_sweat_api::read_only(&cmd) { return self.dispatcher.enqueue(None, cmd); }
+        if crate::limb_vein_api::read_only(&cmd) { return self.dispatcher.enqueue(None, cmd); }
         if crate::background_material_api::read_only(&cmd) { return self.dispatcher.enqueue(None, cmd); }
         if crate::hair_unification_api::read_only(&cmd) { return self.dispatcher.enqueue(None, cmd); }
         if crate::hair_volume_api::read_only(&cmd) { return self.dispatcher.enqueue(None, cmd); }
@@ -308,6 +312,8 @@ pub fn spawn(py: &str, engine_src: &str, session: &str, state: Arc<AppState>,
                             || st.preset_results.lock().map(|h|h.guards_review(inspection_epoch,id)).unwrap_or(true)
                             || st.effect_recovery.lock().map(|h|h.guards_review(inspection_epoch,id)).unwrap_or(true)
                             || crate::people_api::guards_review(inspection_epoch,id)
+                            || crate::fabric_sweat_api::guards_review(inspection_epoch,id)
+                            || crate::limb_vein_api::guards_review(inspection_epoch,id)
                             || crate::body_slim_api::guards_result(inspection_epoch,id)
                             || crate::expression_replacement_api::guards_result(inspection_epoch,id)
                             || crate::hair_unification_api::guards_result(inspection_epoch,id)
@@ -317,7 +323,7 @@ pub fn spawn(py: &str, engine_src: &str, session: &str, state: Arc<AppState>,
                             || crate::portrait_crop_api::guards_result(inspection_epoch,id)
                             || crate::lens_blur_api::guards_result(inspection_epoch,id)
                     });
-                    if !scalar_review && v["event"] != "portrait_crop_result" && v["event"] != "hair_unification_result" && v["event"] != "hair_volume_result" && v["event"] != "creative_selection_result" && v["event"] != "ingest_session_result" && v["event"] != "workflow_owner_result" && v["event"] != "light_glow_result" && v["event"] != "lens_blur_result" && v["event"] != "expression_replacement_result" && v["event"] != "common_background_result" && v["event"] != "fringe_repair_result" && v["event"] != "id_background_result" && v["event"] != "torso_length_result" && v["event"] != "waist_length_result" && v["event"] != "head_size_result" && v["event"] != "body_slim_result" {
+                    if !scalar_review && v["event"] != "limb_vein_result" && v["event"] != "fabric_sweat_result" && v["event"] != "portrait_crop_result" && v["event"] != "hair_unification_result" && v["event"] != "hair_volume_result" && v["event"] != "creative_selection_result" && v["event"] != "ingest_session_result" && v["event"] != "workflow_owner_result" && v["event"] != "light_glow_result" && v["event"] != "lens_blur_result" && v["event"] != "expression_replacement_result" && v["event"] != "common_background_result" && v["event"] != "fringe_repair_result" && v["event"] != "id_background_result" && v["event"] != "torso_length_result" && v["event"] != "waist_length_result" && v["event"] != "head_size_result" && v["event"] != "body_slim_result" {
                         crate::project_recovery_fence::observed(inspection_epoch, &v);
                     }
                     if v["event"]=="ready" && v["command_ack"].as_u64()!=Some(1) {
@@ -349,6 +355,8 @@ pub fn spawn(py: &str, engine_src: &str, session: &str, state: Arc<AppState>,
             crate::light_glow_api::ended(inspection_epoch);
             crate::portrait_crop_api::ended(inspection_epoch);
             crate::lens_blur_api::ended(inspection_epoch);
+            crate::fabric_sweat_api::ended(inspection_epoch);
+            crate::limb_vein_api::ended(inspection_epoch);
             crate::neck_shape_api::ended(inspection_epoch);
             crate::arm_shape_api::ended(inspection_epoch);
             crate::people_api::ended(inspection_epoch);
@@ -432,6 +440,8 @@ fn handle_event(state: &Arc<AppState>, line: &str,inspection_epoch:[u8;16]) {
         "selective_colour_result" | "selective_colour_preview" | "selective_colour_readback" => { crate::selective_colour_api::receive(inspection_epoch, &v); if v.get("doc_state").is_some_and(|d|d.is_object()) { state.on_layer_frame(&v); } if v.get("frame").is_some_and(|f|f.is_object()) { state.on_frame_event(); } },
         "colour_editor_result" | "colour_editor_preview" | "colour_editor_readback" | "colour_editor_sample" => { crate::colour_editor_api::receive(inspection_epoch, &v); if v.get("doc_state").is_some_and(|d|d.is_object()) { state.on_layer_frame(&v); } if v.get("frame").is_some_and(|f|f.is_object()) { state.on_frame_event(); } },
         "primary_calibration_result" | "primary_calibration_preview" | "primary_calibration_readback" => { crate::primary_calibration_api::receive(inspection_epoch, &v); if v.get("doc_state").is_some_and(|d|d.is_object()) { state.on_layer_frame(&v); } if v.get("frame").is_some_and(|f|f.is_object()) { state.on_frame_event(); } },
+        "fabric_sweat_result" => { if let Some(result)=crate::fabric_sweat_api::receive(inspection_epoch,&v) { if result.get("doc_state").is_some_and(|d|d.is_object()) { state.on_layer_frame(&result); } } },
+        "limb_vein_result" => { if let Some(result)=crate::limb_vein_api::receive(inspection_epoch,&v) { if result.get("doc_state").is_some_and(|d|d.is_object()) { state.on_layer_frame(&result); } } },
         "photo_detail_result" | "photo_detail_readback" => { crate::photo_detail_api::receive(inspection_epoch, &v); if v.get("doc_state").is_some_and(|d|d.is_object()) { state.on_layer_frame(&v); } },
         "extended_tone_result" | "extended_tone_readback" => { crate::extended_tone_api::receive(inspection_epoch, &v); if v.get("doc_state").is_some_and(|d|d.is_object()) { state.on_layer_frame(&v); } },
         "custom_lut_result" => { crate::custom_lut_api::receive(inspection_epoch, &v); if v.get("doc_state").is_some_and(|d|d.is_object()) { state.on_layer_frame(&v); } },
@@ -565,6 +575,8 @@ fn handle_event(state: &Arc<AppState>, line: &str,inspection_epoch:[u8;16]) {
             crate::background_material_api::ready(inspection_epoch, v["background_material_library_protocol"].as_u64()==Some(1));
             crate::light_glow_api::ready(inspection_epoch, if v["light_glow_protocol"].as_u64()==Some(1) { &v["light_glow_capability"] } else { &Value::Null });
             crate::portrait_crop_api::ready(inspection_epoch, &v["portrait_crop"]);
+            crate::fabric_sweat_api::ready(inspection_epoch,v["fabric_sweat_protocol"]==1);
+            crate::limb_vein_api::ready(inspection_epoch,v["limb_vein_protocol"]==1);
             crate::lens_blur_api::ready(inspection_epoch, if v["lens_blur_protocol"].as_u64()==Some(3) { &v["lens_blur_capability"] } else { &Value::Null });
             crate::expression_replacement_api::ready(inspection_epoch, v["expression_replacement_protocol"].as_u64()==Some(1) && v["expression_replacement_operation_id"]=="lnx.expression_replacement.v1" && v["expression_replacement_available"]==true);
             crate::body_slim_api::ready(inspection_epoch, v["body_slim_protocol"].as_u64() == Some(1));

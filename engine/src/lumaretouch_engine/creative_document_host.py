@@ -372,6 +372,18 @@ def guard_command(engine, name, request):
         from .creative_derived_smoothing import require_command as require_smoothing
         require_smoothing(engine,request)
         return # Actual owned smoothing source/channel, not unmasked fallback.
+    if name == 'fabric_sweat':
+        from .garment_sweat_routes import check
+        check(request)
+        from .creative_derived_source import binding,verify
+        verify(binding(engine),engine)
+        return  # Source-bound manual garment review uses canonical derived pixels, never original analysis.
+    if name == 'limb_vein':
+        from .limb_vein_routes import check
+        check(request)
+        from .creative_derived_source import binding,verify
+        verify(binding(engine),engine)
+        return  # Source-bound manual limb review uses canonical derived pixels, never original analysis.
     if name == 'fabric':
         from .creative_derived_fabric import require_command as require_fabric
         require_fabric(engine,request)

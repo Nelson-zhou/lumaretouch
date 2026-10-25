@@ -1,0 +1,6 @@
+# Authored dependency-free lockfile; Cargo validation UNRUN.
+version = 3
+
+[[package]]
+name = "lrt_limb_vein"
+version = "0.1.0"

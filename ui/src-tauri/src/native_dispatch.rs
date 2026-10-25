@@ -33,7 +33,7 @@ impl AppState {
 
     /// Owned receipts must never dispatch into a replacement engine epoch.
     pub(crate) fn send_to_engine_at_epoch(&self, cmd: Value, expected_epoch: [u8; 16]) -> Result<(), String> {
-        if !matches!(cmd["cmd"].as_str(), Some("ingest_session" | "workflow_owner" | "creative_selection" | "hair_unification" | "hair_volume")) {
+        if !matches!(cmd["cmd"].as_str(), Some("ingest_session" | "workflow_owner" | "creative_selection" | "hair_unification" | "hair_volume" | "fabric_sweat" | "limb_vein")) {
             return Err("Epoch-bound dispatch is restricted to owned ingestion protocols".into());
         }
         self.send_to_engine_bound(cmd, Some(expected_epoch))
@@ -74,6 +74,18 @@ impl AppState {
             let handle = guard.as_ref().ok_or("引擎未启动")?;
             require_dispatch_epoch(handle, expected_epoch)?;
             return crate::hair_volume_api::enqueue(handle, cmd);
+        }
+        if crate::fabric_sweat_api::read_only(&cmd) {
+            let guard=self.engine.lock().map_err(|_|"Engine lock failed")?;
+            let handle=guard.as_ref().ok_or("Engine offline")?;
+            require_dispatch_epoch(handle,expected_epoch)?;
+            return crate::fabric_sweat_api::enqueue(handle,cmd);
+        }
+        if crate::limb_vein_api::read_only(&cmd) {
+            let guard=self.engine.lock().map_err(|_|"Engine lock failed")?;
+            let handle=guard.as_ref().ok_or("Engine offline")?;
+            require_dispatch_epoch(handle,expected_epoch)?;
+            return crate::limb_vein_api::enqueue(handle,cmd);
         }
         if crate::batch_api::read_only(&cmd) {
             let guard=self.engine.lock().map_err(|_|"引擎锁中毒".to_string())?;
@@ -120,7 +132,7 @@ impl AppState {
             self.sky_preview.lock().map_err(|_|"sky preview lock poisoned")?.invalidate();
             self.sky_semantic.lock().map_err(|_|"semantic lock poisoned")?.invalidate();
         }
-        let edited = self.history_edit_cmds.lock().unwrap().iter().any(|c| c == &name)
+        let edited = (crate::limb_vein_api::mutation(&cmd) || crate::fabric_sweat_api::mutation(&cmd) || self.history_edit_cmds.lock().unwrap().iter().any(|c| c == &name))
             && (name != "torso_length" || cmd["action"] == "edit")
             && (name != "waist_length" || cmd["action"] == "edit")
             && (name != "head_size" || cmd["action"] == "edit")
@@ -152,6 +164,8 @@ impl AppState {
             "neck_shape" => crate::neck_shape_api::enqueue(handle, cmd)?,
             "arm_shape" => crate::arm_shape_api::enqueue(handle, cmd)?,
             "people" => crate::people_api::enqueue(handle, cmd)?,
+            "fabric_sweat" => crate::fabric_sweat_api::enqueue(handle, cmd)?,
+            "limb_vein" => crate::limb_vein_api::enqueue(handle, cmd)?,
             "hair_colour" => crate::hair_colour_api::enqueue(handle, cmd)?,
             "hair_unification" => crate::hair_unification_api::enqueue(handle, cmd)?,
             "hair_volume" => crate::hair_volume_api::enqueue(handle, cmd)?,

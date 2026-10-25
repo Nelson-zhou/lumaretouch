@@ -177,6 +177,8 @@ export interface DocState {
   photo_grain?: {recipe:import('./photoGrain/model').Recipe;algorithm:string;note:string};
   photo_detail?: {spec:import('./photoDetail/model').Spec;active:boolean;available:boolean};
   extended_tone?: {spec:import('./extendedTone/model').Spec;active:boolean;monochrome:boolean;available:boolean};
+  fabric_sweat?: {revision:string;amount:number;available:boolean;reason?:string|null;candidate_sha256?:string;recipe_sha256?:string};
+  limb_vein?: {revision:string;amount:number;available:boolean;reason?:string|null;candidate_sha256?:string;recipe_sha256?:string};
   people?: PeopleView;
   shoulder_shape?: import('./shoulderShape/model').ShoulderView;
   leg_shape?: import('./legShape/model').LegView;
@@ -1055,6 +1057,8 @@ export interface EngineStatus {
     selective_colour_protocol?: number;
     colour_editor_protocol?: number;
     photo_grain_protocol?: number;
+    fabric_sweat_protocol?: number;
+    limb_vein_protocol?: number;
     photo_detail_protocol?: number;
     extended_tone_protocol?: number;
     lip_makeup_protocol?: number;
@@ -2071,3 +2075,19 @@ export const requestDecorationBatchImage=(value:import('./faceDecoration/visualT
 export const readDecorationBatchImage=(requestId:string)=>invoke<{phase:string;request_id:string;result?:import('./faceDecoration/visualTransport').DecorationImageReply;error?:string}>('batch_result',{requestId});
 
 export const requestDecorationCohortImage=(value:import('./faceDecoration/visualTransport').DecorationImageRequest)=>invoke<{requested:boolean}>('batch',{action:'face_decoration_cohort_visual',...value});
+
+/** Sweat edits reuse the existing native command/receipt owner. Never retry an unknown write. */
+export const fabricSweatRequest=(request:unknown):Promise<unknown>=> {
+  const action=(request as {action?:string}|null)?.action;
+  if(action==='confirm'||action==='clear')notifyInspectionEditIntent();
+  return invoke('fabric_sweat_request',{request});
+};
+export const fabricSweatStatus=(requestId:string):Promise<unknown>=>invoke('fabric_sweat_status',{requestId});
+
+/** Vein edits reuse the existing native command/receipt owner. Never retry an unknown write. */
+export const limbVeinRequest=(request:unknown):Promise<unknown>=> {
+  const action=(request as {action?:string}|null)?.action;
+  if(action==='confirm'||action==='clear')notifyInspectionEditIntent();
+  return invoke('limb_vein_request',{request});
+};
+export const limbVeinStatus=(requestId:string):Promise<unknown>=>invoke('limb_vein_status',{requestId});

@@ -10,7 +10,7 @@ struct Pending { command: Value, composite_history: Option<Value> }
 impl Pending { fn composite(&self)->bool {preset_alias::applies(&self.command)||crate::people_api::decoration_alias::applies(&self.command)||crate::people_api::decoration_support_alias::applies(&self.command)||crate::effect_recovery_host::alias::applies(&self.command)||self.composite_history.is_some()} }
 // Body and neck mutations retain the existing fence until a strict terminal or verified
 // workspace reopen. They do not become composite/alias history operations.
-impl Pending { fn guarded(&self) -> bool { self.composite() || crate::people_api::skin_reference_body::mutation(&self.command) || crate::people_api::neck_wrinkle::mutation(&self.command) } }
+impl Pending { fn guarded(&self) -> bool { self.composite() || crate::limb_vein_api::mutation(&self.command) || crate::fabric_sweat_api::mutation(&self.command) || crate::people_api::skin_reference_body::mutation(&self.command) || crate::people_api::neck_wrinkle::mutation(&self.command) } }
 fn pending()->&'static Mutex<HashMap<([u8;16],String),Pending>> {
     static STORE:OnceLock<Mutex<HashMap<([u8;16],String),Pending>>=OnceLock::new();
     STORE.get_or_init(||Mutex::new(HashMap::new()))
@@ -44,7 +44,7 @@ pub(crate) fn issued(epoch:[u8;16], command:&Value)->Result<(),String>{
     // Do not turn an unavailable head/portrait-cohort review into an uncertain edit.
     // Check a pending ID collision first: read-only status cannot release or
     // replace an already-issued mutation belonging to another receipt host.
-    if crate::batch_api::read_only(command) || crate::torso_transfer_protocol::read_only_head_preflight(command) || crate::preset_api::read_only(command)
+    if crate::limb_vein_api::read_only(command) || crate::fabric_sweat_api::read_only(command) || crate::batch_api::read_only(command) || crate::torso_transfer_protocol::read_only_head_preflight(command) || crate::preset_api::read_only(command)
         || crate::people_api::neck_wrinkle::read_only(command) || crate::people_api::skin_reference_choice::read_only(command) || crate::people_api::skin_reference_body::read_only(command) || crate::people_api::skin_reference_match::read_only(command)
         || crate::people_api::face_style::read_only(command) || crate::people_api::eye_bag::read_only(command)
         || crate::people_api::face_decoration::read_only(command) || crate::people_api::facial_sculpt::read_only(command) || crate::people_api::eye_makeup_enhance::read_only(command) || crate::people_api::decoration_alias::read_only(command) || crate::people_api::decoration_support_alias::read_only(command) {return Ok(());}
@@ -84,6 +84,8 @@ pub(crate) fn observed(epoch:[u8;16], value:&Value){
     }
     if crate::people_api::skin_reference_body::mutation(command)
         && !crate::people_api::skin_reference_body::matches_request(command, value) { return; }
+    if crate::fabric_sweat_api::mutation(command) && !crate::fabric_sweat_api::matches_request(command,value) {return;}
+    if crate::limb_vein_api::mutation(command) && !crate::limb_vein_api::matches_request(command,value) {return;}
     if crate::people_api::neck_wrinkle::mutation(command)
         && !crate::people_api::neck_wrinkle::matches_request(command, value) { return; }
     if preset_alias::applies(command) {

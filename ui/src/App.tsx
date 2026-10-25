@@ -1,3 +1,6 @@
+import {LimbVeinPanel,useLimbVeinPort} from './limbVein';
+import {limbVeinRequest,limbVeinStatus} from './native';
+import {FabricSweatPanel,useFabricSweatPort} from './fabricSweat';
 import {NeckWrinkleControl, useNeckWrinklePort} from './neckWrinkle';
 import {PortraitCropWorkspaceHost} from './portraitCrop';
 import {createStartEngineAction} from './engine/startEngineAction';
@@ -1852,7 +1855,17 @@ export default function App() {
     externalBusy:hairToolBusy||portraitCropBusy||idBackgroundBusy||creative.pending||expression.busy||expressionOpen||lens.busy||lensOpen||glow.busy||glowOpen||colorSampler.active||sampleLibrary.open});
   const neckWrinklePort=useNeckWrinklePort({people:peopleWorkflow,capability:{protocol:caps?.neck_wrinkle_protocol,available:caps?.neck_wrinkle_available,reason:caps?.neck_wrinkle_reason},
     blocked:hairBusy||portraitCropBusy||hairFamily.workflowBusy||idBackgroundBusy||creative.pending||expression.busy||expressionOpen||lens.busy||lensOpen||glow.busy||glowOpen||colorSampler.active||sampleLibrary.open||!!status?.edit_queue?.closed});
+  const fabricSweatPort=useFabricSweatPort({bindingKey:hasImage?JSON.stringify([pid,doc?.document_id,doc?.fabric_sweat?.revision]):null,
+    documentId:doc?.document_id??null,revision:doc?.fabric_sweat?.revision??'',
+    enabled:!!status?.engine_alive&&caps?.fabric_sweat_protocol===1&&hasImage&&status.image?.load_id===doc?.document_id,
+    blocked:hairBusy||portraitCropBusy||hairFamily.workflowBusy||idBackgroundBusy||creative.pending||expression.busy||expressionOpen||lens.busy||lensOpen||glow.busy||glowOpen||colorSampler.active||sampleLibrary.open||!!status?.edit_queue?.closed},refreshFromEngine);
+  const limbVeinPort=useLimbVeinPort({bindingKey:hasImage?JSON.stringify([pid,doc?.document_id,doc?.limb_vein?.revision]):null,
+    documentId:doc?.document_id??null,revision:doc?.limb_vein?.revision??'',
+    enabled:!!status?.engine_alive&&caps?.limb_vein_protocol===1&&hasImage&&status.image?.load_id===doc?.document_id,
+    blocked:fabricSweatPort.snapshot.pending||fabricSweatPort.snapshot.uncertain||fabricSweatPort.snapshot.refreshRequired||hairBusy||portraitCropBusy||hairFamily.workflowBusy||idBackgroundBusy||creative.pending||expression.busy||expressionOpen||lens.busy||lensOpen||glow.busy||glowOpen||colorSampler.active||sampleLibrary.open||!!status?.edit_queue?.closed},refreshFromEngine,{request:limbVeinRequest,status:limbVeinStatus});
   armBusyRef.current=armBusyRef.current||portraitCropBusy||expression.busy||lens.busy||glow.busy||hairFamily.workflowBusy;
+  armBusyRef.current=armBusyRef.current||fabricSweatPort.snapshot.pending||fabricSweatPort.snapshot.uncertain||fabricSweatPort.snapshot.refreshRequired;
+  armBusyRef.current=armBusyRef.current||limbVeinPort.snapshot.pending||limbVeinPort.snapshot.uncertain||limbVeinPort.snapshot.refreshRequired;
   creativeRoute.current={active:workspace==='creative',pending:creative.pending,importPaths:creative.importPaths,history:creative.history};
   const guides=useCanvasGuides({loadId:doc?.document_id??'',report:doc?.canvas_guides,center:doc?.crop?[(doc.crop.rect[0]+doc.crop.rect[2])/2,(doc.crop.rect[1]+doc.crop.rect[3])/2]:undefined,
     contextKey:JSON.stringify([pid,doc?.document_id,doc?.crop,view,workspace]),modes:{
@@ -1908,6 +1921,8 @@ export default function App() {
                         people={peopleWorkflow}
                         skinReferencePanel={<SkinReferenceMatchPanel choiceAvailable={status?.ready_caps?.skin_reference_choice_protocol===1} people={peopleWorkflow} available={status?.ready_caps?.skin_reference_match_protocol===1} blocked={hairBusy||hairFamily.workflowBusy||!!status?.edit_queue?.in_flight||!!status?.edit_queue?.pending||!!status?.edit_queue?.closed}/> }
                         neckWrinklePanel={<NeckWrinkleControl port={neckWrinklePort}/>}
+                        fabricSweatPanel={<FabricSweatPanel port={fabricSweatPort} disabled={limbVeinPort.snapshot.pending||limbVeinPort.snapshot.uncertain||limbVeinPort.snapshot.refreshRequired}/>}
+                        limbVeinPanel={<LimbVeinPanel port={limbVeinPort}/>}
                         skinReferenceBodyPanel={<SkinReferenceBodyPanel choiceAvailable={status?.ready_caps?.skin_reference_choice_protocol===1} people={peopleWorkflow} available={status?.ready_caps?.skin_reference_body_protocol===1} blocked={hairBusy||hairFamily.workflowBusy||!!status?.edit_queue?.in_flight||!!status?.edit_queue?.pending||!!status?.edit_queue?.closed}/> }
                         {...hairFamily.slots}
                         brush={{ on: brushOn, mode: brushMode, radius: brushRadius }}

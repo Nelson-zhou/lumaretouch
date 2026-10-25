@@ -16,6 +16,8 @@ from __future__ import annotations
 from .ops import curves as curve_ops
 from .levels_stage import LevelsStage
 from .fabric_stage import FabricStage
+from .limb_vein_runtime import Stage as LimbVeinStage
+from .garment_sweat_runtime import Stage as FabricSweatStage
 from .local_grade_stage import LocalGradeStage
 from .effect_recovery_stage import EffectRecoveryStage
 from .manual_liquify_stage import ManualLiquifyStage
@@ -132,6 +134,8 @@ class PreviewPipeline:
             self.fallback = None
         self.device = torch.device(device)
         self.fabric = FabricStage(self.device)
+        self.limb_vein = LimbVeinStage(self.device)
+        self.fabric_sweat = FabricSweatStage(self.device)
         self.local_grade_layers = LocalGradeStage(self.device, (h, w))
         self.effect_recovery = EffectRecoveryStage(self.device, (h, w))
         self._effect_recovery_key = None
@@ -349,6 +353,8 @@ class PreviewPipeline:
         self.grading_prefix_cache.invalidate()
         self.src_u8 = src_u8
         self.fabric.clear()
+        self.limb_vein.clear()
+        self.fabric_sweat.clear()
         self.local_grade_layers.set([])
         self._local_grade_layers_key = None
         self.effect_recovery = EffectRecoveryStage(self.device, (self.h, self.w))
@@ -605,6 +611,8 @@ class PreviewPipeline:
         # Recovery at an operator mixes only that operator's own input/output;
         # later effects continue to consume the recovered pixels normally.
         out = self.effect_recovery.apply('fabric_fine', out, self.fabric.apply(out))
+        out = self.fabric_sweat.apply(out)
+        out = self.limb_vein.apply(out)
         out = self.studio_background.apply(out)
         if PEOPLE_PIPE.active(self):
             out=PEOPLE_PIPE.source_effect(self,'skin_reference_match',out)

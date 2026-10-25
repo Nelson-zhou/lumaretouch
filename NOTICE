@@ -182,3 +182,9 @@ additive black rule are original. See docs/selective-colour/CONTRACT.md.
 RGB primary calibration: original Lumaretouch float32 xy-primary basis implementation, GPL-3.0-or-later. No third-party numerical implementation copied. Reference concepts: darktable RGB primaries documentation.
 
 Photo grain: original Lumaretouch deterministic source-coordinate Rust kernel, GPL-3.0-or-later. No external texture or model. See docs/photo-grain/CONTRACT.md.
+
+Fabric sweat correction: core/fabric_sweat is an original dependency-free Rust implementation under GPL-3.0-or-later. It uses conceptual public image-processing references documented in docs/fabric-sweat; no OpenCV/darktable numerical code or new model weights are bundled. Source and licence accompany packaged library. Runtime and photo acceptance remain UNRUN.
+
+Limb vein softening (core/limb_vein): original GPL-3.0-or-later reference-assisted
+colour and bounded shading correction, adapted from local fabric_sweat infrastructure.
+No external anatomical model or third-party numerical code; see docs/limb-vein/.

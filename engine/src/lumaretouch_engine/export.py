@@ -254,6 +254,10 @@ class ExportSpec:
     # Append fields to preserve existing positional library callers.
     # Canonical immutable RGBA record; original source path remains untouched.
     creative_base: dict | None = None
+    fabric_sweat: dict | None = None
+    fabric_sweat_repair_sha256: str | None = None
+    limb_vein: dict | None = None
+    limb_vein_repair_sha256: str | None = None
 
     def check_effect_recovery(self) -> None:
         """Validate retained intent and optional full-source fields before work."""
@@ -365,6 +369,14 @@ class ExportSpec:
             WB.prepare_state(state)
         except (ValueError, RuntimeError, OSError) as error:
             raise ExportError(f"White balance export rejected: {error}") from error
+        from .fabric_sweat_state import check as sweat_check
+        self.fabric_sweat = sweat_check(self.fabric_sweat)
+        if self.fabric_sweat is not None and self.fabric_sweat_repair_sha256 != self.fabric_sweat["repair_sha256"]:
+            raise ExportError("衣物汗渍缺少匹配的修复来源")
+        from .limb_vein_state import check as vein_check
+        self.limb_vein = vein_check(self.limb_vein)
+        if self.limb_vein is not None and self.limb_vein_repair_sha256 != self.limb_vein["repair_sha256"]:
+            raise ExportError("肢体青筋缺少匹配的修复来源")
         from .fabric_stage import check_amount
         self.fabric_amount = check_amount(self.fabric_amount)
         if self.fabric_amount and self.fabric_mask is None: raise ExportError("衣物细褶缺少衣物语义蒙版")
@@ -528,6 +540,8 @@ def _admit_manual_tile(spec, h, w, tile, margin, bits, device, manual_peak):
     full_bytes = h*w*(12 if bits == 16 else 3)*int(spec.scale)**2
     full_bytes += h*w*(12 if spec.repair else 0)
     full_bytes += h*w*(4 if spec.fabric_amount else 0)
+    full_bytes += h*w*(196 if spec.fabric_sweat else 0)
+    full_bytes += h*w*(196 if spec.limb_vein else 0)
     from .studio_background_export import resident_bytes as studio_bytes
     full_bytes += studio_bytes(spec)
     from .id_background_runtime import resident_bytes as id_background_bytes
@@ -1019,6 +1033,10 @@ def _export_image_impl(src_u8: np.ndarray, spec: ExportSpec, *, device: str,
         smoothing_pixels = verify_smoothing_export(spec,src_u8,base_f,divisor)
     from .fabric_export import prepare_export
     fabric_field = prepare_export(spec, src_u8, base_f, divisor)
+    from .garment_sweat_runtime import export_prepare as prepare_sweat
+    sweat_field = prepare_sweat(spec, src_u8, base_f, divisor)
+    from .limb_vein_runtime import export_prepare as prepare_vein
+    vein_field = prepare_vein(spec, src_u8, base_f, divisor)
     wrinkle_layer = WRUNTIME.prepare_export(spec, src_u8, base_f, divisor)
     lip_layer = LIPR.prepare_export(spec, src_u8, base_f, divisor)
     enh_reg = None
@@ -1096,6 +1114,10 @@ def _export_image_impl(src_u8: np.ndarray, spec: ExportSpec, *, device: str,
                 # 导出器不该去碰那几个字段（“能只改两条的三条状态”是 M2 审过的病）
                 pipe.set_light_ops(sub)
                 pipe.set_light_params(spec.light_exposure, spec.light_radius)
+        if sweat_field is not None:
+            pipe.fabric_sweat.install(sweat_field.field[cy0:cy1,cx0:cx1],spec.fabric_sweat["amount"])
+        if vein_field is not None:
+            pipe.limb_vein.install(vein_field.field[cy0:cy1,cx0:cx1],spec.limb_vein["amount"])
         if fabric_field is not None:
             pipe.fabric.install(fabric_field[cy0:cy1, cx0:cx1], spec.fabric_amount)
         if delta is not None and people_prepared is None:

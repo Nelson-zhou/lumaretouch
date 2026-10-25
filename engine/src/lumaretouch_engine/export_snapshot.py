@@ -46,6 +46,8 @@ def state_to_export_snap(self,st,*,device,scale,upscale_backend,sharpen,source_p
                     deform=dict(st.get("_deform") or {"amounts": {}, "built": False}),
                     deform_defer=bool(st.get("_deform_defer")),
                     fabric_amount=float(st.get("_fabric_amount", 0.0)),
+                    limb_vein=deepcopy(st.get("_limb_vein")),
+                    fabric_sweat=deepcopy(st.get("_fabric_sweat")),
                     enhance=dict(st.get("_enhance") or {"amounts": {}, "built": False}),
                     enhance_defer=bool(st.get("_enhance_defer")),
                     channel=st.get("_channel"),
@@ -69,6 +71,32 @@ def state_to_export_snap(self,st,*,device,scale,upscale_backend,sharpen,source_p
         snap['fringe_repair_source'] = source
         snap['fringe_repair_path'] = path
         snap['fringe_repair_stamp'] = list(before)
+    if snap['fabric_sweat'] is not None:
+        from .fabric_sweat_state import check as sweat_check
+        from .creative_derived_source import binding as sweat_source
+        from .creative_derived_repairs import stack_digest
+        recipe = sweat_check(snap['fabric_sweat'])
+        path = source_path or self._doc_path
+        rows = [r for r in self._docs if r.get('document_id') == document_id and r.get('path') == path]
+        if len(rows) != 1: raise ValueError('衣物汗渍导出缺少精确来源文档')
+        current_source = sweat_source(st,path,(rows[0].get('src_w'),rows[0].get('src_h')))
+        if current_source != recipe['source']: raise ValueError('衣物汗渍禁止跨照片复制参考')
+        snap['fabric_sweat_repair_sha256'] = stack_digest(st)
+        if snap['fabric_sweat_repair_sha256'] != recipe['repair_sha256']:
+            raise ValueError('衣物汗渍修复来源已改变，需要重新审核')
+    if snap['limb_vein'] is not None:
+        from .limb_vein_state import check as vein_check
+        from .creative_derived_source import binding as vein_source
+        from .creative_derived_repairs import stack_digest
+        recipe = vein_check(snap['limb_vein'])
+        path = source_path or self._doc_path
+        rows = [r for r in self._docs if r.get('document_id') == document_id and r.get('path') == path]
+        if len(rows) != 1: raise ValueError('肢体青筋导出缺少精确来源文档')
+        current_source = vein_source(st,path,(rows[0].get('src_w'),rows[0].get('src_h')))
+        if current_source != recipe['source']: raise ValueError('肢体青筋禁止跨照片复制参考')
+        snap['limb_vein_repair_sha256'] = stack_digest(st)
+        if snap['limb_vein_repair_sha256'] != recipe['repair_sha256']:
+            raise ValueError('肢体青筋修复来源已改变，需要重新审核')
     from .creative_derived_repairs import validate_stacks
     validate_stacks(st)
     from .body_pose_render import capture as capture_body

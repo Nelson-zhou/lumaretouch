@@ -6530,8 +6530,16 @@
       "source_child_index": 1,
       "title": "祛青筋",
       "status": "pending_independent_verification",
-      "implementation": [],
-      "verification": []
+      "implementation": [
+        "core/limb_vein/lib.rs",
+        "engine/src/lumaretouch_engine/limb_vein_host.py",
+        "engine/src/lumaretouch_engine/limb_vein_routes.py",
+        "engine/src/lumaretouch_engine/limb_vein_runtime.py",
+        "ui/src/limbVein/LimbVeinPanel.tsx",
+        "docs/limb-vein/INTEGRATION.md"
+      ],
+      "verification": [],
+      "scope_note": "PARTIAL / SOURCE ONLY: current-photo manual same-limb reference-assisted colour-first vein easing and bounded shading, source masks/protection, complete comparison, canonical history/project and tiled export. No automatic anatomy/vein detector, presets/batch or claimed photo quality. All builds/typechecks/runtime/numerical/photo/performance acceptance UNRUN."
     },
     {
       "id": "control:PC-46608:3",
@@ -6552,8 +6560,16 @@
       "source_child_index": 0,
       "title": "脚部祛青筋",
       "status": "pending_independent_verification",
-      "implementation": [],
-      "verification": []
+      "implementation": [
+        "core/limb_vein/lib.rs",
+        "engine/src/lumaretouch_engine/limb_vein_host.py",
+        "engine/src/lumaretouch_engine/limb_vein_routes.py",
+        "engine/src/lumaretouch_engine/limb_vein_runtime.py",
+        "ui/src/limbVein/LimbVeinPanel.tsx",
+        "docs/limb-vein/INTEGRATION.md"
+      ],
+      "verification": [],
+      "scope_note": "PARTIAL / SOURCE ONLY: current-photo manual same-limb reference-assisted colour-first vein easing and bounded shading, source masks/protection, complete comparison, canonical history/project and tiled export. No automatic anatomy/vein detector, presets/batch or claimed photo quality. All builds/typechecks/runtime/numerical/photo/performance acceptance UNRUN."
     },
     {
       "id": "control:PC-9XYcMCvHXW:2",
@@ -6563,8 +6579,16 @@
       "source_child_index": 1,
       "title": "脚部祛青筋/手动涂抹",
       "status": "pending_independent_verification",
-      "implementation": [],
-      "verification": []
+      "implementation": [
+        "core/limb_vein/lib.rs",
+        "engine/src/lumaretouch_engine/limb_vein_host.py",
+        "engine/src/lumaretouch_engine/limb_vein_routes.py",
+        "engine/src/lumaretouch_engine/limb_vein_runtime.py",
+        "ui/src/limbVein/LimbVeinPanel.tsx",
+        "docs/limb-vein/INTEGRATION.md"
+      ],
+      "verification": [],
+      "scope_note": "PARTIAL / SOURCE ONLY: current-photo manual same-limb reference-assisted colour-first vein easing and bounded shading, source masks/protection, complete comparison, canonical history/project and tiled export. No automatic anatomy/vein detector, presets/batch or claimed photo quality. All builds/typechecks/runtime/numerical/photo/performance acceptance UNRUN."
     },
     {
       "id": "control:PC-32473:1",
@@ -7817,9 +7841,17 @@
       "source_url": "https://www.pixcakeai.com/guide/32477",
       "source_child_index": 4,
       "title": "衣服祛汗渍",
-      "status": "pending_independent_verification",
-      "implementation": [],
-      "verification": []
+      "status": "partial",
+      "implementation": [
+        "core/fabric_sweat/lib.rs",
+        "engine/src/lumaretouch_engine/fabric_sweat_host.py",
+        "engine/src/lumaretouch_engine/garment_sweat_routes.py",
+        "engine/src/lumaretouch_engine/garment_sweat_runtime.py",
+        "ui/src/fabricSweat/FabricSweatPanel.tsx",
+        "docs/fabric-sweat/INTEGRATION.md"
+      ],
+      "verification": [],
+      "scope_note": "Source-only reference-assisted current-photo garment sweat correction with manual garment/target/clean/protect masks, explicit update and full before/after. Not automatic AI detection; builds/runtime/photo/performance UNRUN. Remaining clothing, batch and preset scope not closed."
     },
     {
       "id": "control:PC-32477:6",
@@ -7828,9 +7860,17 @@
       "source_url": "https://www.pixcakeai.com/guide/32477",
       "source_child_index": 5,
       "title": "衣服祛汗渍/编辑衣服汗渍蒙版范围",
-      "status": "pending_independent_verification",
-      "implementation": [],
-      "verification": []
+      "status": "partial",
+      "implementation": [
+        "core/fabric_sweat/lib.rs",
+        "engine/src/lumaretouch_engine/fabric_sweat_host.py",
+        "engine/src/lumaretouch_engine/garment_sweat_routes.py",
+        "engine/src/lumaretouch_engine/garment_sweat_runtime.py",
+        "ui/src/fabricSweat/FabricSweatPanel.tsx",
+        "docs/fabric-sweat/INTEGRATION.md"
+      ],
+      "verification": [],
+      "scope_note": "Source-only reference-assisted current-photo garment sweat correction with manual garment/target/clean/protect masks, explicit update and full before/after. Not automatic AI detection; builds/runtime/photo/performance UNRUN. Remaining clothing, batch and preset scope not closed."
     },
     {
       "id": "control:PC-32477:7",
@@ -7916,9 +7956,17 @@
       "source_url": "https://www.pixcakeai.com/guide/32477",
       "source_child_index": 13,
       "title": "衣服祛汗渍/蒙版/减去画笔",
-      "status": "pending_independent_verification",
-      "implementation": [],
-      "verification": []
+      "status": "partial",
+      "implementation": [
+        "core/fabric_sweat/lib.rs",
+        "engine/src/lumaretouch_engine/fabric_sweat_host.py",
+        "engine/src/lumaretouch_engine/garment_sweat_routes.py",
+        "engine/src/lumaretouch_engine/garment_sweat_runtime.py",
+        "ui/src/fabricSweat/FabricSweatPanel.tsx",
+        "docs/fabric-sweat/INTEGRATION.md"
+      ],
+      "verification": [],
+      "scope_note": "Source-only reference-assisted current-photo garment sweat correction with manual garment/target/clean/protect masks, explicit update and full before/after. Not automatic AI detection; builds/runtime/photo/performance UNRUN. Remaining clothing, batch and preset scope not closed."
     },
     {
       "id": "control:PC-32477:15",
@@ -7927,9 +7975,17 @@
       "source_url": "https://www.pixcakeai.com/guide/32477",
       "source_child_index": 14,
       "title": "衣服祛汗渍/蒙版/添加画笔",
-      "status": "pending_independent_verification",
-      "implementation": [],
-      "verification": []
+      "status": "partial",
+      "implementation": [
+        "core/fabric_sweat/lib.rs",
+        "engine/src/lumaretouch_engine/fabric_sweat_host.py",
+        "engine/src/lumaretouch_engine/garment_sweat_routes.py",
+        "engine/src/lumaretouch_engine/garment_sweat_runtime.py",
+        "ui/src/fabricSweat/FabricSweatPanel.tsx",
+        "docs/fabric-sweat/INTEGRATION.md"
+      ],
+      "verification": [],
+      "scope_note": "Source-only reference-assisted current-photo garment sweat correction with manual garment/target/clean/protect masks, explicit update and full before/after. Not automatic AI detection; builds/runtime/photo/performance UNRUN. Remaining clothing, batch and preset scope not closed."
     },
     {
       "id": "control:PC-32477:16",
@@ -7938,9 +7994,17 @@
       "source_url": "https://www.pixcakeai.com/guide/32477",
       "source_child_index": 15,
       "title": "衣服祛汗渍/蒙版/显示原图和蒙版",
-      "status": "pending_independent_verification",
-      "implementation": [],
-      "verification": []
+      "status": "partial",
+      "implementation": [
+        "core/fabric_sweat/lib.rs",
+        "engine/src/lumaretouch_engine/fabric_sweat_host.py",
+        "engine/src/lumaretouch_engine/garment_sweat_routes.py",
+        "engine/src/lumaretouch_engine/garment_sweat_runtime.py",
+        "ui/src/fabricSweat/FabricSweatPanel.tsx",
+        "docs/fabric-sweat/INTEGRATION.md"
+      ],
+      "verification": [],
+      "scope_note": "Source-only reference-assisted current-photo garment sweat correction with manual garment/target/clean/protect masks, explicit update and full before/after. Not automatic AI detection; builds/runtime/photo/performance UNRUN. Remaining clothing, batch and preset scope not closed."
     },
     {
       "id": "control:PC-32477:17",
@@ -7949,9 +8013,17 @@
       "source_url": "https://www.pixcakeai.com/guide/32477",
       "source_child_index": 16,
       "title": "衣服祛汗渍/蒙版/更新效果",
-      "status": "pending_independent_verification",
-      "implementation": [],
-      "verification": []
+      "status": "partial",
+      "implementation": [
+        "core/fabric_sweat/lib.rs",
+        "engine/src/lumaretouch_engine/fabric_sweat_host.py",
+        "engine/src/lumaretouch_engine/garment_sweat_routes.py",
+        "engine/src/lumaretouch_engine/garment_sweat_runtime.py",
+        "ui/src/fabricSweat/FabricSweatPanel.tsx",
+        "docs/fabric-sweat/INTEGRATION.md"
+      ],
+      "verification": [],
+      "scope_note": "Source-only reference-assisted current-photo garment sweat correction with manual garment/target/clean/protect masks, explicit update and full before/after. Not automatic AI detection; builds/runtime/photo/performance UNRUN. Remaining clothing, batch and preset scope not closed."
     },
     {
       "id": "control:PC-32452:1",

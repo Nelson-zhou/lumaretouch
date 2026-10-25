@@ -228,6 +228,12 @@ def validate(p: object) -> None:
     from .skin_reference_body_project import validate as validate_reference_body
     try:validate_reference_body(p,allowed=sv==SCHEMA)
     except (ValueError,TypeError,KeyError) as error:raise ProjectError(str(error)) from error
+    from .garment_sweat_runtime import validate_records as validate_sweat
+    try: validate_sweat(p,allowed=(sv == SCHEMA))
+    except ValueError as error: raise ProjectError(str(error)) from error
+    from .limb_vein_runtime import validate_records as validate_vein
+    try: validate_vein(p,allowed=(sv == SCHEMA))
+    except ValueError as error: raise ProjectError(str(error)) from error
     _validate_fringe_records(p, allowed=(sv == SCHEMA))
     from .primary_calibration_adapters import validate_records as validate_primary
     try:validate_primary(p,allowed=sv in (PRIMARY_SCHEMA,DETAIL_SCHEMA,GRAIN_SCHEMA,COLOUR_EDITOR_SCHEMA,SCHEMA))
@@ -736,6 +742,12 @@ def _encode(value: object, assets: dict, dropped: list, at: str) -> object:
     if isinstance(value, (list, tuple)):
         return [_encode(v, assets, dropped, f"{at}[{i}]") for i, v in enumerate(value)]
     if isinstance(value, dict):
+        if "_fabric_sweat" in value:
+            from .fabric_sweat_state import check as sweat_check
+            sweat_check(value["_fabric_sweat"])
+        if "_limb_vein" in value:
+            from .limb_vein_state import check as vein_check
+            vein_check(value["_limb_vein"])
         if "_local_masks" in value:
             from .local_mask_state import check
             check(value["_local_masks"])

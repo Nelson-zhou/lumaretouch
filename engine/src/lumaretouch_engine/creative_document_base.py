@@ -158,6 +158,20 @@ def require_rebound_snapshot(snapshot):
         blocked.append('original facial deformation')
     if any(float(v) != 0 for v in (snapshot.get('enhance') or {}).get('amounts', {}).values()):
         blocked.append('original portrait enhancement')
+    if snapshot.get('fabric_sweat') is not None:
+        from .fabric_sweat_state import check as sweat_check
+        recipe=sweat_check(snapshot['fabric_sweat'])
+        record=from_state(snapshot)
+        actual={'sha256':record['id'][7:],'width':record['width'],'height':record['height']}
+        if recipe['source'] != actual or recipe['repair_sha256'] != snapshot.get('fabric_sweat_repair_sha256'):
+            raise ValueError('Creative garment correction has another source/repair binding')
+    if snapshot.get('limb_vein') is not None:
+        from .limb_vein_state import check as vein_check
+        recipe=vein_check(snapshot['limb_vein'])
+        record=from_state(snapshot)
+        actual={'sha256':record['id'][7:],'width':record['width'],'height':record['height']}
+        if recipe['source'] != actual or recipe['repair_sha256'] != snapshot.get('limb_vein_repair_sha256'):
+            raise ValueError('Creative limb correction has another source/repair binding')
     if float(snapshot.get('fabric_amount', 0)):
         from .creative_derived_fabric import verify_snapshot as verify_fabric
         verify_fabric(snapshot)
@@ -197,7 +211,7 @@ def require_rebound_spec(spec):
     snapshot = {key: getattr(spec, key, None) for key in (
         'creative_base', 'people', 'body_pose', 'body_pose_source_proof', 'channel', 'grade_scope',
         'strength', 'creative_smoothing_context',
-        'fabric_amount', 'creative_fabric_context', 'local_masks', 'local_grade_groups', 'creative_mask_context', 'effect_recovery', 'creative_recovery_context', 'manual_liquify',
+        'limb_vein', 'limb_vein_repair_sha256', 'fabric_sweat', 'fabric_sweat_repair_sha256', 'fabric_amount', 'creative_fabric_context', 'local_masks', 'local_grade_groups', 'creative_mask_context', 'effect_recovery', 'creative_recovery_context', 'manual_liquify',
         'studio_background', 'creative_studio_context', 'id_background', 'id_background_bundle', 'creative_id_background_context', 'optics', 'sky_replacement', 'creative_sky_context',
         'reference_color', 'semantic_colour', 'lip_makeup', 'brow_shape',
         'nose_shape', 'eye_shape', 'mouth_shape', 'colour_editor', 'fringe_repair')}

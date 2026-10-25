@@ -25,7 +25,7 @@ class Master16PolicyMixin:
             "grade_scope": "all", "lut": None, "lut_amount": 0.0,
             "repair_ops": [], "light_ops": [], "deform": {},
             "crop_rect": (0.0, 0.0, 1.0, 1.0), "crop_rotation": 0.0,
-            "exposure": (0.0,) * 7, "wb_options": WB.default_options(), "hsl": (0.0,) * 24, "enhance": {}, "fabric_amount": 0.0,
+            "exposure": (0.0,) * 7, "wb_options": WB.default_options(), "hsl": (0.0,) * 24, "enhance": {}, "fabric_amount": 0.0, "limb_vein": None, "fabric_sweat": None,
             "curves": CURVES.default_curves(), "levels": LEVELS.default_levels(),
         }
         fields = {"_" + key: snap.get(key, value) for key, value in defaults.items()}
@@ -142,6 +142,10 @@ class Master16PolicyMixin:
         # 眼/牙增强：amounts 里任一非零就是像素级编辑（与 deform 同规：
         # 「条目存在」不等于「作用了」——只有非零位移/非零额度才真的改像素）。
         if self._fabric_amount: b.append("衣物细褶淡化（有有效调整）")
+        from .limb_vein_state import active as vein_active
+        if vein_active(getattr(self,"_limb_vein",None)): b.append("参考辅助肢体青筋减淡")
+        from .fabric_sweat_state import active as sweat_active
+        if sweat_active(getattr(self,"_fabric_sweat",None)): b.append("参考辅助衣物汗渍修正")
         _en = (self._enhance or {}).get("amounts") or {}
         _en_nz = sum(1 for v in _en.values() if abs(float(v)) > 0.0)
         if _en_nz:

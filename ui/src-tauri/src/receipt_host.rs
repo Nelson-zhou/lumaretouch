@@ -178,6 +178,15 @@ mod scalar_binding_tests {
 struct ReviewBinding { fields: Value, bytes: usize, read_only: bool, strict_failure_identity: bool }
 impl ReviewBinding {
     fn from_command(epoch: [u8;16], value: &Value) -> Result<Option<Self>, String> {
+        if let Some(fields)=crate::fabric_sweat_api::binding(value)? {
+            let bytes=fields.to_string().len();
+            return Ok(Some(Self{fields,bytes,read_only:crate::fabric_sweat_api::read_only(value),strict_failure_identity:true}));
+        }
+        if let Some(fields)=crate::limb_vein_api::binding(value)? {
+            let bytes=fields.to_string().len();
+            return Ok(Some(Self{fields,bytes,read_only:crate::limb_vein_api::read_only(value),strict_failure_identity:true}));
+        }
+
         if let Some(fields) = crate::people_api::skin_reference_choice::binding(value)? {
             let bytes = fields.to_string().len();
             if bytes > 256 * 1024 { return Err("reference-choice identity exceeds people receipt budget".into()); }
@@ -393,6 +402,8 @@ struct Receipt { id: String, action: String, document: Option<String>, review: O
 impl Receipt {
     fn evictable(&self) -> bool {
         self.result.as_ref().is_some_and(|result| self.review.is_none() || result["outcome_unknown"] != true
+            || self.review.as_ref().is_some_and(|r|r.read_only&&r.fields.get("fabric_sweat_request").is_some())
+            || self.review.as_ref().is_some_and(|r|r.read_only&&r.fields.get("limb_vein_request").is_some())
             // Only explicitly classified head/collarbone preflight or paged
             // image reads may expire; an unknown commit remains guarded.
             || (matches!(self.action.as_str(), "skin_reference_choice" | "skin_reference_body_catalog" | "skin_reference_body_preview" | "skin_reference_body_image" | "skin_reference_match_catalog" | "skin_reference_match_preview" | "skin_reference_match_image" | "face_decoration_support_alias_preview" | "face_decoration_support_alias_image" | "face_decoration_alias_preview" | "face_decoration_alias_image" | "face_decoration_cohort_visual" | "preflight" | "face_decoration_visual" | "collarbone_visual" | "eye_bag_visual" | "eye_bag_cohort_visual" | "face_style_visual" | "portrait_cohort_visual" | "face_style_catalog" | "face_style_preview" | "face_style_image" | "eye_bag_source_image" | "eye_bag_reference" | "eye_bag_preview" | "eye_bag_image" | "face_decoration_reference" | "facial_sculpt_reference" | "eye_makeup_enhance_reference") && self.review.as_ref().is_some_and(|review| review.read_only)))

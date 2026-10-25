@@ -47,6 +47,8 @@ def narrow_context(engine):
     # Repair/light and all pre-exposure spatial/source-derived consumers.
     if (p.repair_base is not None or p.repair_ops or p.light_field_gpu is not None
             or p.light_ops or p.fabric.amount != 0 or p.fabric.field is not None
+            or p.limb_vein.amount != 0 or p.limb_vein.field is not None
+            or p.fabric_sweat.amount != 0 or p.fabric_sweat.field is not None
             or p.effect_recovery.required or p.effect_recovery.fields
             or p.effect_recovery.suspended or p.effect_recovery.suspended_targets
             or p.studio_background.required or p.studio_background.fields

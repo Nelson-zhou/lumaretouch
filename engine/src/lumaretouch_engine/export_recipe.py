@@ -133,6 +133,16 @@ def build_export_spec(snap: dict, eh: int, ew: int, *, for_document: bool):
             raise ValueError('Independent local-grade export is missing its verified original source')
         from .local_grade_source import verify_snapshot
         verify_snapshot(snap, spec.local_mask_source_path, (eh, ew))
+    from .fabric_sweat_state import check as sweat_check
+    spec.fabric_sweat = sweat_check(snap.get("fabric_sweat"))
+    spec.fabric_sweat_repair_sha256 = snap.get("fabric_sweat_repair_sha256")
+    if spec.fabric_sweat is not None and not for_document:
+        raise ValueError("衣物汗渍必须逐图审核同件衣物参考，不可直接批量复制")
+    from .limb_vein_state import check as vein_check
+    spec.limb_vein = vein_check(snap.get("limb_vein"))
+    spec.limb_vein_repair_sha256 = snap.get("limb_vein_repair_sha256")
+    if spec.limb_vein is not None and not for_document:
+        raise ValueError("肢体青筋必须逐图审核同件肢体参考，不可直接批量复制")
     from .fabric_export import configure_export
     if for_document:
         configure_export(spec, snap, eh, ew)
