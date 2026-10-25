@@ -165,6 +165,20 @@ export function useCreativeWorkspace(context: CreativeWorkspaceContext, onChange
     if (!state?.capabilities.fresh_current || !state.history?.recoverable_delete) return;
     await submit({...bindingFor(state.authority), request_id: crypto.randomUUID()}, {action: 'fresh_current'});
   }
+  async function acceptSelection(reply: import('../creativeSelection/model').SelectionReply, request: import('../creativeSelection/model').SelectionApplyRequest): Promise<void> {
+    if (reply.status !== 'applied' && reply.status !== 'no_change') throw Error('选区修改尚未确认。');
+    await changed.current();
+    const scope = scopeFor(latest.current);
+    if (latest.current.sourceUid !== request.source_uid) return; // Never publish into a different photo.
+    const request_id = crypto.randomUUID();
+    await submitCreativeNative({action: 'state', request_id, source_uid: request.source_uid});
+    const packet = await awaitCreativeNative(request_id);
+    if (scope !== scopeFor(latest.current)) return;
+    const next = creativeNativeState(packet);
+    if (!next || next.authority.document.document_id !== request.proof.document_id
+      || next.authority.document.revision < Number(reply.revision)) throw Error('选区已应用，但完整图层状态尚未正确回读。');
+    if (!publish(packet, scope)) throw Error('选区已应用，但当前图层所有权已变化。');
+  }
   async function history(direction: 'undo' | 'redo'): Promise<void> {
     const state = current.current?.state;
     if (!state?.capabilities.history || !(direction === 'undo' ? state.history?.can_undo : state.history?.can_redo)) return;
@@ -182,6 +196,6 @@ export function useCreativeWorkspace(context: CreativeWorkspaceContext, onChange
   return {value: shown, ports, message, working, unresolved, pending: working || !!unresolved,
     busy: context.busy || working || !!unresolved || !!shown?.authority.busy,
     read: () => read(), reopen: () => read(true), needsReopen: reopenScope === scopeFor(context),
-    query: () => query(), importPaths, history, freshCurrent};
+    query: () => query(), importPaths, history, freshCurrent, acceptSelection};
 }
 export type CreativeWorkspaceOwner = ReturnType<typeof useCreativeWorkspace>;

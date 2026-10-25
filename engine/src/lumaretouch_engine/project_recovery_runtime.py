@@ -13,6 +13,10 @@ _local = threading.local()
 def observe(event):
     boundary = getattr(_local, 'boundary', None)
     if boundary is not None:
+        message = boundary['message']
+        if (message.get('cmd') == 'creative_selection' and event.get('event') == 'creative_selection_result'
+                and event.get('request_id') == message.get('request_id') and event.get('action') == message.get('action')):
+            boundary['selection_outcome'] = {key: event.get(key) for key in ('status', 'success', 'outcome_unknown', 'no_write')}
         if (event.get('event') == 'error' or event.get('success') is False
             or event.get('outcome_unknown') or event.get('requires_reload')
             or event.get('status') in ('failed', 'unknown', 'partial', 'blocked')
@@ -39,11 +43,13 @@ def finish(engine, boundary, error=None):
     if boundary is None:
         return
     message = boundary['message']
-    if message.get('cmd') in ('ingest_session', 'workflow_owner'):
+    if message.get('cmd') in ('ingest_session', 'workflow_owner', 'background_material_library', 'background_material_library_cancel'):
         # The lease owns pending/unknown copy receipts. Only the existing atomic
         # managed transaction writes the saved project; readback cannot bless a
         # partial copy or taint a committed recipe on a rejected session request.
         return
+    from .creative_selection_host import read_only as selection_read_only
+    if selection_read_only(message): return
     from .light_glow_host import read_only as glow_read_only
     if glow_read_only(message):return
     from .lens_blur_host import read_only as lens_read_only
@@ -79,6 +85,13 @@ def finish(engine, boundary, error=None):
     runtime = engine.__dict__.get('_project_recovery_runtime')
     if runtime is None:
         return
+    if message.get('cmd') == 'creative_selection':
+        outcome = boundary.get('selection_outcome') or {}
+        if not error and boundary['returned'] and outcome.get('outcome_unknown') is False:
+            if outcome.get('status') == 'no_change' or outcome.get('no_write') is True: return
+            if outcome.get('status') == 'applied' and outcome.get('success') is True:
+                runtime.revision += 1
+                return
     # Errors can occur after a partial mutation even if a handler returns. Keep
     # taint until a successful explicit project open/create establishes a base.
     if error or boundary['failed'] or not boundary['returned']:

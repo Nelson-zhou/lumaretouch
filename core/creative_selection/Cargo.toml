@@ -1,0 +1,11 @@
+[package]
+name = "lumaretouch_creative_selection"
+version = "0.1.0"
+edition = "2021"
+license = "GPL-3.0-or-later"
+
+[lib]
+path = "lib.rs"
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]

@@ -83,6 +83,8 @@ mod project_recovery_fence;
 mod virtual_copy_api;
 mod canvas_guides_api;
 mod creative_layers_api;
+mod creative_selection_api;
+mod background_material_api;
 mod export_destination_port;
 mod export_target_size_port;
 mod white_balance_api;
@@ -1991,6 +1993,8 @@ fn main() {
             virtual_copy_api::virtual_copy_request, virtual_copy_api::virtual_copy_status,
             canvas_guides_api::canvas_guides_request, canvas_guides_api::canvas_guides_status,
             creative_layers_api::creative_document_request, creative_layers_api::creative_document_status,
+            background_material_api::background_material_library, background_material_api::background_material_choose,
+            creative_selection_api::creative_selection_request, creative_selection_api::creative_selection_status, creative_selection_api::creative_selection_release,
             managed_import_api::managed_import_request, managed_import_api::managed_import_status,
             ingest_session_api::ingest_session_request, ingest_session_api::ingest_session_status,
             local_workflow_host::local_workflow_workspace, local_workflow_host::local_workflow_definition, local_workflow_host::local_workflow_preflight, local_workflow_host::local_workflow_submit, local_workflow_host::local_workflow_request, local_workflow_host::local_workflow_run,

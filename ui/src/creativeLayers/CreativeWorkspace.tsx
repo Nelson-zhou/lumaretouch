@@ -1,11 +1,14 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 import {TOOLS, TOOL_CATEGORIES} from '../spec';
+import {SelectionRecovery} from './SelectionRecovery';
+import {CreativeSelectionEditor} from '../creativeSelection/CreativeSelectionEditor';
+import type {CreativeSelectionOwner} from '../creativeSelection/useCreativeSelection';
 import {CreativeLayersPanel} from './CreativeLayersPanel';
 import type {CreativeWorkspaceOwner} from './useCreativeWorkspace';
 
 /** Real layer workspace plus the existing tool catalogue, extracted without dropping tools. */
-export function CreativeWorkspace({owner, hasImage, available, onBack, onHeal, healBlocked, onLens, lensBlocked, onGlow, glowBlocked}: {
-  owner: CreativeWorkspaceOwner; hasImage: boolean; available: boolean;
+export function CreativeWorkspace({owner, selection, engineAlive, onStartEngine, selectionUnavailableReason, hasImage, available, onBack, onHeal, healBlocked, onLens, lensBlocked, onGlow, glowBlocked}: {
+  engineAlive: boolean; onStartEngine: () => Promise<void>; owner: CreativeWorkspaceOwner; selection: CreativeSelectionOwner; selectionUnavailableReason?: string; hasImage: boolean; available: boolean;
   onBack: () => void; onHeal: () => void; healBlocked: boolean; onLens: () => void; lensBlocked: boolean; onGlow: () => void; glowBlocked: boolean;
 }) {
   return <section className="creativeView">
@@ -24,6 +27,8 @@ export function CreativeWorkspace({owner, hasImage, available, onBack, onHeal, h
     <CreativeLayersPanel snapshot={owner.value?.authority.document ?? null} ownershipToken={owner.value?.authority.ownership_token ?? null}
       ports={owner.ports} preview={owner.value?.preview} history={owner.value?.history} busy={owner.busy}
       unavailableReason={!hasImage ? '请先打开一张照片，再进入创意工作区。' : !available ? '当前引擎未提供创意文档协议，请使用配套安装包。' : owner.message || '正在等待当前照片的稳定来源身份。'}/>
+    <CreativeSelectionEditor controller={selection.controller} disabled={owner.busy} unavailableReason={selectionUnavailableReason}/>
+    <SelectionRecovery key={selection.state.request?.request_id??'none'} enabled={selection.state.phase==='unknown'} engineAlive={engineAlive} onStartEngine={onStartEngine}/>
     <details className="creative-tool-catalogue"><summary>其他创意工具</summary><div className="creativeCards">
       {TOOL_CATEGORIES.map(category => <div className="cGroup" key={category}><h3>{category}</h3><div className="cCards">
         {TOOLS.filter(tool => tool.category === category).map(tool => {

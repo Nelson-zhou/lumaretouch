@@ -83,6 +83,8 @@ from . import studio_background_state as SBS, studio_background_runtime as SBR
 from . import id_background_state as IDS, id_background_runtime as IDR
 from . import creative_document_host as CDH
 from .studio_tools_dispatch import StudioToolsMixin
+from .creative_module_commands import CreativeModuleCommandsMixin
+from .background_material_host import BackgroundMaterialHostMixin
 from .preview_lifecycle import PreviewLifecycleMixin
 from .portrait_geometry_dispatch import PortraitGeometryMixin
 from .master16_policy import Master16PolicyMixin
@@ -212,7 +214,7 @@ class _TaskControl:
         self.cancel = threading.Event()
 
 
-class Engine(FringeRepairHostMixin, PresetOrganisationHostMixin, HairColourHostMixin, Master16PolicyMixin, BodyPoseHostMixin, PeopleHostMixin, PreviewLifecycleMixin, StudioToolsMixin, PortraitGeometryMixin, WorkflowPortsMixin, SampleLibraryHostMixin, SemanticColourHostMixin):
+class Engine(BackgroundMaterialHostMixin, CreativeModuleCommandsMixin, FringeRepairHostMixin, PresetOrganisationHostMixin, HairColourHostMixin, Master16PolicyMixin, BodyPoseHostMixin, PeopleHostMixin, PreviewLifecycleMixin, StudioToolsMixin, PortraitGeometryMixin, WorkflowPortsMixin, SampleLibraryHostMixin, SemanticColourHostMixin):
     def __init__(self, session: str):
         self.session = session
         self.shm: FrameShm | None = None
@@ -462,6 +464,7 @@ class Engine(FringeRepairHostMixin, PresetOrganisationHostMixin, HairColourHostM
         from .facial_sculpt_state import capability as facial_sculpt_capability
         from .lens_blur_host import capability as lens_blur_capability
         from .light_glow_native import capability as light_glow_capability
+        from .creative_selection_host import capability as selection_capability
         from .expression_replacement_native import capability as expression_capability
         from .eye_makeup_enhance_state import capability as eye_makeup_enhance_capability
         from .eye_bag_preserve_state import capability as eye_bag_preserve_capability
@@ -535,7 +538,7 @@ class Engine(FringeRepairHostMixin, PresetOrganisationHostMixin, HairColourHostM
               "history_max": self.HISTORY_MAX,
               "history_group_ms": self.HISTORY_GROUP_MS,
               "history_edit_cmds": list(self.EDIT_CMDS),
-              "creative_document_protocol": 1,
+              "creative_document_protocol": 1, "creative_selection_protocol": 1, "creative_selection_capability": selection_capability(), "background_material_library_protocol": 1,
               "canvas_guides_protocol": 1,
               "canvas_guides_actions": ["state", "set", "undo", "redo"],
               # 项目面的能力名单由引擎报出去（与 export 的格式名单同一条理由）：
@@ -1381,21 +1384,6 @@ class Engine(FringeRepairHostMixin, PresetOrganisationHostMixin, HairColourHostM
 
     def _history_bind(self, row: dict | None) -> None:
         return self._history_controller().bind(row)
-
-    def cmd_light_glow(self, p):
-        from .light_glow_host import handle
-        return handle(self, p, emit)
-
-    def cmd_lens_blur(self, p):
-        from .lens_blur_host import handle
-        return handle(self,p,emit)
-
-    def cmd_expression_replacement(self, p):
-        from .expression_replacement_host import handle
-        return handle(self, p, emit)
-
-    def cmd_creative_document(self, p: dict):
-        return CDH.handle(self, p, emit)
 
     def cmd_history(self, p: dict):
         return self._history_controller().handle_command(p)
@@ -6717,13 +6705,13 @@ class Engine(FringeRepairHostMixin, PresetOrganisationHostMixin, HairColourHostM
                           'success': False, 'outcome_unknown': False, 'error': reason})
                     return
                 raise ValueError(reason)
-            if name in ('lens_blur', 'light_glow'):
+            if name in ('lens_blur', 'light_glow', 'creative_selection'):
                 fn(msg); return  # The reviewed copy transaction owns source fences and history.
             if name == 'expression_replacement':
                 fn(msg); return  # Dedicated exact source/copy transaction owns its history and receipts.
             if name == 'creative_document' and msg.get('action') == 'state':
                 fn(msg); return  # Read-only polling must not revoke capture/edit owners.
-            if name in ('project_recovery', 'managed_import', 'ingest_session', 'workflow_owner', 'project_package', 'source_relocation', 'virtual_copy', 'canvas_guides'):
+            if name in ('project_recovery', 'managed_import', 'ingest_session', 'workflow_owner', 'project_package', 'source_relocation', 'virtual_copy', 'canvas_guides', 'background_material_library', 'background_material_library_cancel'):
                 fn(msg); return  # Path transactions never enter recipe history/capture invalidation.
             if relocation is not None and name == 'project' and msg.get('action') == 'state':
                 with relocation.lock: fn(msg)

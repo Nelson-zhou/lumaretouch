@@ -1,0 +1,430 @@
+{
+  "schema_version": 1,
+  "baseline_commit": "d5f81acb7e686ed99f8012fcac1b3c638527018e",
+  "baseline_tree": "f3d491aff6451dacddc729bae958478e2d9963d0",
+  "date": "2026-10-25",
+  "status": "SOURCE_CONNECTED_PARTIAL_ALL_RUNTIME_ACCEPTANCE_UNRUN",
+  "scope": "Original tiled Rust creative selection masks with real whole-composition image review and canonical history; durable local background-material library with exact immutable selection into existing ID decoder, project bundle and history.",
+  "requirements": [
+    "ui:18",
+    "ui:19",
+    "creative:165433",
+    "LNX-REF-PC-32475-C-7f1d9dd04c"
+  ],
+  "manifest_policy": "Exact 79 payload files plus this self-excluded manifest, 80 total. Historical unrelated manifests and old sparse directory untouched.",
+  "source_checks": {
+    "python_ast": 25,
+    "toml_parse": 1,
+    "file_lines": {
+      "ui/src/App.tsx": 2157,
+      "ui/src-tauri/src/main.rs": 2014,
+      "engine/src/lumaretouch_engine/server.py": 7045
+    },
+    "whitespace": "Every modified and new payload text file checked, including blank EOF; git diff --check clean.",
+    "independent_review": "Bounded source audit closed recovery bookkeeping, outer-dispatch terminals, epoch retention, exact mask receipt and dead-engine explicit recovery entry findings. No runtime acceptance."
+  },
+  "remaining": [
+    "All builds, tests, typechecks, numerical, performance, image quality, crash/reopen and packaging acceptance UNRUN. Missing selection ABI remains unavailable without fallback.",
+    "Manual image-leaf selection only; vector drafts not persisted across restart, no group/semantic selection or native-size inspection. Box feather and subpixel approximation are not vendor/Gaussian parity.",
+    "Affine source-mask projection is reviewed through actual composite, not claimed identical to arbitrary post-transform canvas coverage. Working-set/work/transport caps remain; no 24 MP acceptance.",
+    "Materials implement local library and ID consumer only, not stock packs, AI scene generation, sky consumer, garbage collection or cross-process durable mutation receipts. Interrupted import objects remain budget-counted.",
+    "Original ID format/10 MB/32 MP/ICC/alpha policies and broader retouch HDR/alpha restrictions unchanged. Unknown selection outcomes require query or explicitly confirmed saved-project reopen, never blind retry."
+  ],
+  "files": [
+    {
+      "path": "core/creative_selection/Cargo.toml",
+      "bytes": 185,
+      "sha256": "3d3ffaea94f664432e680861a47e74a71f5fcbc2dea663fb6a1bd6f115cba6a2"
+    },
+    {
+      "path": "core/creative_selection/build_creative_selection.sh",
+      "bytes": 395,
+      "sha256": "861f417eab6ab5aabb533bcfd675b9d18aefab6d4667b2cfe929c39b54f3bec0"
+    },
+    {
+      "path": "core/creative_selection/creative_selection.h",
+      "bytes": 2471,
+      "sha256": "6b75d66e2693c163cdaca09550eebfa24e85c29361f21b99c4d0b8d258005015"
+    },
+    {
+      "path": "core/creative_selection/lib.rs",
+      "bytes": 28077,
+      "sha256": "4ba917b7dffed7cb8d7dad7b4422ee184809ee87946dceacf26139211a2ce7bf"
+    },
+    {
+      "path": "core/creative_selection/tests.rs",
+      "bytes": 13972,
+      "sha256": "8c8e382b5fa8bb8c98016e96f2ef8ecfdad0334b9783149143af5f65093f9f9c"
+    },
+    {
+      "path": "docs/background-materials/BACKEND-SHA256SUMS",
+      "bytes": 1449,
+      "sha256": "bb4babd5a98069780bb614940c93dec6cfebb3c2876d0e8f94d23ea1a30e29fe"
+    },
+    {
+      "path": "docs/background-materials/CONTRACT.md",
+      "bytes": 7576,
+      "sha256": "c2d6caeac4dddaf5ba57357c542b5b504b965ddc212dd90e3ca5f8130e21889b"
+    },
+    {
+      "path": "docs/background-materials/NATIVE-UI.md",
+      "bytes": 9481,
+      "sha256": "93efab0deb49899cb3ff37ff8b5424189adf1730fb8e1f770ac16b80b57ca6cb"
+    },
+    {
+      "path": "docs/background-materials/README.md",
+      "bytes": 9817,
+      "sha256": "0d9d93a1c4b7a42c9570b1aab745ec4085ee364a8f5b741fa1f6d1878611db12"
+    },
+    {
+      "path": "docs/creative-selection/ABI.md",
+      "bytes": 8064,
+      "sha256": "ad8272711685b01b47e88590bea8a1a9fff86bd1a4e00dbe39c1d3bc346a7df8"
+    },
+    {
+      "path": "docs/creative-selection/ACCEPTANCE-UNRUN.md",
+      "bytes": 4873,
+      "sha256": "67adfdf706fa83625b04e0560d626c5033e9c4862c6d7499771564f3b626e1c8"
+    },
+    {
+      "path": "docs/creative-selection/CORE.md",
+      "bytes": 4965,
+      "sha256": "64078c09fa45ecc9a4cc47ca0bf9c833fb9b4e8d7a0bbace597e36daee817eb1"
+    },
+    {
+      "path": "docs/creative-selection/ENGINE.md",
+      "bytes": 10245,
+      "sha256": "bef8eba595d9c6f8540d6d958128f2ef8ad961d58e70680c8504db3a062a7c2b"
+    },
+    {
+      "path": "docs/creative-selection/INTEGRATED-STATUS.md",
+      "bytes": 5692,
+      "sha256": "905335b204f1fff4efa7c1f1bfe72b830c926f252c9ba38856c682941b97aaee"
+    },
+    {
+      "path": "docs/creative-selection/NUMERICS.md",
+      "bytes": 7860,
+      "sha256": "020de16178a92a11f265d2a598fc3b516dc347e524445246cc480090c2abd894"
+    },
+    {
+      "path": "docs/creative-selection/RESEARCH.md",
+      "bytes": 4563,
+      "sha256": "bc0d4b6bb1f4b8d571532504b4fa67ed284a57b5deb1345d6f0b4aafaae11708"
+    },
+    {
+      "path": "docs/creative-selection/UI.md",
+      "bytes": 13246,
+      "sha256": "e8208769cd8bc3ba8195f7c8179a749213a1ceb0b2db80d03607c3fd3954e897"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/background_material_command.py",
+      "bytes": 1885,
+      "sha256": "35b7283682e1f96746804abe7603a7eb122d532ba6211ee15a4576cd3dfca3fa"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/background_material_controller.py",
+      "bytes": 8176,
+      "sha256": "4785a683a93d808237bfc61d90a81e9fc78fbb3fab411e1cc7c9520bf870119d"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/background_material_host.py",
+      "bytes": 9639,
+      "sha256": "da17b5b1ad664976d5d07f1b3b951031d8ae0f69359aee1c8f466e6c650c6df6"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/background_material_images.py",
+      "bytes": 8975,
+      "sha256": "fca0b8fa844555b240f19e33d3ee9c55fd224ae5979e200802f523d8c8eec60b"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/background_material_query.py",
+      "bytes": 3580,
+      "sha256": "7238912c8fa6ce54da7a74f132367342f887b29564074a7fad1c47bce0c3adea"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/background_material_selection.py",
+      "bytes": 1576,
+      "sha256": "f1b9c972e466df0361287f9ec6f99eb53aa99c7009c70bd82a88f5a68422cb7d"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/background_material_state.py",
+      "bytes": 7311,
+      "sha256": "f136875f1a833336ef6fa3abda5271699707b9cf819089bee0b3a40b8ed556e5"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/background_material_store.py",
+      "bytes": 11426,
+      "sha256": "944ab125d1fb866a1fc0ff0fd9a219671acce8c62862e08263be035819883051"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/command_registry.py",
+      "bytes": 2691,
+      "sha256": "4160586cff1cd2e773d3b564f7880272af30bb0c260d386771515cb02e4fe477"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/creative_capture_routes.py",
+      "bytes": 1722,
+      "sha256": "e7317ee8d72e7501c0f482c9da5a0c0070948e6e5e13842af771bae324d9e8ea"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/creative_id_background_host.py",
+      "bytes": 4376,
+      "sha256": "03ccbeedd582238b0db2a16f98c939829d078e784a315447ea90e8132291a3d4"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/creative_module_commands.py",
+      "bytes": 1178,
+      "sha256": "5ac6e0a17f50c899dcb22fc13c1a54e44c801f7b30e13e661d7f851388811d6a"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/creative_selection_host.py",
+      "bytes": 24824,
+      "sha256": "95829342188660038b3b02f8320a993df7822b228162e710f229b0f3672f762c"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/creative_selection_jobs.py",
+      "bytes": 5200,
+      "sha256": "309e9afb371a0df9d782e25183cb0fee3012caa70e93386af5e682b1a228f6da"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/creative_selection_native.py",
+      "bytes": 6385,
+      "sha256": "9a2c22ae440085f48d887f32c2037a636c9ba833eed2cfa670dbc101c20061d6"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/creative_selection_recipe.py",
+      "bytes": 5249,
+      "sha256": "25317b8f7aff024e21dbdc6ac23f2f918dfd3187a170bdb7cb5be6561d1b294d"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/creative_selection_stage.py",
+      "bytes": 9237,
+      "sha256": "bac470d7562adf993053c5281adfd6d07d48b9892b62172da6e3ceb2959b3ce6"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/id_background_controller.py",
+      "bytes": 7354,
+      "sha256": "abbceb145e687cf646f23aeda1d23b806e7f00f3df7a715248add87655b726a5"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/project_recovery_runtime.py",
+      "bytes": 11403,
+      "sha256": "ba768c81687c61604069b72fa1675609dfda66f02a2964b2134db305529c5fed"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/read_job_ingress.py",
+      "bytes": 2756,
+      "sha256": "2ada21e90ab6d56aab15e1dcee2eb5814f7735e370038b4bd7cf3a4377d8904b"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/server.py",
+      "bytes": 471351,
+      "sha256": "7ba5d9ba2b5a1905b920ede9afbbaa845b0092339418c87d163105b6225965e2"
+    },
+    {
+      "path": "engine/tests/test_background_material_host_unrun.py",
+      "bytes": 6398,
+      "sha256": "78fa3f8b960567e145b64560e57cf5edb09979b28eded6360ce9bb30f235eef0"
+    },
+    {
+      "path": "engine/tests/test_background_materials_unrun.py",
+      "bytes": 10194,
+      "sha256": "056465eb334b7e0fc197b0b847e45f23cbf7e7b7dce4c1acc6f505cf2d630772"
+    },
+    {
+      "path": "engine/tests/test_creative_selection_engine_unrun.py",
+      "bytes": 18242,
+      "sha256": "af99865670acdf98a005d90b4d381eb1d68ec05f0502accda9a87f149d565eaf"
+    },
+    {
+      "path": "engine/tests/test_selection_material_integration_unrun.py",
+      "bytes": 4102,
+      "sha256": "b1d88fb2de357004e487971685e811e5c4e329d8e4d40ef78f63d1a0f8df87d7"
+    },
+    {
+      "path": "packaging/stage-engine.sh",
+      "bytes": 30041,
+      "sha256": "e5220e1d30f1165c8692d0f2d99cd9f7e90f742e3d6e75e19d971222f2b25771"
+    },
+    {
+      "path": "ui/src-tauri/src/background_material_api.rs",
+      "bytes": 24184,
+      "sha256": "12b3dc9fe338b9f861ebc98e2a6126a3ca40f9f9b78f78f1611271a014f48bd3"
+    },
+    {
+      "path": "ui/src-tauri/src/capture_lifecycle.rs",
+      "bytes": 3893,
+      "sha256": "eea88471e1ccee0150d80b84f5f050ca9d9677a1fa26a0508174e3125c14b752"
+    },
+    {
+      "path": "ui/src-tauri/src/creative_selection_api.rs",
+      "bytes": 11879,
+      "sha256": "cc192d26cdc990f4f4c0815b086f7c8f8e95fa30ddb8b336f4b0a2d0cddb8116"
+    },
+    {
+      "path": "ui/src-tauri/src/engine.rs",
+      "bytes": 49344,
+      "sha256": "e384efebcdee704e41f7d36335d31382c56f581f82b830d78bac0cb6c737ee16"
+    },
+    {
+      "path": "ui/src-tauri/src/id_background_api.rs",
+      "bytes": 28864,
+      "sha256": "3ff59aa5f65861088e5b02c74010a5506a4b1be59a9ec262ec6f426d20e68275"
+    },
+    {
+      "path": "ui/src-tauri/src/main.rs",
+      "bytes": 100541,
+      "sha256": "f226f58a77e4bf80e3493ae7d9ef6edc4c5047a10c9443d954f0808310fb9dbc"
+    },
+    {
+      "path": "ui/src-tauri/src/native_dispatch.rs",
+      "bytes": 12908,
+      "sha256": "86e253b33e7a8391b10bcf98d7b021c68445a361bb7259cff2a64b0bed3f0bf1"
+    },
+    {
+      "path": "ui/src/App.tsx",
+      "bytes": 156144,
+      "sha256": "3e2bc10c81efe48c73fb81deb8cd66ff854e6a686e223eb4e51efd8715b28b3e"
+    },
+    {
+      "path": "ui/src/backgroundMaterials/BackgroundMaterialHost.tsx",
+      "bytes": 20603,
+      "sha256": "7b8be3d284a6e4622bca8cebc42b1a93919a24f8e56e85cc04daa1b3ece6638b"
+    },
+    {
+      "path": "ui/src/backgroundMaterials/adapter.ts",
+      "bytes": 3739,
+      "sha256": "bc08531d182905659f9f7a75b11eec37af46550d75cf44e6c7a6f11ddeaf28aa"
+    },
+    {
+      "path": "ui/src/backgroundMaterials/backgroundMaterials.css",
+      "bytes": 4221,
+      "sha256": "9f35e0c741705443379b106c76c29a067be72216ac3e0eddf3b7b3a9c49e034c"
+    },
+    {
+      "path": "ui/src/backgroundMaterials/index.ts",
+      "bytes": 440,
+      "sha256": "3f674701cb93f368892f8c4d68822a3abd930f4451b261038ab24d0fb48f38dd"
+    },
+    {
+      "path": "ui/src/backgroundMaterials/model.ts",
+      "bytes": 12261,
+      "sha256": "2d8357ac0bf2c408b4979aa9268a4f455302051726d69a34c0be72233a1bb5bf"
+    },
+    {
+      "path": "ui/src/backgroundMaterials/model.unrun.test.ts",
+      "bytes": 3822,
+      "sha256": "d739a5c1be239349483c9205dfa0dd10acdf09554a497401a2b922b9e1934a6a"
+    },
+    {
+      "path": "ui/src/backgroundMaterials/nativePort.ts",
+      "bytes": 10235,
+      "sha256": "e966899eac9d0a71cc4d2e3e61c2764eca5e28cf92cc2b84a8a2fa75c48dd14b"
+    },
+    {
+      "path": "ui/src/backgroundMaterials/useBackgroundMaterialHost.ts",
+      "bytes": 12158,
+      "sha256": "e77862e28b14235c3c757055ca09dbae1e1c36f194dbcb3342bae3644481d53b"
+    },
+    {
+      "path": "ui/src/creativeLayers/CreativeWorkspace.tsx",
+      "bytes": 4401,
+      "sha256": "93541c86fab7babc22601bc8ded7660dbfda97e22681777977a3fe0a4e613eff"
+    },
+    {
+      "path": "ui/src/creativeLayers/SelectionRecovery.tsx",
+      "bytes": 2834,
+      "sha256": "b3de0540b44f4df5b2377384b13463514b335394b762ee0c66a021b5debcb072"
+    },
+    {
+      "path": "ui/src/creativeLayers/useCreativeWorkspace.ts",
+      "bytes": 16242,
+      "sha256": "06bc5bfc6af971e611acf5ad768a1be0a94f2eb3fd999540d803e81e336ee2e0"
+    },
+    {
+      "path": "ui/src/creativeLayers/useSelectionBinding.ts",
+      "bytes": 1133,
+      "sha256": "62cedb76953410fc5efbb092cb419da26219b5f8a2b56de0de55e035a34b5b57"
+    },
+    {
+      "path": "ui/src/creativeSelection/CreativeSelectionEditor.tsx",
+      "bytes": 23103,
+      "sha256": "5ecfe5c630b002c905f15e40178d3b1a0f13626ab271c212b8eea3ac8f68f15a"
+    },
+    {
+      "path": "ui/src/creativeSelection/controller.ts",
+      "bytes": 24787,
+      "sha256": "8b0d15d721e7c4131a525e6cbd90236933ce7c36978d7c9dd844c4f549b8728d"
+    },
+    {
+      "path": "ui/src/creativeSelection/controller.unrun.test.ts",
+      "bytes": 9343,
+      "sha256": "bd301bf5d028999edc6ead701ae66f92f37e79eaec7aff80530d454141d26909"
+    },
+    {
+      "path": "ui/src/creativeSelection/creativeSelection.css",
+      "bytes": 4193,
+      "sha256": "0af6961e7a0ddcd17e420d4cf80c19abd9df9ac4b2c8dde546e824be05b7ef0b"
+    },
+    {
+      "path": "ui/src/creativeSelection/geometry.ts",
+      "bytes": 3582,
+      "sha256": "af6df75acb797348d32e17230db8d98f342f4609f5ebaec036014c872309e7cb"
+    },
+    {
+      "path": "ui/src/creativeSelection/imagery.ts",
+      "bytes": 2534,
+      "sha256": "cce5815f2d3d9077d4a0ef76c872cc8639465c28348bca2733b50a64a9845858"
+    },
+    {
+      "path": "ui/src/creativeSelection/index.ts",
+      "bytes": 346,
+      "sha256": "ed59c35d7c3c64b01e89cdc74fa2a680c4f5df30517ffb37972843d399113b91"
+    },
+    {
+      "path": "ui/src/creativeSelection/model.ts",
+      "bytes": 12427,
+      "sha256": "5f129b74078a60d764953bec11640aa53d9cd8aae4042191ce3e910801d96085"
+    },
+    {
+      "path": "ui/src/creativeSelection/model.unrun.test.ts",
+      "bytes": 3797,
+      "sha256": "42e71d8e652a60bb4c7c3e97dddf97ca71f5d40ffb18c0a7e90b5657f0c74354"
+    },
+    {
+      "path": "ui/src/creativeSelection/nativePort.ts",
+      "bytes": 3251,
+      "sha256": "0006bacbafbbb66ea274cf27893332ba46f5a5be79420a1a0d77236e1f9c8ac7"
+    },
+    {
+      "path": "ui/src/creativeSelection/useCreativeSelection.ts",
+      "bytes": 1819,
+      "sha256": "256cc81451a2f7dff87e78b5195caab6ece4de4f78c5a6669cb63d3594e63763"
+    },
+    {
+      "path": "ui/src/idBackground/IdBackgroundPanel.tsx",
+      "bytes": 15993,
+      "sha256": "c4a6f69e4948e689851e7c0d9a28f56e8de5729f1f33a26645b48e30da7dd35f"
+    },
+    {
+      "path": "ui/src/idBackground/useIdBackground.ts",
+      "bytes": 15906,
+      "sha256": "03f09a43b0124c44f77a3c228b7ec7e7c6b1e0cae5972236f0b82b62b9162de3"
+    },
+    {
+      "path": "ui/src/libraryQuery/LibraryWorkspace.tsx",
+      "bytes": 1078,
+      "sha256": "cd2f7c28824ea0e8e2763222adc4b82cd62e642b00a5a95d8d90264b94fc4229"
+    },
+    {
+      "path": "ui/src/native.ts",
+      "bytes": 115872,
+      "sha256": "607be0f54f2091a7db4d0354abbee1b87c85eb971f8c0cda859b9c5da29c42f5"
+    },
+    {
+      "path": "ui/src/workspaces/guardCreativeWork.ts",
+      "bytes": 1553,
+      "sha256": "39a4c4056df86017e2123e09f4829f967d03483623930cc7265873a349639f9e"
+    }
+  ]
+}

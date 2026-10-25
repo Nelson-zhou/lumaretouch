@@ -45,9 +45,12 @@ pub struct EngineHandle {
 impl EngineHandle {
     pub fn epoch(&self)->[u8;16]{self.epoch}
     pub fn send(&self, cmd: Value) -> Result<(), String> {
+        crate::creative_selection_api::blocks_mutation(self.epoch, &cmd)?;
         crate::light_glow_api::blocks_mutation(self.epoch, &cmd)?;
         crate::lens_blur_api::blocks_mutation(self.epoch, &cmd)?;
         crate::expression_replacement_api::blocks_mutation(self.epoch, &cmd)?;
+        if crate::background_material_api::read_only(&cmd) { return self.dispatcher.enqueue(None, cmd); }
+        if crate::creative_selection_api::read_only(&cmd) { return self.dispatcher.enqueue(None, cmd); }
         if crate::light_glow_api::read_only(&cmd) { return self.dispatcher.enqueue(None, cmd); }
         if crate::lens_blur_api::read_only(&cmd) { return self.dispatcher.enqueue(None, cmd); }
         if crate::expression_replacement_api::read_only(&cmd) { return self.dispatcher.enqueue(None, cmd); }
@@ -104,7 +107,20 @@ impl EngineHandle {
         }
         Ok(())
     }
+    /// Only already-bound context/preview cancellation enters this control lane.
+    pub(crate) fn cancel_creative_selection(&self, request: &Value) -> Result<(), String> {
+        if !self.is_alive() { return Err("原选区引擎已结束；取消结果未确认".into()); }
+        if request["cmd"] != "creative_selection" || request["action"] != "cancel" { return Err("无效选区取消控制".into()); }
+        let mut line = serde_json::to_vec(request).map_err(|error| error.to_string())?;
+        line.push(b'\n');
+        if let Err(error) = self.input.with_writer(|writer| writer.write_all(&line).and_then(|_|writer.flush())) {
+            self.dispatcher.close(); self.input.close();
+            return Err(format!("选区取消发送未获确认，不会重发：{error}"));
+        }
+        Ok(())
+    }
     pub(crate) fn cancel_eye_bag_read(&self,request_id:&str)->Result<(),String>{self.cancel_owned_request("eye_bag_cancel",request_id)}
+    pub(crate) fn cancel_background_material_library(&self,request_id:&str)->Result<(),String>{self.cancel_owned_request("background_material_library_cancel",request_id)}
     pub(crate) fn cancel_sample_library(&self,request_id:&str)->Result<(),String>{self.cancel_owned_request("sample_library_cancel",request_id)}
     pub(crate) fn cancel_semantic_colour(&self,request_id:&str)->Result<(),String>{self.cancel_owned_request("semantic_colour_cancel",request_id)}
     fn cancel_owned_request(&self, command:&str, request_id: &str) -> Result<(), String> {
@@ -121,9 +137,12 @@ impl EngineHandle {
     }
 
     pub fn send_interactive(&self, key: String, cmd: Value) -> Result<(), String> {
+        crate::creative_selection_api::blocks_mutation(self.epoch, &cmd)?;
         crate::light_glow_api::blocks_mutation(self.epoch, &cmd)?;
         crate::lens_blur_api::blocks_mutation(self.epoch, &cmd)?;
         crate::expression_replacement_api::blocks_mutation(self.epoch, &cmd)?;
+        if crate::background_material_api::read_only(&cmd) { return self.dispatcher.enqueue(None, cmd); }
+        if crate::creative_selection_api::read_only(&cmd) { return self.dispatcher.enqueue(None, cmd); }
         if crate::light_glow_api::read_only(&cmd) { return self.dispatcher.enqueue(None, cmd); }
         if crate::lens_blur_api::read_only(&cmd) || crate::expression_replacement_api::read_only(&cmd) { return self.dispatcher.enqueue(None, cmd); }
         if !crate::torso_length_api::read_only(&cmd) && !crate::waist_length_api::read_only(&cmd) && !crate::head_size_api::read_only(&cmd) && !crate::body_slim_api::read_only(&cmd) { crate::project_recovery_fence::issued(self.epoch, &cmd)?; }
@@ -237,6 +256,8 @@ pub fn spawn(py: &str, engine_src: &str, session: &str, state: Arc<AppState>,
                 if let Some(marker)=crate::lens_blur_api::observe_line(inspection_epoch, &line) { crate::project_recovery_fence::observed(inspection_epoch, &marker); }
                 if let Some(marker)=crate::expression_replacement_api::observe_line(inspection_epoch, &line) { crate::project_recovery_fence::observed(inspection_epoch, &marker); }
                 if let Ok(v)=serde_json::from_str::<Value>(&line) {
+                    crate::background_material_api::receive(inspection_epoch, &v);
+                    if let Some(marker) = crate::creative_selection_api::receive(inspection_epoch, &v) { crate::project_recovery_fence::observed(inspection_epoch, &marker); }
                     // Reviewed outcomes settle only after exact original validation.
                     // Scalar preset/batch identities are retained by the existing
                     // receipt host. Raw success cannot settle recovery first.
@@ -249,10 +270,11 @@ pub fn spawn(py: &str, engine_src: &str, session: &str, state: Arc<AppState>,
                             || crate::people_api::guards_review(inspection_epoch,id)
                             || crate::body_slim_api::guards_result(inspection_epoch,id)
                             || crate::expression_replacement_api::guards_result(inspection_epoch,id)
+                            || crate::creative_selection_api::guards_result(inspection_epoch,id)
                             || crate::light_glow_api::guards_result(inspection_epoch,id)
                             || crate::lens_blur_api::guards_result(inspection_epoch,id)
                     });
-                    if !scalar_review && v["event"] != "ingest_session_result" && v["event"] != "workflow_owner_result" && v["event"] != "light_glow_result" && v["event"] != "lens_blur_result" && v["event"] != "expression_replacement_result" && v["event"] != "common_background_result" && v["event"] != "fringe_repair_result" && v["event"] != "id_background_result" && v["event"] != "torso_length_result" && v["event"] != "waist_length_result" && v["event"] != "head_size_result" && v["event"] != "body_slim_result" {
+                    if !scalar_review && v["event"] != "creative_selection_result" && v["event"] != "ingest_session_result" && v["event"] != "workflow_owner_result" && v["event"] != "light_glow_result" && v["event"] != "lens_blur_result" && v["event"] != "expression_replacement_result" && v["event"] != "common_background_result" && v["event"] != "fringe_repair_result" && v["event"] != "id_background_result" && v["event"] != "torso_length_result" && v["event"] != "waist_length_result" && v["event"] != "head_size_result" && v["event"] != "body_slim_result" {
                         crate::project_recovery_fence::observed(inspection_epoch, &v);
                     }
                     if v["event"]=="ready" && v["command_ack"].as_u64()!=Some(1) {
@@ -278,6 +300,7 @@ pub fn spawn(py: &str, engine_src: &str, session: &str, state: Arc<AppState>,
             crate::head_size_api::ended(inspection_epoch);
             crate::body_slim_api::ended(inspection_epoch);
             crate::expression_replacement_api::ended(inspection_epoch);
+            crate::background_material_api::ended(inspection_epoch);
             crate::light_glow_api::ended(inspection_epoch);
             crate::lens_blur_api::ended(inspection_epoch);
             crate::neck_shape_api::ended(inspection_epoch);
@@ -338,6 +361,7 @@ fn handle_event(state: &Arc<AppState>, line: &str,inspection_epoch:[u8;16]) {
     match v.get("event").and_then(|e| e.as_str()).unwrap_or("") {
         "inspection_snapshot"=>state.on_inspection_event(inspection_epoch,&v),
         "creative_geometry" => state.on_creative_geometry(&v),
+        "creative_selection_result" => { if v.get("doc_state").is_some_and(|d| d.is_object()) { state.on_layer_frame(&v); } },
         "creative_document_state" | "creative_document_result" => { crate::creative_layers_api::receive(inspection_epoch, &v); if v.get("doc_state").is_some_and(|d| d.is_object()) { state.on_layer_frame(&v); } },
         "shoulder_shape_result" => { crate::shoulder_shape_api::receive(inspection_epoch, &v); if v.get("doc_state").is_some() { state.on_layer_frame(&v); } },
         "leg_shape_result" => { crate::leg_shape_api::receive(inspection_epoch, &v); if v.get("doc_state").is_some_and(|doc| doc.is_object()) { state.on_layer_frame(&v); } },
@@ -481,6 +505,7 @@ fn handle_event(state: &Arc<AppState>, line: &str,inspection_epoch:[u8;16]) {
             crate::torso_length_api::ready(inspection_epoch, v["torso_length_protocol"].as_u64() == Some(1));
             crate::waist_length_api::ready(inspection_epoch, v["waist_length_protocol"].as_u64() == Some(1));
             crate::head_size_api::ready(inspection_epoch, v["head_size_protocol"].as_u64() == Some(1));
+            crate::background_material_api::ready(inspection_epoch, v["background_material_library_protocol"].as_u64()==Some(1));
             crate::light_glow_api::ready(inspection_epoch, if v["light_glow_protocol"].as_u64()==Some(1) { &v["light_glow_capability"] } else { &Value::Null });
             crate::lens_blur_api::ready(inspection_epoch, if v["lens_blur_protocol"].as_u64()==Some(3) { &v["lens_blur_capability"] } else { &Value::Null });
             crate::expression_replacement_api::ready(inspection_epoch, v["expression_replacement_protocol"].as_u64()==Some(1) && v["expression_replacement_operation_id"]=="lnx.expression_replacement.v1" && v["expression_replacement_available"]==true);
@@ -612,6 +637,7 @@ fn handle_event(state: &Arc<AppState>, line: &str,inspection_epoch:[u8;16]) {
         | "project_state" => {
             // 项目面：五个名字进同一格（最后一条就是当前事实）。载荷只有名字与计数，
             // 整条回显：装机自证要拿它比“重开后 dirty 说的是不是真话”
+            crate::creative_selection_api::project_reopened(inspection_epoch, &v);
             state.on_project(&v);
             println!("M0_PROJECT {line}");
         }

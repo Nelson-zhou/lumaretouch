@@ -74,7 +74,7 @@ export function useIdBackground(documentId:string,hostRevision:number,available:
   setMessage(reply.success?(p.kind==='preview'?`${label}候选已生成，请审核真实前后图像。`:p.kind==='source'?`已读取不可变源图，核验完成后可绘制${label}范围草稿。`:p.action==='id_original_shadow_apply'?'原图阴影修改已确认。':p.action==='id_spill_apply'?'祛染修改已确认。':'已确认当前背景状态。'):(reply.error||'证件照背景未应用'));
   setUncertain(false);pending.current=null;if(p.kind==='mutation'&&reply.success)changed.current?.();
  }
- async function request(action:string,fields:Record<string,unknown>={},read=false){
+ async function request(action:string,fields:Record<string,unknown>={},read=false,frozenCaller?:{document_id:string;recipe_document_id:string;recipe_revision:string}){
   const kind:Kind=action==='id_spill_paint_source'||action==='id_original_shadow_paint_source'?'source':action==='id_spill_preview'||action==='id_original_shadow_preview'?'preview':read?'read':'mutation';
   if(flight.current||!available||(kind!=='read'&&uncertainRef.current))return;
   // An unresolved mutation must be reconciled by its original ID, never replaced with a new read.
@@ -95,6 +95,7 @@ export function useIdBackground(documentId:string,hostRevision:number,available:
     setMessage('准备预览时编辑或草稿已变化，请检查当前参数后重新生成审核。');return;
    }
    const saved=reportRef.current,fence=saved?{recipe_document_id:saved.recipe_document_id,recipe_revision:saved.recipe_revision}:null;
+   if(frozenCaller&&(frozenCaller.document_id!==doc||frozenCaller.recipe_document_id!==fence?.recipe_document_id||frozenCaller.recipe_revision!==fence?.recipe_revision)){setMessage('背景素材选择时的照片配方已变化，未发送修改。');return;}
    if(kind!=='read'&&(!fence?.recipe_document_id||typeof fence.recipe_revision!=='string')){setMessage('缺少当前配方版本，请重新读取状态');return;}
    if(action==='id_spill_apply'&&(!frozenReview||reviewAtStart!==reviewEpoch.current||reviewRef.current!==frozenReview||frozenReview.recipe_document_id!==fence?.recipe_document_id||frozenReview.recipe_revision!==fence?.recipe_revision)){
     clearSpillReview();setMessage('准备应用时照片配方已变化，请重新生成祛染审核。');return;
@@ -112,7 +113,7 @@ export function useIdBackground(documentId:string,hostRevision:number,available:
    else if(kind==='source'){clearReviews();clearPaintSource();}
    const p:Pending={id,document:doc,kind,action,fence,reviewEpoch:reviewEpoch.current,shadowReviewEpoch:shadowReviewEpoch.current,sourceEpoch:sourceEpoch.current};pending.current=p;
    const admission=await invoke<unknown>('id_background_request',{request:payload}),expected={action,request_id:id,document_id:doc};
-   const notSent=original?originalShadowNotSent(admission,expected):spillAction(action)&&spillNotSent(admission,expected);
+   const notSent=original?originalShadowNotSent(admission,expected):spillNotSent(admission,expected);
    if(notSent){
     if(doc===current.current&&token===generation.current){pending.current=null;setUncertain(false);if(original)clearShadowReview();else clearSpillReview();setMessage(`未发送，照片未修改：${(admission as {error:string}).error}`);}return;
    }

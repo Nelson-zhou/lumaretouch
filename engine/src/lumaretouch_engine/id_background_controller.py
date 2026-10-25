@@ -34,14 +34,14 @@ class Controller:
                 fields|={'recipe_document_id','recipe_revision'}
                 version=e._document_versions().version(e._docs[e._doc_index])
                 if p.get('recipe_document_id')!=version.document_id or p.get('recipe_revision')!=str(version.revision):raise ValueError('背景配方已变化，请刷新后重新检查')
-            extra={'id_state':set(),'id_clear':set(),'id_import':{'path'},'id_set':{'recipe'},'id_review':{'category','object_ids','reviewed'}}
+            extra={'id_state':set(),'id_clear':set(),'id_import':{'path'},'id_import_material':{'selection'},'id_set':{'recipe'},'id_review':{'category','object_ids','reviewed'}}
             if action not in extra or set(p)!=fields|extra[action]:raise ValueError('证件照换背景请求字段无效')
             if action=='id_state':result.update(success=True,report=R.report(e));return
             reason=e._guard_editable('ID background')
             if reason:raise ValueError(reason)
             value=S.check(getattr(e,'_id_background',None));bundle=getattr(e,'_id_background_bundle',None)
             from .original_shadow_state import active as shadow_active
-            if action in ('id_set','id_import','id_review') and shadow_active(S.original_shadow_of(value)):
+            if action in ('id_set','id_import','id_import_material','id_review') and shadow_active(S.original_shadow_of(value)):
                 raise ValueError('原图阴影启用时不能未经前后审核更换背景或主体范围；请先通过原图阴影审核关闭，再调整并重新审核。清除背景仍可用')
             derived=D.record(e) is not None
             source=D.binding(e) if derived else None
@@ -49,8 +49,12 @@ class Controller:
                 from .creative_derived_id_background import validate_state
                 validate_state(e)
             if action=='id_clear':value['enabled']=False;value['background']={**value['background'],'kind':'none','color':None,'asset':None};bundle=None
-            elif action=='id_import':
-                asset=A.read(p['path']);bundle=A.pack(asset)
+            elif action in ('id_import','id_import_material'):
+                if action == 'id_import_material':
+                    from .background_material_selection import resolve_for_id_background
+                    asset=resolve_for_id_background(p['selection'])
+                else: asset=A.read(p['path'])
+                bundle=A.pack(asset)
                 value['background']={**value['background'],'kind':'asset','asset':asset.binding,'color':value['background']['color'] or [255,255,255]}
             elif action=='id_review':
                 from .id_background_support import review

@@ -1045,6 +1045,9 @@ export interface EngineStatus {
     chin_length_available?: boolean;
     chin_length_reason?: string | null;
     creative_document_protocol?: number;
+    creative_selection_protocol?: number;
+    creative_selection_capability?: {available: boolean; abi: number; reason: string | null; manual_only: boolean};
+    background_material_library_protocol?: number;
     canvas_guides_protocol?: number;
     export_destination_protocol?: number;
     colour_grading_protocol?: number;

@@ -9,8 +9,9 @@ import {pickerLabels,type PickerMode} from './model';
 import type {SelectedSampleReference} from '../sampleLibrary/model';
 import {SpillRemovalPanel} from '../spillRemoval/SpillRemovalPanel';
 import {OriginalShadowPanel} from '../originalShadow/OriginalShadowPanel';
+import type {BackgroundMaterialOwner} from '../backgroundMaterials';
 import {originalShadowActive} from '../originalShadow/model';
-export function IdBackgroundPanel({documentId,hostRevision,disabled,available,masks,onChanged,onBusy,selectedReference,onSelectReference,pickerDisabled}:{documentId:string;hostRevision:number;disabled:boolean;available:boolean;masks?:LocalMaskReport;onChanged?:()=>void;onBusy?:(busy:boolean)=>void;selectedReference?:SelectedSampleReference|null;onSelectReference?:()=>void;pickerDisabled?:boolean}){
+export function IdBackgroundPanel({documentId,hostRevision,disabled,available,masks,onChanged,onBusy,selectedReference,onSelectReference,pickerDisabled,materials,materialTargetKey}:{documentId:string;hostRevision:number;disabled:boolean;available:boolean;masks?:LocalMaskReport;onChanged?:()=>void;onBusy?:(busy:boolean)=>void;selectedReference?:SelectedSampleReference|null;onSelectReference?:()=>void;pickerDisabled?:boolean;materials:BackgroundMaterialOwner;materialTargetKey:string}){
  const owner=useIdBackground(documentId,hostRevision,available,onChanged),[draft,setDraft]=useState<Recipe|null>(null),[hexText,setHexText]=useState(''),[ids,setIds]=useState<string[]>([]),[reviewed,setReviewed]=useState(false),[dialogError,setDialogError]=useState(''),[picking,setPicking]=useState(false),[pickerMode,setPickerMode]=useState<PickerMode>('original');
  const current=useRef(documentId);current.current=documentId;
  useEffect(()=>{setDraft(owner.report?structuredClone(owner.report.recipe):null);setReviewed(false);setIds([]);setHexText(owner.report?hex(owner.report.recipe.background.color??[255,255,255]):'');},[owner.report?.recipe_document_id,owner.report?.recipe_revision,documentId]);
@@ -19,6 +20,17 @@ export function IdBackgroundPanel({documentId,hostRevision,disabled,available,ma
  const selectedColor:RGB=draft?.background.color??[255,255,255];
  const originalActive=originalShadowActive(owner.report?.recipe.version===3?owner.report.recipe.original_shadow:null);
  const locked=disabled||owner.busy||owner.uncertain||!available||picking,backgroundLocked=locked||originalActive;
+ const materialContext=useRef({documentId,hostRevision,materialTargetKey,backgroundLocked,recipeDocumentId:owner.report?.recipe_document_id,recipeRevision:owner.report?.recipe_revision});
+ materialContext.current={documentId,hostRevision,materialTargetKey,backgroundLocked,recipeDocumentId:owner.report?.recipe_document_id,recipeRevision:owner.report?.recipe_revision};
+ function chooseMaterial(){
+  const captured={...materialContext.current};
+  if(captured.backgroundLocked||!captured.recipeDocumentId||!captured.recipeRevision)return;
+  materials.show({targetKey:captured.materialTargetKey,onChoose:async selection=>{
+   const now=materialContext.current;
+   if(now.backgroundLocked||now.documentId!==captured.documentId||now.hostRevision!==captured.hostRevision||now.materialTargetKey!==captured.materialTargetKey||now.recipeDocumentId!==captured.recipeDocumentId||now.recipeRevision!==captured.recipeRevision)throw Error('照片或背景配方已变化，请从当前照片重新选择素材。');
+   await owner.request('id_import_material',{selection},false,{document_id:captured.documentId,recipe_document_id:captured.recipeDocumentId!,recipe_revision:captured.recipeRevision!});
+  }});
+ }
  const edit=(patch:Partial<ReturnType<typeof editable>>)=>{if(draft){owner.clearReviews();setDraft({...draft,...patch});}};
  const bg=(patch:Partial<Background>)=>draft&&edit({background:{...draft.background,...patch}}),shadow=(patch:Partial<Shadow>)=>draft&&edit({shadow:{...draft.shadow,...patch}});
  const color=(value:RGB)=>{bg({kind:draft?.background.kind==='asset'?'asset':'solid',color:value});setHexText(hex(value));};
@@ -39,7 +51,7 @@ export function IdBackgroundPanel({documentId,hostRevision,disabled,available,ma
  <button type="button" data-control-id={control('1836579d78')} disabled={draft.favourites.length>=6||draft.favourites.some(c=>hex(c)===hex(selectedColor))} onClick={()=>edit({favourites:[...draft.favourites,[...selectedColor] as RGB]})}>收藏颜色（{draft.favourites.length}/6）</button>
  <div className="idSwatches">{draft.favourites.map((c,i)=><span key={hex(c)}><button type="button" style={{borderColor:hex(c)}} onClick={()=>color(c)}>{hex(c)}</button><button type="button" aria-label={`删除收藏颜色 ${hex(c)}`} onClick={()=>edit({favourites:draft.favourites.filter((_,j)=>j!==i)})}>×</button></span>)}</div>
  </fieldset>
- <fieldset data-control-id={control('7f1d9dd04c')}><legend>我的背景素材</legend><button type="button" onClick={()=>void importAsset()}>导入自有背景</button><p>JPG / PNG / TIF / BMP，≤10MB。保留不可变文件与色彩绑定；不含外部授权图库。</p>{draft.background.asset&&<><p>{draft.background.asset.path.split(/[\\/]/).at(-1)} · {draft.background.asset.width}×{draft.background.asset.height} · {draft.background.asset.bits} 位</p><button type="button" onClick={()=>bg({kind:'asset'})}>使用此素材</button></>}
+ <fieldset data-control-id={control('7f1d9dd04c')}><legend>我的背景素材</legend><button type="button" onClick={()=>void importAsset()}>导入自有背景</button><button type="button" disabled={!materials.enabled||!owner.report} onClick={chooseMaterial}>从本地背景素材库选择</button><button type="button" disabled={!materials.enabled} onClick={()=>materials.show()}>管理背景素材库</button><p>JPG / PNG / TIF / BMP，≤10MB。保留不可变文件与色彩绑定；不含外部授权图库。</p>{draft.background.asset&&<><p>{draft.background.asset.path.split(/[\\/]/).at(-1)} · {draft.background.asset.width}×{draft.background.asset.height} · {draft.background.asset.bits} 位</p><button type="button" onClick={()=>bg({kind:'asset'})}>使用此素材</button></>}
  <fieldset data-control-id={control('4c863ef473')}><legend>素材位置与大小</legend>{(['center','stretch'] as const).map((fit,i)=><button type="button" key={fit} data-control-id={control(i?'5824d5469d':'cd761bd630')} aria-pressed={draft.background.fit===fit} onClick={()=>bg(fit==='stretch'?{fit,x:0,y:0,scale:1}:{fit})}>{i?'拉伸填充':'居中对齐'}</button>)}
  {numeric('水平位置（源图宽度倍数）',draft.background.x,-2,2,.01,'6300a5fbb6',x=>bg({x}),draft.background.fit==='stretch')}{numeric('垂直位置（源图高度倍数）',draft.background.y,-2,2,.01,'8fa4b68f8d',y=>bg({y}),draft.background.fit==='stretch')}{numeric('大小',draft.background.scale,.05,10,.05,'09c2aca416',scale=>bg({scale}),draft.background.fit==='stretch')}</fieldset></fieldset>
  <fieldset data-control-id={control('a2015579d0')}><legend>独立审核保留范围</legend>{categories.map(c=><label key={c.key} data-control-id={control(c.id)}><input type="radio" name={`id-support-${documentId}`} checked={draft.selected_support===c.key} onChange={()=>{edit({selected_support:c.key});setIds([]);setReviewed(false);}}/>{c.name} · {draft.support[c.key]?'已保存审核快照':'未审核'}</label>)}
