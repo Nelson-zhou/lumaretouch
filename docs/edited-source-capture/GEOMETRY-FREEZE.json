@@ -1,0 +1,120 @@
+{
+  "schema_version": 1,
+  "baseline_commit": "d89c9bd6c161c3f80a44fc6fa3cef89186847919",
+  "baseline_tree": "fd71c48521bee63ed8d379f195100717b6c9ee85",
+  "date": "2026-10-25",
+  "requirement_ids": [
+    "LNX-REF-WF-165438-165adae6a7"
+  ],
+  "status": "SOURCE_CONNECTED_BOUNDED_PARTIAL_ALL_RUNTIME_ACCEPTANCE_UNRUN",
+  "scope": "Explicit capture strategy2 defers arbitrary-angle geometry only across proven-neutral finishing, reuses exact old bilinear sampler through bounded float64 gathers, keeps source-owned full-resolution capture and unchanged final lens review/history. No new numerical algorithm count.",
+  "manifest_policy": "Exact15 payload files below plus this manifest,16 total. No older manifests changed; old sparse directory untouched.",
+  "source_checks": {
+    "python_ast": 10,
+    "json": "parsed",
+    "whitespace": "All15 payload files checked including new files; git diff --check clean",
+    "independent_review": "Actual sampler arithmetic/known backing/scratch, phase sub-budget, float64 tail and bridge/source/publication ordering reviewed; no concrete open blocker found",
+    "legacy_geometry_sha256": "d8926644d923b5589eb112ac1ec3bb3a96c908789c9f53968aaecb8f618b4985",
+    "generic_export_and_core": "unchanged",
+    "new_fixture_functions": {
+      "bounded_geometry": 24,
+      "geometry_bridge": 19,
+      "admission_additions": 9
+    },
+    "file_lines": {
+      "App.tsx": 2152,
+      "main.rs": 2054,
+      "server.py": 7050
+    }
+  },
+  "remaining": [
+    "All numerical byte-parity fixtures, genuine photos, decoder/render/export/reopen and cancellation-race acceptance remain UNRUN",
+    "24MP performance and process RSS are unmeasured; rotation canvas growth can exceed unchanged budgets",
+    "Generic export float64 neutral-PhotoDetail validation mismatch remains; this explicit strategy is not whole-flow old runtime parity",
+    "Unsnapped angles plus active CG/SC finishing remain unadmitted; no cast/reorder or silently dropped effects",
+    "Active portrait/body/local/background/repair families,custom LUTs,RAW/TIFF,transparent/HDR,automatic depth and lens batch/editable reopen remain incomplete"
+  ],
+  "unrun": [
+    "Product imports/execution",
+    "Tests/build/compiler/typecheck",
+    "Model download/inference",
+    "Numerical/performance/RSS/photo/export/reopen acceptance"
+  ],
+  "files": [
+    {
+      "path": "docs/development/handbook-traceability.json",
+      "bytes": 485565,
+      "sha256": "83505bda4be9061f78c6a6896ac5a9a2244e4d08e4651e5ecb1eafd06c67d98e"
+    },
+    {
+      "path": "docs/edited-source-capture/ADMISSION.md",
+      "bytes": 12157,
+      "sha256": "b341e68159cd98c49fb25d01b82e631d7235aceacda59bcad1f1c67021b8d9fe"
+    },
+    {
+      "path": "docs/edited-source-capture/GEOMETRY-INTEGRATION.md",
+      "bytes": 4066,
+      "sha256": "00f9707de5004bf0c8ef20d2a2d3e1a1d0673fef62997969e314f4fece0aaec1"
+    },
+    {
+      "path": "docs/edited-source-capture/GEOMETRY.md",
+      "bytes": 11118,
+      "sha256": "4280e14881313fbc9f15022ac4c5385fc204a1216fe070e6f4ba7a536b97bd12"
+    },
+    {
+      "path": "docs/edited-source-capture/INTEGRATION.md",
+      "bytes": 6186,
+      "sha256": "48b8f125bb3fdcdfc7dd4adf52432687797553abe2970c5494f705b4bf53d03d"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/creative_capture_geometry.py",
+      "bytes": 14071,
+      "sha256": "9a08ad15683510d3e69995c7b941455bedfd1db378e167447960f3684b7b5eed"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/creative_document_base.py",
+      "bytes": 23598,
+      "sha256": "212403055ef0b6e6dbc84a96874b26724d84771f7eb3b73403c11cc0c688e8e7"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/creative_edited_capture.py",
+      "bytes": 13657,
+      "sha256": "875c348e449964dc0a0dcae633762fde7027ed11658322fc36eb4d42f447d362"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/creative_edited_capture_admission.py",
+      "bytes": 43250,
+      "sha256": "3d36be7cc5e1b9a1c7d012ff4bb79a894bfe72ec97cf2690c9cad45e6b2d39c2"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/lens_blur_admission.py",
+      "bytes": 3395,
+      "sha256": "621070680cbf205e0b761e359b3dd0deb0113a99f519fc37baab260ba73eb3e0"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/lens_blur_host.py",
+      "bytes": 33509,
+      "sha256": "a13aedc4d92f2e92174403531a5eee5722a48412ba26962e4bd9c9707bbd832d"
+    },
+    {
+      "path": "engine/tests/test_creative_capture_geometry_flow_unrun.py",
+      "bytes": 20771,
+      "sha256": "a7b0075624a5fce32a3afd55f33d8020df0bf9cb7d6c721abfab84f7ffb6aad5"
+    },
+    {
+      "path": "engine/tests/test_creative_capture_geometry_unrun.py",
+      "bytes": 16338,
+      "sha256": "770140b1bf6f1cf1bafb78373a6a7eb8535211129da7b6df992dd482307c5dcf"
+    },
+    {
+      "path": "engine/tests/test_creative_edited_capture_admission_unrun.py",
+      "bytes": 26129,
+      "sha256": "530c29558f25357b636bda2bc755a873db661a3994725134e712dc7ab475c46e"
+    },
+    {
+      "path": "engine/tests/test_creative_edited_capture_flow_unrun.py",
+      "bytes": 25475,
+      "sha256": "ddd5afb139a1a47f733eccb7a64cfe544677aa0f037a3c2cb722c99632435575"
+    }
+  ]
+}

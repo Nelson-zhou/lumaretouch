@@ -34,7 +34,7 @@ def source_admission(asset, budget, *, display_reserve, renderers=('direct-v1',)
 def source_notice(source,budget,*,renderers=('direct-v1',)):
     if 'cohort-fft-v2' in renderers:
         return (' 可显式选择 v2 完整光圈渲染；仅人工恒定基准面。羽化残差、笔画扫描、FFT、保留数据和协作式截止均有独立预算，超过即拒绝，不简化或缩图。'
-                '原始 JPEG/PNG 的已支持全局调色可走分阶段完整来源捕获；活动人像、重型全局效果、RAW/TIFF 等仍受原有预算限制。不是任意 24MP 工作流或性能验收。')
+                '原始 JPEG/PNG 的已支持全局调色可走分阶段完整来源捕获；任意角裁剪旋转仅在后置效果均中性时使用有预算的原采样公式。活动人像、重型全局效果、RAW/TIFF 等仍受原有预算限制。不是任意 24MP 工作流或性能验收。')
     width,height=source['width'],source['height']
     pixels=width*height
     maximum=.5

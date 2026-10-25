@@ -306,7 +306,7 @@ class Service:
                                           max_bytes=maximum.max_bytes, cancelled=stopped,
                                           neutral_import_version=1 if 'cohort-fft-v2' in cap['renderers'] else 0,
                                           allow_legacy_import_budget_fallback='direct-v1' in cap['renderers'],
-                                          edited_capture_version=1 if 'cohort-fft-v2' in cap['renderers'] else 0)
+                                          edited_capture_version=2 if 'cohort-fft-v2' in cap['renderers'] else 0)
             del assets, state  # Release imported intermediates before display staging.
             _poll(stopped)
             require_photo_return(asset)  # Exact opaque SDR gate, never a clip.

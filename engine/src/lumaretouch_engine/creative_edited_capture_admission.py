@@ -68,6 +68,8 @@ class CaptureMemoryPlan:
     phases: tuple[tuple[str, int], ...]
     owners: tuple[tuple[str, tuple[tuple[str, int], ...]], ...]
     max_bytes: int
+    geometry_max_bytes: int = 0
+    geometry_version: int = 0
     bounds_kind: str = 'application-working-set-with-conservative-native-reserves'
     runtime_verified: bool = False
 
@@ -285,7 +287,8 @@ def _cube_fingerprint(cube):
     return (_freeze(metadata), digest.hexdigest()), int(grid.size) * 8
 
 
-def _classify(snapshot):
+def _classify(snapshot, *, geometry_version=0):
+    _integer(geometry_version, 'geometry version', maximum=1)
     from . import white_balance_recipe as WB
     from .ops import curves as CURVES, levels as LEVELS, geometry as G
     from .ops.exposure import check_params as check_exposure
@@ -369,7 +372,8 @@ def _classify(snapshot):
     check_amount(snapshot['lut_amount'])
     cube, _ = _cube_fingerprint(snapshot['lut'])
     geom = G.check(snapshot['crop_rect'], snapshot['crop_rotation'])
-    if G._snapped_quarter_turn(geom[-1]) is None:
+    arbitrary = G._snapped_quarter_turn(geom[-1]) is None
+    if arbitrary and geometry_version == 0:
         reasons.append('arbitrary-angle geometry needs separately admitted renderer')
     lm = LM.check(snapshot.get('local_masks'))
     if lm['recipe']['objects'] or lm['source'] is not None or lm['semantic_owner'] is not None:
@@ -439,11 +443,15 @@ def _classify(snapshot):
     fingerprint = _freeze(dict(params=params, grade=grade, exposure=exposure,
         exposure_ref_k=reference, wb_options=options, hsl=hsl, curves=curves,
         levels=levels, lut=cube, lut_amount=float(snapshot['lut_amount']), **native))
-    features = ['global-colour', 'integer-crop-quarter-turn']
+    features = ['global-colour', 'bounded-arbitrary-angle' if arbitrary else 'integer-crop-quarter-turn']
     if cube is not None:
         features.append('ordinary-cube')
     if CG.active(native['colour_grading']) or SC.active(native['selective_colour']):
         features.append('native-full-colour')
+        if arbitrary:
+            # The legacy sampler returns f64. Native finishing requires f32;
+            # casting or reordering an active effect would change the contract.
+            reasons.append('arbitrary angle with active postgeometry native colour')
     if PC.active(native['primary_calibration']):
         features.append('primary-calibration')
     if snapshot.get('people') is not None:
@@ -451,20 +459,23 @@ def _classify(snapshot):
     return Eligibility(not reasons, tuple(dict.fromkeys(reasons)), tuple(features), fingerprint)
 
 
-def classify_snapshot(snapshot):
+def classify_snapshot(snapshot, *, geometry_version=0):
     """Before preparation, reject optimization without changing selected effects.
 
     Neutral people candidates still need definitive original source proof in the
-    common renderer. This result never authorizes skipping preparation itself.
+    common renderer. Version 0 preserves quarter-turn-only selection. Explicit
+    version 1 also permits bounded arbitrary geometry after unchanged export,
+    only when every postgeometry effect is neutral. This result never authorizes
+    skipping preparation itself or changing the generic export geometry path.
     """
     try:
-        return _classify(snapshot)
+        return _classify(snapshot, geometry_version=geometry_version)
     except (ValueError, TypeError, KeyError, AttributeError, OverflowError) as error:
         return Eligibility(False, ('snapshot admission: ' + str(error),))
 
 
-def snapshot_eligible(snapshot):
-    return classify_snapshot(snapshot).eligible
+def snapshot_eligible(snapshot, *, geometry_version=0):
+    return classify_snapshot(snapshot, geometry_version=geometry_version).eligible
 
 
 # Frozen source-audited field inventory. Future fields fail closed.
@@ -520,13 +531,14 @@ def _snapshot_from_spec(data, snapshot):
     return result
 
 
-def validate_spec(spec, snapshot=None, *, skipped=()):
+def validate_spec(spec, snapshot=None, *, skipped=(), geometry_version=0):
     """Return eligible Eligibility or raise on postbuild recipe/resource drift.
 
     Does not call mutating ExportSpec.check or replace downstream validation.
     Private original-source context is structural evidence only; it never alone
     authorizes bypassing the definitive neutral-people gate.
     """
+    _integer(geometry_version, 'geometry version', maximum=1)
     if skipped:
         raise AdmissionError('Edited capture cannot omit export effects')
     data = _spec_data(spec)
@@ -550,11 +562,11 @@ def validate_spec(spec, snapshot=None, *, skipped=()):
             raise AdmissionError('Unaccounted postbuild private owner: ' + key)
     if '_creative_capture_original_source' in data:
         _check_source_context(data['_creative_capture_original_source'])
-    result = classify_snapshot(_snapshot_from_spec(data, snapshot))
+    result = classify_snapshot(_snapshot_from_spec(data, snapshot), geometry_version=geometry_version)
     if not result.eligible:
         raise AdmissionError('Postbuild edited capture rejected: ' + '; '.join(result.reasons))
     if snapshot is not None:
-        original = classify_snapshot(snapshot)
+        original = classify_snapshot(snapshot, geometry_version=geometry_version)
         if not original.eligible or result.fingerprint != original.fingerprint:
             raise AdmissionError('Postbuild export differs from admitted colour recipe')
         if (data['people'] is None) != (snapshot.get('people') is None):
@@ -564,7 +576,7 @@ def validate_spec(spec, snapshot=None, *, skipped=()):
 
 def plan_capture(metadata, snapshot=None, *, spec=None, max_bytes,
                  retained_bytes=0, persistent_retained_bytes=0,
-                 host_lease_bytes=0, tile=DEFAULT_TILE):
+                 host_lease_bytes=0, tile=DEFAULT_TILE, geometry_version=0):
     """Named conservative phases before genuine decode and again after build.
 
     Use public inspect_encoded_source metadata. retained_bytes includes all
@@ -572,10 +584,14 @@ def plan_capture(metadata, snapshot=None, *, spec=None, max_bytes,
     caller state is already included there, then charged separately in output
     tail phases after transient roots end. Other live session owners require the
     host lease. All source identity, opacity and decoder gates remain required.
+    Geometry version 1 is explicit deferred bounded sampling, not a change to
+    generic export. geometry_max_bytes covers geometry's source backing, output
+    and scratch after subtracting every nongeometry live owner from max_bytes.
     """
     from .creative_document_assets import MAX_PIXELS, MAX_ORIGINAL_BYTES
     from .creative_document_import_bounded import ImportMemoryPlan
     from .ops import geometry as G
+    _integer(geometry_version, 'geometry version', maximum=1)
     _integer(max_bytes, 'capture budget', minimum=1, maximum=MAX_WORK_BYTES)
     _integer(retained_bytes, 'retained capture bytes')
     _integer(persistent_retained_bytes, 'persistent retained capture bytes')
@@ -610,21 +626,22 @@ def plan_capture(metadata, snapshot=None, *, spec=None, max_bytes,
     if n > MAX_PIXELS:
         raise AdmissionError('Source exceeds canonical pixel limit')
     if spec is None:
-        eligibility = classify_snapshot(snapshot)
+        eligibility = classify_snapshot(snapshot, geometry_version=geometry_version)
         if not eligibility.eligible:
             raise AdmissionError('Snapshot not eligible: ' + '; '.join(eligibility.reasons))
         params = snapshot['params']
         margin = 2 * params['texture_radius'] + 6 * params['radius']
         cube = snapshot['lut']
     else:
-        eligibility = validate_spec(spec, snapshot)
+        eligibility = validate_spec(spec, snapshot, geometry_version=geometry_version)
         data = _spec_data(spec)
         from .export import ExportSpec
         margin = ExportSpec.margin_px(spec)
         cube = data['cube']
     geometry = ((0., 0., 1., 1.), 0.) if snapshot is None else (snapshot['crop_rect'], snapshot['crop_rotation'])
     x0, y0, x1, y1, rotation = G.check(*geometry)
-    if G._snapped_quarter_turn(rotation) is None:
+    arbitrary = G._snapped_quarter_turn(rotation) is None
+    if arbitrary and geometry_version == 0:
         raise AdmissionError('Unsnapped geometry requires its separate bounded admission')
     ow, oh = G.out_size(width, height, *geometry)
     m = ow * oh
@@ -649,6 +666,7 @@ def plan_capture(metadata, snapshot=None, *, spec=None, max_bytes,
     native = ('native-allocator-reserve', NATIVE_RESERVE)
     last_tile = ('last-export-rgb-tile', 12 * t)
     block = min(BLOCK_PIXELS, m)
+    geometry_max_bytes = 0  # no deferred sampler for default/snapped geometry
     owners = [
         ('snapshot-recipe-validation', render + (
              ('retained-array-validation', census.validation_scratch_bytes), native)),
@@ -661,16 +679,34 @@ def plan_capture(metadata, snapshot=None, *, spec=None, max_bytes,
         ('common-tile-render', render + (integer, ('stitched-float-rgb', 12 * n),
              ('halo-colour-workspace', TILE_BYTES_PER_PIXEL * t),
              ('lut-upload-copies', table_upload), native)),
-        ('crop-quarter-turn', render + (integer, ('stitched-rgb-backing', 12 * n),
-             ('integer-crop-copy', 12 * c), ('quarter-turn-output', 12 * m), last_tile, native)),
     ]
+    if arbitrary:
+        from . import creative_capture_geometry as bounded_geometry
+        if (bounded_geometry.GEOMETRY_VERSION != 'edited-capture-numpy-geometry-v1'
+                or bounded_geometry.BLOCK_PIXELS != BLOCK_PIXELS):
+            raise AdmissionError('Bounded geometry strategy changed since capture admission audit')
+        # Same exported conservative component family as actual-array admission.
+        # No dummy raster, full f64 source conversion or pixel scan is needed.
+        scratch = tuple(('geometry-' + name, multiplier * block)
+                        for name, multiplier in bounded_geometry.ARBITRARY_SCRATCH_PER_PIXEL)
+        geometry_live = render + (integer, last_tile, native)
+        geometry_max_bytes = max_bytes - sum(amount for _, amount in geometry_live)
+        owners.append(('bounded-arbitrary-geometry', geometry_live + (
+            ('stitched-rgb-backing', 12 * n), ('arbitrary-float64-output', 24 * m),
+            *scratch,
+            ('geometry-array-workspace', bounded_geometry.ARRAY_WORKSPACE_RESERVE),
+            ('geometry-metadata', bounded_geometry.METADATA_RESERVE))))
+    else:
+        owners.append(('crop-quarter-turn', render + (integer, ('stitched-rgb-backing', 12 * n),
+            ('integer-crop-copy', 12 * c), ('quarter-turn-output', 12 * m), last_tile, native)))
     if 'native-full-colour' in eligibility.features:
         owners.append(('native-colour-finishing', render + (integer,
             ('retained-stitch-backing', 12 * n), ('native-input-output', 24 * m),
             ('validation-contiguous-return-reserve', 36 * m), last_tile, native)))
-    # A small contiguous crop can still retain 12N original backing.
+    # A small contiguous crop can still retain 12N original backing. Deferred
+    # arbitrary geometry owns f64 output; never price that result as f32.
     owners.extend((
-        ('rgb-to-canonical', tail + (('output-rgb-backing', max(12 * n, 12 * m)),
+        ('rgb-to-canonical', tail + (('output-rgb-backing', max(12 * n, (24 if arbitrary else 12) * m)),
             ('private-rgba-sink', 16 * m), ('row-transfer-staging', 48 * block),
             ('array-workspace', VALIDATION_RESERVE))),
         ('immutable-freeze', tail + (('mutable-and-immutable-rgba', 32 * m),)),
@@ -678,7 +714,8 @@ def plan_capture(metadata, snapshot=None, *, spec=None, max_bytes,
     ))
     phases = tuple((name, sum(amount for _, amount in entries)) for name, entries in owners)
     plan = CaptureMemoryPlan(width, height, ow, oh, bits, margin, t, retained,
-                             phases, tuple(owners), max_bytes)
+                             phases, tuple(owners), max_bytes,
+                             geometry_max_bytes=geometry_max_bytes, geometry_version=geometry_version)
     if plan.peak_bytes > max_bytes:
         raise CaptureBudgetExceeded('%s requires declared working set %d bytes; budget is %d' %
                                    (plan.peak_phase, plan.peak_bytes, max_bytes))

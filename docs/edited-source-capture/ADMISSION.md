@@ -7,11 +7,11 @@ imports, test execution, builds, typechecks, inference or downloads were run.
 
 ## Public interfaces
 
-- `classify_snapshot(snapshot) -> Eligibility` is the pre-preparation gate.
+- `classify_snapshot(snapshot, *, geometry_version=0) -> Eligibility` is the pre-preparation gate.
   `snapshot_eligible` is its Boolean wrapper. Unknown/incomplete fields, malformed
   records and unsupported recipe families return not eligible. Keep the complete
   recipe and select the existing legacy path. Never neutralize actual inputs.
-- `validate_spec(spec, snapshot=None, *, skipped=()) -> Eligibility` accepts only
+- `validate_spec(spec, snapshot=None, *, skipped=(), geometry_version=0) -> Eligibility` accepts only
   an ordinary `ExportSpec`, checks its explicit audited field inventory and
   normalized colour fingerprint, and raises `AdmissionError` on rejection. It
   neither mutates the spec nor calls the mutating `ExportSpec.check` method.
@@ -30,7 +30,8 @@ imports, test execution, builds, typechecks, inference or downloads were run.
   mask duplication, not merely the number of unique input owners. This does not
   retrospectively admit a host `_capture_state()` already performed upstream.
 - `plan_capture(metadata, snapshot=None, *, spec=None, max_bytes,
-  retained_bytes=0, persistent_retained_bytes=0, host_lease_bytes=0, tile=1024)`
+  retained_bytes=0, persistent_retained_bytes=0, host_lease_bytes=0, tile=1024,
+  geometry_version=0)`
   returns an immutable plan or raises `CaptureBudgetExceeded`. Call before real
   decode, then again with the built spec and actual retained roots. Metadata is
   the public `inspect_encoded_source` result, never its private parser source.
@@ -55,8 +56,24 @@ gains and algorithm identity, legacy tone and global grade, HSL, levels, support
 curve recipes, validated ordinary CubeLut and primary calibration. Colour grading
 and selective colour use a separately reserved whole-frame finishing phase.
 Crop and strictly snapped quarter turns retain the common geometry functions.
-Unsnapped arbitrary angles remain outside this admission even if a separate
-bounded geometry implementation is present.
+Geometry version 0 remains the default and rejects unsnapped arbitrary angles.
+Explicit integer version 1 also admits the separately budgeted bounded sampler;
+unknown versions, including Boolean values, fail closed. The Boolean
+`snapshot_eligible` wrapper accepts the same keyword. This is not a change to
+generic export defaults or source-family eligibility.
+See [GEOMETRY-INTEGRATION.md](GEOMETRY-INTEGRATION.md) for the explicit capture
+strategy boundary; the admission keyword is independent of saved recipe versions.
+
+For unsnapped angles only, the explicit capture strategy runs unchanged export
+with no geometry, then applies bounded geometry after all neutral finishing
+stages. Active colour grading or selective colour with an unsnapped angle is
+rejected before preparation; primary calibration remains a tile-stage edit.
+Other active postgeometry families are already outside this cohort. No spec
+geometry marker is admitted, no active effect is reordered, and no float64-to-
+float32 finishing conversion is added. The old sampler returns float64, while
+the existing photo-detail wrapper rejects float64 even when neutral. Accordingly
+the numerical target is the unchanged legacy sampler applied to the unchanged
+pregeometry export, not equivalence to an old full flow that refused this dtype.
 
 Strength must be zero, channel absent, global grade scope, scale one and output
 sharpen zero. Active/unaccounted people, body, repair/light, local masks/groups,
@@ -96,12 +113,27 @@ the actual radii even when smoothing strength is zero. Tile size is not tuned.
   12N, conservative 512T colour workspace, LUT upload copies and reserves.
 - Integer crop/quarter turn includes source, stitched backing 12N, crop 12C,
   output 12M and the last retained export RGB tile 12T.
+- Explicit bounded arbitrary geometry instead keeps source and stitched backing
+  12N, a float64 output 24M, and separately bounded sampler scratch. Its current
+  declared geometry-local total is `12N + 24M + 640B + 8 MiB`, where
+  `B = min(65,536, M)`. The named 640B components and two 4 MiB reserves come from
+  the same exported constants used by the actual-array geometry inspector.
+  It does not
+  allocate a full float64 source copy. `geometry_max_bytes` is the total capture
+  budget minus the simultaneously reserved original/ICC, retained roots, integer
+  source, last tile, host lease, metadata and native reserves. The actual-array
+  geometry inspector must admit that sub-budget before allocating its output.
+  The sub-budget is zero when geometry is not deferred, including snapped angles.
+  The last tile is conservatively charged even though deferred geometry runs
+  after the export frame has returned.
 - Whole-frame native colour finishing retains source and stitch backing 12N,
   input/output 24M plus conservative validation/contiguity/return reserve 36M,
   the last tile and named native reserve.
 - Transfer assumes render-only owners have ended, but preserves caller-owned
   persistent state, original/ICC, the actual possible 12N RGB crop backing,
   private RGBA 16M and bounded staging 48B, B <= 65,536 pixels.
+  Arbitrary geometry instead reserves `max(12N, 24M)` RGB backing through the
+  float64-to-canonical sink boundary; it is not accounted as a float32 result.
 - Immutable freeze requires both mutable and immutable canonical buffers, 32M,
   after every RGB and row alias is released. Validate/intern keeps 16M plus
   bounded scratch. Immutable byte aliases are not additional payload copies.
@@ -122,6 +154,9 @@ per-face planned copies, hostile unknown objects, cycles/subclasses/stride trick
 CubeLut residency, actual halo radii, exact budget boundaries, native finishing
 with a small crop retaining large backing, low-bit PNG, PNG16 decode overlap,
 orientation disagreement and persistent state through freeze.
+Versioned geometry fixtures additionally cover default rejection, strict snap
+boundaries, opt-in admission, unsupported versions, neutral-only postgeometry
+finishing, unchanged tile calibration, geometry sub-budgets and float64 tails.
 
 They are authored specifications, not executed evidence. See [INTEGRATION.md](INTEGRATION.md)
 for the recovered slice's actual integration boundaries and verification limits.
@@ -133,6 +168,9 @@ Separately authorized future runtime acceptance must include:
 - Compare optimized output numerically against the unchanged legacy export for
   individual and combined admitted edits, crop/quarter turns, native finishing,
   ordinary CubeLut, JPEG and PNG 1/2/4/8/16, ICC and orientation fixtures.
+  Separately compare deferred arbitrary geometry against the legacy sampler on
+  unchanged pregeometry export, including singleton axes, borders, half-degree
+  boundaries and blocked gather sizes; do not label this old-full-flow parity.
 - Verify genuine decoder opacity, precision and original-byte provenance; test
   cancellation, file/document races and failure cleanup without publishing a
   partial asset or silently dropping an edit.

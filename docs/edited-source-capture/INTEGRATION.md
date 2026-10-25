@@ -1,5 +1,10 @@
 # Edited original capture, version 1
 
+This records the version1 slice. The later explicit capture strategy2 is
+documented in [GEOMETRY-INTEGRATION.md](GEOMETRY-INTEGRATION.md); it adds bounded
+arbitrary-angle sampling only for a proven-neutral finishing cohort. Version1
+defaults and the broader limitations recorded below are not silently changed.
+
 Requirement: LNX-REF-WF-165438-165adae6a7. Status remains
 `partial_source_connected_unrun`; this is a source-working-set improvement to
 the existing lens workflow, not a new algorithm or completed AI depth feature.

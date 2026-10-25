@@ -276,7 +276,7 @@ def capture_current_asset(engine, row, state, assets, *, cancelled=lambda: False
         raise ValueError('Unknown explicit neutral-source import strategy')
     if type(allow_legacy_import_budget_fallback) is not bool:
         raise ValueError('Legacy import budget fallback must be explicitly selected')
-    if type(edited_capture_version) is not int or edited_capture_version not in (0, 1):
+    if type(edited_capture_version) is not int or edited_capture_version not in (0, 1, 2):
         raise ValueError('Unknown explicit edited-source capture strategy')
     def poll(*_args):
         if cancelled():
@@ -284,9 +284,10 @@ def capture_current_asset(engine, row, state, assets, *, cancelled=lambda: False
     poll()
     path = row['path']; before = LM.file_stamp(path)
     version = engine._document_versions().version(row)
-    if edited_capture_version == 1:
+    if edited_capture_version in (1, 2):
         from .creative_edited_capture import preflight_snapshot
-        if not preflight_snapshot(engine, row, state, max_bytes=max_bytes):
+        if not preflight_snapshot(engine, row, state, max_bytes=max_bytes,
+                                  geometry_version=1 if edited_capture_version == 2 else 0):
             edited_capture_version = 0
     frozen = deepcopy(state)
     if not frozen.get('_params') or not frozen.get('_light'):
@@ -299,11 +300,12 @@ def capture_current_asset(engine, row, state, assets, *, cancelled=lambda: False
     snap=isolated_snapshot(snap,for_document=True)
     neutral = _neutral_snapshot(snap)
     record = from_state(frozen)
-    if edited_capture_version == 1 and record is None and not neutral:
+    if edited_capture_version in (1, 2) and record is None and not neutral:
         from .creative_edited_capture import prepare as prepare_edited, finish as finish_edited
         pending = prepare_edited(engine, row, snap, retained_roots=(state, frozen, snap),
             source_stamp=before, document_id=version.document_id,
-            max_bytes=max_bytes, persistent_roots=(state,), cancelled=cancelled)
+            max_bytes=max_bytes, persistent_roots=(state,), cancelled=cancelled,
+            geometry_version=1 if edited_capture_version == 2 else 0)
         if pending is not None:
             # Frozen render roots end before output transfer/freezing. The host's
             # captured state still lives and is charged by Pending's census.

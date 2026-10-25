@@ -378,3 +378,151 @@ def test_dormant_semantic_mask_declines_before_embedded_payload_unpack(monkeypat
     recipe['semantic_colour']['masks'] = [{'base': {'encoding': 'legacy-embedded'}}]
     assert not A.classify_snapshot(recipe).eligible
     assert recipe['semantic_colour']['masks']
+
+
+@pytest.mark.parametrize('angle', (.5, -.5, 13., -37., 89.5, -89.5, 179.5))
+def test_arbitrary_angles_require_explicit_geometry_version_without_recipe_changes(angle):
+    recipe = snapshot()
+    recipe.update(crop_rect=(.1, .2, .9, .8), crop_rotation=angle)
+    before = deepcopy(recipe)
+    assert not A.snapshot_eligible(recipe)
+    result = A.classify_snapshot(recipe, geometry_version=1)
+    assert result.eligible, result.reasons
+    assert 'bounded-arbitrary-angle' in result.features
+    assert A.snapshot_eligible(recipe, geometry_version=1)
+    spec = build(recipe)
+    assert A.validate_spec(spec, recipe, geometry_version=1).eligible
+    with pytest.raises(A.AdmissionError):
+        A.validate_spec(spec, recipe)
+    assert recipe == before
+
+
+@pytest.mark.parametrize('version', (-1, 2, True, False, 1., '1', None))
+def test_unknown_geometry_versions_fail_closed_on_every_public_gate(version):
+    recipe = snapshot()
+    assert not A.classify_snapshot(recipe, geometry_version=version).eligible
+    assert not A.snapshot_eligible(recipe, geometry_version=version)
+    with pytest.raises(A.AdmissionError, match='geometry version'):
+        A.validate_spec(build(recipe), recipe, geometry_version=version)
+    with pytest.raises(A.AdmissionError, match='geometry version'):
+        A.plan_capture(metadata(), recipe, geometry_version=version, max_bytes=A.MAX_WORK_BYTES)
+
+
+@pytest.mark.parametrize('family', ('colour_grading', 'selective_colour'))
+def test_arbitrary_angle_never_casts_or_reorders_active_native_finishing(family):
+    recipe = snapshot()
+    recipe['crop_rotation'] = 13.
+    recipe[family] = CG.neutral() if family == 'colour_grading' else SC.neutral()
+    if family == 'colour_grading':
+        recipe[family]['global']['saturation'] = 10.
+    else:
+        recipe[family]['ranges']['reds']['cyan'] = 8.
+    before = deepcopy(recipe)
+    assert not A.classify_snapshot(recipe, geometry_version=1).eligible
+    with pytest.raises(A.AdmissionError):
+        A.validate_spec(build(recipe), recipe, geometry_version=1)
+    assert recipe == before
+    recipe['crop_rotation'] = 89.9
+    assert A.classify_snapshot(recipe, geometry_version=1).eligible
+
+
+def test_geometry_version_does_not_admit_other_families_or_private_spec_marker():
+    recipe = snapshot()
+    recipe['crop_rotation'] = 13.
+    recipe['strength'] = .1
+    assert not A.snapshot_eligible(recipe, geometry_version=1)
+    recipe['strength'] = 0.
+    spec = build(recipe)
+    spec._creative_capture_geometry = {'version': 1, 'max_bytes': 100_000_000}
+    with pytest.raises(A.AdmissionError, match='Unknown/missing'):
+        A.validate_spec(spec, recipe, geometry_version=1)
+
+
+def test_arbitrary_angle_keeps_tile_primary_calibration_and_neutral_finishing():
+    recipe = snapshot()
+    recipe.update(crop_rotation=13., colour_grading=CG.neutral(), selective_colour=SC.neutral(),
+                  primary_calibration=PC.neutral())
+    recipe['primary_calibration']['red']['hue'] = 4.
+    eligibility = A.classify_snapshot(recipe, geometry_version=1)
+    assert eligibility.eligible, eligibility.reasons
+    assert 'primary-calibration' in eligibility.features
+    assert 'native-full-colour' not in eligibility.features
+    assert A.validate_spec(build(recipe), recipe, geometry_version=1).eligible
+
+
+def test_arbitrary_phase_uses_actual_geometry_inspector_component_contract():
+    from lumaretouch_engine import creative_capture_geometry as G
+    recipe = snapshot()
+    recipe.update(crop_rect=(.1, .2, .9, .8), crop_rotation=13.)
+    info = metadata(width=160, height=120)
+    plan = A.plan_capture(info, recipe, geometry_version=1, max_bytes=A.MAX_WORK_BYTES,
+                          retained_bytes=1_000_000, persistent_retained_bytes=400_000)
+    parts = dict(dict(plan.owners)['bounded-arbitrary-geometry'])
+    source = np.zeros((120, 160, 3), np.float32)
+    actual = G.inspect_crop_rotate_np(source, recipe['crop_rect'], recipe['crop_rotation'],
+                                     max_bytes=plan.geometry_max_bytes)
+    assert parts['stitched-rgb-backing'] == actual.source_storage_bytes
+    assert parts['arbitrary-float64-output'] == actual.output_allocation_bytes
+    assert (plan.output_height, plan.output_width, 3) == actual.output_shape
+    for name, amount in actual.scratch_components:
+        assert parts['geometry-' + name] == amount
+    assert parts['geometry-array-workspace'] == actual.array_workspace_reserve
+    assert parts['geometry-metadata'] == actual.metadata_reserve
+    other = sum(parts[name] for name in ('host-lease', 'metadata-allocator',
+        'encoded-original', 'retained-icc', 'capture-snapshot-owners',
+        'integer-working-source', 'last-export-rgb-tile', 'native-allocator-reserve'))
+    assert plan.geometry_max_bytes == plan.max_bytes - other
+    assert dict(plan.phases)['bounded-arbitrary-geometry'] == other + actual.peak_bytes
+    assert 'crop-quarter-turn' not in dict(plan.phases)
+    assert 'native-colour-finishing' not in dict(plan.phases)
+    assert plan.geometry_version == 1 and not plan.runtime_verified
+
+
+def test_arbitrary_plan_admits_before_geometry_arrays_and_keeps_exact_budget_boundary(monkeypatch):
+    from lumaretouch_engine import creative_capture_geometry as G
+    def forbidden(*_args, **_kwargs):
+        raise AssertionError('Predecode planning must not manufacture a raster or run a sampler')
+    monkeypatch.setattr(G, 'inspect_crop_rotate_np', forbidden)
+    monkeypatch.setattr(G, 'crop_rotate_np_bounded', forbidden)
+    recipe = snapshot()
+    recipe['crop_rotation'] = 13.
+    options = dict(geometry_version=1, retained_bytes=17_000_000,
+                   persistent_retained_bytes=8_000_000, host_lease_bytes=7_000_000)
+    plan = A.plan_capture(metadata(), recipe, max_bytes=A.MAX_WORK_BYTES, **options)
+    boundary = A.plan_capture(metadata(), recipe, max_bytes=plan.peak_bytes, **options)
+    assert boundary.peak_bytes == plan.peak_bytes
+    assert boundary.geometry_max_bytes > 0
+    for phase, total in plan.phases:
+        assert total == sum(amount for _, amount in dict(plan.owners)[phase])
+    with pytest.raises(A.CaptureBudgetExceeded):
+        A.plan_capture(metadata(), recipe, max_bytes=plan.peak_bytes - 1, **options)
+    with pytest.raises(A.AdmissionError):
+        A.plan_capture(metadata(), recipe, max_bytes=A.MAX_WORK_BYTES)
+
+
+@pytest.mark.parametrize('rect', ((0., 0., 1., 1.), (0., 0., 1., .01)))
+def test_arbitrary_transfer_counts_f64_and_large_source_backing_without_changing_freeze(rect):
+    recipe = snapshot()
+    recipe.update(crop_rect=rect, crop_rotation=13.)
+    plan = A.plan_capture(metadata(), recipe, geometry_version=1,
+        retained_bytes=30_000_000, persistent_retained_bytes=20_000_000,
+        max_bytes=A.MAX_WORK_BYTES)
+    n, m = 1600 * 1200, plan.output_width * plan.output_height
+    parts = dict(plan.owners)
+    assert dict(parts['rgb-to-canonical'])['output-rgb-backing'] == max(12 * n, 24 * m)
+    assert dict(parts['immutable-freeze'])['mutable-and-immutable-rgba'] == 32 * m
+    for phase in ('rgb-to-canonical', 'immutable-freeze', 'validate-intern'):
+        assert dict(parts[phase])['persistent-caller-state'] == 20_000_000
+    assert dict(parts['bounded-arbitrary-geometry'])['capture-snapshot-owners'] == 30_000_000
+
+
+def test_snapped_geometry_version_one_preserves_existing_phase_and_native_finishing():
+    recipe = snapshot()
+    recipe.update(crop_rect=(.1, .2, .9, .8), crop_rotation=89.9, colour_grading=CG.neutral())
+    recipe['colour_grading']['global']['saturation'] = 10.
+    original = A.plan_capture(metadata(), recipe, max_bytes=A.MAX_WORK_BYTES)
+    opted = A.plan_capture(metadata(), recipe, geometry_version=1, max_bytes=A.MAX_WORK_BYTES)
+    assert opted.phases == original.phases
+    assert opted.owners == original.owners
+    assert opted.geometry_max_bytes == original.geometry_max_bytes == 0
+    assert 'native-colour-finishing' in dict(opted.phases)
