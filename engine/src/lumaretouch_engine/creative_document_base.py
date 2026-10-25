@@ -253,7 +253,8 @@ def _working_source(path, original, *, max_pixels, device):
 
 def capture_current_asset(engine, row, state, assets, *, cancelled=lambda: False,
                           max_bytes=DEFAULT_WORK_BYTES, neutral_import_version=0,
-                          allow_legacy_import_budget_fallback=False):
+                          allow_legacy_import_budget_fallback=False,
+                          edited_capture_version=0):
     """Freeze current full-resolution edits into a real canonical base record.
 
     Same recipe/source guards, crop, effects and float output as file export.
@@ -275,12 +276,18 @@ def capture_current_asset(engine, row, state, assets, *, cancelled=lambda: False
         raise ValueError('Unknown explicit neutral-source import strategy')
     if type(allow_legacy_import_budget_fallback) is not bool:
         raise ValueError('Legacy import budget fallback must be explicitly selected')
+    if type(edited_capture_version) is not int or edited_capture_version not in (0, 1):
+        raise ValueError('Unknown explicit edited-source capture strategy')
     def poll(*_args):
         if cancelled():
             raise InterruptedError('Creative full-resolution capture cancelled')
     poll()
     path = row['path']; before = LM.file_stamp(path)
     version = engine._document_versions().version(row)
+    if edited_capture_version == 1:
+        from .creative_edited_capture import preflight_snapshot
+        if not preflight_snapshot(engine, row, state, max_bytes=max_bytes):
+            edited_capture_version = 0
     frozen = deepcopy(state)
     if not frozen.get('_params') or not frozen.get('_light'):
         raise ValueError('Creative capture needs complete owned editing state, not current-document parameter fallbacks')
@@ -292,6 +299,21 @@ def capture_current_asset(engine, row, state, assets, *, cancelled=lambda: False
     snap=isolated_snapshot(snap,for_document=True)
     neutral = _neutral_snapshot(snap)
     record = from_state(frozen)
+    if edited_capture_version == 1 and record is None and not neutral:
+        from .creative_edited_capture import prepare as prepare_edited, finish as finish_edited
+        pending = prepare_edited(engine, row, snap, retained_roots=(state, frozen, snap),
+            source_stamp=before, document_id=version.document_id,
+            max_bytes=max_bytes, persistent_roots=(state,), cancelled=cancelled)
+        if pending is not None:
+            # Frozen render roots end before output transfer/freezing. The host's
+            # captured state still lives and is charged by Pending's census.
+            del frozen, snap
+            result = finish_edited(pending, cancelled=cancelled)
+            poll()
+            if LM.file_stamp(path) != before or engine._document_versions().version(row) != version:
+                raise ValueError('Edited capture source/document changed before publication')
+            assets.intern(result)
+            return result
     source = None
     if record is None:
         if not is_raw(path):

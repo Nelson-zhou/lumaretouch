@@ -1308,16 +1308,19 @@
         "ui/src/lensBlur/useLensBlur.ts",
         "core/lens_cohort/lib.rs",
         "engine/src/lumaretouch_engine/creative_document_import_bounded.py",
-        "engine/src/lumaretouch_engine/lens_blur_cohort_stage.py"
+        "engine/src/lumaretouch_engine/lens_blur_cohort_stage.py",
+        "engine/src/lumaretouch_engine/creative_edited_capture.py"
       ],
       "verification": [
         "docs/lens-blur/INTEGRATION.md",
         "docs/lens-blur/ACCEPTANCE-UNRUN.md",
         "engine/tests/test_lens_integration_unrun.py",
         "docs/lens-fullresolution/INTEGRATION.md",
-        "engine/tests/test_lens_cohort_stage_unrun.py"
+        "engine/tests/test_lens_cohort_stage_unrun.py",
+        "docs/edited-source-capture/INTEGRATION.md",
+        "engine/tests/test_creative_edited_capture_real_state_unrun.py"
       ],
-      "scope_note": "LNX-REF-WF-165438-165adae6a7：人工基准面、五种真实光圈核、来源专属涂抹、完整候选审核与新副本源码接通；显式 v2 新数值版本新增真实分组 FFT 与稀疏残差渲染，以及中性 JPEG/PNG16 的低复制导入。全部运行/数值/画质/24MP性能验收 UNRUN。自动 AI 景深、任意混合修图24MP来源、RAW/TIFF优化、密集羽化、批量预设与可重新编辑配方仍不完整；不缩小最终结果，不把人工路径算作完整官方功能。"
+      "scope_note": "LNX-REF-WF-165438-165adae6a7：人工基准面、五种真实光圈核、来源专属涂抹、完整候选审核与新副本源码接通；显式 v2 新数值版本新增真实分组 FFT 与稀疏残差渲染，以及中性 JPEG/PNG16 的低复制导入。另接通有限原始 JPEG/PNG 全局调色的分阶段完整来源捕获，保留真正解码、ICC/16位精度、中性人物来源核验及旧渲染数学；不计为新算法。全部运行/数值/画质/24MP性能验收 UNRUN。自动 AI 景深、任意混合修图24MP来源、RAW/TIFF优化、密集羽化、批量预设与可重新编辑配方仍不完整；不缩小最终结果，不把人工路径算作完整官方功能。"
     },
     {
       "id": "creative:uXo7tBdQwi",

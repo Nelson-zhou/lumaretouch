@@ -99,6 +99,13 @@ def isolated_snapshot(snapshot,*,for_document):
 
 def prepare(spec,source,repaired):
     if getattr(spec,'people',None) is None:return None
+    if getattr(spec, '_creative_capture_original_source', None) is not None:
+        # Opt-in bounded original-colour capture only. Keep the graph on spec;
+        # every generic portrait/export caller retains its old preparation.
+        from .creative_capture_people import neutral_original_census
+        if repaired is not None or not neutral_original_census(spec, source):
+            raise ValueError('Bounded edited capture requires a fully verified neutral original people census')
+        return None
     from .people_engine_runtime import prepare_export
     from .cpu_memory_budget import available_estimate
     snapshot=spec.people

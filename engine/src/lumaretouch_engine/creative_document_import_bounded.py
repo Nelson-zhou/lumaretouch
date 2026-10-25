@@ -533,6 +533,39 @@ def inspect_import(original, *, max_bytes=512_000_000, cancelled=lambda: False):
     return _prepare(original, max_bytes, cancelled)[1]
 
 
+def inspect_encoded_source(original, *, max_bytes=512_000_000, cancelled=lambda: False):
+    """Validated immutable provenance, not proof of another decoder's pixels.
+
+    Edited capture retains these unchanged bytes and independently verifies the
+    real working decoder's file identity, dimensions, precision and opacity.
+    Reuse the complete strict metadata parser instead of canonicalizing an
+    unused original RGBA just to retrieve its ICC. Existing conservative import
+    planning still gates this metadata-only interface.
+    """
+    source, plan = _prepare(original, max_bytes, cancelled)
+    working_orientation = source.orientation
+    if source.format == 'PNG' and source.bits == 16:
+        # Original-retouch PNG16 uses standard eXIf only. Creative import also
+        # understands text carriers. Equal dimensions cannot prove equal flips.
+        from .png16_source import _exif_metadata
+        exif = None
+        offset = 8
+        while offset < len(original):
+            _cancel(cancelled)
+            length = int.from_bytes(original[offset:offset + 4], 'big')
+            if original[offset + 4:offset + 8] == b'eXIf':
+                exif = original[offset + 8:offset + 8 + length]
+                break
+            offset += length + 12
+        _, working_orientation = _exif_metadata(exif)
+    return {
+        'version': IMPORT_VERSION, 'format': source.format,
+        'width': plan.width, 'height': plan.height, 'bits': source.bits,
+        'orientation': source.orientation, 'working_orientation': working_orientation,
+        'icc': source.icc, 'original_bytes': len(original), 'import_plan': plan,
+    }
+
+
 def _decode_png(original, source, cancelled):
     import imagecodecs
     import numpy as np

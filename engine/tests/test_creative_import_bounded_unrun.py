@@ -58,6 +58,27 @@ def _raw_exif(orientation):
 
 
 class BoundedImportPreflightContracts(unittest.TestCase):
+    def test_edited_metadata_distinguishes_same_size_png16_text_flip(self):
+        original = _png(3, 3, 16, 2, ancillary=(
+            _text(b'iTXt', 'XML:com.adobe.xmp', _xmp(2)),))
+        with patch.object(bounded, '_decode_png') as decode:
+            info = bounded.inspect_encoded_source(original)
+            decode.assert_not_called()
+        self.assertEqual((info['width'], info['height']), (3, 3))
+        self.assertEqual(info['orientation'], 2)
+        self.assertEqual(info['working_orientation'], 1)
+        self.assertEqual(info['original_bytes'], len(original))
+
+    def test_edited_metadata_preserves_standard_png16_orientation(self):
+        for orientation in range(1, 9):
+            info = bounded.inspect_encoded_source(_png(2, 3, 16, 2,
+                ancillary=((b'eXIf', _exif(orientation)),)))
+            self.assertEqual(info['orientation'], orientation)
+            self.assertEqual(info['working_orientation'], orientation)
+        info = bounded.inspect_encoded_source(_png(2, 3, 8, 2, ancillary=(
+            _text(b'iTXt', 'XML:com.adobe.xmp', _xmp(6)),)))
+        self.assertEqual(info['working_orientation'], info['orientation'])
+
     def test_24mp_admission_charges_final_copy_and_does_not_use_96n(self):
         # Deliberately header-only sizing fixture. No pixel decode is alleged.
         original = _png(6000, 4000, 16, 6)
