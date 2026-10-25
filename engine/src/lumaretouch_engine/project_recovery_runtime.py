@@ -80,6 +80,8 @@ def finish(engine, boundary, error=None):
     if decoration_support_read_only(message):return  # Staged graph/bank reads never publish or taint committed state.
     from .people_host_commands import face_style_read_only, eye_bag_read_only, facial_sculpt_read_only, eye_makeup_enhance_read_only
     if face_style_read_only(message) or eye_bag_read_only(message) or facial_sculpt_read_only(message) or eye_makeup_enhance_read_only(message):return  # Private read failures cannot taint committed project state.
+    from .skin_reference_match_host import read_only as skin_reference_read_only
+    if skin_reference_read_only(message): return
     from .hair_unification_controller import read_only as hair_unification_read_only
     if hair_unification_read_only(message): return
     if not boundary['started'] or message.get('cmd') in ('project_recovery', 'canvas_guides'):

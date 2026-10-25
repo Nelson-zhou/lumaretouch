@@ -13,6 +13,8 @@ def preview(engine, state=None, *, body_bank=_MISSING, body_source=None, support
     document_id=engine._people_binding()['document_id']
     from . import hair_unification_project as UNIFY
     unification_inputs={**UNIFY.preview_kwargs(engine,state),**UNIFY.shared_preview(engine,state)}
+    from .skin_reference_match_inputs import preview as reference_inputs
+    unification_inputs.update(reference_inputs(engine,state,support_bank))
     from .people_cross_owner import validate_owner
     validate_owner(state,engine._people_source()['sha256'],document_id)
     from .creative_derived_source import record, binding, analysis_rgb, verify_precompute

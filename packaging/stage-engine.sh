@@ -311,3 +311,9 @@ cp "$here/../core/photo_grain/lib.rs" "$here/../LICENSE" "$here/../docs/photo-gr
 bash "$here/build-colour-editor.sh" "$stage/lumaretouch_engine/bin/liblrt_colour_editor.so"
 mkdir -p "$stage/lumaretouch_engine/third_party/colour_editor"
 cp "$here/../core/colour_editor/lib.rs" "$here/../LICENSE" "$here/../docs/colour-editor/INTEGRATION.md" "$stage/lumaretouch_engine/third_party/colour_editor/"
+
+# Source-authored selected face reference matching; numerical acceptance remains UNRUN.
+bash "$here/../core/skin_reference_match/build_skin_reference_match.sh" "$stage/lumaretouch_engine/bin/liblrt_skin_reference_match.so"
+mkdir -p "$stage/lumaretouch_engine/third_party/skin_reference_match"
+cp "$here/../core/skin_reference_match/"{lib.rs,tests.rs,skin_reference_match.h,Cargo.toml,README.md,build_skin_reference_match.sh} "$here/../LICENSE" "$stage/lumaretouch_engine/third_party/skin_reference_match/"
+cp "$here/../docs/skin-reference-match/"{CORE.md,NUMERICS.md,RESEARCH.md} "$stage/lumaretouch_engine/third_party/skin_reference_match/"

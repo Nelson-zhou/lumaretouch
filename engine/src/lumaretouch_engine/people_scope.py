@@ -7,7 +7,7 @@ def describe():
     return [{'operation_id':op,'parameters':sorted(leaves),'neutral':leaves,
              'target_context':'asset_face_ref_or_explicit_confirmed_map',
              'transfer':('unavailable_requires_target_owned_manual_samples_and_dedicated_image_review'
-                         if op == A.HAIR_UNIFICATION.OP else 'dormant_scalars_only_active_requires_dedicated_face_visual_review'
+                         if op in (A.HAIR_UNIFICATION.OP,'lnx.skin_reference_match.v1') else 'dormant_scalars_only_active_requires_dedicated_face_visual_review'
                          if op == A.EYE_BAG_PRESERVE.OP else 'existing_frozen_batch_selected_parameter_leaves'),
              'local_assets_transferable':False} for op,leaves in A.defaults().items()]
 

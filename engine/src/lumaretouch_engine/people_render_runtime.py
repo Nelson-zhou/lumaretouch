@@ -70,10 +70,12 @@ def verify_analysis(face, analysis, shape):
 
 
 def prepare(state, asset_sha256, source, analyses, *, byte_budget, document_id=None, max_faces=32, recovery_assets=None, repaired=None,
-            creative_source=None, creative_repair_evidence=None, hair_assets=None, hair_unification_assets=None, hair_unification_source=None, full_source_verified=False, hair_evidence=None, hair_source_path=None, force_hair_prompted=False, eye_light_assets=None, blush_makeup_assets=None, face_decoration_assets=None,facial_sculpt_assets=None,eye_makeup_enhance_assets=None, lipstick_assets=None,eyeliner_assets=None,eyelash_assets=None,brow_makeup_assets=None,iris_makeup_assets=None,skin_colour_body_assets=None,skin_finish_body_assets=None,body_skin_evenness_assets=None,body_face_match_assets=None,collarbone_assets=None,eye_bag_preserve_assets=None,body_bank=None):
+            creative_source=None, creative_repair_evidence=None, skin_reference_match_assets=None, skin_reference_match_source=None, hair_assets=None, hair_unification_assets=None, hair_unification_source=None, full_source_verified=False, hair_evidence=None, hair_source_path=None, force_hair_prompted=False, eye_light_assets=None, blush_makeup_assets=None, face_decoration_assets=None,facial_sculpt_assets=None,eye_makeup_enhance_assets=None, lipstick_assets=None,eyeliner_assets=None,eyelash_assets=None,brow_makeup_assets=None,iris_makeup_assets=None,skin_colour_body_assets=None,skin_finish_body_assets=None,body_skin_evenness_assets=None,body_face_match_assets=None,collarbone_assets=None,eye_bag_preserve_assets=None,body_bank=None):
     state = S.check(state)
     from . import hair_unification_project as UNIFY
     UNIFY.validate_graph(state)
+    from .skin_reference_match_project import validate_graph as validate_reference_match
+    validate_reference_match(state)
     from .hair_unification_assets import verify_graph as verify_unification_graph
     verify_unification_graph(state, hair_unification_assets or {}, hair_assets or {})
     A.FACE_DECORATION.validate_graph(state)
@@ -181,7 +183,7 @@ def prepare(state, asset_sha256, source, analyses, *, byte_budget, document_id=N
             face = state['faces'][key]; analysis = analyses[key]
             for asset in face['local_assets'].values():
                 stage = asset['kind']
-                if stage in ('skin_colour_body_visibility','skin_finish_body_visibility','body_skin_evenness_visibility','body_face_match_visibility','collarbone_visibility','eye_bag_ridge_visibility','face_decoration_visibility','facial_sculpt_visibility','eye_makeup_enhance_visibility'):
+                if stage in ('skin_reference_match_relation','skin_colour_body_visibility','skin_finish_body_visibility','body_skin_evenness_visibility','body_face_match_visibility','collarbone_visibility','eye_bag_ridge_visibility','face_decoration_visibility','facial_sculpt_visibility','eye_makeup_enhance_visibility'):
                     # Separate operation-owned support, never generic recovery.
                     # Resolve each only when its own recipe is active below;
                     # dormant review cannot prevent disabling its own recipe.
@@ -490,6 +492,17 @@ def prepare(state, asset_sha256, source, analyses, *, byte_budget, document_id=N
     if failures: raise PeoplePreparationRefused(failures)
     geometry = combine(fields, (h,w), byte_budget=byte_budget)
     prepared=PreparedPeople(plan, geometry, tuple(effects), facts, owned_recovery,tuple(fields))
+    from .skin_reference_match_runtime import requests as reference_requests, prepare_bank as prepare_reference_match
+    if reference_requests(state,asset_sha256):
+        if not callable(skin_reference_match_source):
+            raise ValueError('Skin-reference matching needs authenticated full-source fitting, not the current display raster')
+        remaining=byte_budget-retained_bytes(prepared)-source.nbytes-(0 if repaired is None else repaired.nbytes)
+        captured=skin_reference_match_source(byte_budget=remaining,cancelled=lambda:False)
+        reference_effects,reference_facts=prepare_reference_match(state,asset_sha256,captured,analyses,
+            assets=skin_reference_match_assets or {},application_shape=(h,w),byte_budget=remaining)
+        del captured
+        for key,fact in reference_facts.items():facts.setdefault(key,{})['skin_reference_match']=fact
+        prepared=PreparedPeople(plan,geometry,prepared.effects+reference_effects,facts,owned_recovery,tuple(fields))
     if source_only:
         from .creative_derived_hair import needed
         if not needed(state,asset_sha256) and not UNIFY.needed(state,asset_sha256):return prepared
@@ -498,7 +511,7 @@ def prepare(state, asset_sha256, source, analyses, *, byte_budget, document_id=N
         byte_budget=byte_budget-retained_bytes(prepared)-source.nbytes-(0 if repaired is None else repaired.nbytes),
         source_path=hair_source_path,force_prompted=force_hair_prompted)
     for key,fact in hair_facts.items():facts.setdefault(key,{})['hair_colour']=fact
-    prepared=PreparedPeople(plan,geometry,tuple(effects)+hair,facts,owned_recovery,tuple(fields))
+    prepared=PreparedPeople(plan,geometry,prepared.effects+hair,facts,owned_recovery,tuple(fields))
     from .hair_unification_runtime import prepare_bank as prepare_unification
     unified, unify_facts=prepare_unification(state,asset_sha256,source,plan,
         evidence=hair_evidence,assets=hair_unification_assets,hair_assets=hair_assets,measurement_source=hair_unification_source,full_source_verified=full_source_verified,
@@ -512,5 +525,6 @@ def retained_bytes(prepared,*,include_geometry=True):
     total=sum(field.resident_bytes() for field in (*prepared.face_fields,*prepared.body_fields))
     total+=sum(array.nbytes for record in prepared.effects for array in (record.delta,record.weights,record.chroma_shift,record.log_gain) if array is not None)
     total+=sum(record['weight'].nbytes for record in prepared.recovery.values())
+    total+=sum(record.amounts.resident_bytes() for record in prepared.effects if record.stage=='skin_reference_match')
     if include_geometry:total+=prepared.geometry.delta.nbytes+prepared.geometry.owner.nbytes
     return total

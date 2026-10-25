@@ -10,7 +10,7 @@ from . import people_pipeline as PIPE
 
 
 def prepare_preview(pipe,state,asset_sha256,analyses,*,byte_budget,document_id=None,recovery_assets=None,body_bank=None,body_source=None,body_source_path=None,body_source_pixels=None,creative_source=None,creative_proxy=None,
-                    hair_assets=None,hair_unification_assets=None,hair_unification_source=None,hair_evidence=None,hair_source_path=None,eye_light_assets=None,blush_makeup_assets=None,face_decoration_assets=None,facial_sculpt_assets=None,eye_makeup_enhance_assets=None,lipstick_assets=None,eyeliner_assets=None,eyelash_assets=None,brow_makeup_assets=None,iris_makeup_assets=None,skin_colour_body_assets=None,skin_finish_body_assets=None,body_skin_evenness_assets=None,body_face_match_assets=None,collarbone_assets=None,eye_bag_preserve_assets=None):
+                    skin_reference_match_assets=None,skin_reference_match_source=None,hair_assets=None,hair_unification_assets=None,hair_unification_source=None,hair_evidence=None,hair_source_path=None,eye_light_assets=None,blush_makeup_assets=None,face_decoration_assets=None,facial_sculpt_assets=None,eye_makeup_enhance_assets=None,lipstick_assets=None,eyeliner_assets=None,eyelash_assets=None,brow_makeup_assets=None,iris_makeup_assets=None,skin_colour_body_assets=None,skin_finish_body_assets=None,body_skin_evenness_assets=None,body_face_match_assets=None,collarbone_assets=None,eye_bag_preserve_assets=None):
     import torch
     if body_bank is None and getattr(getattr(pipe,'people_prepared',None),'body_fields',()):
         raise ValueError('Preview omitted independently retained body inputs')
@@ -43,7 +43,7 @@ def prepare_preview(pipe,state,asset_sha256,analyses,*,byte_budget,document_id=N
         repaired=np.array(pipe.repair_base[0].permute(1,2,0).to('cpu',torch.float32).numpy(),dtype=np.float32,copy=True)
         repaired.setflags(write=False)
     prepared=prepare(state,asset_sha256,rgb,analyses,byte_budget=byte_budget,document_id=document_id,recovery_assets=recovery_assets,repaired=repaired,
-        creative_source=creative_source,creative_repair_evidence=replay_evidence,hair_assets=hair_assets,hair_unification_assets=hair_unification_assets,hair_unification_source=hair_unification_source,hair_evidence=hair_evidence,hair_source_path=hair_source_path,eye_light_assets=eye_light_assets,blush_makeup_assets=blush_makeup_assets,face_decoration_assets=face_decoration_assets,facial_sculpt_assets=facial_sculpt_assets,eye_makeup_enhance_assets=eye_makeup_enhance_assets,lipstick_assets=lipstick_assets,eyeliner_assets=eyeliner_assets,eyelash_assets=eyelash_assets,brow_makeup_assets=brow_makeup_assets,iris_makeup_assets=iris_makeup_assets,
+        creative_source=creative_source,creative_repair_evidence=replay_evidence,skin_reference_match_assets=skin_reference_match_assets,skin_reference_match_source=skin_reference_match_source,hair_assets=hair_assets,hair_unification_assets=hair_unification_assets,hair_unification_source=hair_unification_source,hair_evidence=hair_evidence,hair_source_path=hair_source_path,eye_light_assets=eye_light_assets,blush_makeup_assets=blush_makeup_assets,face_decoration_assets=face_decoration_assets,facial_sculpt_assets=facial_sculpt_assets,eye_makeup_enhance_assets=eye_makeup_enhance_assets,lipstick_assets=lipstick_assets,eyeliner_assets=eyeliner_assets,eyelash_assets=eyelash_assets,brow_makeup_assets=brow_makeup_assets,iris_makeup_assets=iris_makeup_assets,
         skin_colour_body_assets=skin_colour_body_assets,skin_finish_body_assets=skin_finish_body_assets,body_skin_evenness_assets=body_skin_evenness_assets,body_face_match_assets=body_face_match_assets,collarbone_assets=collarbone_assets,eye_bag_preserve_assets=eye_bag_preserve_assets,body_bank=body_bank)
     if body_bank is not None:
         from .body_pose_render import prepare as prepare_body
@@ -52,9 +52,9 @@ def prepare_preview(pipe,state,asset_sha256,analyses,*,byte_budget,document_id=N
 
 
 def synchronize(pipe,state,asset_sha256,analyses,*,byte_budget,document_id=None,recovery_assets=None,body_bank=None,body_source=None,body_source_path=None,body_source_pixels=None,creative_source=None,creative_proxy=None,
-                    hair_assets=None,hair_unification_assets=None,hair_unification_source=None,hair_evidence=None,hair_source_path=None,eye_light_assets=None,blush_makeup_assets=None,face_decoration_assets=None,facial_sculpt_assets=None,eye_makeup_enhance_assets=None,lipstick_assets=None,eyeliner_assets=None,eyelash_assets=None,brow_makeup_assets=None,iris_makeup_assets=None,skin_colour_body_assets=None,skin_finish_body_assets=None,body_skin_evenness_assets=None,body_face_match_assets=None,collarbone_assets=None,eye_bag_preserve_assets=None):
+                    skin_reference_match_assets=None,skin_reference_match_source=None,hair_assets=None,hair_unification_assets=None,hair_unification_source=None,hair_evidence=None,hair_source_path=None,eye_light_assets=None,blush_makeup_assets=None,face_decoration_assets=None,facial_sculpt_assets=None,eye_makeup_enhance_assets=None,lipstick_assets=None,eyeliner_assets=None,eyelash_assets=None,brow_makeup_assets=None,iris_makeup_assets=None,skin_colour_body_assets=None,skin_finish_body_assets=None,body_skin_evenness_assets=None,body_face_match_assets=None,collarbone_assets=None,eye_bag_preserve_assets=None):
     prepared=prepare_preview(pipe,state,asset_sha256,analyses,byte_budget=byte_budget,document_id=document_id,recovery_assets=recovery_assets,body_bank=body_bank,body_source=body_source,body_source_path=body_source_path,body_source_pixels=body_source_pixels,creative_source=creative_source,creative_proxy=creative_proxy,
-        hair_assets=hair_assets,hair_unification_assets=hair_unification_assets,hair_unification_source=hair_unification_source,hair_evidence=hair_evidence,hair_source_path=hair_source_path,eye_light_assets=eye_light_assets,blush_makeup_assets=blush_makeup_assets,face_decoration_assets=face_decoration_assets,facial_sculpt_assets=facial_sculpt_assets,eye_makeup_enhance_assets=eye_makeup_enhance_assets,lipstick_assets=lipstick_assets,eyeliner_assets=eyeliner_assets,eyelash_assets=eyelash_assets,brow_makeup_assets=brow_makeup_assets,iris_makeup_assets=iris_makeup_assets,skin_colour_body_assets=skin_colour_body_assets,skin_finish_body_assets=skin_finish_body_assets,body_skin_evenness_assets=body_skin_evenness_assets,body_face_match_assets=body_face_match_assets,collarbone_assets=collarbone_assets,eye_bag_preserve_assets=eye_bag_preserve_assets)
+        skin_reference_match_assets=skin_reference_match_assets,skin_reference_match_source=skin_reference_match_source,hair_assets=hair_assets,hair_unification_assets=hair_unification_assets,hair_unification_source=hair_unification_source,hair_evidence=hair_evidence,hair_source_path=hair_source_path,eye_light_assets=eye_light_assets,blush_makeup_assets=blush_makeup_assets,face_decoration_assets=face_decoration_assets,facial_sculpt_assets=facial_sculpt_assets,eye_makeup_enhance_assets=eye_makeup_enhance_assets,lipstick_assets=lipstick_assets,eyeliner_assets=eyeliner_assets,eyelash_assets=eyelash_assets,brow_makeup_assets=brow_makeup_assets,iris_makeup_assets=iris_makeup_assets,skin_colour_body_assets=skin_colour_body_assets,skin_finish_body_assets=skin_finish_body_assets,body_skin_evenness_assets=body_skin_evenness_assets,body_face_match_assets=body_face_match_assets,collarbone_assets=collarbone_assets,eye_bag_preserve_assets=eye_bag_preserve_assets)
     PIPE.install(pipe,prepared);pipe.people_suspended=None
     return prepared
 
@@ -130,6 +130,8 @@ def prepare_export(snapshot,source,repaired,*,byte_budget,document_id=None,recov
         source_inputs={'creative_source':creative,'creative_repair_evidence':creative_repair_evidence,**export_inputs(snapshot)}
     from .hair_unification_project import kwargs as unification_inputs
     source_inputs.update(unification_inputs(snapshot))
+    from .skin_reference_match_inputs import export_kwargs as reference_inputs
+    source_inputs.update(reference_inputs(snapshot,source))
     # Independent reviewed skin families consume the target's retained BodyRef
     # before composing once. Body geometry joins the single common map below.
     bank=frame=None
@@ -157,6 +159,7 @@ def body_budget(prepared,budget):
     # Body composition already counts retained face evaluators and both maps.
     # Reserve independent colour/recovery arrays and source buffers as well.
     colour=sum(array.nbytes for record in prepared.effects for array in (record.delta,record.weights,record.chroma_shift,record.log_gain) if array is not None)
+    colour+=sum(record.amounts.resident_bytes() for record in prepared.effects if record.stage=='skin_reference_match')
     recovery=sum(record['weight'].nbytes for record in prepared.recovery.values())
     h,w=prepared.geometry.delta.shape[1:3]
     return budget-colour-recovery-h*w*24

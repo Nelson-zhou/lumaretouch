@@ -27,6 +27,7 @@ def digest(state, asset):
     defaults.pop('lnx.facial_sculpt.v1',None)
     defaults.pop('lnx.eye_makeup_enhance.v1',None)
     defaults.pop('lnx.hair_unification.v1',None)
+    defaults.pop('lnx.skin_reference_match.v1',None)
     resolved={}
     for key in sorted(faces):
         value=resolve(state,key,defaults)

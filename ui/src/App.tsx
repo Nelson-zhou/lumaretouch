@@ -1,3 +1,5 @@
+import {createStartEngineAction} from './engine/startEngineAction';
+import {SkinReferenceMatchPanel} from './skinReferenceMatch/SkinReferenceMatchPanel';
 import {useGlowWorkspaceBinding} from './lightGlow/useGlowWorkspaceBinding';
 import {LightGlowWorkspaceHost} from './lightGlow/LightGlowWorkspaceHost';
 import {GLOW_PROTOCOL, validGlowCapability} from './lightGlow/model';
@@ -657,17 +659,8 @@ export default function App() {
     return () => { cancelled = true; };
   }, []);
 
-  async function onStartEngine() {
-    setBusy(true);
-    try {
-      const r = await startEngine(py, src);
-      setPid(r.pid);
-    } catch (e) {
-      setHud({ ...hudRef.current, lastError: String(e) });
-    } finally {
-      setBusy(false);
-    }
-  }
+  const onStartEngine = createStartEngineAction({python: py, source: src, busy: setBusy,
+    pid: setPid, error: (lastError) => setHud({...hudRef.current, lastError})});
 
   async function onRun() {
     setBusy(true);
@@ -1908,6 +1901,7 @@ export default function App() {
                         note={setDragNote} onDone={requestPanelRefresh}
                         thumb={strip?.current ? thumbs[strip.current] : undefined}
                         people={peopleWorkflow}
+                        skinReferencePanel={<SkinReferenceMatchPanel people={peopleWorkflow} available={status?.ready_caps?.skin_reference_match_protocol===1} blocked={hairBusy||hair.state.pending||!!status?.edit_queue?.in_flight||!!status?.edit_queue?.pending||!!status?.edit_queue?.closed}/> }
                         hairUnificationPanel={<HairUnificationPanel port={hairUnification.port} engineAlive={engineAlive} onStartEngine={onStartEngine} busy={hairBusy||hair.state.pending} available={status?.ready_caps?.hair_unification_protocol===1}/>} hairPort={hair.port} hairBusy={hairBusy} refreshHair={refreshFromEngine}
                         brush={{ on: brushOn, mode: brushMode, radius: brushRadius }}
                         onBrush={(patch) => {

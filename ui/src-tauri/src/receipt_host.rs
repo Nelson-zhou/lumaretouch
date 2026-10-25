@@ -178,6 +178,12 @@ mod scalar_binding_tests {
 struct ReviewBinding { fields: Value, bytes: usize, read_only: bool, strict_failure_identity: bool }
 impl ReviewBinding {
     fn from_command(epoch: [u8;16], value: &Value) -> Result<Option<Self>, String> {
+        if let Some(fields) = crate::people_api::skin_reference_match::binding(value)? {
+            let bytes = fields.to_string().len();
+            if bytes > 256 * 1024 { return Err("skin-reference identity exceeds people receipt budget".into()); }
+            return Ok(Some(Self { fields, bytes,
+                read_only: crate::people_api::skin_reference_match::read_only(value), strict_failure_identity: true }));
+        }
         if let Some(fields) = crate::effect_recovery_host::alias::binding(value)? {
             let bytes = fields.to_string().len();
             if bytes > 16 * 1024 { return Err("shared recovery receipt identity exceeds budget".into()); }
@@ -371,7 +377,7 @@ impl Receipt {
         self.result.as_ref().is_some_and(|result| self.review.is_none() || result["outcome_unknown"] != true
             // Only explicitly classified head/collarbone preflight or paged
             // image reads may expire; an unknown commit remains guarded.
-            || (matches!(self.action.as_str(), "face_decoration_support_alias_preview" | "face_decoration_support_alias_image" | "face_decoration_alias_preview" | "face_decoration_alias_image" | "face_decoration_cohort_visual" | "preflight" | "face_decoration_visual" | "collarbone_visual" | "eye_bag_visual" | "eye_bag_cohort_visual" | "face_style_visual" | "portrait_cohort_visual" | "face_style_catalog" | "face_style_preview" | "face_style_image" | "eye_bag_source_image" | "eye_bag_reference" | "eye_bag_preview" | "eye_bag_image" | "face_decoration_reference" | "facial_sculpt_reference" | "eye_makeup_enhance_reference") && self.review.as_ref().is_some_and(|review| review.read_only)))
+            || (matches!(self.action.as_str(), "skin_reference_match_catalog" | "skin_reference_match_preview" | "skin_reference_match_image" | "face_decoration_support_alias_preview" | "face_decoration_support_alias_image" | "face_decoration_alias_preview" | "face_decoration_alias_image" | "face_decoration_cohort_visual" | "preflight" | "face_decoration_visual" | "collarbone_visual" | "eye_bag_visual" | "eye_bag_cohort_visual" | "face_style_visual" | "portrait_cohort_visual" | "face_style_catalog" | "face_style_preview" | "face_style_image" | "eye_bag_source_image" | "eye_bag_reference" | "eye_bag_preview" | "eye_bag_image" | "face_decoration_reference" | "facial_sculpt_reference" | "eye_makeup_enhance_reference") && self.review.as_ref().is_some_and(|review| review.read_only)))
     }
 }
 pub(crate) struct ReceiptHost<K: ReceiptKind> {
@@ -455,6 +461,14 @@ impl<K: ReceiptKind> ReceiptHost<K> {
                     && review.fields.get("eye_bag_request").is_some() && review.matches(value))
                 && value["outcome_unknown"] == false && K::valid(value, record.document.as_deref())
                 && value.to_string().len() <= MAX_RESULT_BYTES;
+            // Only this family's exact captured reads may settle after a lost
+            // read response. Confirm and clear never acquire replay authority.
+            let skin_read_reconciliation = K::NAME == "people" && previous["outcome_unknown"] == true
+                && matches!(record.action.as_str(), "skin_reference_match_catalog" | "skin_reference_match_preview" | "skin_reference_match_image")
+                && record.review.as_ref().is_some_and(|review| review.read_only
+                    && review.fields.get(crate::people_api::skin_reference_match::MARKER).is_some() && review.matches(value))
+                && value["event"] == "people_result" && value["outcome_unknown"] == false
+                && K::valid(value, record.document.as_deref()) && value.to_string().len() <= MAX_RESULT_BYTES;
             // The dedicated support protocol may reconcile a locally synthesized
             // transport unknown with the original exact engine terminal.
             // An engine-issued unknown or any known terminal stays immutable.
@@ -488,7 +502,7 @@ impl<K: ReceiptKind> ReceiptHost<K> {
                 && K::valid(value, record.document.as_deref()) && value.to_string().len() <= MAX_RESULT_BYTES;
             let support_reconciliation = (bound_support_event || bound_support_history_event || bound_decoration_preset_event) && value["outcome_unknown"] == false;
             let support_engine_unknown = (bound_support_event || bound_support_history_event || bound_decoration_preset_event) && value["outcome_unknown"] == true;
-            if !read_reconciliation && !support_reconciliation && !support_engine_unknown { return; }
+            if !read_reconciliation && !skin_read_reconciliation && !support_reconciliation && !support_engine_unknown { return; }
             // An exact engine unknown replaces the transport diagnostic, not
             // its authority: it closes late-terminal reconciliation and stays fenced.
             if support_engine_unknown { record.native_unknown = false; }

@@ -7,6 +7,7 @@ import json
 from . import people_state as S,people_algorithms as A,people_edit as EDIT
 from .people_command import validate_envelope
 from .people_graph_owner import affected_assets
+from .skin_reference_match_host import ACTIONS as SKIN_REFERENCE_ACTIONS, READS as SKIN_REFERENCE_READS
 
 
 FACE_STYLE_READS = frozenset(('face_style_catalog','face_style_preview','face_style_image'))
@@ -28,6 +29,11 @@ DECORATION_ACTIONS = DECORATION_READS | {'face_decoration_review','face_decorati
 def face_style_read_only(raw):
     """Exact read route only; existing recovery/import/source guards run first."""
     return _review_read_only(raw,FACE_STYLE_READS)
+
+
+def skin_reference_match_read_only(raw):
+    from .skin_reference_match_host import read_only
+    return read_only(raw)
 
 
 def eye_bag_read_only(raw):
@@ -80,7 +86,8 @@ def checked(engine,p):
     decoration_action=p.get('action') in DECORATION_ACTIONS
     sculpt_action=p.get('action') in SCULPT_ACTIONS
     eye_makeup_action=p.get('action') in EYE_MAKEUP_ACTIONS
-    if style_action or eye_bag_action or decoration_action or sculpt_action or eye_makeup_action:
+    reference_action=p.get('action') in SKIN_REFERENCE_ACTIONS
+    if style_action or eye_bag_action or decoration_action or sculpt_action or eye_makeup_action or reference_action:
         from .people_preset_plan import require_active_owner
         owner=require_active_owner(engine)
     else:
@@ -90,6 +97,9 @@ def checked(engine,p):
     asset=binding['asset_sha256']
     if (target['scope']=='face' and target['face_ref']['asset_sha256']!=asset) or (target['scope']=='all_people' and target['target_id']!=asset):
         raise ValueError('People command targets another source asset')
+    if reference_action:
+        from .skin_reference_match_host import check_action
+        check_action(p['action'],p.get('payload'),target)
     if style_action or eye_bag_action or decoration_action or sculpt_action or eye_makeup_action:
         if eye_makeup_action:
             from .eye_makeup_enhance_host import check_action
@@ -219,6 +229,13 @@ def apply(engine,raw,emit):
         records[request]['payload']=method(engine,state,target,payload,**options)
         skin_body.bound_receipt_payloads(records)
         frame=None
+    elif action in SKIN_REFERENCE_READS:
+        from . import skin_reference_match_host as reference_review
+        method={'skin_reference_match_catalog':reference_review.catalogue,
+                'skin_reference_match_preview':reference_review.preview,
+                'skin_reference_match_image':reference_review.image}[action]
+        records[request]['payload']=method(engine,state,target,payload)
+        frame=None
     elif action=='iris_reference':
         from .iris_makeup_host import reference
         reference(engine,state,target,payload)
@@ -295,7 +312,11 @@ def apply(engine,raw,emit):
         engine._people_sync();frame=None
     else:
         before_publish=None
-        if action=='face_decoration_support_alias_confirm':
+        if action in ('skin_reference_match_confirm','skin_reference_match_clear'):
+            from . import skin_reference_match_host as reference_review
+            method=reference_review.confirm if action.endswith('_confirm') else reference_review.clear
+            candidate,records[request]['payload']=method(engine,state,target,payload)
+        elif action=='face_decoration_support_alias_confirm':
             from . import face_decoration_support_alias_review as decoration_support_alias
             candidate,records[request]['payload']=decoration_support_alias.confirm(engine,state,target,payload)
         elif action=='face_decoration_alias_confirm':
@@ -368,7 +389,10 @@ def apply(engine,raw,emit):
             frame=engine._people_publish_pending_review(candidate)
         else:
             try:
-                if action=='face_decoration_support_alias_confirm':
+                if action in ('skin_reference_match_confirm','skin_reference_match_clear'):
+                    batch_id,frame=reference_review.publish(engine,state,target,payload,candidate,records[request]['payload'],
+                        request_id=request,mark_started=lambda:records[request].update(side_effects_started=True))
+                elif action=='face_decoration_support_alias_confirm':
                     batch_id,frame=decoration_support_alias.publish(engine,state,target,payload,candidate,records[request]['payload'],request_id=request,mark_started=lambda:records[request].update(side_effects_started=True))
                     # Retain the known ledger identity before status/readback or
                     # frame emission can fail. Identity is not success proof.
@@ -400,6 +424,8 @@ def apply(engine,raw,emit):
             records[request]['face_decoration_support_alias_review']=status_summary(engine._batch_controller().ledger[batch_id])
             records[request]['alias_members']=deepcopy(records[request]['payload']['alias_members'])
         if action=='face_decoration_alias_confirm':decoration_alias.verify_after_publish(engine,candidate,records[request]['payload'])
+        if action in ('skin_reference_match_confirm','skin_reference_match_clear'):
+            reference_review.verify_after_publish(engine,candidate,records[request]['payload'])
         if action=='face_style_confirm':style_review.verify_after_publish(engine,candidate,records[request]['payload'])
         if action=='eye_bag_confirm':eye_bag_review.verify_after_publish(engine,candidate,records[request]['payload'])
         if action=='analyse_face':select(engine,engine._people_owner().snapshot(),asset,target)
@@ -415,7 +441,8 @@ def finish(engine,p,error,emit):
     style_action=p.get('action') in FACE_STYLE_ACTIONS
     style_read=p.get('action') in FACE_STYLE_READS
     eye_bag_action=p.get('action') in EYE_BAG_ACTIONS
-    review_read=style_read or p.get('action') in EYE_BAG_READS or p.get('action') in ('face_decoration_alias_image','face_decoration_support_alias_image')
+    reference_action=p.get('action') in SKIN_REFERENCE_ACTIONS
+    review_read=style_read or p.get('action') in SKIN_REFERENCE_READS or p.get('action') in EYE_BAG_READS or p.get('action') in ('face_decoration_alias_image','face_decoration_support_alias_image')
     echo={'face_style_request':deepcopy({key:p.get(key) for key in ('action','document_id','document_epoch','document_revision','state_revision','association_revision','target','payload')})} if style_action else {}
     if p.get('action') in EYE_MAKEUP_ACTIONS:
         echo={'eye_makeup_enhance_request':deepcopy({key:p.get(key) for key in ('action','document_id','document_epoch','document_revision','state_revision','association_revision','target','payload')})}
@@ -429,19 +456,21 @@ def finish(engine,p,error,emit):
         echo={'face_decoration_support_alias_request':deepcopy({key:p.get(key) for key in ('action','document_id','document_epoch','document_revision','state_revision','association_revision','target','payload')})}
     if eye_bag_action:
         echo={'eye_bag_request':deepcopy({key:p.get(key) for key in ('action','document_id','document_epoch','document_revision','state_revision','association_revision','target','payload')})}
+    if reference_action:
+        echo={'skin_reference_match_request':deepcopy({key:p.get(key) for key in ('action','document_id','document_epoch','document_revision','state_revision','association_revision','target','payload')})}
     digest=hashlib.sha256(json.dumps({k:v for k,v in p.items() if k!='cmd'},sort_keys=True,allow_nan=False).encode()).hexdigest()
     if old.get('digest') not in (None,digest):
         emit({'event':'people_result','protocol':1,'action':p.get('action'),'request_id':p['request_id'],'document_id':p.get('document_id'),
               'success':False,'error':'People request identity was reused with different content','outcome_unknown':False,
               **({'outcome_unknown':True,'no_write':False,'rolled_back':False,'requires_reload':False} if p.get('action') in DECORATION_SUPPORT_ALIAS_ACTIONS else {}),
-              **echo,**({} if review_read or p.get('action') in DECORATION_SUPPORT_ALIAS_ACTIONS else {'doc_state':engine.doc_state()})});return
+              **echo,**({} if review_read or reference_action or p.get('action') in DECORATION_SUPPORT_ALIAS_ACTIONS else {'doc_state':engine.doc_state()})});return
     if 'result' in old:emit(old['result']);return
     if p.get('action') in EYE_BAG_READS:
         from .eye_bag_review_jobs import controller
         controller(engine).retire(p['request_id'])
     # Publication can succeed before status emission or history recording fails.
     # Rollback also advances the graph fence; neither case is a proven refusal.
-    guarded_review=style_action or eye_bag_action or p.get('action') in DECORATION_ACTIONS or p.get('action') in SCULPT_ACTIONS or p.get('action') in EYE_MAKEUP_ACTIONS
+    guarded_review=reference_action or style_action or eye_bag_action or p.get('action') in DECORATION_ACTIONS or p.get('action') in SCULPT_ACTIONS or p.get('action') in EYE_MAKEUP_ACTIONS
     owner=engine.__dict__.get('_people_graph_owner') if guarded_review else None
     fence_changed=(old.get('before_fence') is not None and
                    ((owner is None or owner.fence!=old['before_fence']) if guarded_review else engine._people_owner().fence!=old['before_fence']))
@@ -480,7 +509,11 @@ def finish(engine,p,error,emit):
         # Failed previews and attempted confirmations are never publication
         # evidence. Preserve only verified terminal/uncertain ledger diagnostics.
         result.pop('payload',None);result.pop('doc_state',None);result.pop('payload_released',None)
+    if reference_action and not result['success']:
+        result.pop('payload',None);result.pop('doc_state',None);result.pop('payload_released',None)
     records[p['request_id']]={'result':result,'digest':digest}
+    from .skin_reference_match_host import bound_receipt_images as bound_reference_images
+    bound_reference_images(records)
     from .facial_sculpt_host import bound_receipt_images as bound_sculpt_images
     bound_sculpt_images(records)
     from .eye_makeup_enhance_host import bound_receipt_images as bound_eye_makeup_images

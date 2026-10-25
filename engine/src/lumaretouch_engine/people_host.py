@@ -190,6 +190,8 @@ class PeopleHostMixin:
             result['facial_sculpt']=sculpt_report(self,state,source,self._people_cursors.get(asset))
             from .eye_makeup_enhance_host import report as eye_makeup_enhance_report
             result['eye_makeup_enhance']=eye_makeup_enhance_report(self,state,source,self._people_cursors.get(asset))
+            from .skin_reference_match_host import report as skin_reference_report
+            result['skin_reference_match']=skin_reference_report(self,state)
             result.update(binding=self._people_binding(),editing_target=deepcopy(target),editing_overrides=overrides,legacy_unresolved=legacy_report(state,asset))
             return result
         except (ValueError,OSError):return None
@@ -247,6 +249,8 @@ class PeopleHostMixin:
         validate_records(project);HAIR.validate(project)
         from .hair_unification_project import validate as validate_unification
         validate_unification(project)
+        from .skin_reference_match_project import validate as validate_reference_match
+        validate_reference_match(project)
         from .people_cross_owner_project import validate_project
         validate_project(project)
         return prepare(project,rows,self.HISTORY_MAX)
@@ -264,6 +268,7 @@ class PeopleHostMixin:
         load_unification(self,project)
         from .hair_unification_controller import invalidate_after_reload
         invalidate_after_reload(self)
+        self.__dict__.pop('_skin_reference_match_reviews',None)
         self._people_graph_owner=PeopleGraphOwner(project.get('people_graph'))
         self._people_support=SUPPORT.check_store(project.get('people_support_assets',{}))
         self._people_landmarks=RA.check_store(project.get('people_landmarks',{}))
@@ -310,11 +315,15 @@ class PeopleHostMixin:
             from .creative_derived_effects import require_graph
             require_graph(graph,source,document_id=document_id)
             result['creative_source'] = source
+            from .skin_reference_match_inputs import freeze as freeze_reference_match
+            freeze_reference_match(result,source)
             from .creative_derived_hair import capture as capture_hair
             capture_hair(retained_host,state,result,pc,source)
             from .hair_unification_project import capture_derived as capture_unification
             return capture_unification(retained_host,state,result,pc,source)
         if binding is None:return result
+        from .skin_reference_match_inputs import freeze as freeze_reference_match
+        freeze_reference_match(result,binding,source_path=source_path)
         HAIR.capture(retained_host,result,pc,binding,source_path=source_path)
         from .hair_unification_project import capture as capture_unification
         return capture_unification(retained_host,result,pc,binding,source_path=source_path)
@@ -342,6 +351,8 @@ class PeopleHostMixin:
         require_sculpt_transition(self,before,candidate)
         from .hair_unification_project import require_transition as require_hair_unification_transition
         require_hair_unification_transition(self,before,candidate)
+        from .skin_reference_match_project import require_transition as require_reference_transition
+        require_reference_transition(self,before,candidate)
         from .eye_makeup_enhance_project import require_transition as require_eye_makeup_enhance_transition
         require_eye_makeup_enhance_transition(self,before,candidate)
         def signature(state,asset):

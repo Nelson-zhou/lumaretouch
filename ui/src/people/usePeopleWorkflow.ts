@@ -10,6 +10,7 @@ import {runPeopleRequest, type DocState, type EngineStatus} from '../native';
 import {createPeopleWorkflow} from './workflow';
 import {type PeopleAction, type PeopleMailbox, type PeopleTarget} from './model';
 import {useBatchWorkflow} from '../batch/useBatchWorkflow';
+import {isSkinReferenceAction} from '../skinReferenceMatch/model';
 
 /** App lifetime keeps the original request queryable when the panel is collapsed. */
 export function usePeopleWorkflow(status: EngineStatus | null, doc: DocState | null, refresh: () => Promise<void>) {
@@ -176,11 +177,13 @@ export function usePeopleWorkflow(status: EngineStatus | null, doc: DocState | n
     if(work&&value)beginDecorationHistoryReadback(value.binding.document_epoch,batchId,action,decorationPresetAliasHistoryClass(batchId)!.marker!);
     return work;
   }
-  const guard = () => {
+  const guard = (action?: PeopleAction['action']) => {
     if (historyBusy) throw Error('共享来源批次历史仍在处理或查询中，不能重发修改。');
+    if (action && isSkinReferenceAction(action) && status?.ready_caps?.skin_reference_match_protocol !== 1)
+      throw Error('当前引擎未提供专用肤色参考匹配协议，不能使用其他操作代替。');
   };
   async function submit(action: PeopleAction['action'], payload: Record<string, unknown>, target: PeopleTarget): Promise<void> {
-    guard();
+    guard(action);
     if (!value) return Promise.reject(Error('当前照片尚未提供人物状态。'));
     const {document_id, document_epoch, document_revision} = value.binding;
     return workflow.submit({document_id, document_epoch, document_revision,
@@ -189,7 +192,8 @@ export function usePeopleWorkflow(status: EngineStatus | null, doc: DocState | n
   }
   return {value, state: {...state, pending: state.pending || historyBusy,
     uncertain: state.uncertain || history.ui.phase === 'uncertain'}, supported, enabled, submit,
-    submitCaptured: async (command: PeopleAction) => {guard(); return workflow.submit(command);},
+    submitCaptured: async (command: PeopleAction) => {guard(command.action); return workflow.submit(command);},
+    refreshCurrent: () => refreshRef.current(),
     patch: (patches: Parameters<typeof workflow.patch>[0]) => {guard(); return workflow.patch(patches);},
     cancelEyeBagRead: workflow.cancelEyeBagRead,
     recoverEyeBagRead: workflow.recoverEyeBagRead,

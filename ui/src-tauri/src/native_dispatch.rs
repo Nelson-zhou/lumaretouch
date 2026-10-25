@@ -55,7 +55,7 @@ impl AppState {
             require_dispatch_epoch(handle, expected_epoch)?;
             return handle.send(cmd);
         }
-        if crate::people_api::face_style::read_only(&cmd) || crate::people_api::eye_bag::read_only(&cmd) || crate::people_api::face_decoration::read_only(&cmd) || crate::people_api::facial_sculpt::read_only(&cmd) || crate::people_api::eye_makeup_enhance::read_only(&cmd) || crate::people_api::decoration_alias::read_only(&cmd) || crate::people_api::decoration_support_alias::read_only(&cmd) {
+        if crate::people_api::skin_reference_match::read_only(&cmd) || crate::people_api::face_style::read_only(&cmd) || crate::people_api::eye_bag::read_only(&cmd) || crate::people_api::face_decoration::read_only(&cmd) || crate::people_api::facial_sculpt::read_only(&cmd) || crate::people_api::eye_makeup_enhance::read_only(&cmd) || crate::people_api::decoration_alias::read_only(&cmd) || crate::people_api::decoration_support_alias::read_only(&cmd) {
             let guard = self.engine.lock().map_err(|_| "引擎锁中毒".to_string())?;
             return crate::people_api::enqueue(guard.as_ref().ok_or("引擎未启动")?, cmd);
         }
