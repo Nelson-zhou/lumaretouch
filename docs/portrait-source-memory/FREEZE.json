@@ -1,0 +1,79 @@
+{
+  "schema_version": 1,
+  "baseline_commit": "9e6af5397f7721eee7782392a3a80fd8240696cb",
+  "baseline_tree": "630bbe5500c8c6176dea726a568b2c4fad0c2c90",
+  "date": "2026-10-25",
+  "status": "SOURCE_CONNECTED_PARTIAL_ALL_RUNTIME_ACCEPTANCE_UNRUN",
+  "scope": "Actual portrait export adapter selects explicit source materialization v1: one private readonly float32 result with bounded exact legacy NumPy cast/divide blocks for original RGB8/16 and derived float32. Direct v0 callers retain original expression. No new algorithm or handbook completion count.",
+  "manifest_policy": "Exact7 payload files plus this manifest,8 total. Historical manifests and old sparse directory untouched.",
+  "source_checks": {
+    "python_ast": 5,
+    "whitespace": "All7 payload files including new files and git diff --check clean",
+    "independent_review": "Known-owner spans and cleanup corrected; no remaining concrete static finding. Exact arithmetic, source/repair ownership, legacy dispatch, semantic allowance and solver gate reviewed.",
+    "fixture_functions": {
+      "isolated": 17,
+      "flow": 19
+    },
+    "file_lines": {
+      "App.tsx": 2152,
+      "main.rs": 2054,
+      "server.py": 7050
+    },
+    "unchanged_sources_sha256": {
+      "engine/src/lumaretouch_engine/people_render_runtime.py": "5fec9df1294d4f0bd33bee499a3b2ba07396051e0dba213a1655e8dfa5faa3d9",
+      "engine/src/lumaretouch_engine/people_snapshot.py": "32e0f9ea3dc568ffe544921c8812fd354e9891bbef6997c757b2c4c7ced5fbc8",
+      "engine/src/lumaretouch_engine/creative_derived_repair_runtime.py": "39544a0d2a9a997aaa894d98e2170a8279a30a31eb3fe66699c9fdc4000bfd37"
+    }
+  },
+  "remaining": [
+    "All numerical, runtime, RSS, actual export and photo acceptance UNRUN",
+    "Existing 36N semantic allowance and 256N+128MiB solver gate unchanged; no larger-photo admission claim",
+    "Decode/ICC, source-proof validation, semantic resizing, recovery rasterization and downstream portrait geometry/effects remain independently unbounded phases",
+    "Torch preview and its repair proof CPU staging unchanged",
+    "Opaque SDR portrait source contract remains; no HDR/alpha clipping",
+    "Helper cancellation exists but no new user-facing export cancellation route claimed"
+  ],
+  "unrun": [
+    "Product imports/execution",
+    "Tests/build/compiler/typecheck",
+    "Model download/inference",
+    "Numerical/performance/RSS/photo/export/reopen acceptance"
+  ],
+  "files": [
+    {
+      "path": "docs/portrait-source-memory/INTEGRATION.md",
+      "bytes": 3651,
+      "sha256": "8468f41ed5d2aa4bc9b1fe5b9e58b67e96c373597936cf7d9b857b77c241e906"
+    },
+    {
+      "path": "docs/portrait-source-memory/MATERIALIZATION.md",
+      "bytes": 7179,
+      "sha256": "18aa509bd335fd614e826ea54e70e18e626507a4606a84d16a5d98aeee3696ef"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_engine_runtime.py",
+      "bytes": 13803,
+      "sha256": "88cbf89b5befb87dd84772a37b4c6d01c2f774e0f15d7cea2a8eda2d3fb40ab3"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_export.py",
+      "bytes": 9634,
+      "sha256": "45e065563fd6f8377283cf0e75e11977db618090bfe053692147cc3f46a87895"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_source_materialization.py",
+      "bytes": 8912,
+      "sha256": "0f80ed76c84457926caff847dc0763abc4652c2a82b90ad35e14f604f6ad0429"
+    },
+    {
+      "path": "engine/tests/test_people_source_materialization_flow_unrun.py",
+      "bytes": 28549,
+      "sha256": "d259496fa2a006017f2e1211be7b0644c6944677e33fec86021c06d0cae10ff6"
+    },
+    {
+      "path": "engine/tests/test_people_source_materialization_unrun.py",
+      "bytes": 8881,
+      "sha256": "88b0a8e310543177d53549b31f51b3eace3b6b858129776914be7b12111b69c4"
+    }
+  ]
+}

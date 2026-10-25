@@ -69,8 +69,10 @@ def require_ready(pipe):
     if reason:raise ValueError('Retained people edits are unresolved: '+reason)
 
 
-def prepare_export(snapshot,source,repaired,*,byte_budget,document_id=None,recovery_assets=None,body_pose=None,body_source_path=None,creative_repair_evidence=None):
+def prepare_export(snapshot,source,repaired,*,byte_budget,document_id=None,recovery_assets=None,body_pose=None,body_source_path=None,creative_repair_evidence=None,source_materialization_version=0):
     """Original RGB8/16 enters once; all face solvers run before tile slicing."""
+    if type(source_materialization_version) is not int or source_materialization_version not in (0,1):
+        raise ValueError('Unsupported portrait source materialization strategy')
     if type(source) is not np.ndarray or source.ndim != 3 or source.shape[2] != 3 or min(source.shape[:2]) < 1:
         raise ValueError('People export requires actual RGB source pixels; alpha is unsupported')
     from .people_snapshot import at_dimensions
@@ -105,9 +107,21 @@ def prepare_export(snapshot,source,repaired,*,byte_budget,document_id=None,recov
         raise ValueError('People export needs an explicit nonnegative byte budget')
     pixels=int(source.shape[0])*int(source.shape[1])
     reserved=source.nbytes+(0 if repaired is None else repaired.nbytes)+pixels*36
+    materialization=None
+    if source_materialization_version == 1:
+        from .people_source_materialization import can_materialize_export_source, inspect_export_source
+        if can_materialize_export_source(source,divisor):
+            materialization=inspect_export_source(source,divisor)
+            # Retain the historical semantic-resampling allowance. A small view
+            # may own a larger backing allocation, never charge only its nbytes.
+            reserved=max(source.nbytes+pixels*36,materialization.peak_bytes)+(0 if repaired is None else repaired.nbytes)
     state,asset,analyses=at_dimensions(snapshot,tuple(source.shape[:2]),byte_budget=byte_budget-reserved)
-    rgb=np.array(source.astype(np.float32)/divisor,dtype=np.float32,copy=True)
-    rgb.setflags(write=False)
+    if materialization is None:
+        rgb=np.array(source.astype(np.float32)/divisor,dtype=np.float32,copy=True)
+        rgb.setflags(write=False)
+    else:
+        from .people_source_materialization import materialize_export_source
+        rgb=materialize_export_source(source,divisor,max_bytes=materialization.peak_bytes)
     if creative is None:
         from .hair_colour_project import kwargs as hair_inputs
         source_inputs=hair_inputs(snapshot)

@@ -125,7 +125,7 @@ def prepare(spec,source,repaired):
         from .creative_derived_recovery import validate_supports
         validate_supports(snapshot['state'],snapshot.get('support_assets',{}),snapshot['creative_source'])
     recovery=ASSETS.raster(snapshot['state'],snapshot.get('support_assets',{}),snapshot['asset_sha256'],source.shape[:2])
-    return prepare_export(snapshot,source,repaired,document_id=document_id,creative_repair_evidence=replay_evidence,byte_budget=available_estimate(),recovery_assets=recovery,body_pose=getattr(spec,'body_pose',None),body_source_path=None if snapshot.get('creative_source') is not None else getattr(spec,'body_pose_source_path',None))
+    return prepare_export(snapshot,source,repaired,document_id=document_id,creative_repair_evidence=replay_evidence,byte_budget=available_estimate(),recovery_assets=recovery,body_pose=getattr(spec,'body_pose',None),body_source_path=None if snapshot.get('creative_source') is not None else getattr(spec,'body_pose_source_path',None),source_materialization_version=1)
 
 
 def verify_source(snapshot,path):
