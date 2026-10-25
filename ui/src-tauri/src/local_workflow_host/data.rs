@@ -22,7 +22,7 @@ impl Lease {
 }
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct UiExternal { pub phase: String, pub request: Value, pub epoch: [u8; 16] }
+pub struct UiExternal { pub phase: String, pub request: Value, pub epoch: [u8; 16], #[serde(skip)] pub query: Option<Value> }
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct RequestRow { pub request: Request, pub receipt: Value, pub external: Option<UiExternal> }
@@ -40,6 +40,7 @@ pub struct Run {
     pub managed_root_identity: [String; 2],
     pub sequence: u64, pub snapshot: Value, pub released: bool,
     pub release: Option<UiExternal>, pub error: Option<String>,
+    #[serde(default)] pub handoff: Value,
 }
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]

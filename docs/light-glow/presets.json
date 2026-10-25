@@ -1,0 +1,17 @@
+{
+  "status": "authored_unrun_local_calibration_not_vendor_values",
+  "operation_id": "lnx.light_glow.v1",
+  "math_identity": 65537,
+  "shared": {"scattering": 0, "tint": {"hue_deg": 0, "saturation": 0, "lightness": 0}},
+  "presets": [
+    {"mode": "black_mist", "preset": "eighth", "label": "1/8", "default": false, "strength": 0.15, "radius_px": 16, "threshold": 0.72, "exposure_ev": 0},
+    {"mode": "black_mist", "preset": "quarter", "label": "1/4", "default": true, "strength": 0.30, "radius_px": 24, "threshold": 0.65, "exposure_ev": 0},
+    {"mode": "black_mist", "preset": "half", "label": "1/2", "default": false, "strength": 0.50, "radius_px": 36, "threshold": 0.58, "exposure_ev": 0},
+    {"mode": "white_mist", "preset": "eighth", "label": "1/8", "default": false, "strength": 0.20, "radius_px": 24, "threshold": 0.58, "exposure_ev": 0.25},
+    {"mode": "white_mist", "preset": "quarter", "label": "1/4", "default": true, "strength": 0.35, "radius_px": 36, "threshold": 0.50, "exposure_ev": 0.50},
+    {"mode": "white_mist", "preset": "half", "label": "1/2", "default": false, "strength": 0.55, "radius_px": 54, "threshold": 0.42, "exposure_ev": 0.75},
+    {"mode": "glow", "preset": "weak", "label": "弱", "default": true, "strength": 0.25, "radius_px": 24, "threshold": 0.68, "exposure_ev": 0.25},
+    {"mode": "glow", "preset": "medium", "label": "中", "default": false, "strength": 0.45, "radius_px": 36, "threshold": 0.60, "exposure_ev": 0.50},
+    {"mode": "glow", "preset": "strong", "label": "强", "default": false, "strength": 0.70, "radius_px": 54, "threshold": 0.50, "exposure_ev": 1}
+  ]
+}

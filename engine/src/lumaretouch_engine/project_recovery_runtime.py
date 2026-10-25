@@ -17,6 +17,7 @@ def observe(event):
             or event.get('outcome_unknown') or event.get('requires_reload')
             or event.get('status') in ('failed', 'unknown', 'partial', 'blocked')
             or event.get('requires_readback')
+            or (event.get('event')=='light_glow_result' and (event.get('receipt') or {}).get('outcome_unknown') is True)
             or (event.get('event')=='lens_blur_result' and (event.get('receipt') or {}).get('outcome_unknown') is True)
             or (event.get('event')=='expression_replacement_result' and (event.get('receipt') or {}).get('phase')=='unknown')):
             boundary['failed'] = True
@@ -43,6 +44,8 @@ def finish(engine, boundary, error=None):
         # managed transaction writes the saved project; readback cannot bless a
         # partial copy or taint a committed recipe on a rejected session request.
         return
+    from .light_glow_host import read_only as glow_read_only
+    if glow_read_only(message):return
     from .lens_blur_host import read_only as lens_read_only
     if lens_read_only(message):return
     from .expression_replacement_host import read_only as expression_read_only
@@ -85,7 +88,7 @@ def finish(engine, boundary, error=None):
         'project','session','history','virtual_copy','managed_import','source_relocation',
         'people','batch','primary_calibration','colour_editor','selective_colour','colour_grading',
         'photo_grain','photo_detail','extended_tone','shoulder_shape','leg_shape','arm_shape',
-        'waist_shape','leg_length','neck_shape','torso_length','waist_length','head_size','body_slim','custom_lut','semantic_colour','creative_document','common_background','expression_replacement','lens_blur'):
+        'waist_shape','leg_length','neck_shape','torso_length','waist_length','head_size','body_slim','custom_lut','semantic_colour','creative_document','common_background','expression_replacement','lens_blur','light_glow'):
         if message.get('action') not in ('state','query','status','receipt','list','context'):
             runtime.revision += 1
 
@@ -126,7 +129,7 @@ class Runtime:
             # implement the existing active/pending/uncertain/job conventions.
             if name in ('bench', '_export', '_thumbs', '_picks'):
                 if owner.is_alive(): raise RecoveryError('后台任务尚未完成：' + name)
-            if not (name.endswith(('_controller', '_owner', '_host')) or name in ('_batch_sync','_expression_replacement_service','_lens_blur_service')):
+            if not (name.endswith(('_controller', '_owner', '_host')) or name in ('_batch_sync','_expression_replacement_service','_lens_blur_service','_light_glow_service')):
                 continue
             for field in ('active', 'uncertain', 'pending', 'job', 'worker_running'):
                 value = getattr(owner, field, None)

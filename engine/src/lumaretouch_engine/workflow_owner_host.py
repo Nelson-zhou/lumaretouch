@@ -18,6 +18,8 @@ class WorkflowOwner:
         self.operations = {}
         self.plans = {}
         self.preflights = {}
+        from .workflow_preset_handoff import PresetHandoff
+        self.presets = PresetHandoff(self)
 
     def _lease(self, session_id, *, idle=False):
         owner = getattr(self.engine, '_ingest_session_host', None)
@@ -26,6 +28,12 @@ class WorkflowOwner:
         lease = owner._session(session_id)
         if lease['owner'] != 'workflow':
             raise ValueError('The ingestion lease belongs to another producer')
+        if self.presets.active is not None:
+            if self.presets.active['session_id'] != session_id:
+                raise ValueError('Preset handoff belongs to another lease')
+            self.presets._check()
+            if idle: raise ValueError('Preset handoff is not back at its clean armed boundary')
+            return owner, lease
         owner._identity(lease)
         if idle:
             if lease.get('operation_id') or lease.get('uncertain') or lease.get('stop_reason'):
@@ -97,17 +105,26 @@ class WorkflowOwner:
             destination_roots = self._filesystem(ordered, expected_destination_roots=existing['destination_roots'] if existing else None)
             if self.pending():
                 raise ValueError('Original workflow export remains unresolved; query it first')
-            if len(self.requests) + 2 * lease['max_operations'] > P.MAX_REQUESTS:
-                raise ValueError('Owner receipt capacity cannot retain both export phases for this bounded session')
+            receipt_phases = 4 if any(node['operation']['kind'] == 'compatible_preset' for node in ordered) else 2
+            if len(self.requests) + receipt_phases * lease['max_operations'] > P.MAX_REQUESTS:
+                raise ValueError('Owner receipt capacity cannot retain every preset and export phase for this bounded session')
             if self.session is not None and self.session['session_id'] == request['session_id']:
                 if self.session['graph_sha256'] != request['graph_sha256']:
                     raise ValueError('This ingestion session is already bound to a different immutable graph')
             if ordered[1]['error_policy'] != 'stop':
                 value['diagnostics'].append({'severity': 'error', 'code': 'import_policy_requires_stop',
                     'message': 'The genuine ingestion lease stops after any failed or cancelled import; skip cannot continue this session. Select stop for the managed-import node.'})
-            if any(node['operation']['kind'] == 'compatible_preset' for node in ordered):
-                value['diagnostics'].append({'severity': 'error', 'code': 'preset_owner_not_bound',
-                    'message': 'This lease preserves editor selection. The real preset owner requires a loaded target and target-image review; this workflow bridge cannot safely apply it. Remove the preset node or finish the session and review it in the editor. No preset is silently skipped and no review acknowledgment is fabricated.'})
+            preset_nodes = [node for node in ordered if node['operation']['kind'] == 'compatible_preset']
+            if preset_nodes:
+                from .workflow_preset_catalogue import resolve
+                from .workflow_preset_review import support_reason
+                selected = preset_nodes[0]
+                preset = resolve(selected['operation']['preset_id'], selected['operation']['preset_sha256'])
+                reason = support_reason(preset)
+                if reason: raise ValueError(reason)
+                if selected['error_policy'] != 'stop': raise ValueError('Reviewed preset handoff currently requires stop-on-error')
+                if not self.engine._image_loaded or not self.engine._load_id or self.engine._doc_index < 0:
+                    raise ValueError('Open a saved editor document before starting a preset workflow; review must return to that exact document')
             if ordered[-1]['operation']['recipe_sha256'] != P.RECIPE_SHA256:
                 value['diagnostics'].append({'severity': 'error', 'code': 'export_profile_mismatch',
                     'message': 'Choose the returned explicit export profile, save the graph and preflight again; an arbitrary recipe hash is not export authority.'})
@@ -119,14 +136,15 @@ class WorkflowOwner:
                     'run_id': current.get('run_id') if current and current['session_id'] == request['session_id'] else None}
                 value['supported'] = True
                 value['diagnostics'].append({'severity': 'info', 'code': 'bounded_import_export',
-                    'message': 'Real saved-project managed import and per-document frozen export are supported. Output conflicts stop without overwrite, rename, skip or implicit directory creation. Preset nodes are unsupported.'})
+                    'message': 'Real saved-project managed import and per-document frozen export are supported. Output conflicts stop without overwrite, rename, skip or implicit directory creation. Supported colour presets pause for actual image approval, explicit save and verified editor return.'})
         except Exception as error:
             value['diagnostics'].append({'severity': 'error', 'code': 'owner_preflight_failed', 'message': str(error)[:2048]})
         self.preflights[request['request_id']] = {'request': deepcopy(request), 'value': deepcopy(value)}
         return self._result(request, 'readback', **value)
 
     def _bound(self, request, command):
-        owner, lease = self._lease(request['session_id'], idle=True)
+        applying = command['operation']['kind'] == 'apply_preset'
+        owner, lease = self._lease(request['session_id'], idle=not applying)
         session = self.session
         if session is None or session['session_id'] != request['session_id']:
             raise ValueError('This exact ingestion session has no supported workflow preflight')
@@ -135,7 +153,7 @@ class WorkflowOwner:
         for key, expected in (('workflow_id', graph['workflow_id']), ('workflow_revision', graph['revision']),
                               ('graph_sha256', session['graph_sha256']),
                               ('project_id', session['binding']['project_id']),
-                              ('node_id', session['ordered'][-1]['id'])):
+                              ('node_id', (self.presets.node() if command['operation']['kind'] in ('preflight_preset', 'apply_preset') else session['ordered'][-1])['id'])):
             if identity[key] != expected:
                 raise ValueError('Owner command differs from its preflight graph/project/node')
         if session['run_id'] is not None and session['run_id'] != identity['run_id']:
@@ -146,8 +164,15 @@ class WorkflowOwner:
                 or document['project_id'] != identity['project_id']
                 or document['source_sha256'] != identity['source_sha256']):
             raise ValueError('Command document receipt differs from its source identity')
-        row = self._document(owner, lease, identity, document)
+        row = self.presets._check(target_loaded=True)[1] if applying else self._document(owner, lease, identity, document)
         operation = command['operation']
+        if operation['kind'] in ('preflight_preset', 'apply_preset'):
+            expected_preset = self.presets.node()['operation']
+            if operation['preset_id'] != expected_preset['preset_id']:
+                raise ValueError('Preset differs from the exact preflight graph')
+            actual_hash = operation.get('preset_sha256', (operation.get('assessment') or {}).get('preset_sha256'))
+            if actual_hash != expected_preset['preset_sha256']:
+                raise ValueError('Preset version differs from the exact preflight graph')
         expected_export = session['ordered'][-1]['operation']
         if operation['kind'] == 'freeze_export':
             if operation['output_root'] != expected_export['output_root'] or operation['recipe_sha256'] != P.RECIPE_SHA256:
@@ -156,6 +181,15 @@ class WorkflowOwner:
         return row
 
     def _document(self, owner, lease, identity, document):
+        completed = self.presets.completed.get(document['receipt_id'])
+        if completed is not None:
+            if document != completed['document'] or identity['input_occurrence_id'] != completed['identity']['input_occurrence_id']:
+                raise ValueError('Preset-result chain does not match this exact occurrence')
+            original = {**document, 'receipt_id': completed['import_document']['receipt_id']}
+            row = self._document(owner, lease, identity, original)
+            if self._row_stamp(row) != completed['row_stamp']:
+                raise ValueError('Saved reviewed preset target changed after its verified return')
+            return row
         imported = owner.operations.get(document['receipt_id'])
         if (imported is None or imported['session_id'] != lease['session_id']
                 or imported.get('status') != 'succeeded'):
@@ -215,7 +249,7 @@ class WorkflowOwner:
             'fingerprint', 'managed_import', 'import_origin', 'copy_number')}})
 
     def pending(self):
-        return any(record['command']['operation']['kind'] == 'start_export'
+        return self.presets.active is not None or any(record['command']['operation']['kind'] == 'start_export'
                    and record['receipt']['result']['status'] in ('pending', 'unknown')
                    for record in self.operations.values())
 
@@ -227,7 +261,13 @@ class WorkflowOwner:
         receipt = record['receipt']
         status = receipt['result']['status']
         outer = 'readback' if query else status if status in ('pending', 'unknown', 'failed') else 'succeeded'
-        return self._result(request, outer, receipt=deepcopy(receipt))
+        extra = {}
+        if record['command']['operation']['kind'] in ('preflight_preset', 'apply_preset'):
+            current = self.presets.public()
+            if current is not None and current['operation_id'] == record['command']['identity']['operation_id']:
+                record['handoff'] = deepcopy(current)
+            extra['handoff'] = deepcopy(record.get('handoff'))
+        return self._result(request, outer, receipt=deepcopy(receipt), **extra)
 
     def _execute(self, request):
         command = P.command(request['command'])
@@ -255,9 +295,25 @@ class WorkflowOwner:
                   'dispatch_started': False, 'task_id': None}
         self.requests[rid] = record; self.operations[oid] = record
         try:
-            if unresolved: raise ValueError('Original export is pending or uncertain; only query its receipt')
+            if unresolved and not (operation['kind'] == 'apply_preset' and self.presets.active is not None
+                    and self.presets.active['phase'] == 'authorized'):
+                raise ValueError('Original owner work is pending or uncertain; query it first')
+            if operation['kind'] == 'apply_preset' and self.presets.active is not None:
+                entry = self.presets.active
+                previous = entry['preflight']['command']['identity']
+                same_identity = all(command['identity'][key] == value for key, value in previous.items() if key != 'operation_id')
+                if (entry['phase'] == 'authorized' and request['session_id'] == entry['session_id'] and same_identity
+                        and operation['assessment'] == entry['assessment'] and operation['document'] == entry['initial_document']
+                        and operation['preset_id'] == entry['preset_id']):
+                    # Correlate an exact admitted intent before source/CAS checks
+                    # can fail. This changes no recipe and grants no dispatch.
+                    entry.update(operation_id=oid, apply=record)
             row = self._bound(request, command)
-            if operation['kind'] == 'freeze_export':
+            if operation['kind'] == 'preflight_preset':
+                self.presets.start(record, row)
+            elif operation['kind'] == 'apply_preset':
+                self.presets.apply(record)
+            elif operation['kind'] == 'freeze_export':
                 frozen = E.freeze(self.engine, row, operation['document'], operation['output_root'],
                                   self.session['graph']['revision'], rid, self.session['destination_roots'])
                 frozen['row_stamp'] = self._row_stamp(row)
@@ -290,16 +346,30 @@ class WorkflowOwner:
                 result, record['task_id'] = E.start(self.engine, frozen, rid)
                 record['receipt'] = self._receipt(command, result)
         except Exception as error:
+            if operation['kind'] == 'apply_preset' and self.presets.active is not None:
+                self.presets.active.update(phase='unknown', message=str(error)[:2048])
             result = ({'status': 'unknown', 'reason': str(error)[:2048]} if record['dispatch_started'] else
                       {'status': 'failed', 'code': 'owner_admission_rejected', 'message': str(error)[:2048], 'retained_document': None})
             record['receipt'] = self._receipt(command, result)
         return self._publish(request, record)
 
     def _query(self, request):
+        step = self.presets.steps.get(request['original_request_id'])
+        if step is not None:
+            original = step['request']
+            if original['session_id'] != request['session_id'] or original['operation_id'] != request['operation_id']:
+                raise ValueError('Step query differs from its original handoff identity')
+            result = self._result(original, **deepcopy(step['result']))
+            return self._result(request, 'readback', operation_id=request['operation_id'], step_result=result)
         record = self.requests.get(request['original_request_id'])
         if (record is None or record['command']['identity']['operation_id'] != request['operation_id']
                 or record['request']['session_id'] != request['session_id']):
             return self._result(request, 'unknown', error='Original owner receipt is unavailable; no replay or replacement operation is authorized')
+        # Read retained facts even if a partial save changed the disk CAS. This
+        # grants no new mutation and never retries the original command.
+        if record['command']['operation']['kind'] in ('preflight_preset', 'apply_preset'):
+            self._publish(record['request'], record)
+            return self._publish(request, record, query=True)
         self._lease(request['session_id'])
         if record['receipt']['result']['status'] in ('pending', 'unknown') and record['dispatch_started']:
             result = E.observe(self.engine, record['task_id'], record['frozen'], record['command']['operation']['document'])
@@ -315,16 +385,32 @@ class WorkflowOwner:
         try:
             request = P.envelope(payload)
             if request['action'] == 'profile':
-                return self._result(request, 'readback', supported=True, **self._profile())
+                from .workflow_preset_catalogue import list_catalogue, resolve
+                from .workflow_preset_review import support_reason
+                catalogue = list_catalogue()
+                for row in catalogue['presets']:
+                    try:
+                        reason = support_reason(resolve(row['id'], row['preset_sha256']))
+                        row.update(workflow_supported=reason is None, support_reason=reason or 'target_image_review_required')
+                    except Exception as error:
+                        row.update(workflow_supported=False, support_reason=str(error)[:2048])
+                return self._result(request, 'readback', supported=True,
+                    preset_catalogue=catalogue, **self._profile())
             if request['action'] == 'preflight': return self._preflight(request)
             if request['action'] == 'execute': return self._execute(request)
             if request['action'] == 'query': return self._query(request)
-            # There is no retained review in this bounded version. A review_id
-            # is not authorization and cannot be exchanged for a synthetic ACK.
+            if request['action'] == 'review_step': return self.presets.step(request)
+            if request['action'] == 'review_image': return self.presets.image(request)
             self._lease(request['session_id'])
-            return self._result(request, 'failed', error='No real preset review is owned by this workflow bridge; preset graphs fail preflight and must be reviewed in the editor after the session is safely released')
+            handoff = self.presets.public()
+            if handoff is None or request['operation_id'] != handoff['operation_id'] or (handoff['review'] or {}).get('review_id') != request['review_id']:
+                raise ValueError('Original preset review is not available')
+            return self._result(request, 'readback', opened=True, handoff=handoff)
         except Exception as error:
-            return self._result(request, 'unknown' if request.get('action') == 'query' else 'failed', error=str(error)[:2048])
+            extra = {'dispatch_rejected': True, 'operation_id': request.get('operation_id'), 'step': request.get('step')} if request.get('action') == 'review_step' else {}
+            if request.get('action') == 'review_image':
+                extra['operation_id'] = request.get('operation_id')
+            return self._result(request, 'unknown' if request.get('action') == 'query' else 'failed', error=str(error)[:2048], **extra)
 
 
 def controller(engine, emit):
@@ -340,7 +426,7 @@ def handle(engine, payload, emit):
 
 
 def ingest_passthrough(engine, payload):
-    """Strict lease-gate admission only; never bypasses other subsystem guards."""
+    """Exact same-lease transitions only; no general editor exemption."""
     try:
         request = P.envelope(payload)
         if request['action'] == 'profile': return True
@@ -348,15 +434,22 @@ def ingest_passthrough(engine, payload):
         if ingestion is None: return False
         lease = ingestion._session(request['session_id'])
         if lease['owner'] != 'workflow': return False
-        ingestion._identity(lease)
-        if request['action'] in ('query', 'open_review'):
-            owner = getattr(engine, '_workflow_owner_host', None)
-            if owner is None: return request['action'] == 'query'  # Unknown readback, never redispatch.
+        owner = getattr(engine, '_workflow_owner_host', None)
+        if owner is not None and owner.presets.active is not None:
+            entry = owner.presets.active
+            if entry['session_id'] != request['session_id']: return False
             if request['action'] == 'query':
-                record = owner.requests.get(request['original_request_id'])
-                return record is None or (record['request']['session_id'] == request['session_id']
-                    and record['command']['identity']['operation_id'] == request['operation_id'])
-            return False  # No synthetic or unretained preset review route.
+                original = owner.requests.get(request['original_request_id']) or owner.presets.steps.get(request['original_request_id'])
+                return original is not None and original['request']['session_id'] == request['session_id']
+            if request['action'] in ('review_step', 'review_image', 'open_review'):
+                return request['operation_id'] == entry['operation_id']
+            return (request['action'] == 'execute' and entry['phase'] == 'authorized'
+                    and P.command(request['command'])['operation']['kind'] == 'apply_preset')
+        ingestion._identity(lease)
+        if request['action'] == 'query':
+            return True  # Missing receipts return Unknown, never redispatch.
+        if request['action'] in ('review_step', 'review_image', 'open_review'):
+            return request['action'] == 'review_step' and owner is not None and request['request_id'] in owner.presets.steps
         return not (lease.get('operation_id') or lease.get('uncertain') or lease.get('stop_reason'))
     except (ValueError, TypeError, KeyError, OSError):
         return False
@@ -364,10 +457,12 @@ def ingest_passthrough(engine, payload):
 
 def guard_command(engine, name, payload):
     """The ingestion lease cannot be released/reused while export is unresolved."""
+    from .workflow_preset_dispatch import permits
+    if permits(engine, name, payload): return
     owner = getattr(engine, '_workflow_owner_host', None)
     if owner is None or not owner.pending(): return
     if name in ('hello', 'ping', 'status', 'shutdown'): return
-    if name == 'workflow_owner' and payload.get('action') in ('query', 'profile'): return
+    if name == 'workflow_owner' and ingest_passthrough(engine, payload): return
     if name == 'ingest_session' and payload.get('action') in ('state', 'query'): return
     if name == 'project' and payload.get('action') == 'state': return
     if name == 'session' and payload.get('action') == 'query': return

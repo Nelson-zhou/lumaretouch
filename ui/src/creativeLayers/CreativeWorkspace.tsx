@@ -4,9 +4,9 @@ import {CreativeLayersPanel} from './CreativeLayersPanel';
 import type {CreativeWorkspaceOwner} from './useCreativeWorkspace';
 
 /** Real layer workspace plus the existing tool catalogue, extracted without dropping tools. */
-export function CreativeWorkspace({owner, hasImage, available, onBack, onHeal, healBlocked, onLens, lensBlocked}: {
+export function CreativeWorkspace({owner, hasImage, available, onBack, onHeal, healBlocked, onLens, lensBlocked, onGlow, glowBlocked}: {
   owner: CreativeWorkspaceOwner; hasImage: boolean; available: boolean;
-  onBack: () => void; onHeal: () => void; healBlocked: boolean; onLens: () => void; lensBlocked: boolean;
+  onBack: () => void; onHeal: () => void; healBlocked: boolean; onLens: () => void; lensBlocked: boolean; onGlow: () => void; glowBlocked: boolean;
 }) {
   return <section className="creativeView">
     <div className="creativeHead"><div><h2>创意</h2><span>真实图片图层与可恢复的文档编辑</span></div>
@@ -28,10 +28,11 @@ export function CreativeWorkspace({owner, hasImage, available, onBack, onHeal, h
       {TOOL_CATEGORIES.map(category => <div className="cGroup" key={category}><h3>{category}</h3><div className="cCards">
         {TOOLS.filter(tool => tool.category === category).map(tool => {
           const lens = tool.id === '165438';
+          const glow = tool.id === '211524';
           const heal = tool.name.includes('智能消除');
-          const wired = heal || lens;
-          return <button key={tool.id} className={`cCard${wired ? ' on' : ' off'}`} disabled={!wired || !hasImage || owner.pending || (lens ? lensBlocked : healBlocked)}
-            title={lens ? '人工镜头散焦与完整图像审核；AI 景深尚不可用' : wired ? '在画布上使用消除笔' : '该工具将在后续版本提供'} onClick={() => {if (lens && !lensBlocked) onLens(); else if (heal && !healBlocked) onHeal();}}>
+          const wired = heal || lens || glow;
+          return <button key={tool.id} className={`cCard${wired ? ' on' : ' off'}`} disabled={!wired || !hasImage || owner.pending || (glow ? glowBlocked : lens ? lensBlocked : healBlocked)}
+            title={glow ? '黑柔、白柔与发光：原创扩散配方，完整图像审核后生成新副本' : lens ? '人工镜头散焦与完整图像审核；AI 景深尚不可用' : wired ? '在画布上使用消除笔' : '该工具将在后续版本提供'} onClick={() => {if (glow && !glowBlocked) onGlow(); else if (lens && !lensBlocked) onLens(); else if (heal && !healBlocked) onHeal();}}>
             <b>{tool.name}</b><span>{(tool.interaction || tool.output || '').slice(0, 46)}</span></button>;
         })}
       </div></div>)}

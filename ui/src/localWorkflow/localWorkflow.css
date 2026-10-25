@@ -51,3 +51,11 @@
   .local-workflow-rule { grid-template-columns: minmax(0, 1fr); }
   .local-workflow-heading { align-items: flex-start; }
 }
+
+.local-workflow-review-images { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; }
+.local-workflow-review-images figure { margin: 0; min-width: 0; }
+.local-workflow-review-images img { width: 100%; height: auto; display: block; background: #171717; border-radius: 6px; }
+.local-workflow-review-images figcaption { margin-block: 8px; font-weight: 600; }
+.local-workflow .local-workflow-review-check { flex-direction: row; align-items: flex-start; line-height: 1.5; }
+.local-workflow-review-check input { flex: none; margin-top: 3px; }
+.local-workflow-handoff button { margin-block: 6px; }

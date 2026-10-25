@@ -5,12 +5,14 @@ use lrt_local_workflow::{DurableRunner, ports::{CommandKind, Receipt, ReceiptRes
     scheduler::RunStatus, schema::{Graph, NodeKind, ValidatedGraph}};
 use serde_json::{json, Value};
 use crate::AppState;
-use super::{data::*, ingestion, storage::{self, Store}, transport, view, wire::{self, Action, PreflightInput, Request}};
+use super::{data::*, ingestion, storage::{self, Store}, transport, view, review, wire::{self, Action, PreflightInput, Request, ReviewImageInput}};
 
 pub enum Message {
     Submit(Request, SyncSender<Result<Value, String>>),
     Preflight(PreflightInput, SyncSender<Result<Value, String>>),
+    ReviewImage(ReviewImageInput, SyncSender<Result<Value, String>>),
     Refresh,
+    RefreshCatalogue,
     Shutdown,
 }
 #[derive(Default)]
@@ -24,11 +26,13 @@ struct Check {
     deadline: Instant, reply: SyncSender<Result<Value, String>>,
     managed_root_identity: [String; 2],
 }
+struct ImageRead { request: Value, handoff: Value, epoch: [u8; 16], deadline: Instant, reply: SyncSender<Result<Value, String>> }
 struct Token { graph_digest: String, lease_id: String, expires: u64, managed_root_identity: [String; 2] }
 struct Active { runner: DurableRunner, poller: DirectoryPoller, maximum: usize, last_poll: Instant }
 pub struct Runtime {
     store: Store, data: Data, state: Arc<AppState>, public: Arc<Mutex<Public>>,
     active: Option<Active>, checks: Vec<Check>, tokens: BTreeMap<String, Token>,
+    images: Vec<ImageRead>,
     profile: Value, profile_request: Option<Value>, profile_epoch: Option<[u8; 16]>,
     closing: bool, shutdown_requested: Arc<AtomicBool>,
 }
@@ -52,7 +56,7 @@ impl Runtime {
             }
         }
         let mut runtime = Self { store, data, state, public, active: None, checks: Vec::new(), tokens: BTreeMap::new(),
-            profile: Value::Null, profile_request: None, profile_epoch: None, closing: false, shutdown_requested };
+            images: Vec::new(), profile: Value::Null, profile_request: None, profile_epoch: None, closing: false, shutdown_requested };
         runtime.persist()?; // Bootstrap exposes a stable scope, never a null snapshot.
         Ok(runtime)
     }
@@ -87,8 +91,13 @@ impl Runtime {
             match rx.recv_timeout(Duration::from_millis(250)) {
                 Ok(Message::Submit(request, reply)) => { let result = self.submit(request); let _ = reply.send(result); }
                 Ok(Message::Preflight(input, reply)) => self.preflight(input, reply),
+                Ok(Message::ReviewImage(input, reply)) => self.review_image(input, reply),
                 Ok(Message::Refresh) => {
                     if self.profile_request.is_none() && self.profile["unavailable"] == true { self.profile = Value::Null; }
+                    self.refresh_profile();
+                }
+                Ok(Message::RefreshCatalogue) => {
+                    if self.profile_request.is_none() { self.profile = Value::Null; }
                     self.refresh_profile();
                 }
                 Ok(Message::Shutdown) => {
@@ -105,6 +114,7 @@ impl Runtime {
             }
             self.refresh_profile();
             self.poll_checks();
+            self.poll_images();
             if self.data.blocked.is_none() && !self.closing {
                 if self.data.lease.as_ref().is_some_and(|lease| transport::epoch(&self.state).ok() != Some(lease.epoch)) {
                     self.fence("引擎代际已变化，原租约不可恢复；保留原请求，只能核对，不能重放".into());
@@ -220,6 +230,50 @@ impl Runtime {
             }
         }
     }
+    fn review_image(&mut self, input: ReviewImageInput, reply: SyncSender<Result<Value, String>>) {
+        let result = (|| -> Result<(Value, Value, [u8; 16]), String> {
+            if self.closing || self.data.blocked.is_some() || self.images.len() >= 4 { return Err("审核图片读取当前不可用；没有批准任何预设".into()); }
+            let active = self.active.as_ref().ok_or("没有当前实际运行")?;
+            if active.runner.state().run_id() != input.run_id { return Err("审核图片运行身份不匹配".into()); }
+            let pending = active.runner.state().pending().ok_or("没有待审核的原操作")?;
+            let meta = self.data.runs.get(&input.run_id).ok_or("审核运行不存在")?;
+            if pending.identity.operation_id != input.operation_id || !review::image_request(&input, &meta.handoff) {
+                return Err("审核图片已过期或不是当前交接的精确内容".into());
+            }
+            let lease = self.lease(&meta.lease_id)?;
+            let request = json!({"cmd":"workflow_owner","protocol":1,"action":"review_image","request_id":storage::uuid()?,
+                "session_id":lease.lease_id,"operation_id":input.operation_id,"review_id":input.review_id,
+                "review_sha256":input.review_sha256,"side":input.side,"sha256":input.sha256,"page":input.page});
+            self.send(request.clone(), lease.epoch)?;
+            Ok((request, meta.handoff.clone(), lease.epoch))
+        })();
+        match result {
+            Ok((request, handoff, epoch)) => self.images.push(ImageRead { request, handoff, epoch, deadline: Instant::now() + Duration::from_secs(15), reply }),
+            Err(error) => { let _ = reply.send(Err(error)); }
+        }
+    }
+    fn poll_images(&mut self) {
+        for read in std::mem::take(&mut self.images) {
+            if read.deadline < Instant::now() || transport::epoch(&self.state).ok() != Some(read.epoch) {
+                let _ = read.reply.send(Err("审核图像读取超时或引擎已变化；没有批准预设".into())); continue;
+            }
+            match self.read(&read.request) {
+                Ok(response) if response["phase"] == "done" => {
+                    let result = &response["result"];
+                    let current = self.data.active_run.as_ref().and_then(|id| self.data.runs.get(id));
+                    let valid = current.is_some_and(|run| run.handoff == read.handoff)
+                        && result["status"] == "readback" && result["operation_id"] == read.request["operation_id"]
+                        && review::image_page(&result["image"], &read.request, &read.handoff);
+                    let _ = read.reply.send(if valid { Ok(result["image"].clone()) } else {
+                        Err(result["error"].as_str().unwrap_or("原审核图片身份、页面或字节校验失败；不能批准").into())
+                    });
+                }
+                Ok(response) if response["phase"] == "unknown" => { let _ = read.reply.send(Err("原审核图像结果未知；没有批准预设".into())); }
+                Err(error) => { let _ = read.reply.send(Err(error)); }
+                _ => self.images.push(read),
+            }
+        }
+    }
     fn settle(&mut self, id: &str, receipt: Value) -> Result<(), String> {
         let row = self.data.requests.get_mut(id).ok_or("请求身份丢失")?;
         row.receipt = receipt; row.external = None;
@@ -279,9 +333,31 @@ impl Runtime {
             Action::Start { graph, lease_id, preflight_token } => self.start(request, graph.clone(), lease_id, preflight_token),
             Action::Stop { run_id } => {
                 if self.data.active_run.as_deref() != Some(run_id) { return Err("没有匹配的活动运行".into()); }
+                if !self.data.runs[run_id].handoff.is_null() || self.active.as_ref().and_then(|active| active.runner.state().pending())
+                    .is_some_and(|pending| matches!(pending.operation, CommandKind::PreflightPreset { .. } | CommandKind::ApplyPreset { .. })) { return Err("预设交接尚未结清，来源监听已暂停。请先取消并返回，或完成保存与返回；停止不能释放半完成的交接".into()); }
                 self.active.as_mut().ok_or("原运行仅能恢复核对，不能恢复原引擎租约")?.runner.stop().map_err(|e| e.to_string())?;
                 self.update_run()?;
                 self.settle(&request.request_id, request.success(json!({"kind":"stop","run":self.data.runs[run_id].snapshot})))
+            }
+            Action::ReviewStep { run_id, operation_id, step, payload } => {
+                let active = self.active.as_ref().ok_or("没有当前实际运行；旧代际交接只能核对")?;
+                if active.runner.state().run_id() != run_id { return Err("交接运行身份不匹配".into()); }
+                if matches!(active.runner.state().status(), RunStatus::Paused { detail: lrt_local_workflow::scheduler::PauseReason::UncertainOutcome { .. } }) {
+                    return Err("原核心操作结果未知；只能查询，不可执行新的交接步骤".into());
+                }
+                let pending = active.runner.state().pending().ok_or("当前核心没有保留的交接操作")?;
+                if self.data.requests.values().any(|row| row.request.request_id != request.request_id && row.receipt["status"] == "succeeded"
+                    && matches!(&row.request.command, Action::ReviewStep { run_id: prior_run, operation_id: prior_operation, step: prior_step, .. }
+                        if prior_run == run_id && prior_operation == operation_id && prior_step == step)) {
+                    return Err("该原始交接步骤已确认；请读取新阶段，不要以新身份重复执行".into());
+                }
+                let original = self.data.operations.get(operation_id).ok_or("交接原操作不存在")?;
+                let handoff = &self.data.runs[run_id].handoff;
+                if pending.identity.operation_id != *operation_id || original.settled || !review::handoff(handoff, &original.command)
+                    || !review::step_allowed(handoff, step, payload) { return Err("交接身份、阶段或批准内容已变化；没有执行新操作，请读取原状态".into()); }
+                let lease = self.lease(&self.data.runs[run_id].lease_id)?;
+                self.ui_external(request, "review_step", json!({"cmd":"workflow_owner","protocol":1,"action":"review_step",
+                    "request_id":storage::uuid()?,"session_id":lease.lease_id,"operation_id":operation_id,"step":step,"payload":payload}))
             }
             Action::OpenReview { run_id, review_id } => {
                 let active = self.active.as_ref().ok_or("没有实际待审核运行")?;
@@ -297,7 +373,7 @@ impl Runtime {
     }
     fn ui_external(&mut self, request: &Request, phase: &str, envelope: Value) -> Result<(), String> {
         let epoch = transport::epoch(&self.state)?;
-        self.data.requests.get_mut(&request.request_id).ok_or("请求身份丢失")?.external = Some(UiExternal { phase: phase.into(), request: envelope.clone(), epoch });
+        self.data.requests.get_mut(&request.request_id).ok_or("请求身份丢失")?.external = Some(UiExternal { phase: phase.into(), request: envelope.clone(), epoch, query: None });
         self.persist()?;
         self.send(envelope, epoch)
     }
@@ -317,6 +393,21 @@ impl Runtime {
         for (request, external) in pending {
             if transport::epoch(&self.state).ok() != Some(external.epoch) { return Err("引擎代际变化；租约或请求结果未知，禁止重新提交".into()); }
             let response = self.read(&external.request)?;
+            if external.phase == "review_step" && (response["phase"] == "pending" || response["phase"] == "unknown"
+                || response["result"]["status"] == "unknown") {
+                if let Some(query) = &external.query {
+                    if self.read(query)?["phase"] == "done" {
+                        self.data.requests.get_mut(&request.request_id).unwrap().external.as_mut().unwrap().query = None;
+                    }
+                } else {
+                    let query = json!({"cmd":"workflow_owner","protocol":1,"action":"query","request_id":storage::uuid()?,
+                        "session_id":external.request["session_id"],"original_request_id":external.request["request_id"],"operation_id":external.request["operation_id"]});
+                    self.data.requests.get_mut(&request.request_id).unwrap().external.as_mut().unwrap().query = Some(query.clone());
+                    // The engine republishes only the retained original step
+                    // envelope. A readback cannot forge a new write receipt.
+                    let _ = self.send(query, external.epoch);
+                }
+            }
             if response["phase"] == "pending" { continue; }
             if response["phase"] == "unknown" || response["result"]["status"] == "unknown" {
                 let receipt = request.receipt("unknown", "原始 owner 结果未知；只保留并查询原请求，不重新执行");
@@ -362,8 +453,23 @@ impl Runtime {
                         self.settle(&request.request_id, request.receipt("failed", result["error"].as_str().unwrap_or("原租约尚未释放")))?;
                     }
                 }
-                "open_review" => {
+                "review_step" => {
+                    let Action::ReviewStep { run_id, operation_id, step, .. } = &request.command else { return Err("交接请求阶段不匹配".into()); };
+                    if result["operation_id"] != *operation_id || result["step"] != *step { return Err("交接回执不属于原始精确步骤".into()); }
+                    // Step replies settle only this explicit request. Core state
+                    // advances exclusively from the original execute/query receipt.
                     if result["status"] == "succeeded" {
+                        self.settle(&request.request_id, request.success(json!({"kind":"review_step","run_id":run_id,
+                            "operation_id":operation_id,"step":step,"message":result["message"].as_str().unwrap_or("已核对交接步骤；等待原操作回执更新")})))?;
+                    } else if result["status"] == "failed" && result["dispatch_rejected"] == true {
+                        self.settle(&request.request_id, request.receipt("failed", result["error"].as_str().unwrap_or("实际 owner 在执行前拒绝该交接步骤")))?;
+                    } else if result["status"] == "failed" {
+                        self.data.requests.get_mut(&request.request_id).unwrap().receipt = request.receipt("unknown", "交接步骤没有无效果证明；保留原请求，只读核对");
+                        self.persist()?;
+                    }
+                }
+                "open_review" => {
+                    if matches!(result["status"].as_str(), Some("succeeded" | "readback")) {
                         self.settle(&request.request_id, request.success(json!({"kind":"open_review","opened":result["opened"] == true,
                             "message":result["message"].as_str().unwrap_or("审核由实际 owner 保留；这里未批准任何报告")})))?;
                     } else if result["status"] == "failed" {
@@ -395,7 +501,7 @@ impl Runtime {
         let poller = runner.source().map_err(|e| e.to_string())?;
         let mut meta = Run { run_id: run_id.clone(), lease_id: lease_id.into(), started_at: storage::timestamp(storage::now()?)?,
             managed_root_identity,
-            sequence: 0, snapshot: Value::Null, released: false, release: None, error: None };
+            sequence: 0, snapshot: Value::Null, released: false, release: None, error: None, handoff: Value::Null };
         meta.snapshot = view::run(runner.state(), &meta);
         let maximum = lease.arm_request["max_operations"].as_u64().filter(|value| (1..=64).contains(value)).ok_or("租约导入上限无效")? as usize;
         self.data.runs.insert(run_id.clone(), meta); self.data.active_run = Some(run_id.clone());
@@ -417,13 +523,15 @@ impl Runtime {
         let id = active.runner.state().run_id().to_owned();
         let lease_id = self.data.runs[&id].lease_id.clone();
         let lease = self.lease(&lease_id)?;
-        if storage::now()? >= lease.expires && matches!(active.runner.state().status(), RunStatus::Running) {
+        let handoff_active = !self.data.runs[&id].handoff.is_null() || active.runner.state().pending()
+            .is_some_and(|pending| matches!(pending.operation, CommandKind::PreflightPreset { .. } | CommandKind::ApplyPreset { .. }));
+        if !handoff_active && storage::now()? >= lease.expires && matches!(active.runner.state().status(), RunStatus::Running) {
             self.active.as_mut().unwrap().runner.stop().map_err(|e| e.to_string())?;
             self.data.runs.get_mut(&id).unwrap().error = Some("工程租约有效期已到；停止新调度，继续核对已启动的 owner 效果".into());
             self.update_run()?;
         }
         let active = self.active.as_mut().unwrap();
-        if matches!(active.runner.state().status(), RunStatus::Running) && !active.runner.state().is_sealed()
+        if !handoff_active && matches!(active.runner.state().status(), RunStatus::Running) && !active.runner.state().is_sealed()
             && active.last_poll.elapsed() >= Duration::from_secs(1) {
             active.last_poll = Instant::now();
             if let Err(error) = active.runner.poll_source_bounded(&mut active.poller, crate::monotonic_clock::now_ns() / 1_000_000, active.maximum) {
@@ -434,7 +542,7 @@ impl Runtime {
             if active.runner.state().jobs().len() >= active.maximum && !active.runner.state().is_sealed() { active.runner.seal().map_err(|e| e.to_string())?; }
             self.update_run()?;
         }
-        if self.data.operations.len() >= 4096 && self.active.as_ref().unwrap().runner.state().pending().is_none() {
+        if !handoff_active && self.data.operations.len() >= 4096 && self.active.as_ref().unwrap().runner.state().pending().is_none() {
             self.active.as_mut().unwrap().runner.stop().map_err(|e| e.to_string())?;
             self.data.runs.get_mut(&id).unwrap().error = Some("本地 owner 记录容量已满；已停止新调度，未驱逐历史操作".into());
             self.update_run()?;
@@ -446,7 +554,7 @@ impl Runtime {
                     && !job.input.source_stat.iter().all(|part| !part.is_empty() && part.len() <= 20
                         && part.bytes().all(|byte| byte.is_ascii_digit()) && (part == "0" || !part.starts_with('0'))))
         };
-        if incompatible_source {
+        if incompatible_source && !handoff_active {
             self.active.as_mut().unwrap().runner.stop().map_err(|e| e.to_string())?;
             self.data.runs.get_mut(&id).unwrap().error = Some("来源时间戳不兼容真实导入协议；未派发导入，已停止接收新照片".into());
             self.update_run()?;
@@ -508,6 +616,15 @@ impl Runtime {
                 self.data.operations.get_mut(operation_id).unwrap().query = None;
             }
         }
+        let mut handoff_changed = false;
+        if matches!(original.command.operation, CommandKind::PreflightPreset { .. } | CommandKind::ApplyPreset { .. })
+            && reply["result"]["receipt"].is_object() {
+            let value = reply["result"].get("handoff").ok_or("预设 owner 未提供实际交接状态；不能推断目标已返回")?;
+            if !value.is_null() && !review::handoff(value, &original.command) { return Err("预设 owner 交接身份或审核内容不匹配".into()); }
+            let run = self.data.runs.get_mut(&original.command.identity.run_id).ok_or("交接运行丢失")?;
+            handoff_changed = run.handoff != *value;
+            run.handoff = value.clone();
+        }
         let receipt = if original.request["cmd"] == "ingest_session" {
             ingestion::map(&original, &mut lease, &reply).unwrap_or_else(|error| Receipt { schema_version: 1,
                 identity: original.command.identity.clone(), result: ReceiptResult::Unknown { reason: error.chars().take(2048).collect() } })
@@ -536,7 +653,7 @@ impl Runtime {
         self.data.lease = Some(lease.clone());
         let row = self.data.operations.get_mut(operation_id).unwrap();
         row.last_receipt = Some(receipt); row.settled = terminal;
-        if changed || terminal || stop_import { self.update_run()?; }
+        if changed || terminal || stop_import || handoff_changed { self.update_run()?; }
         if !terminal && self.data.operations[operation_id].query.is_none()
             && !matches!(original.command.operation, CommandKind::PrepareImport { .. }) {
             let query = if original.request["cmd"] == "ingest_session" { ingestion::query(&lease, &original.request)? }
@@ -549,7 +666,7 @@ impl Runtime {
         Ok(())
     }
     fn release_run(&mut self, id: &str) -> Result<(), String> {
-        if self.active.as_ref().unwrap().runner.state().pending().is_some() || self.data.operations.values().any(|op| !op.settled) { return Ok(()); }
+        if !self.data.runs[id].handoff.is_null() || self.active.as_ref().unwrap().runner.state().pending().is_some() || self.data.operations.values().any(|op| !op.settled) { return Ok(()); }
         let lease = self.lease(&self.data.runs[id].lease_id)?;
         if let Some(external) = self.data.runs[id].release.clone() {
             let response = self.read(&external.request)?;
@@ -565,7 +682,7 @@ impl Runtime {
             } else if result["status"] == "failed" { return Err(result["error"].as_str().unwrap_or("owner 拒绝释放原租约").into()); }
         } else {
             let request = json!({"cmd":"ingest_session","action":"release","request_id":storage::uuid()?,"session_id":lease.lease_id});
-            self.data.runs.get_mut(id).unwrap().release = Some(UiExternal { phase: "release_run".into(), request: request.clone(), epoch: lease.epoch });
+            self.data.runs.get_mut(id).unwrap().release = Some(UiExternal { phase: "release_run".into(), request: request.clone(), epoch: lease.epoch, query: None });
             self.update_run()?;
             if let Err(error) = self.send(request, lease.epoch) { self.data.runs.get_mut(id).unwrap().error = Some(error); self.update_run()?; }
         }

@@ -823,13 +823,16 @@
         "ui/src-tauri/src/local_workflow_host",
         "engine/src/lumaretouch_engine/workflow_owner_host.py",
         "ui/src/localWorkflow",
-        "docs/local-workflow/REQUIREMENTS.md"
+        "docs/local-workflow/REQUIREMENTS.md",
+        "engine/src/lumaretouch_engine/workflow_preset_handoff.py",
+        "engine/src/lumaretouch_engine/workflow_preset_review.py",
+        "docs/local-workflow/PRESET-INTEGRATION.md"
       ],
       "verification": [
         "Static source/DTO/ownership inspection only; authored fixtures and all end-to-end/build/UI acceptance UNRUN"
       ],
       "scope_note": "原始需求全量保留；本条登记不等于实现或验收通过",
-      "remaining": "Bounded linear local import/labels/fixed-profile export only. Presets requiring actual loaded target/review are preflight-refused; ERP, AI culling, general branches/loops, arbitrary profiles, portable template interchange and unresolved-owner process-restart recovery remain incomplete. Import failure policy is stop-only."
+      "remaining": "Bounded linear local import/labels/fixed-profile export and explicit per-target exposure/white-balance preset review/apply/save/return only. Other complete mixed presets, ERP, AI culling, branches/loops, arbitrary profiles, portable template interchange and uncertain-owner process-restart recovery remain incomplete. Import/preset failure policy is stop-only; no unattended approval or hardware acceptance."
     },
     {
       "id": "workflow:47251",
@@ -1307,10 +1310,19 @@
       "source_url": "https://www.pixcakeai.com/guide/211524",
       "title": "光影——发光",
       "phase": null,
-      "status": "pending_independent_verification",
-      "implementation": [],
-      "verification": [],
-      "scope_note": "原始需求全量保留；本条登记不等于实现或验收通过"
+      "status": "partial_source_connected_unrun",
+      "implementation": [
+        "core/light_glow",
+        "engine/src/lumaretouch_engine/light_glow_host.py",
+        "ui/src-tauri/src/light_glow_api",
+        "ui/src/lightGlow",
+        "docs/light-glow/INTEGRATED-STATUS.md"
+      ],
+      "verification": [
+        "Static ABI/source/ownership review only; authored fixtures, all execution/build/typecheck/numerical/photographic acceptance UNRUN"
+      ],
+      "scope_note": "原始需求全量保留；本条登记不等于实现或验收通过",
+      "remaining": "Current-photo original deterministic SDR black-mist/white-mist/glow, full-source review and immutable new-image return only. AI illumination detection, vendor/optical parity, HDR/non-opaque retouch, update-original, multi-photo/batch, colour shortcut and re-editable persisted glow recipe remain incomplete. No 24 MP performance acceptance."
     },
     {
       "id": "creative:165438",

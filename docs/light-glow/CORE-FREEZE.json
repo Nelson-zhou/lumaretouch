@@ -1,0 +1,35 @@
+{
+  "requirement_id": "creative:211524",
+  "source_index": 29,
+  "baseline_commit_supplied_by_coordinator": "c04fa7c028f9d3325ed72d8796e4ff384d5cc432",
+  "operation_id": "lnx.light_glow.v1",
+  "abi": 1,
+  "math_identity": 65537,
+  "status": "authored_isolated_core_source_review_only_all_execution_unrun",
+  "authored_rust_test_cases": 19,
+  "executed_test_cases": 0,
+  "not_run": ["product imports", "compile", "build", "typecheck", "tests", "application", "benchmark", "inference", "download", "install"],
+  "shared_files_modified_by_core_owner": [],
+  "original_granular_requirement_ids": null,
+  "primary_references": [
+    {"url": "https://www.pixcakeai.com/guide/211524", "role": "official user-visible semantics, no implementation permission"},
+    {"url": "https://raw.githubusercontent.com/GNOME/gegl/master/operations/common/bloom.c", "role": "read-only mature highlight-halo reference", "license": "LGPL-3.0-or-later", "copied_or_linked": false},
+    {"url": "https://raw.githubusercontent.com/darktable-org/darktable/master/src/iop/soften.c", "role": "read-only repeated-box diffusion reference", "license": "GPL-3.0-or-later", "copied_or_linked": false}
+  ],
+  "files": [
+    {"path": "core/light_glow/Cargo.toml", "sha256": "580acd27ae073f82f0d504008068013f2376b91b1575320775ad230621979330"},
+    {"path": "core/light_glow/lib.rs", "sha256": "710dce5a4d9334045530a073936741785fa38412a4036994a74ee58be27a1efd"},
+    {"path": "core/light_glow/light_glow.h", "sha256": "2496e8a1ba95be58cf719b16b11188759805dc1a7703a39db7bc820efb838127"},
+    {"path": "core/light_glow/tests.rs", "sha256": "b2615f5ec8b48a9973ea33fc7902c891d38f10b17cc9140d9c2595aa640c23fa"},
+    {"path": "core/light_glow/README.md", "sha256": "71889fc94f7171309ad86db7f5fba63fc78403bfcba66b85c288490614631e05"},
+    {"path": "core/light_glow/ABI.md", "sha256": "252420b100311095af577abfeb6febfe145d35df0df67af08119639a7aa004f6"},
+    {"path": "core/light_glow/NUMERICS.md", "sha256": "02ae29856196a0d45e41262bd4a5c5ff11d0154b4b98b6cc4a51aeaccb84bf97"},
+    {"path": "docs/light-glow/RESEARCH.md", "sha256": "0dbfc37dd14e613827dc83cf6eaf2028f7bee6dc04dac90e2cde05c092be693b"},
+    {"path": "docs/light-glow/INTEGRATION.md", "sha256": "843f74acdf6516ee1d2481cd713bfaa13e29004d95c70b9ca1b976bfd0af80ac"},
+    {"path": "docs/light-glow/presets.json", "sha256": "0d719a0d6de640b3a45d8b55f50642c9ddd37550137621bf47d52eb90ff947ed"},
+    {"path": "docs/light-glow/requirements.json", "sha256": "bb4673a95d2bcd9d8fd64037bba6dfd24a0f773b94b82c49c8abbd825ce4be43"},
+    {"path": "docs/light-glow/ACCEPTANCE-UNRUN.md", "sha256": "882e8d2a7fc7255f138e53ede8b125d68ab59aad50f1d0e65a61b910f6dbb40e"}
+  ],
+  "integration_boundary": "Parent owns engine/UI/native registration, packaging, source/review/apply/receipt lifecycle. Core/source adapter signatures statically reconciled, not executed.",
+  "limitations": ["SDR only; signed/HDR rejected, not clipped", "No AI illumination detection or measured physical/vendor parity", "No automatic alpha expansion", "Presets and numeric ranges are local calibration", "No runtime, image quality, interactive speed, full-resolution memory or whole-feature acceptance established"]
+}

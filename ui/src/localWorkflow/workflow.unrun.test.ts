@@ -50,6 +50,7 @@ function harness() {
         case 'save_definition': outcome = {kind: input.command.kind, definition: {...input.command.definition, storage_revision: 'stored-2'}}; break;
         case 'start': activeRun = run(); outcome = {kind: input.command.kind, run: activeRun}; break;
         case 'stop': activeRun = run('stopped', 2); outcome = {kind: input.command.kind, run: activeRun}; break;
+        case 'review_step': outcome = {kind: input.command.kind, run_id: input.command.run_id, operation_id: input.command.operation_id, step: input.command.step, message: 'Fixture step only'}; break;
         case 'open_review': outcome = {kind: input.command.kind, opened: true, message: 'Fixture review view opened; no approval.'}; break;
       }
       const receipt: WorkflowReceipt = {request_id: input.request_id, command_kind: input.command.kind, status: 'succeeded', outcome};
@@ -322,4 +323,41 @@ test('partial, unknown, nonfinite or altered nested profiles fail closed without
     assert.equal(h.controller.getState().export_profile, null);
     assert.deepEqual(h.controller.getState().draft, before);
   }
+});
+
+test('handoff pauses Stop and requires both verified displayed images plus explicit checkbox before approval', async () => {
+  const {handoffFixture, pageFixture} = await import('./presetReviewFixture.unrun.test.ts');
+  const {reviewKey} = await import('./presetReview.ts');
+  const h = harness(), handoff = handoffFixture();
+  h.setRun({...run('paused', 2), handoff}); h.host.readReviewImage = async input => pageFixture(input);
+  await h.controller.refresh();
+  assert.equal(h.controller.canStop(), false);
+  assert.equal(h.controller.canReviewStep('approve'), false);
+  await h.controller.reviewStep('approve'); assert.equal(h.submits.length, 0);
+  await h.controller.loadReviewImages();
+  const key = reviewKey('run-a', handoff);
+  h.controller.acknowledgeReview(key, true); assert.equal(h.controller.canReviewStep('approve'), false);
+  h.controller.reviewImageDisplayed(key, 'before', true, 2, 2);
+  h.controller.reviewImageDisplayed(key, 'after', false, 2, 2);
+  h.controller.acknowledgeReview(key, true); assert.equal(h.controller.canReviewStep('approve'), false);
+  h.controller.reviewImageDisplayed(key, 'after', true, 2, 2);
+  assert.equal(h.controller.canReviewStep('approve'), false);
+  h.controller.acknowledgeReview(key, true); assert.equal(h.controller.canReviewStep('approve'), true);
+  await h.controller.reviewStep('approve');
+  assert.equal(h.submits.length, 1); assert.equal(h.submits[0].command.kind, 'review_step');
+  assert.equal(h.controller.canReviewStep('approve'), false);
+});
+test('handoff target changes and panel dismissal revoke prior display acknowledgement', async () => {
+  const {handoffFixture, pageFixture} = await import('./presetReviewFixture.unrun.test.ts');
+  const {reviewKey} = await import('./presetReview.ts');
+  const h = harness(), handoff = handoffFixture();
+  h.setRun({...run('paused', 2), handoff}); h.host.readReviewImage = async input => pageFixture(input);
+  await h.controller.refresh(); await h.controller.loadReviewImages();
+  const key = reviewKey('run-a', handoff);
+  for (const side of ['before', 'after'] as const) h.controller.reviewImageDisplayed(key, side, true, 2, 2);
+  h.controller.acknowledgeReview(key, true); h.controller.clearReviewPresentation(key);
+  assert.equal(h.controller.canReviewStep('approve'), false);
+  h.setRun({...run('paused', 3), handoff: {...handoff, phase: 'unknown'}}); await h.controller.tick();
+  for (const step of ['open_target', 'approve', 'save_project', 'return_target'] as const) assert.equal(h.controller.canReviewStep(step), false);
+  assert.equal(h.submits.length, 0);
 });

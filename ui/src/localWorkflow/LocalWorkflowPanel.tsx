@@ -1,3 +1,5 @@
+import {PresetHandoffPanel} from './PresetHandoffPanel';
+import {WorkflowPresetPicker, type PresetCatalogue} from './presetCatalogue';
 // SPDX-License-Identifier: GPL-3.0-or-later
 import {useEffect, useState, useSyncExternalStore} from 'react';
 import type {ErrorPolicy, NodeKind, WorkflowCapabilities, WorkflowDiagnostic, WorkflowGraph, WorkflowNode,
@@ -21,7 +23,7 @@ function Diagnostics({items, label}: {items: WorkflowDiagnostic[]; label: string
   </section>;
 }
 
-function NodeParameters({operation: op, onChange}: {operation: WorkflowOperation; onChange: (op: WorkflowOperation) => void}) {
+function NodeParameters({operation: op, onChange, catalogue}: {operation: WorkflowOperation; catalogue: PresetCatalogue | null; onChange: (op: WorkflowOperation) => void}) {
   switch (op.kind) {
     case 'directory_source': return <>
       <label>来源文件夹（绝对路径）<input value={op.root} placeholder="/photos/incoming" onChange={event => onChange({...op, root: event.currentTarget.value})}/></label>
@@ -53,8 +55,7 @@ function NodeParameters({operation: op, onChange}: {operation: WorkflowOperation
       <button type="button" disabled={op.rules.length >= 64} onClick={() => onChange({...op, rules: [...op.rules, {target: 'filename', contains: '', label: ''}]})}>添加标签规则</button>
     </>;
     case 'compatible_preset': return <>
-      <label>已保存预设标识<input value={op.preset_id} onChange={event => onChange({...op, preset_id: event.currentTarget.value})}/></label>
-      <label>预设 SHA-256 指纹<input value={op.preset_sha256} maxLength={64} spellCheck={false} onChange={event => onChange({...op, preset_sha256: event.currentTarget.value})}/></label>
+      <WorkflowPresetPicker catalogue={catalogue} operation={op} onChange={onChange}/>
       <label>必须同时具备的标签（逗号分隔；留空匹配全部）<input value={op.when_all_labels.join(',')} onChange={event => onChange({...op, when_all_labels: splitList(event.currentTarget.value)})}/></label>
       <small>宿主按真实预设内容检查兼容性。需要逐图审核的效果会暂停，只有原审核流程产生的有效回执才能继续。</small>
     </>;
@@ -66,12 +67,12 @@ function NodeParameters({operation: op, onChange}: {operation: WorkflowOperation
   }
 }
 
-function NodeCard({node, locked, capabilities, onChange, onRemove}: {node: WorkflowNode; locked: boolean;
-  capabilities: WorkflowCapabilities | null; onChange: (node: WorkflowNode) => void; onRemove: () => void}) {
+function NodeCard({node, locked, capabilities, onChange, onRemove, catalogue}: {node: WorkflowNode; locked: boolean;
+  capabilities: WorkflowCapabilities | null; catalogue: PresetCatalogue | null; onChange: (node: WorkflowNode) => void; onRemove: () => void}) {
   const supported = capabilities?.error_policies[node.operation.kind] ?? [];
   return <fieldset className="local-workflow-node" disabled={locked}>
     <legend>{NODE_LABELS[node.operation.kind]} · {node.id}</legend>
-    <NodeParameters operation={node.operation} onChange={operation => onChange({...node, operation})}/>
+    <NodeParameters catalogue={catalogue} operation={node.operation} onChange={operation => onChange({...node, operation})}/>
     <label>错误策略<select value={node.error_policy} onChange={event => onChange({...node, error_policy: event.currentTarget.value as ErrorPolicy})}>
       {(Object.keys(POLICY_LABELS) as ErrorPolicy[]).map(policy => <option key={policy} value={policy}
         disabled={!supported.includes(policy) || (policy === 'keep_continue' && node.operation.kind !== 'compatible_preset') || (node.operation.kind === 'directory_source' && policy !== 'stop')}>
@@ -177,6 +178,7 @@ export function LocalWorkflowPanel({controller}: LocalWorkflowPanelProps) {
       <button type="button" disabled={locked || !selectedDefinition} onClick={() => requestReplace({kind: 'load', workflow_id: selectedDefinition})}>加载定义</button>
       <button type="button" disabled={locked || !capabilities?.can_save || !draft.name.trim()} onClick={() => void controller.save()}>保存定义</button>
       <button type="button" disabled={state.busy} onClick={() => void controller.refresh()}>刷新宿主状态</button>
+      <button type="button" disabled={state.busy} onClick={() => void controller.refreshCatalogue()}>刷新实际预设目录</button>
     </div>
     {replacement && <div className="local-workflow-warning" role="alert">
       <p>当前草稿尚未保存。继续会替换草稿，不会删除已保存的工作流。</p>
@@ -198,7 +200,7 @@ export function LocalWorkflowPanel({controller}: LocalWorkflowPanelProps) {
           changeGraph({...graph, nodes: [...graph.nodes, {id: `node-${i}`, error_policy: 'stop', operation: newOperation(addKind)}]});
         }}>添加节点</button>
       </div>
-      <div className="local-workflow-nodes">{graph.nodes.map(node => <NodeCard key={node.id} node={node} locked={locked} capabilities={capabilities}
+      <div className="local-workflow-nodes">{graph.nodes.map(node => <NodeCard key={node.id} node={node} locked={locked} capabilities={capabilities} catalogue={state.preset_catalogue}
         onChange={next => changeGraph({...graph, nodes: graph.nodes.map(item => item.id === node.id ? next : item)})}
         onRemove={() => changeGraph({...graph, nodes: graph.nodes.filter(item => item.id !== node.id), edges: graph.edges.filter(edge => edge.from !== node.id && edge.to !== node.id)})}/>)}</div>
       <EdgeEditor graph={graph} locked={locked} onChange={changeGraph}/>
@@ -236,7 +238,8 @@ export function LocalWorkflowPanel({controller}: LocalWorkflowPanelProps) {
         <ul>{state.pending.map(item => <li key={item.request_id}>{item.command_kind} · {item.request_id}</li>)}</ul>
         <button type="button" disabled={state.busy} onClick={() => void controller.queryPending()}>查询原操作</button>
       </section>}
-      {activeRun?.review && <section className="local-workflow-warning" aria-label="人工审核暂停">
+      <PresetHandoffPanel controller={controller} state={state}/>
+      {activeRun?.review && !activeRun.handoff && <section className="local-workflow-warning" aria-label="人工审核暂停">
         <h4>人工审核暂停</h4><p>{activeRun.review.reason}</p>
         <p>{activeRun.review.family} · 文件 {activeRun.review.file_id} · 节点 {activeRun.review.node_id}</p>
         <button type="button" disabled={state.busy || state.pending.length > 0 || !capabilities?.can_open_review || activeRun.status !== 'paused'} onClick={() => void controller.openReview()}>打开真实审核</button>

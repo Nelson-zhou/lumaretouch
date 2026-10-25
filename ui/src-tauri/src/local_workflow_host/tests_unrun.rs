@@ -83,3 +83,38 @@ fn owner_receipt_from_wrong_phase_does_not_settle_export() {
     receipt.result = ReceiptResult::PresetApplied { document: document(), preset_receipt_id: "not-an-export".into() };
     assert!(!validation::valid(&command, &receipt));
 }
+
+#[test]
+fn review_steps_are_distinct_durable_requests_and_never_read_only() {
+    let request = wire::Request::parse(json!({"port_version":1,"request_id":"open-one","command":{
+        "kind":"review_step","run_id":"run-fixture","operation_id":"d".repeat(64),"step":"open_target","payload":{}}})).unwrap();
+    assert_eq!(request.command.name(), "review_step");
+    assert!(!super::transport::read_only(&json!({"cmd":"workflow_owner","action":"review_step"})));
+    assert!(super::transport::read_only(&json!({"cmd":"workflow_owner","action":"review_image"})));
+    assert!(super::transport::read_only(&json!({"cmd":"workflow_owner","action":"open_review"})));
+}
+#[test]
+fn exact_handoff_binds_command_and_stops_unknown_actions() {
+    let command = Command {schema_version:1, identity:identity(), operation:CommandKind::PreflightPreset {
+        document:document(), preset_id:"warm".into(), preset_sha256:"f".repeat(64), labels:vec![]}};
+    let mut handoff = json!({"version":1,"operation_id":"d".repeat(64),"document_id":"document-fixture",
+        "preset_id":"warm","preset_sha256":"f".repeat(64),"phase":"awaiting_open","review":null,"message":"Open the exact target explicitly"});
+    assert!(super::review::handoff(&handoff, &command));
+    assert!(super::review::step_allowed(&handoff, "open_target", &json!({})));
+    assert!(super::review::step_allowed(&handoff, "return_target", &json!({})));
+    assert!(!super::review::step_allowed(&handoff, "approve", &json!({"accepted":true})));
+    assert!(!super::review::step_allowed(&handoff, "open_target", &json!({"auto_ack":true})));
+    handoff["phase"] = json!("unknown");
+    for step in ["open_target", "approve", "save_project", "return_target"] {
+        assert!(!super::review::step_allowed(&handoff, step, &json!({})));
+    }
+    handoff["document_id"] = json!("different-document");
+    assert!(!super::review::handoff(&handoff, &command));
+}
+#[test]
+fn preset_review_required_receipt_remains_nonterminal_until_owner_approval() {
+    use lrt_local_workflow::ports::PresetAssessment;
+    let receipt = Receipt {schema_version:1, identity:identity(), result:ReceiptResult::PresetPreflight {assessment:PresetAssessment {
+        report_id:"review".into(), report_sha256:"a".repeat(64), document_revision:"1".into(), preset_sha256:"b".repeat(64), requires_review:true, review:None}}};
+    assert!(!validation::terminal(&receipt));
+}

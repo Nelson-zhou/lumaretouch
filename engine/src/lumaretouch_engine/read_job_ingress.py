@@ -1,6 +1,8 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 """Reader-thread read-job controls, extracted without changing order or owners."""
 def stop(engine):
+    from .light_glow_jobs import controller as glow_jobs
+    glow_jobs(engine).stop()
     from .lens_blur_jobs import controller as lens_jobs
     lens_jobs(engine).stop()
     from .expression_replacement_jobs import controller as expression_jobs
@@ -22,6 +24,8 @@ def stop(engine):
     engine._owned_reader_stop()
 
 def ingress(engine, line):
+    from .light_glow_jobs import controller as glow_jobs
+    if glow_jobs(engine).ingress(line): return True
     from .lens_blur_jobs import controller as lens_jobs
     if lens_jobs(engine).ingress(line): return True
     from .expression_replacement_jobs import controller as expression_jobs

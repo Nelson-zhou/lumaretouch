@@ -20,7 +20,7 @@ pub fn send(state: &AppState, request: Value, expected_epoch: [u8; 16]) -> Resul
     if epoch(state)? != expected_epoch { return Err("引擎已变化；保留原请求，不重发".into()); }
     let id = request["request_id"].as_str().filter(|s| super::wire::identity(s)).ok_or("缺少工作流 owner 请求身份")?.to_owned();
     if request["cmd"] != "workflow_owner" || request["protocol"] != 1 || request.to_string().len() > 1024 * 1024
-        || !matches!(request["action"].as_str(), Some("profile" | "preflight" | "execute" | "query" | "open_review")) {
+        || !matches!(request["action"].as_str(), Some("profile" | "preflight" | "execute" | "query" | "open_review" | "review_step" | "review_image")) {
         return Err("无效工作流 owner 请求".into());
     }
     {
@@ -32,8 +32,8 @@ pub fn send(state: &AppState, request: Value, expected_epoch: [u8; 16]) -> Resul
         // Only completed read-only envelopes may be dropped. Mutation receipts
         // and unknown results are retained for this process/epoch.
         rows.retain(|_, row| !(row.delivered_read && row.result.as_ref().is_some_and(|result|
-            matches!(row.request["action"].as_str(), Some("profile" | "preflight" | "query")) && result["status"] == "readback")));
-        let capacity = if request["action"] == "execute" { 1008 } else { 1024 };
+            matches!(row.request["action"].as_str(), Some("profile" | "preflight" | "query" | "open_review" | "review_image")) && result["status"] == "readback")));
+        let capacity = if matches!(request["action"].as_str(), Some("execute" | "review_step")) { 1008 } else { 1024 };
         if rows.len() >= capacity { return Err("工作流 owner 回执容量已满；不会驱逐原操作".into()); }
         rows.insert(id.clone(), Entry { epoch: expected_epoch, request: request.clone(), result: None, delivered_read: false });
     }
@@ -59,6 +59,13 @@ pub fn receive(epoch: [u8; 16], event: &Value) -> bool {
         || event["session_id"] != row.request["session_id"]
         || !matches!(event["status"].as_str(), Some("pending" | "readback" | "succeeded" | "failed" | "unknown")) { return false; }
     let mut settled = false;
+    if matches!(row.request["action"].as_str(), Some("review_step" | "review_image")) {
+        if event["operation_id"] != row.request["operation_id"] { return false; }
+        if row.request["action"] == "review_step" {
+            if event["step"] != row.request["step"] { return false; }
+            settled = event["status"] == "succeeded" || (event["status"] == "failed" && event["dispatch_rejected"] == true);
+        }
+    }
     if event["receipt"].is_object() {
         let Ok(receipt) = serde_json::from_value::<lrt_local_workflow::ports::Receipt>(event["receipt"].clone()) else { return false; };
         let original = if row.request["action"] == "execute" { row }
@@ -72,6 +79,10 @@ pub fn receive(epoch: [u8; 16], event: &Value) -> bool {
             } else { return false; };
         let Ok(command) = serde_json::from_value::<lrt_local_workflow::ports::Command>(original.request["command"].clone()) else { return false; };
         if !super::validation::valid(&command, &receipt) { return false; }
+        if matches!(command.operation, lrt_local_workflow::ports::CommandKind::PreflightPreset { .. } | lrt_local_workflow::ports::CommandKind::ApplyPreset { .. }) {
+            let Some(handoff) = event.get("handoff") else { return false; };
+            if !handoff.is_null() && !super::review::handoff(handoff, &command) { return false; }
+        }
         if let Some(prior) = original.result.as_ref().filter(|value| value["receipt"].is_object()) {
             let Ok(prior) = serde_json::from_value::<lrt_local_workflow::ports::Receipt>(prior["receipt"].clone()) else { return false; };
             if super::validation::terminal(&prior) && prior != receipt { return false; }
@@ -96,7 +107,10 @@ pub fn receive(epoch: [u8; 16], event: &Value) -> bool {
     if let Some(prior) = &row.result {
         // A terminal receipt is immutable, while pending/unknown reads may
         // acquire real owner evidence. A conflicting completion stays fenced.
-        if prior["receipt"].is_object() && matches!(prior["status"].as_str(), Some("succeeded" | "failed")) && prior != event { return false; }
+        if prior["receipt"].is_object() && serde_json::from_value::<lrt_local_workflow::ports::Receipt>(prior["receipt"].clone())
+            .is_ok_and(|receipt| super::validation::terminal(&receipt)) && prior != event { return false; }
+        if row.request["action"] == "review_step" && (prior["status"] == "succeeded"
+            || (prior["status"] == "failed" && prior["dispatch_rejected"] == true)) && prior != event { return false; }
     }
     rows.get_mut(id).expect("retained owner request").result = Some(event.clone());
     drop(rows);
@@ -107,5 +121,5 @@ pub fn receive(epoch: [u8; 16], event: &Value) -> bool {
 }
 
 pub fn read_only(request: &Value) -> bool {
-    request["cmd"] == "workflow_owner" && matches!(request["action"].as_str(), Some("profile" | "preflight" | "query" | "open_review"))
+    request["cmd"] == "workflow_owner" && matches!(request["action"].as_str(), Some("profile" | "preflight" | "query" | "open_review" | "review_image"))
 }

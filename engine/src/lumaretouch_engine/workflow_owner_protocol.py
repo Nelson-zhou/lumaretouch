@@ -30,6 +30,8 @@ FIELDS = {
     'execute': {'command'},
     'query': {'original_request_id', 'operation_id'},
     'open_review': {'operation_id', 'review_id'},
+    'review_step': {'operation_id', 'step', 'payload'},
+    'review_image': {'operation_id', 'review_id', 'review_sha256', 'side', 'sha256', 'page'},
 }
 # This is a declared, pinned v1 product profile, not an imitation image recipe.
 # Each document's actual saved image recipe is frozen separately by cmd_export.
@@ -90,8 +92,15 @@ def envelope(value):
     if action != 'profile': I.identity(value['session_id'])
     if action == 'preflight': I.digest(value['graph_sha256'])
     if action == 'query': I.identity(value['original_request_id'])
-    if action in ('query', 'open_review'): I.digest(value['operation_id'])
+    if action in ('query', 'open_review', 'review_step', 'review_image'): I.digest(value['operation_id'])
     if action == 'open_review': text(value['review_id'], 256)
+    if action == 'review_step':
+        if value['step'] not in ('open_target', 'approve', 'save_project', 'return_target') or type(value['payload']) is not dict:
+            raise ValueError('Unknown preset handoff step')
+    if action == 'review_image':
+        text(value['review_id'], 256); I.digest(value['review_sha256']); I.digest(value['sha256'])
+        if value['side'] not in ('before', 'after') or type(value['page']) is not int or not 0 <= value['page'] < 128:
+            raise ValueError('Invalid exact review image page')
     return deepcopy(value)
 
 
@@ -211,8 +220,26 @@ def command(value):
     elif kind == 'start_export':
         operation = record(operation, ('kind', 'document', 'plan'))
         operation['plan'] = frozen(operation['plan'])
+    elif kind == 'preflight_preset':
+        operation = record(operation, ('kind', 'document', 'preset_id', 'preset_sha256', 'labels'))
+        token(operation['preset_id']); I.digest(operation['preset_sha256'])
+        if type(operation['labels']) is not list or len(operation['labels']) > 64:
+            raise ValueError('Invalid preset label set')
+        for label in operation['labels']: text(label, 128)
+        if len(set(operation['labels'])) != len(operation['labels']): raise ValueError('Repeated preset label')
+    elif kind == 'apply_preset':
+        operation = record(operation, ('kind', 'document', 'preset_id', 'assessment'))
+        token(operation['preset_id'])
+        assessment = record(operation['assessment'], ('report_id', 'report_sha256', 'document_revision', 'preset_sha256', 'requires_review', 'review'))
+        text(assessment['report_id'], 256); text(assessment['document_revision'], 256)
+        I.digest(assessment['report_sha256']); I.digest(assessment['preset_sha256'])
+        if assessment['requires_review'] is not True: raise ValueError('Workflow preset requires actual image review')
+        review = record(assessment['review'], ('receipt_id', 'report_sha256', 'document_id', 'document_revision', 'preset_sha256'))
+        text(review['receipt_id'], 256); token(review['document_id']); text(review['document_revision'], 256)
+        I.digest(review['report_sha256']); I.digest(review['preset_sha256'])
+        assessment['review'] = review; operation['assessment'] = assessment
     else:
-        raise ValueError('Only the preflight-supported export owner ports are enabled; imports remain ingestion-owned')
+        raise ValueError('Unsupported workflow owner port; imports remain ingestion-owned')
     operation['document'] = document(operation['document'])
     empty_identity = {**identity, 'operation_id': ''}
     if hashlib.sha256(encoded([empty_identity, operation])).hexdigest() != identity['operation_id']:

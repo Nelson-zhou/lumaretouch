@@ -2,6 +2,7 @@
 //! Runtime/build/integration acceptance is deliberately UNRUN for this change.
 mod wire;
 mod validation;
+mod review;
 mod transport;
 #[cfg(target_os = "linux")] mod storage;
 #[cfg(target_os = "linux")] mod data;
@@ -40,17 +41,18 @@ fn host(app: tauri::AppHandle, state: Arc<AppState>) -> Result<Arc<runtime::Host
 }
 
 #[tauri::command]
-pub(crate) fn local_workflow_workspace(app: tauri::AppHandle, state: State<'_, Arc<AppState>>) -> Result<Value, String> {
+pub(crate) fn local_workflow_workspace(app: tauri::AppHandle, state: State<'_, Arc<AppState>>, refresh_catalogue: Option<bool>) -> Result<Value, String> {
     #[cfg(target_os = "linux")]
     {
         let host = host(app, state.inner().clone())?;
-        let _ = host.tx.try_send(runtime::Message::Refresh);
+        let message = if refresh_catalogue == Some(true) { runtime::Message::RefreshCatalogue } else { runtime::Message::Refresh };
+        let _ = host.tx.try_send(message);
         let shared = host.public.lock().map_err(|_| "工作流状态锁不可用")?;
         if shared.workspace.is_null() { return Err("工作流宿主正在读取持久化状态，请稍后刷新".into()); }
         Ok(shared.workspace.clone())
     }
     #[cfg(not(target_os = "linux"))]
-    { let _ = (app, state); Ok(json!({"port_version":1,"host_scope_id":"unsupported-local-workflow-platform","workspace_revision":0,
+    { let _ = (app, state, refresh_catalogue); Ok(json!({"port_version":1,"host_scope_id":"unsupported-local-workflow-platform","workspace_revision":0,
         "capabilities":{"available":false,"can_save":false,"can_run":false,"can_open_review":false,
             "reason":"本地工作流原生持久化适配器目前仅支持 Linux","error_policies":{}},
         "definitions":[],"runs":[],"active_run":null,"lease":null,"unresolved_requests":[]})) }
@@ -109,6 +111,22 @@ pub(crate) fn local_workflow_run(app: tauri::AppHandle, state: State<'_, Arc<App
         shared.runs.get(&run_id).cloned().ok_or_else(|| "找不到原运行记录".into()) }
     #[cfg(not(target_os = "linux"))]
     { let _ = (app, state, run_id); Err("当前平台不支持本地工作流查询".into()) }
+}
+#[tauri::command]
+pub(crate) async fn local_workflow_review_image(app: tauri::AppHandle, state: State<'_, Arc<AppState>>, input: Value) -> Result<Value, String> {
+    #[cfg(target_os = "linux")]
+    {
+        if input.to_string().len() > 8192 { return Err("审核图片请求过大".into()); }
+        let input: wire::ReviewImageInput = serde_json::from_value(input).map_err(|error| error.to_string())?;
+        let host = host(app, state.inner().clone())?;
+        tauri::async_runtime::spawn_blocking(move || {
+            let (tx, rx) = std::sync::mpsc::sync_channel(1);
+            host.tx.try_send(runtime::Message::ReviewImage(input, tx)).map_err(|_| "审核读取队列已满或关闭")?;
+            rx.recv_timeout(std::time::Duration::from_secs(20)).map_err(|_| "审核图片读取尚未完成；没有提交批准".to_string())?
+        }).await.map_err(|error| error.to_string())?
+    }
+    #[cfg(not(target_os = "linux"))]
+    { let _ = (app, state, input); Err("当前平台不支持本地工作流审核".into()) }
 }
 pub(crate) fn shutdown() {
     #[cfg(target_os = "linux")]

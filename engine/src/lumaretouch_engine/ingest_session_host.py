@@ -122,6 +122,8 @@ class IngestSession:
 
     def blocks(self, name, payload):
         """No global workflow exemption; a lease excludes all unrelated writers."""
+        from .workflow_preset_dispatch import permits
+        if permits(self.engine, name, payload): return False
         with self.lock:
             if self.lease is None:
                 return False
@@ -171,7 +173,11 @@ class IngestSession:
         raw, disk_sha = read_project(current['path'])
         disk = json.loads(raw)
         project = {key: value for key, value in e._project.items() if key not in ('_source_path', '_source_sha256')}
-        if disk_sha != current['disk_sha256'] or project_digest(disk) != project_digest(project):
+        from . import creative_document_storage as CS
+        # A genuine codec save externalizes immutable creative chunks. Compare
+        # the exact packed representation, not hydrated base64 to blob markers.
+        comparison = CS.pack(project)[0] if CS.blob_inventory(disk) else project
+        if disk_sha != current['disk_sha256'] or project_digest(disk) != project_digest(comparison):
             raise ValueError('原操作磁盘回执与当前工程尚未一致，不能继续接入')
         rid = operation['operation_id']
         durable = disk.get('managed_import_receipts', {}).get(rid)

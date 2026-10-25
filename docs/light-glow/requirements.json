@@ -1,0 +1,22 @@
+{
+  "requirement_id": "creative:211524",
+  "source_file": "创意工具规格.json",
+  "source_index": 29,
+  "preserved_spec": "ui/src/spec/creative.json",
+  "source_url": "https://www.pixcakeai.com/guide/211524",
+  "read_on": "2026-10-25",
+  "original_granular_ids": null,
+  "granular_id_note": "Original full mapping files are unavailable in this recovered workspace. Behavior labels below are local descriptions under the exact preserved parent record, not invented original sub-IDs.",
+  "status": "partial_isolated_core_authored_unrun_not_feature_accepted",
+  "behaviors": [
+    {"behavior": "Single and multiple photo selection", "core_contribution": "Source-addressed per-target renderer", "remaining": "Host multi-target selection, source capture, review, apply and failure lifecycle"},
+    {"behavior": "Creative and colour-panel entry", "core_contribution": null, "remaining": "Parent-owned routes and connected UI"},
+    {"behavior": "Black mist, white mist and glow", "core_contribution": "Three distinct independently authored deterministic SDR response equations", "remaining": "UI/native integration and photographic acceptance; no vendor algorithm or optical parity"},
+    {"behavior": "Three presets per mode and continued manual edits", "core_contribution": "Nine explicit local scalar expansions in presets.json", "remaining": "UI controls and exact persisted recipe binding; vendor numeric defaults undisclosed"},
+    {"behavior": "Strength, radius, threshold, exposure and scattering", "core_contribution": "Real bounded full-source operators for all five controls", "remaining": "Native loading, interaction, numerical and photographic acceptance"},
+    {"behavior": "Hue, saturation and lightness tint", "core_contribution": "Defined HSL transformation of halo only", "remaining": "UI/native integration and photographic acceptance"},
+    {"behavior": "Green affected-region diagnostic", "core_contribution": "Actual final per-pixel RGB difference coverage", "remaining": "Display-only overlay and UI lifecycle"},
+    {"behavior": "Apply", "core_contribution": "Private same-size output and error-atomic native call", "remaining": "Source-fenced review, host immutable return, readback, history and project lifecycle"},
+    {"behavior": "AI illumination detection and advertised physical description", "core_contribution": null, "remaining": "Not implemented; deterministic luminance selection and artistic diffusion must not be called AI or physically equivalent"}
+  ]
+}

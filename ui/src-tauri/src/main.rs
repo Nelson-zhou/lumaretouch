@@ -51,6 +51,7 @@ mod torso_length_api;
 mod waist_length_api;
 mod head_size_api;
 mod body_slim_api;
+mod light_glow_api;
 mod lens_blur_api;
 mod lens_blur_protocol;
 mod expression_replacement_api;
@@ -1953,6 +1954,7 @@ fn main() {
             extended_tone_api::extended_tone_request, extended_tone_api::extended_tone_status, extended_tone_api::extended_tone_cancel,
             custom_lut_api::custom_lut_choose, custom_lut_api::custom_lut_request, custom_lut_api::custom_lut_status, custom_lut_api::custom_lut_cancel,
             inpaint, light, portrait_api::deform, lut, grade, portrait_api::enhance, background, export, session, filmstrip, history,
+            light_glow_api::light_glow_request, light_glow_api::light_glow_status, light_glow_api::light_glow_cancel, light_glow_api::light_glow_capability,
             lens_blur_api::lens_blur_request, lens_blur_api::lens_blur_status, lens_blur_api::lens_blur_cancel, lens_blur_api::lens_blur_capability,
             expression_replacement_api::expression_replacement_request, expression_replacement_api::expression_replacement_status, expression_replacement_api::expression_replacement_cancel, expression_replacement_api::expression_replacement_capability,
             people_api::people, shoulder_shape_api::shoulder_shape, leg_shape_api::leg_shape, waist_shape_api::waist_shape, leg_length_api::leg_length, torso_length_api::torso_length, waist_length_api::waist_length, head_size_api::head_size, body_slim_api::body_slim, neck_shape_api::neck_shape, arm_shape_api::arm_shape, body_pose_model_api::body_pose_model, body_pose_model_api::body_pose_model_status, semantic_colour_api::semantic_colour, hair_colour_api::hair_colour,
@@ -1992,6 +1994,7 @@ fn main() {
             managed_import_api::managed_import_request, managed_import_api::managed_import_status,
             ingest_session_api::ingest_session_request, ingest_session_api::ingest_session_status,
             local_workflow_host::local_workflow_workspace, local_workflow_host::local_workflow_definition, local_workflow_host::local_workflow_preflight, local_workflow_host::local_workflow_submit, local_workflow_host::local_workflow_request, local_workflow_host::local_workflow_run,
+            local_workflow_host::local_workflow_review_image,
             tether_host::tether_capture_state, tether_host::tether_capture_request, tether_host::tether_capture_receipt, tether_host::tether_capture_destination,
             source_relocation_api::source_relocation_request, source_relocation_api::source_relocation_status,
             project_recovery_api::project_recovery_request, project_recovery_api::project_recovery_status,

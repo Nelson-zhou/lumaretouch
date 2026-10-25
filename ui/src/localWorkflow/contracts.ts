@@ -1,3 +1,4 @@
+import type {PresetReviewAck, ReviewImageInput, ReviewImagePage, ReviewStep, WorkflowPresetHandoff} from './presetReview';
 // SPDX-License-Identifier: GPL-3.0-or-later
 /** Local-only v1 contract. The application supplies the port; this module never invokes native APIs. */
 export const WORKFLOW_PORT_VERSION = 1 as const;
@@ -109,6 +110,8 @@ export interface WorkflowRun extends RunSummary {
   records_truncated: boolean;
   diagnostics: WorkflowDiagnostic[];
   review: ReviewRequirement | null;
+  /** Engine-owned exact current preset handoff; missing only for legacy hosts. */
+  handoff?: WorkflowPresetHandoff | null;
 }
 export type WorkflowCommand =
   | {kind: 'save_definition'; definition: WorkflowDefinition; expected_storage_revision: string | null}
@@ -116,14 +119,16 @@ export type WorkflowCommand =
   | {kind: 'release_project_lease'; lease_id: string}
   | {kind: 'start'; graph: WorkflowGraph; lease_id: string; preflight_token: string}
   | {kind: 'stop'; run_id: string}
-  | {kind: 'open_review'; run_id: string; review_id: string};
+  | {kind: 'open_review'; run_id: string; review_id: string}
+  | {kind: 'review_step'; run_id: string; operation_id: string; step: ReviewStep; payload: PresetReviewAck | Record<string, never>};
 export type WorkflowOutcome =
   | {kind: 'save_definition'; definition: WorkflowDefinition}
   | {kind: 'acquire_project_lease'; lease: ProjectLease}
   | {kind: 'release_project_lease'; released: true; lease_id: string}
   | {kind: 'start'; run: WorkflowRun}
   | {kind: 'stop'; run: WorkflowRun}
-  | {kind: 'open_review'; opened: boolean; message: string};
+  | {kind: 'open_review'; opened: boolean; message: string}
+  | {kind: 'review_step'; run_id: string; operation_id: string; step: ReviewStep; message: string};
 export interface PendingWorkflowRequest {request_id: string; command_kind: WorkflowCommand['kind']}
 export type WorkflowReceipt = PendingWorkflowRequest & (
   | {status: 'pending' | 'unknown'; message?: string}
@@ -143,6 +148,7 @@ export interface WorkflowWorkspace {
   lease?: ProjectLease | null;
   recipe_sha256?: string;
   recipe_profile?: WorkflowExportProfile;
+  preset_catalogue?: unknown;
   /** True only while the host's real read-only engine profile request is outstanding. */
   recipe_profile_pending?: boolean;
   /** Includes indeterminate writes from earlier UI lifetimes. An unknown receipt must remain here. */
@@ -153,9 +159,11 @@ export interface WorkflowHostPort {
   /** Stable identity of the host recovery journal. Do not change it on rerender. */
   readonly scope_id: string;
   readWorkspace(): Promise<WorkflowWorkspace>;
+  refreshCatalogue?(): Promise<WorkflowWorkspace>;
   readDefinition(workflow_id: string): Promise<WorkflowDefinition>;
   preflight(input: {port_version: 1; graph: WorkflowGraph; lease_id: string}): Promise<PreflightReport>;
-  /** Persist request identity before effects; deduplicate by identity. Never acknowledge a review here. */
+  readReviewImage?(input: ReviewImageInput): Promise<ReviewImagePage>;
+  /** Persist exact identity before effects. Only an explicit review_step can acknowledge a reviewed pair. */
   submit(input: {port_version: 1; request_id: string; command: WorkflowCommand}): Promise<WorkflowReceipt>;
   queryRequest(request_id: string): Promise<WorkflowReceipt>;
   readRun(run_id: string): Promise<WorkflowRun>;

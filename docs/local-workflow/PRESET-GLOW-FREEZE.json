@@ -1,0 +1,534 @@
+{
+  "schema_version": 1,
+  "baseline_commit": "c04fa7c028f9d3325ed72d8796e4ff384d5cc432",
+  "baseline_tree": "273b5206d5bd6b0e4255c53e4a4ae77906219567",
+  "date": "2026-10-25",
+  "status": "SOURCE_CONNECTED_PARTIAL_ALL_RUNTIME_ACCEPTANCE_UNRUN",
+  "scope": "Reviewed per-photo workflow exposure/WB preset pause/apply/save/return and independent current-photo original Rust light-glow family with real full-source review and canonical immutable new-image return. No new count for workflow adapters.",
+  "requirements": [
+    "workflow:8YEKwsjJg7",
+    "creative:211524"
+  ],
+  "manifest_policy": "Exact 100 payload files plus this self-excluded manifest, 101 total. Historical unrelated manifests and old sparse directory untouched.",
+  "source_checks": {
+    "python_ast": 27,
+    "json_parse": 4,
+    "toml_parse": 1,
+    "file_lines": {
+      "ui/src/App.tsx": 2156,
+      "ui/src-tauri/src/main.rs": 2010,
+      "engine/src/lumaretouch_engine/server.py": 7057
+    },
+    "whitespace": "All changed and new payload files checked; git diff --check clean",
+    "independent_review": "Source audit of workflow handoff/CAS and glow core/transport/publication/App boundaries; corrected timestamp, source-binding, context-restoration, query-correlation, capacity, CAS and interface findings. Not runtime acceptance."
+  },
+  "remaining": [
+    "All builds/typechecks/tests/product imports/rendering/numerical/photo/UI/crash/device acceptance remain UNRUN; required glow/creative native libraries are absent in inspected source bin paths",
+    "Workflow supports complete exposure/white-balance presets only; other mixed presets are rejected whole, no auto-ACK; empty initial editor, restart recovery, ERP/AI culling/branches/arbitrary export profiles remain incomplete",
+    "Workflow save requires cooperating trusted filesystem; immutable sidecar codec remains pathname-based and content CAS is not hostile-writer atomicity",
+    "Glow is deterministic artistic opaque SDR, not learned illumination or physical/vendor parity; no HDR/alpha retouch, update-original, multi-photo/batch, colour shortcut or persisted re-editable glow stack",
+    "Full-source memory admission can refuse images; no 24 MP/performance/quality claim, and native send errors retain conservative query-only uncertainty"
+  ],
+  "files": [
+    {
+      "path": "core/light_glow/ABI.md",
+      "bytes": 6291,
+      "sha256": "252420b100311095af577abfeb6febfe145d35df0df67af08119639a7aa004f6"
+    },
+    {
+      "path": "core/light_glow/Cargo.toml",
+      "bytes": 219,
+      "sha256": "580acd27ae073f82f0d504008068013f2376b91b1575320775ad230621979330"
+    },
+    {
+      "path": "core/light_glow/NUMERICS.md",
+      "bytes": 5167,
+      "sha256": "02ae29856196a0d45e41262bd4a5c5ff11d0154b4b98b6cc4a51aeaccb84bf97"
+    },
+    {
+      "path": "core/light_glow/README.md",
+      "bytes": 2537,
+      "sha256": "71889fc94f7171309ad86db7f5fba63fc78403bfcba66b85c288490614631e05"
+    },
+    {
+      "path": "core/light_glow/build_light_glow.sh",
+      "bytes": 586,
+      "sha256": "eff6553cec7ec7a05f267ce58bb2950b378478ac469b00c720e650dffb8c2422"
+    },
+    {
+      "path": "core/light_glow/lib.rs",
+      "bytes": 19180,
+      "sha256": "710dce5a4d9334045530a073936741785fa38412a4036994a74ee58be27a1efd"
+    },
+    {
+      "path": "core/light_glow/light_glow.h",
+      "bytes": 1760,
+      "sha256": "2496e8a1ba95be58cf719b16b11188759805dc1a7703a39db7bc820efb838127"
+    },
+    {
+      "path": "core/light_glow/tests.rs",
+      "bytes": 11864,
+      "sha256": "b2615f5ec8b48a9973ea33fc7902c891d38f10b17cc9140d9c2595aa640c23fa"
+    },
+    {
+      "path": "docs/development/handbook-traceability.json",
+      "bytes": 488055,
+      "sha256": "daa9e0c44f0a7200c7b545796c9a2290d2e4cc937142f120e0ad49f5d82fa29b"
+    },
+    {
+      "path": "docs/light-glow/ACCEPTANCE-UNRUN.md",
+      "bytes": 3286,
+      "sha256": "882e8d2a7fc7255f138e53ede8b125d68ab59aad50f1d0e65a61b910f6dbb40e"
+    },
+    {
+      "path": "docs/light-glow/APP-INTEGRATION.md",
+      "bytes": 6171,
+      "sha256": "e9378ce9740a733a1b18e27690c5fffcfc89186747f427f9a62c0c7298172a0b"
+    },
+    {
+      "path": "docs/light-glow/CORE-FREEZE.json",
+      "bytes": 3187,
+      "sha256": "64077308335ee2d6d2116b8cf11da5e75b898d89c0ef7ee99c3b2fd9c20ea32a"
+    },
+    {
+      "path": "docs/light-glow/ENGINE.md",
+      "bytes": 11525,
+      "sha256": "62a98a4d2116abd7b69b3a8ff774b43b1c7098632034bbb6fd0f6c39e5836179"
+    },
+    {
+      "path": "docs/light-glow/INTEGRATED-STATUS.md",
+      "bytes": 3100,
+      "sha256": "954731c9b2df647281c8b929a05ed49ee14daebb6171cb254a71300152df0ff8"
+    },
+    {
+      "path": "docs/light-glow/INTEGRATION.md",
+      "bytes": 4616,
+      "sha256": "843f74acdf6516ee1d2481cd713bfaa13e29004d95c70b9ca1b976bfd0af80ac"
+    },
+    {
+      "path": "docs/light-glow/NATIVE.md",
+      "bytes": 12250,
+      "sha256": "041db805ef350dcbac1b5d51761056dd793f00678e7f503deab829843a6f4bd6"
+    },
+    {
+      "path": "docs/light-glow/RESEARCH.md",
+      "bytes": 4962,
+      "sha256": "0dbfc37dd14e613827dc83cf6eaf2028f7bee6dc04dac90e2cde05c092be693b"
+    },
+    {
+      "path": "docs/light-glow/STATIC-INTEGRATION-AUDIT.md",
+      "bytes": 6634,
+      "sha256": "5e1949986b202e51efb8c14b9afaee3e08059a33a97c9628cc51a60313b1f23e"
+    },
+    {
+      "path": "docs/light-glow/UI.md",
+      "bytes": 11073,
+      "sha256": "318608cff7e0b8438e17b6ff7ccaed3f50a44b55d07fb7cee232cab289479a14"
+    },
+    {
+      "path": "docs/light-glow/presets.json",
+      "bytes": 1617,
+      "sha256": "0d719a0d6de640b3a45d8b55f50642c9ddd37550137621bf47d52eb90ff947ed"
+    },
+    {
+      "path": "docs/light-glow/requirements.json",
+      "bytes": 2494,
+      "sha256": "bb4673a95d2bcd9d8fd64037bba6dfd24a0f773b94b82c49c8abbd825ce4be43"
+    },
+    {
+      "path": "docs/local-workflow/PRESET-CATALOGUE.md",
+      "bytes": 9203,
+      "sha256": "36e0ae7cbfc4b26a7af845a93ea3eae3a50cbefa47925f6776c43f89fed17c8d"
+    },
+    {
+      "path": "docs/local-workflow/PRESET-HANDOFF.md",
+      "bytes": 4787,
+      "sha256": "136a9c5756b1dd5d1831b892d8f2f1b5a1a2b16ddf84d0d515f8d8ea72af1bc7"
+    },
+    {
+      "path": "docs/local-workflow/PRESET-INTEGRATION.md",
+      "bytes": 2416,
+      "sha256": "64bc1d0ac5a920490bda6cb4be2263a5d2626800b56dbedd70a80a602a934eeb"
+    },
+    {
+      "path": "docs/local-workflow/PRESET-REVIEW.md",
+      "bytes": 8664,
+      "sha256": "16eb40e1abf546de8a3146c6b3c758df1876de9da2bd6defe142decc431035f0"
+    },
+    {
+      "path": "docs/local-workflow/PRESET-SAVE.md",
+      "bytes": 10681,
+      "sha256": "781a4466db085dec8d6c294f7084d581fbf5fb7df47fb3172af630874844839e"
+    },
+    {
+      "path": "docs/local-workflow/PRESET-UI.md",
+      "bytes": 6415,
+      "sha256": "930fac7cb111fe08a150c37a68c44db975946bd054aab9bbfa6667e9b39f4b8a"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/command_registry.py",
+      "bytes": 2600,
+      "sha256": "9c8d14fec448fb9c677b90489d757fd5034cd0f6afbb85572794b498d52cf308"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/creative_capture_routes.py",
+      "bytes": 1262,
+      "sha256": "ea4f8c33200ce0b648ee4602c185e6422cb003f38a86b92846db4dd92754d58e"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/ingest_session_host.py",
+      "bytes": 28290,
+      "sha256": "0490c7fa160d8b513f51ac37568faac892244728ec6a1607bcd876595ecae30a"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/light_glow_host.py",
+      "bytes": 19844,
+      "sha256": "de033bed373563065f46f709bb4efd88087dcd84779bc7889d8a6d6cce4312f7"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/light_glow_jobs.py",
+      "bytes": 3727,
+      "sha256": "5918dcc32742998ad706a73a572b4aa01b94204cf2e0cab216a05809db09a54b"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/light_glow_native.py",
+      "bytes": 11298,
+      "sha256": "139d39c026871b8059c7a172fe9c0039d4576847c0806fd3f4a8febc9cc7275f"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/light_glow_source.py",
+      "bytes": 4641,
+      "sha256": "f1f62a84c83a582aec5bb7c457e2d43af279fae428b303d3601820906a9f5a61"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/light_glow_stage.py",
+      "bytes": 11091,
+      "sha256": "833bec06fe3448a6da6b0b64c0bed3f6768cfd483634502876008cafd112b385"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/project_recovery_runtime.py",
+      "bytes": 10373,
+      "sha256": "817fc64a4f085c7a563f561173d6b186abe9dcd2f8160508acfb4c3f83c3832d"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/read_job_ingress.py",
+      "bytes": 2421,
+      "sha256": "d7f951beb493a488a4121c4fa5510ca9adbd0869a5b4306607217ae495e34318"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/server.py",
+      "bytes": 471309,
+      "sha256": "95ca2d12007f50dc1ba3c7710fa5295ccf481a01f994a791419b393bf58d229b"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/workflow_owner_dispatch.py",
+      "bytes": 1761,
+      "sha256": "2d42f1a17c8ead26f5419d09e972db5a6e0fdb201c983b25c8c7935775336130"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/workflow_owner_host.py",
+      "bytes": 31528,
+      "sha256": "b3fddb64ca1dfd6cf307d3c55eaac93441f49a87eb3c93e7f226299603e7522b"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/workflow_owner_protocol.py",
+      "bytes": 13795,
+      "sha256": "e224df7b30c8cb5c675e68bc525d1aef2fa22d0fab6dc9ebd2107eda6ae4d63a"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/workflow_preset_catalogue.py",
+      "bytes": 15785,
+      "sha256": "61fb964b94923489ff880a203dceba030d34a8189fa6e242b6a1c46a9385c40b"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/workflow_preset_dispatch.py",
+      "bytes": 1630,
+      "sha256": "e0f77b7ff1adb40546082fb3267aa20f8473f6f32293ea1a224618a0af9efd1c"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/workflow_preset_handoff.py",
+      "bytes": 25759,
+      "sha256": "a8d111984b9d755b54bc3eeafbbe0af2f314ba045299f789554c942e8826a74b"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/workflow_preset_review.py",
+      "bytes": 22587,
+      "sha256": "dbd68f7951f07e076e28af3af2694ad50bced91507d1c449ba9286c8dade711c"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/workflow_preset_save.py",
+      "bytes": 5968,
+      "sha256": "ad81a120c00809c6b97b5f6e3f73cc6d9c390e4635b1b1d4af71fd5bf4dc1cc8"
+    },
+    {
+      "path": "engine/tests/test_light_glow_contract_unrun.py",
+      "bytes": 6006,
+      "sha256": "1b8d0060ff5c63fd3bdddd8e7270af8e193e3ea3de3b4dfefb7bf71bdf020415"
+    },
+    {
+      "path": "engine/tests/test_light_glow_host_unrun.py",
+      "bytes": 3177,
+      "sha256": "42b263b27b2871f1ec31e2c2af9db5eb8a34e41a90f071b0a495bcf67c90f6fd"
+    },
+    {
+      "path": "engine/tests/test_light_glow_native_unrun.py",
+      "bytes": 7168,
+      "sha256": "7d3a6757e5887bfd9f0ae7a769883b2c5c1ca4128b0e1aecda5687ee66408481"
+    },
+    {
+      "path": "engine/tests/test_light_glow_publication_unrun.py",
+      "bytes": 12227,
+      "sha256": "1cb69a6f523a936210634c0c26c9c08d336e593d4d5c44125e95eaf8a85cb37b"
+    },
+    {
+      "path": "engine/tests/test_workflow_preset_catalogue_unrun.py",
+      "bytes": 14182,
+      "sha256": "cda3ba655619cac40d28479ca311d9cc5b6872f4d22bc4e54b9d70999e735050"
+    },
+    {
+      "path": "engine/tests/test_workflow_preset_handoff_unrun.py",
+      "bytes": 14650,
+      "sha256": "11e5e2b14c834077de97c41106be3f62d7bdacb78ecb30f4a6acb1813e4a31a4"
+    },
+    {
+      "path": "engine/tests/test_workflow_preset_review_unrun.py",
+      "bytes": 18254,
+      "sha256": "bff45da996e1229ebe60f1e6d864720c61e4d8517d72300ea08db1a78332a44f"
+    },
+    {
+      "path": "engine/tests/test_workflow_preset_save_unrun.py",
+      "bytes": 20194,
+      "sha256": "4825df1846506acecfd32f9cd0bc0a871fa912f4cfb8e3825b341866caf6e433"
+    },
+    {
+      "path": "packaging/stage-engine.sh",
+      "bytes": 29510,
+      "sha256": "34fc7058408de690e2a6590c8e371a0907ef07b9c1fc82c5581833cd5526d199"
+    },
+    {
+      "path": "ui/src-tauri/src/capture_lifecycle.rs",
+      "bytes": 3839,
+      "sha256": "2e25031e4395570b62d0fc1ac0515e15aae88fae4fd1243d720486e0d20698cb"
+    },
+    {
+      "path": "ui/src-tauri/src/engine.rs",
+      "bytes": 46972,
+      "sha256": "2693f98f1b51ed8ce92f94d7fcd277152de90957729638e0651cd3d28885b69d"
+    },
+    {
+      "path": "ui/src-tauri/src/light_glow_api/imagery.rs",
+      "bytes": 3445,
+      "sha256": "73cf4661c72e1e78a2b6d09c67d06bcbc451034beb34f0e34e3ebf9f177344b0"
+    },
+    {
+      "path": "ui/src-tauri/src/light_glow_api/json.rs",
+      "bytes": 5219,
+      "sha256": "a9592cab2febf0adbd6f65690fbe433cbf83a20765acbdefda7aea2d13a015fd"
+    },
+    {
+      "path": "ui/src-tauri/src/light_glow_api/mailbox.rs",
+      "bytes": 20129,
+      "sha256": "92621e653d9a0d16555ce71ecdfb4c411033244f5fb59ac75e2a41017d419083"
+    },
+    {
+      "path": "ui/src-tauri/src/light_glow_api/mod.rs",
+      "bytes": 1819,
+      "sha256": "dd32b64f72f8b3d81f8979af66d9ec1f539e6d82fdb23279418533f715043ae6"
+    },
+    {
+      "path": "ui/src-tauri/src/light_glow_api/tests_unrun.rs",
+      "bytes": 15381,
+      "sha256": "96ac6340170f99fe1902e1ea77cdd59ebcd641db89252b4b5e25dcb569aa86d3"
+    },
+    {
+      "path": "ui/src-tauri/src/light_glow_api/transport.rs",
+      "bytes": 5201,
+      "sha256": "b6b1bf681652b0ff07b1f6c7350efb142be9544e36c5576d481ea08da79a0011"
+    },
+    {
+      "path": "ui/src-tauri/src/light_glow_api/wire.rs",
+      "bytes": 12017,
+      "sha256": "e7c30fdcf9be79939c1a8f989860e0a196d1683f61d710492c68adb98b14a751"
+    },
+    {
+      "path": "ui/src-tauri/src/local_workflow_host/data.rs",
+      "bytes": 4648,
+      "sha256": "a8ab4b4e0be257e46ed59ea4c16c3a6507b6a6190f91d1ffe71f5948b13daf72"
+    },
+    {
+      "path": "ui/src-tauri/src/local_workflow_host/mod.rs",
+      "bytes": 8102,
+      "sha256": "fb617b034893f573426a901577e4a15dd220ef2806c883681bf482345d13df09"
+    },
+    {
+      "path": "ui/src-tauri/src/local_workflow_host/review.rs",
+      "bytes": 7978,
+      "sha256": "b7c1bf9646b7788bbb5cfa6be6c7b1279c61e474ec72dde2b251299a7e2c69ba"
+    },
+    {
+      "path": "ui/src-tauri/src/local_workflow_host/runtime.rs",
+      "bytes": 51412,
+      "sha256": "f35513191fd527ef931d9bc00b04dbd15a175fac82043c51b41fdefcf6e1eda9"
+    },
+    {
+      "path": "ui/src-tauri/src/local_workflow_host/tests_unrun.rs",
+      "bytes": 7743,
+      "sha256": "474528d01cddda9445013893417317365afeac315c5235230a33a577af3ca008"
+    },
+    {
+      "path": "ui/src-tauri/src/local_workflow_host/transport.rs",
+      "bytes": 8654,
+      "sha256": "4b3329c0efecd5d35c25831c428260a1e4eca41286ac2189a39f5736dceab1c7"
+    },
+    {
+      "path": "ui/src-tauri/src/local_workflow_host/view.rs",
+      "bytes": 6195,
+      "sha256": "60f2347fca745f75679ba9a7cf68d840ff5f51ba7e6a476cf67f115f60cd3196"
+    },
+    {
+      "path": "ui/src-tauri/src/local_workflow_host/wire.rs",
+      "bytes": 3891,
+      "sha256": "39f20aca7adf0bf1de9c571ff2166d39a535a6d94c296cca31525994f95b6aed"
+    },
+    {
+      "path": "ui/src-tauri/src/main.rs",
+      "bytes": 100198,
+      "sha256": "835f98ffd9491747e466ab7c1d3c16eca1533d9a71e678f19b06f95858d8a1dd"
+    },
+    {
+      "path": "ui/src-tauri/src/native_dispatch.rs",
+      "bytes": 12885,
+      "sha256": "2d52dda468191dbc751f3e23574db98a246ced1c8e03831ec2a3f78c605bca1f"
+    },
+    {
+      "path": "ui/src/App.tsx",
+      "bytes": 155450,
+      "sha256": "7078413f541540d8b360206bc33ecb9d27f7eefac8551e508c7dd57da3cd3cd5"
+    },
+    {
+      "path": "ui/src/creativeLayers/CreativeWorkspace.tsx",
+      "bytes": 3667,
+      "sha256": "b83acc752ff0ab44ba93d80bbc0d7e61ab2ee9196d500caa9b1080ef8301a84f"
+    },
+    {
+      "path": "ui/src/lightGlow/LightGlowWorkspace.tsx",
+      "bytes": 11610,
+      "sha256": "f2d66ffb195243dd4dd27638526f7d9e49d4dbc3df7f68651d5765642515e7e1"
+    },
+    {
+      "path": "ui/src/lightGlow/LightGlowWorkspaceHost.tsx",
+      "bytes": 1794,
+      "sha256": "58bce43b8c73d65942b3bf01e00c28a8f1f9f323e2205673383dadfbebd59280"
+    },
+    {
+      "path": "ui/src/lightGlow/controller.ts",
+      "bytes": 17555,
+      "sha256": "51376ad2eb34bce7461354cbfd1e9fd9577d8d8cc2ada63ad12e36d9437ca0f2"
+    },
+    {
+      "path": "ui/src/lightGlow/imagery.ts",
+      "bytes": 2926,
+      "sha256": "e53f924ecc8608b419c93abd8c1ca30dc28b89afe052b5ed73e10ca8ec84e0e7"
+    },
+    {
+      "path": "ui/src/lightGlow/index.ts",
+      "bytes": 404,
+      "sha256": "c8b6df7b3e9f753567434d7f984a7f8ec375f74261c2d3c81f4c0c8dd4e05aa0"
+    },
+    {
+      "path": "ui/src/lightGlow/lightGlow.css",
+      "bytes": 3899,
+      "sha256": "d07b7d74604c86acfec5fcc4b83023f380556604ebda2963d36569cd8f4aaccd"
+    },
+    {
+      "path": "ui/src/lightGlow/model.ts",
+      "bytes": 18198,
+      "sha256": "f8a824ac148408b2d5fd3705d9e21a6d85a0ccdcd656f490e04b2d6561c0069b"
+    },
+    {
+      "path": "ui/src/lightGlow/nativePort.ts",
+      "bytes": 20529,
+      "sha256": "a1692b9eaf06669775974da186ede9d218598f9a06ea5567ff84ab5f785c00f0"
+    },
+    {
+      "path": "ui/src/lightGlow/useGlowWorkspaceBinding.ts",
+      "bytes": 7071,
+      "sha256": "1985c2187579aedd8cb5c47770f235fa261b02900087afed0698d19fc470b157"
+    },
+    {
+      "path": "ui/src/lightGlow/useLightGlow.ts",
+      "bytes": 12264,
+      "sha256": "c0cc2831068ce3dc9d151972d017ec32b8daf28bddcf37700c87b971b076066a"
+    },
+    {
+      "path": "ui/src/lightGlow/workflow.unrun.test.ts",
+      "bytes": 14463,
+      "sha256": "ce4c65958a12fdd703cb5fe8c20fc7f250f71b2d51224b3b19aae0cb4ad9d4c7"
+    },
+    {
+      "path": "ui/src/localWorkflow/LocalWorkflowPanel.tsx",
+      "bytes": 23656,
+      "sha256": "b1854cafa4a0b8341d5656ef1aa0a0c47406b68e1f7c2ecfeedb26d26b7fff91"
+    },
+    {
+      "path": "ui/src/localWorkflow/PresetHandoffPanel.tsx",
+      "bytes": 6160,
+      "sha256": "6d615917f39b47fd1ce858746248aa8a82aa161abf05c2d600d298ee6052f340"
+    },
+    {
+      "path": "ui/src/localWorkflow/contracts.ts",
+      "bytes": 7886,
+      "sha256": "c5c5956fbb73a1cca686f382c174cd99d1bede9a9de9811bfa935c81944da339"
+    },
+    {
+      "path": "ui/src/localWorkflow/controller.ts",
+      "bytes": 30762,
+      "sha256": "7363f776c7a219b16c0b1ffe1330dce7d8731dd6cb1c6b5d23f46e5b9ac2cc7f"
+    },
+    {
+      "path": "ui/src/localWorkflow/localWorkflow.css",
+      "bytes": 5068,
+      "sha256": "58452064c03583171445493d96cded278a657978fab99ca56f652722c33c791f"
+    },
+    {
+      "path": "ui/src/localWorkflow/nativePort.ts",
+      "bytes": 1462,
+      "sha256": "6ba60065504434524669fa9740b2b2293cbc4256782a8e582ea0a403f5cc9e0f"
+    },
+    {
+      "path": "ui/src/localWorkflow/presetCatalogue.tsx",
+      "bytes": 3815,
+      "sha256": "fa35c347dc93f2646d7baf2fd9fc16477a6bbe44ef69e5dae76ed63bb968ab5f"
+    },
+    {
+      "path": "ui/src/localWorkflow/presetReview.ts",
+      "bytes": 10401,
+      "sha256": "24d1943f50e1be5dfd56744660375c0119e45090c12da0a8ba02a6b3542a1c12"
+    },
+    {
+      "path": "ui/src/localWorkflow/presetReview.unrun.test.ts",
+      "bytes": 3451,
+      "sha256": "1a806c98ef79fa4430b997e9c5bb463699b2b0a3779967d957cee73100b03f84"
+    },
+    {
+      "path": "ui/src/localWorkflow/presetReviewFixture.unrun.test.ts",
+      "bytes": 1984,
+      "sha256": "abb8e3551c5f2c38eb29781d066f61d22965ba7e33e9c8169f4235db8029399f"
+    },
+    {
+      "path": "ui/src/localWorkflow/workflow.unrun.test.ts",
+      "bytes": 23834,
+      "sha256": "cfa6a2fd42d508de114684b860566087b90ad4c16fa464f4161e8a82bd5a0484"
+    },
+    {
+      "path": "ui/src/native.ts",
+      "bytes": 115663,
+      "sha256": "854b6d11c9b0f5026ef776589cceeb3a4b7adef99d8572b38ce6f8e0a792b3bc"
+    },
+    {
+      "path": "ui/src/workspaces/guardCreativeWork.ts",
+      "bytes": 1462,
+      "sha256": "87a6cd35c4e189a95747cf2187cd9477925e34c93f310cbeffd95c1228136dc5"
+    }
+  ]
+}

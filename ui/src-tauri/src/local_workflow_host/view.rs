@@ -5,18 +5,18 @@ use super::data::{Data, Run};
 
 pub fn run(scheduler: &Scheduler, meta: &Run) -> Value {
     let pending = scheduler.pending();
-    let status = match scheduler.status() {
+    let status = if !meta.handoff.is_null() { "paused" } else { match scheduler.status() {
         RunStatus::Running => "running", RunStatus::Paused { .. } => "paused",
         RunStatus::Complete => if meta.released { "complete" } else { "stopping" },
         RunStatus::Stopped => if !meta.released { "stopping" }
             else if scheduler.jobs().iter().any(|job| matches!(job.stage, Stage::Failed)) { "failed" } else { "stopped" },
-    };
+    }};
     let stopped = matches!(scheduler.status(), RunStatus::Stopped);
     let mut review = Value::Null;
     if let RunStatus::Paused { detail: PauseReason::ReviewRequired { report_id, .. } } = scheduler.status() {
         if let Some(command) = pending {
             review = json!({"review_id":report_id,"file_id":command.identity.input_occurrence_id,
-                "node_id":command.identity.node_id,"family":"compatible_preset","reason":"需要预设 owner 保留的实际人工审核；这里不能提交 ACK"});
+                "node_id":command.identity.node_id,"family":"compatible_preset","reason":"需要查看完整前后对比并明确批准；未批准时不会应用预设"});
         }
     }
     let files: Vec<_> = scheduler.jobs().iter().map(|job| {
@@ -58,20 +58,21 @@ pub fn run(scheduler: &Scheduler, meta: &Run) -> Value {
         "completed_files":scheduler.jobs().iter().filter(|job| matches!(job.stage, Stage::Done)).count(),
         "total_files":scheduler.jobs().len(),"sequence":meta.sequence,"lease_id":meta.lease_id,
         "effects_settled":meta.released && pending.is_none(),"files":files,"records_truncated":false,
-        "diagnostics":diagnostics,"review":review})
+        "diagnostics":diagnostics,"review":review,"handoff":meta.handoff})
 }
 pub fn workspace(data: &Data, available: bool, profile: &Value, profile_pending: bool) -> Value {
     let active = data.active_run.as_ref().and_then(|id| data.runs.get(id)).map(|run| run.snapshot.clone());
     json!({"port_version":1,"host_scope_id":data.host_scope_id,"workspace_revision":data.revision,
         "capabilities":{"available":available && data.blocked.is_none(),"reason":data.blocked,
-            "can_save":data.blocked.is_none(),"can_run":available && data.blocked.is_none(),"can_open_review":false,
+            "can_save":data.blocked.is_none(),"can_run":available && data.blocked.is_none(),"can_open_review":available && data.blocked.is_none(),
             "error_policies":{"directory_source":["stop"],"managed_import":["stop"],
-                "path_labels":["stop","skip"],"export":["stop","skip"]}},
+                "path_labels":["stop","skip"],"compatible_preset":["stop"],"export":["stop","skip"]}},
         "definitions":data.definitions.iter().map(|(id,row)|json!({"workflow_id":id,"name":row.definition.name,
             "storage_revision":row.definition.storage_revision,"updated_at":row.updated_at})).collect::<Vec<_>>(),
         "runs":data.runs.values().map(|run|run.snapshot.clone()).collect::<Vec<_>>(),"active_run":active,
         "lease":data.lease.as_ref().map(|lease|lease.public()),
         "recipe_sha256":profile["recipe_sha256"],"recipe_profile":profile["recipe_profile"],"recipe_profile_pending":profile_pending,
+        "preset_catalogue":profile["preset_catalogue"],
         "unresolved_requests":data.requests.values().filter(|row|super::wire::unresolved(&row.receipt))
             .map(|row|json!({"request_id":row.request.request_id,"command_kind":row.request.command.name()})).collect::<Vec<_>>()})
 }

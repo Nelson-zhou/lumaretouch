@@ -1,3 +1,7 @@
+import {useGlowWorkspaceBinding} from './lightGlow/useGlowWorkspaceBinding';
+import {LightGlowWorkspaceHost} from './lightGlow/LightGlowWorkspaceHost';
+import {GLOW_PROTOCOL, validGlowCapability} from './lightGlow/model';
+import {guardCreativeWork} from './workspaces/guardCreativeWork';
 import {useLensBlur} from './lensBlur/useLensBlur';
 import {LensWorkspaceHost} from './lensBlur/LensWorkspaceHost';
 import {useExpressionReplacement} from './expressionReplacement/useExpressionReplacement';
@@ -205,6 +209,7 @@ export default function App() {
   const [chunks, setChunks] = useState(1);
   const [tierLabel, setTierLabel] = useState("tier2");
   const poll = useRef<number | null>(null);
+  const [glowOpen,setGlowOpen]=useState(false);
   const [lensOpen,setLensOpen]=useState(false);
   const [expressionOpen,setExpressionOpen]=useState(false);
   const armBusyRef=useRef(false);
@@ -1838,7 +1843,11 @@ export default function App() {
   const lens=useLensBlur({sourceUid:doc?.source_uid??'',loadId:doc?.document_id??'',engineKey:String(pid??''),hostRevision:status?.doc_rev??-1,
     active:workspace==='creative',available:!!status?.engine_alive&&caps?.lens_blur_protocol===3&&hasImage&&status.image?.load_id===doc?.document_id,
     externalBusy:imageToolBusy||idBackgroundBusy||creative.pending||expression.busy||expressionOpen||colorSampler.active||sampleLibrary.open,queueBusy:!!status?.edit_queue?.in_flight||!!status?.edit_queue?.pending},refreshFromEngine);
-  armBusyRef.current=armBusyRef.current||expression.busy||lens.busy;
+  const glowCapability=caps?.light_glow_capability;
+  const glow=useGlowWorkspaceBinding({sourceUid:doc?.source_uid??'',loadId:doc?.document_id??'',engineKey:String(pid??''),hostRevision:status?.doc_rev??-1,active:workspace==='creative',
+    available:!!status?.engine_alive&&hasImage&&status.image?.load_id===doc?.document_id&&caps?.light_glow_protocol===GLOW_PROTOCOL&&validGlowCapability(glowCapability)&&glowCapability.status==='available',
+    externalBusy:imageToolBusy||idBackgroundBusy||creative.pending||expression.busy||expressionOpen||lens.busy||lensOpen||colorSampler.active||sampleLibrary.open,queueBusy:!!status?.edit_queue?.in_flight||!!status?.edit_queue?.pending},refreshFromEngine);
+  armBusyRef.current=armBusyRef.current||expression.busy||lens.busy||glow.busy;
   creativeRoute.current={active:workspace==='creative',pending:creative.pending,importPaths:creative.importPaths,history:creative.history};
   const guides=useCanvasGuides({loadId:doc?.document_id??'',report:doc?.canvas_guides,center:doc?.crop?[(doc.crop.rect[0]+doc.crop.rect[2])/2,(doc.crop.rect[1]+doc.crop.rect[3])/2]:undefined,
     contextKey:JSON.stringify([pid,doc?.document_id,doc?.crop,view,workspace]),modes:{
@@ -1856,19 +1865,14 @@ export default function App() {
   };
   // Keep uncertain arm/waist mutations and proposal cancellation from racing other UI edits.
   // Original-receipt checks, popup Close and the activity locator remain accessible.
-  const guardArmWork=(event:import('react').SyntheticEvent)=>{
-    if((lens.busy||lensOpen)&&event.target instanceof Element&&!event.target.closest('[data-lens-blur-workflow]')){event.preventDefault();event.stopPropagation();return;}
-    if((expression.busy||expressionOpen)&&event.target instanceof Element&&!event.target.closest('[data-expression-workflow]')){event.preventDefault();event.stopPropagation();return;}
-    if((fringe.active||fringe.pending||commonBackground.active||commonBackground.pending)&&event.target instanceof Element&&!event.target.closest('.commonBackgroundPanel,.commonBackgroundWorkspace,.fringePanel,.fringeWorkspace,.fringeReceipt,.fringeBackdrop,.retouchToolActivity')){event.preventDefault();event.stopPropagation();return;}
-    if(healBrush.pending&&event.target instanceof Element&&!event.target.closest('[data-heal-workflow],.retouchToolActivity')){event.preventDefault();event.stopPropagation();return;}
-    if(creative.pending&&event.target instanceof Element&&!event.target.closest('.creative-layers,.creative-connection')){event.preventDefault();event.stopPropagation();return;}
-    if(event.target instanceof Element&&((idBackgroundBusy&&!event.target.closest('.idBackgroundPanel,.id-background-picker'))||((arms.busy||waist.busy||length.busy||neck.busy||torso.busy||waistLength.busy||headSize.busy||bodySlim.busy)&&!event.target.closest('[data-arm-workflow],[data-waist-workflow],[data-leg-length-workflow],[data-neck-workflow],[data-torso-length-workflow],[data-waist-length-workflow],[data-head-size-workflow],[data-body-slim-workflow],.retouchToolActivity')))){event.preventDefault();event.stopPropagation();}
-  };
+  const guardArmWork=(event:import('react').SyntheticEvent)=>guardCreativeWork(event,{glow:glow.busy||glowOpen,lens:lens.busy||lensOpen,expression:expression.busy||expressionOpen,background:fringe.active||fringe.pending||commonBackground.active||commonBackground.pending,heal:healBrush.pending,layers:creative.pending,
+    idBackground:idBackgroundBusy,body:arms.busy||waist.busy||length.busy||neck.busy||torso.busy||waistLength.busy||headSize.busy||bodySlim.busy});
   return (
     <div className={"app ws-" + workspace} onClickCapture={guardArmWork} onPointerDownCapture={guardArmWork} onKeyDownCapture={guardArmWork}>
       <WorkspaceTopbar workspace={workspace} onWorkspace={setWorkspace} busy={busy||arms.busy||waist.busy||length.busy||neck.busy||torso.busy||waistLength.busy||headSize.busy||bodySlim.busy||creative.pending} hasImage={hasImage}
         currentPath={strip?.current} onOpenPhoto={() => { setWorkspace("retouch"); void openAndImport(); }}
         libraryEnabled={sampleLibrary.enabled} onLibrary={() => sampleLibrary.show('manage')}/>
+      <LightGlowWorkspaceHost owner={glow} unavailableReason={validGlowCapability(glowCapability)?(glowCapability.status==='available'?undefined:glowCapability.reason||'发光原生模块不可用'): '缺少匹配的发光原生模块；不会降级为占位效果或自动安装'} open={glowOpen} onOpen={()=>setGlowOpen(true)} onClose={()=>setGlowOpen(false)}/>
       <LensWorkspaceHost owner={lens} open={lensOpen} onOpen={()=>setLensOpen(true)} onClose={()=>setLensOpen(false)}/>
       <ExpressionWorkspaceHost owner={expression} open={expressionOpen} onOpen={()=>setExpressionOpen(true)} onClose={()=>setExpressionOpen(false)}/>
       <SampleLibraryHost owner={sampleLibrary}/>
@@ -2065,7 +2069,7 @@ export default function App() {
           </>
         )}
 
-        {workspace === "creative" && <CreativeWorkspace owner={creative} hasImage={hasImage} onLens={()=>setLensOpen(true)} lensBlocked={imageToolBusy||idBackgroundBusy||expression.busy||!!status?.edit_queue?.in_flight||!!status?.edit_queue?.pending} available={caps?.creative_document_protocol===1}
+        {workspace === "creative" && <CreativeWorkspace owner={creative} hasImage={hasImage} onGlow={()=>setGlowOpen(true)} glowBlocked={imageToolBusy||idBackgroundBusy||expression.busy||lens.busy||!!status?.edit_queue?.in_flight||!!status?.edit_queue?.pending} onLens={()=>setLensOpen(true)} lensBlocked={imageToolBusy||idBackgroundBusy||expression.busy||!!status?.edit_queue?.in_flight||!!status?.edit_queue?.pending} available={caps?.creative_document_protocol===1}
           onBack={()=>setWorkspace('retouch')} healBlocked={sky.active||sky.pending||colorPicker.pending||manual.pending||recovery.pending||liveGrade.busy}
           onHeal={()=>{if(healBrush.pending)return;colorPicker.workflow.cancel();recovery.workflow.cancel();manual.workflow.cancel();setBrushOn(false);locateTool('PC-32482','污点修复画笔');setDragNote('已打开审核式修复画笔，请点击开始后在冻结输入画面涂抹');}}/>}
 

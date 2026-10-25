@@ -24,6 +24,10 @@ def rejected(engine, payload, error, started, emit):
         'request_id': request.get('request_id'), 'action': request.get('action'),
         'session_id': request.get('session_id'), 'runtime_verified': False,
         'status': 'unknown' if started else 'failed', 'error': str(error)[:2048]}
+    if request.get('action') in ('review_step', 'review_image'):
+        result['operation_id'] = request.get('operation_id')
+    if request.get('action') == 'review_step':
+        result['step'] = request.get('step')
     if not started: result['dispatch_rejected'] = True
     emit(result)
     return result

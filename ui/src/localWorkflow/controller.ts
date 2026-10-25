@@ -1,3 +1,5 @@
+import {checkedHandoff, fetchReviewImage, reviewAck, reviewKey, type ReviewImages, type ReviewSide, type ReviewStep} from './presetReview';
+import {checkedCatalogue, type PresetCatalogue} from './presetCatalogue';
 // SPDX-License-Identifier: GPL-3.0-or-later
 import type {DefinitionSummary, PendingWorkflowRequest, PreflightReport, ProjectLease, ReturnedExportProfile, RunSummary, WorkflowCapabilities,
   WorkflowCommand, WorkflowDefinition, WorkflowExportProfile, WorkflowHostPort, WorkflowReceipt, WorkflowRun} from './contracts';
@@ -18,10 +20,12 @@ export interface WorkflowViewState {
   preflight: PreflightReport | null;
   export_profile: ReturnedExportProfile | null;
   profile_pending: boolean;
+  preset_catalogue: PresetCatalogue | null;
+  review_images: ReviewImages | null;
   message: string;
   error: string;
 }
-const commandKinds: WorkflowCommand['kind'][] = ['save_definition', 'acquire_project_lease', 'release_project_lease', 'start', 'stop', 'open_review'];
+const commandKinds: WorkflowCommand['kind'][] = ['save_definition', 'acquire_project_lease', 'release_project_lease', 'start', 'stop', 'open_review', 'review_step'];
 const failureMessage = (error: unknown) => error instanceof Error ? error.message : String(error);
 function exactObjectKeys(value: unknown, keys: readonly string[]): value is Record<string, unknown> {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
@@ -57,6 +61,7 @@ export class WorkflowController {
   private workspaceRefreshNeeded = false;
   private commands = new Map<string, WorkflowCommand>();
   private queryCursor = 0;
+  private imageEpoch = 0;
   private value: WorkflowViewState;
   private readonly host: WorkflowHostPort | null;
   private readonly newId: () => string;
@@ -66,14 +71,24 @@ export class WorkflowController {
     this.newId = newId;
     this.value = {draft: structuredClone(initial ?? newDefinition(newId())), dirty: !initial?.storage_revision,
       ready: false, busy: false, capabilities: null, definitions: [], runs: [], active_run: null,
-      inspected_run: null, pending: this.restorePending(), lease: null, preflight: null, export_profile: null, profile_pending: false,
-      message: '', error: !host ? '本地工作流宿主尚未接入。可编辑草稿，但不能保存、检测或运行。' : ''};
+      inspected_run: null, pending: this.restorePending(), lease: null, preflight: null, export_profile: null, profile_pending: false, preset_catalogue: null,
+      review_images: null, message: '', error: !host ? '本地工作流宿主尚未接入。可编辑草稿，但不能保存、检测或运行。' : ''};
+  }
+  async refreshCatalogue(): Promise<void> {
+    if (!this.host?.refreshCatalogue || this.disposed) return;
+    try { await this.host.refreshCatalogue(); await this.refresh(); }
+    catch (error) { if (!this.disposed) this.patch({error: failureMessage(error)}); }
   }
   getState = (): WorkflowViewState => this.value;
   subscribe = (listener: () => void): (() => void) => {this.listeners.add(listener); return () => {this.listeners.delete(listener);};};
   private patch(patch: Partial<WorkflowViewState>): void {
     if (this.disposed) return;
     this.value = {...this.value, ...patch};
+    const run = this.value.active_run, handoff = run?.handoff;
+    if (this.value.review_images && (!run || handoff?.phase !== 'reviewing' || this.value.review_images.key !== reviewKey(run.run_id, handoff))) {
+      this.imageEpoch += 1;
+      this.value = {...this.value, review_images: null};
+    }
     this.listeners.forEach(listener => listener());
   }
   private get storageKey(): string {return `lrt:local-workflow:v1:${this.host?.scope_id ?? 'unconnected'}`;}
@@ -132,6 +147,7 @@ export class WorkflowController {
         ...(workspace.lease?.lease_id !== this.value.lease?.lease_id ? {preflight: null} : {})};
       this.patch({ready: true, capabilities: workspace.capabilities, definitions: workspace.definitions,
         runs: workspace.runs, active_run: this.newerRun(workspace.active_run, this.value.active_run),
+        preset_catalogue: checkedCatalogue(workspace.preset_catalogue),
         export_profile: returnedProfile(workspace.recipe_sha256, workspace.recipe_profile), profile_pending: workspace.recipe_profile_pending === true,
         ...leasePatch,
         message: pending.size ? '存在未确认操作。请查询原操作，不要重新提交。' : this.value.message});
@@ -141,6 +157,7 @@ export class WorkflowController {
   private newerRun(next: WorkflowRun | null, current: WorkflowRun | null): WorkflowRun | null {
     // Never erase an active run from an incomplete/stale read. A terminal run must be explicitly returned.
     if (!next) return isRunActive(current) ? current : null;
+    if (next.handoff != null && !checkedHandoff(next.handoff)) throw new Error('宿主预设交接内容无效；保留原运行，不能批准或释放。');
     if (current?.run_id === next.run_id && current.sequence >= next.sequence) return current;
     return next;
   }
@@ -234,13 +251,64 @@ export class WorkflowController {
     // A known active run may be explicitly stopped even if its original start response is unresolved.
     // This is a distinct safe-boundary action, never a replay of that original start.
     return !!this.host && this.host.version === 1 && !this.disposed && this.value.ready && !this.value.busy &&
-      !!this.value.active_run && ['running', 'paused'].includes(this.value.active_run.status) &&
+      !!this.value.active_run && !this.value.active_run.handoff && ['running', 'paused'].includes(this.value.active_run.status) &&
       !this.value.pending.some(item => item.command_kind === 'stop');
   }
   async openReview(): Promise<void> {
     const run = this.value.active_run;
     if (!this.mayWrite() || !this.value.capabilities?.can_open_review || run?.status !== 'paused' || !run.review) return;
     await this.submit({kind: 'open_review', run_id: run.run_id, review_id: run.review.review_id});
+  }
+  canReviewStep(step: ReviewStep): boolean {
+    const run = this.value.active_run, handoff = run?.handoff;
+    if (!this.host || this.disposed || !this.value.ready || !this.value.capabilities?.available || !this.value.capabilities.can_open_review || this.value.busy || this.value.pending.length || !run || !handoff || !checkedHandoff(handoff)) return false;
+    if (run.diagnostics.some(item => item.code === 'owner_outcome_unknown' || item.code === 'native_host_fence')) return false;
+    if (step === 'open_target') return handoff.phase === 'awaiting_open';
+    if (step === 'save_project') return handoff.phase === 'awaiting_save';
+    if (step === 'return_target') return ['awaiting_open', 'reviewing', 'awaiting_return'].includes(handoff.phase);
+    const images = this.value.review_images;
+    return handoff.phase === 'reviewing' && !!handoff.review && !!images && images.key === reviewKey(run.run_id, handoff) &&
+      !images.loading && !images.error && !!images.before && !!images.after && images.displayed.before && images.displayed.after && images.acknowledged;
+  }
+  async reviewStep(step: ReviewStep): Promise<void> {
+    if (!this.canReviewStep(step)) return;
+    const run = this.value.active_run!, handoff = run.handoff!;
+    await this.submit({kind: 'review_step', run_id: run.run_id, operation_id: handoff.operation_id, step,
+      payload: step === 'approve' ? reviewAck(handoff.review!) : {}});
+  }
+  async loadReviewImages(): Promise<void> {
+    const host = this.usableHost(), run = this.value.active_run, handoff = run?.handoff;
+    if (!host?.readReviewImage || !this.value.capabilities?.available || !run || handoff?.phase !== 'reviewing' || !handoff.review || this.value.review_images?.loading) return;
+    const key = reviewKey(run.run_id, handoff), generation = ++this.imageEpoch;
+    const current = () => !this.disposed && generation === this.imageEpoch && this.value.active_run?.run_id === run.run_id &&
+      this.value.active_run.handoff?.phase === 'reviewing' && reviewKey(run.run_id, this.value.active_run.handoff) === key;
+    this.patch({review_images: {key, loading: true, error: '', before: null, after: null, displayed: {before: false, after: false}, acknowledged: false}});
+    try {
+      // Complete page sequences remain bounded. No ACK is sent by this read.
+      const before = await fetchReviewImage(run.run_id, handoff, 'before', input => host.readReviewImage!(input), current);
+      const after = await fetchReviewImage(run.run_id, handoff, 'after', input => host.readReviewImage!(input), current);
+      if (current()) this.patch({review_images: {key, loading: false, error: '', before, after, displayed: {before: false, after: false}, acknowledged: false}});
+    } catch (error) {
+      if (current()) this.patch({review_images: {key, loading: false, error: failureMessage(error), before: null, after: null, displayed: {before: false, after: false}, acknowledged: false}});
+    }
+  }
+  reviewImageDisplayed(key: string, side: ReviewSide, complete: boolean, width: number, height: number): void {
+    const images = this.value.review_images, report = this.value.active_run?.handoff?.review;
+    if (!images || images.key !== key || images.loading || !images[side] || !report) return;
+    const ready = complete && width === report[side].width && height === report[side].height;
+    this.patch({review_images: {...images, displayed: {...images.displayed, [side]: ready}, acknowledged: ready ? images.acknowledged : false,
+      error: ready ? images.error : '审核图像未完整解码，或实际显示尺寸与报告不符；不能批准。可重新读取图像。'}});
+  }
+  clearReviewPresentation(key: string): void {
+    const images = this.value.review_images;
+    if (!images || images.key !== key) return;
+    this.imageEpoch += 1;
+    this.patch({review_images: null});
+  }
+  acknowledgeReview(key: string, accepted: boolean): void {
+    const images = this.value.review_images;
+    if (!images || images.key !== key || images.loading || images.error || !images.displayed.before || !images.displayed.after) return;
+    this.patch({review_images: {...images, acknowledged: accepted}});
   }
   private async submit(command: WorkflowCommand): Promise<void> {
     const host = this.usableHost();
@@ -281,6 +349,10 @@ export class WorkflowController {
         (original?.kind === 'stop' && result.run.run_id !== original.run_id))) {
         this.patch({error: '运行回执不属于原操作。原请求仍保留。'}); return;
       }
+      if (result.kind === 'review_step' && (!result.run_id || !result.operation_id || !['open_target', 'approve', 'save_project', 'return_target'].includes(result.step) ||
+        (original?.kind === 'review_step' && (result.run_id !== original.run_id || result.operation_id !== original.operation_id || result.step !== original.step)))) {
+        this.patch({error: '交接步骤回执与原请求不匹配；继续保留并查询原请求。'}); return;
+      }
       switch (result.kind) {
         case 'save_definition':
           this.workspaceRefreshNeeded = true;
@@ -300,6 +372,9 @@ export class WorkflowController {
           this.patch({active_run: current, runs: [current, ...this.value.runs.filter(item => item.run_id !== current.run_id)], preflight: null,
             message: result.kind === 'stop' ? '已收到停止操作回执，请以运行状态为准。已开始的安全提交可能完成。' : '已收到启动回执，请以运行记录为准。'}); break;
         }
+        case 'review_step':
+          this.workspaceRefreshNeeded = true;
+          this.patch({review_images: null, message: result.message || '已收到实际交接步骤回执，正在核对原操作。'}); break;
         case 'open_review':
           this.patch({message: result.message || (result.opened ? '已打开人工审核。完成真实审核后，由宿主核验并继续。' : '宿主未打开审核界面。')}); break;
       }

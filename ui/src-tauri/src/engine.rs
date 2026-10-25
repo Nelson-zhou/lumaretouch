@@ -45,8 +45,10 @@ pub struct EngineHandle {
 impl EngineHandle {
     pub fn epoch(&self)->[u8;16]{self.epoch}
     pub fn send(&self, cmd: Value) -> Result<(), String> {
+        crate::light_glow_api::blocks_mutation(self.epoch, &cmd)?;
         crate::lens_blur_api::blocks_mutation(self.epoch, &cmd)?;
         crate::expression_replacement_api::blocks_mutation(self.epoch, &cmd)?;
+        if crate::light_glow_api::read_only(&cmd) { return self.dispatcher.enqueue(None, cmd); }
         if crate::lens_blur_api::read_only(&cmd) { return self.dispatcher.enqueue(None, cmd); }
         if crate::expression_replacement_api::read_only(&cmd) { return self.dispatcher.enqueue(None, cmd); }
         if crate::local_workflow_host::read_only(&cmd) { return self.dispatcher.enqueue(None, cmd); }
@@ -72,6 +74,16 @@ impl EngineHandle {
 
     /// Cancellation is the only out-of-band command. It must reach the Python
     /// reader while the acknowledged command is still rendering/importing.
+    pub(crate) fn cancel_light_glow_read(&self, request_id: &str, request: &Value) -> Result<(), String> {
+        if !self.is_alive() { return Err("原发光引擎已结束；取消结果未确认".into()); }
+        let mut line=serde_json::to_vec(&json!({"cmd":"light_glow_cancel_read","request_id":request_id,"request":request})).map_err(|e|e.to_string())?;
+        line.push(b'\n');
+        if let Err(error)=self.input.with_writer(|writer|writer.write_all(&line).and_then(|_|writer.flush())) {
+            self.dispatcher.close(); self.input.close();
+            return Err(format!("发光读取取消写入未获确认，不会重发：{error}"));
+        }
+        Ok(())
+    }
     pub(crate) fn cancel_lens_blur_read(&self, request_id: &str, request: &Value) -> Result<(), String> {
         if !self.is_alive() { return Err("原镜头引擎已结束；取消结果未确认".into()); }
         let mut line=serde_json::to_vec(&json!({"cmd":"lens_blur_cancel_read","request_id":request_id,"request":request})).map_err(|e|e.to_string())?;
@@ -109,8 +121,10 @@ impl EngineHandle {
     }
 
     pub fn send_interactive(&self, key: String, cmd: Value) -> Result<(), String> {
+        crate::light_glow_api::blocks_mutation(self.epoch, &cmd)?;
         crate::lens_blur_api::blocks_mutation(self.epoch, &cmd)?;
         crate::expression_replacement_api::blocks_mutation(self.epoch, &cmd)?;
+        if crate::light_glow_api::read_only(&cmd) { return self.dispatcher.enqueue(None, cmd); }
         if crate::lens_blur_api::read_only(&cmd) || crate::expression_replacement_api::read_only(&cmd) { return self.dispatcher.enqueue(None, cmd); }
         if !crate::torso_length_api::read_only(&cmd) && !crate::waist_length_api::read_only(&cmd) && !crate::head_size_api::read_only(&cmd) && !crate::body_slim_api::read_only(&cmd) { crate::project_recovery_fence::issued(self.epoch, &cmd)?; }
         if cmd["cmd"] != "preset_organisation" && crate::sample_library_api::invalidates_capture(&cmd) && !crate::semantic_colour_api::read_only(&cmd) && !crate::shoulder_shape_api::read_only(&cmd) && !crate::leg_shape_api::read_only(&cmd) && !crate::waist_shape_api::read_only(&cmd) && !crate::leg_length_api::read_only(&cmd) && !crate::torso_length_api::read_only(&cmd) && !crate::waist_length_api::read_only(&cmd) && !crate::head_size_api::read_only(&cmd) && !crate::body_slim_api::read_only(&cmd) && !crate::neck_shape_api::read_only(&cmd) && !crate::arm_shape_api::read_only(&cmd) {
@@ -219,6 +233,7 @@ pub fn spawn(py: &str, engine_src: &str, session: &str, state: Arc<AppState>,
         let d = dispatcher.clone();
         thread::spawn(move || {
             while let Ok(line) = rx.recv() {
+                if let Some(marker)=crate::light_glow_api::observe_line(inspection_epoch, &line) { crate::project_recovery_fence::observed(inspection_epoch, &marker); }
                 if let Some(marker)=crate::lens_blur_api::observe_line(inspection_epoch, &line) { crate::project_recovery_fence::observed(inspection_epoch, &marker); }
                 if let Some(marker)=crate::expression_replacement_api::observe_line(inspection_epoch, &line) { crate::project_recovery_fence::observed(inspection_epoch, &marker); }
                 if let Ok(v)=serde_json::from_str::<Value>(&line) {
@@ -234,9 +249,10 @@ pub fn spawn(py: &str, engine_src: &str, session: &str, state: Arc<AppState>,
                             || crate::people_api::guards_review(inspection_epoch,id)
                             || crate::body_slim_api::guards_result(inspection_epoch,id)
                             || crate::expression_replacement_api::guards_result(inspection_epoch,id)
+                            || crate::light_glow_api::guards_result(inspection_epoch,id)
                             || crate::lens_blur_api::guards_result(inspection_epoch,id)
                     });
-                    if !scalar_review && v["event"] != "ingest_session_result" && v["event"] != "workflow_owner_result" && v["event"] != "lens_blur_result" && v["event"] != "expression_replacement_result" && v["event"] != "common_background_result" && v["event"] != "fringe_repair_result" && v["event"] != "id_background_result" && v["event"] != "torso_length_result" && v["event"] != "waist_length_result" && v["event"] != "head_size_result" && v["event"] != "body_slim_result" {
+                    if !scalar_review && v["event"] != "ingest_session_result" && v["event"] != "workflow_owner_result" && v["event"] != "light_glow_result" && v["event"] != "lens_blur_result" && v["event"] != "expression_replacement_result" && v["event"] != "common_background_result" && v["event"] != "fringe_repair_result" && v["event"] != "id_background_result" && v["event"] != "torso_length_result" && v["event"] != "waist_length_result" && v["event"] != "head_size_result" && v["event"] != "body_slim_result" {
                         crate::project_recovery_fence::observed(inspection_epoch, &v);
                     }
                     if v["event"]=="ready" && v["command_ack"].as_u64()!=Some(1) {
@@ -262,6 +278,7 @@ pub fn spawn(py: &str, engine_src: &str, session: &str, state: Arc<AppState>,
             crate::head_size_api::ended(inspection_epoch);
             crate::body_slim_api::ended(inspection_epoch);
             crate::expression_replacement_api::ended(inspection_epoch);
+            crate::light_glow_api::ended(inspection_epoch);
             crate::lens_blur_api::ended(inspection_epoch);
             crate::neck_shape_api::ended(inspection_epoch);
             crate::arm_shape_api::ended(inspection_epoch);
@@ -464,6 +481,7 @@ fn handle_event(state: &Arc<AppState>, line: &str,inspection_epoch:[u8;16]) {
             crate::torso_length_api::ready(inspection_epoch, v["torso_length_protocol"].as_u64() == Some(1));
             crate::waist_length_api::ready(inspection_epoch, v["waist_length_protocol"].as_u64() == Some(1));
             crate::head_size_api::ready(inspection_epoch, v["head_size_protocol"].as_u64() == Some(1));
+            crate::light_glow_api::ready(inspection_epoch, if v["light_glow_protocol"].as_u64()==Some(1) { &v["light_glow_capability"] } else { &Value::Null });
             crate::lens_blur_api::ready(inspection_epoch, if v["lens_blur_protocol"].as_u64()==Some(3) { &v["lens_blur_capability"] } else { &Value::Null });
             crate::expression_replacement_api::ready(inspection_epoch, v["expression_replacement_protocol"].as_u64()==Some(1) && v["expression_replacement_operation_id"]=="lnx.expression_replacement.v1" && v["expression_replacement_available"]==true);
             crate::body_slim_api::ready(inspection_epoch, v["body_slim_protocol"].as_u64() == Some(1));

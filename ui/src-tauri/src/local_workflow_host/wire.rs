@@ -37,6 +37,7 @@ pub enum Action {
     Start { graph: Graph, lease_id: String, preflight_token: String },
     Stop { run_id: String },
     OpenReview { run_id: String, review_id: String },
+    ReviewStep { run_id: String, operation_id: String, step: String, payload: Value },
 }
 impl Action {
     pub fn name(&self) -> &'static str {
@@ -45,7 +46,7 @@ impl Action {
             Self::AcquireProjectLease { .. } => "acquire_project_lease",
             Self::ReleaseProjectLease { .. } => "release_project_lease",
             Self::Start { .. } => "start", Self::Stop { .. } => "stop",
-            Self::OpenReview { .. } => "open_review",
+            Self::OpenReview { .. } => "open_review", Self::ReviewStep { .. } => "review_step",
         }
     }
 }
@@ -79,4 +80,12 @@ pub fn identity(value: &str) -> bool {
 }
 pub fn unresolved(receipt: &Value) -> bool {
     matches!(receipt["status"].as_str(), Some("pending" | "unknown"))
+}
+
+/// Read-only image paging never enters the durable mutation submission queue.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ReviewImageInput {
+    pub port_version: u32, pub run_id: String, pub operation_id: String,
+    pub review_id: String, pub review_sha256: String, pub side: String, pub sha256: String, pub page: u64,
 }

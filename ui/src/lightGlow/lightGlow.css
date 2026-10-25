@@ -1,0 +1,40 @@
+/* SPDX-License-Identifier: GPL-3.0-or-later */
+.lightGlowHost { position: fixed; inset: 3vh 3vw; z-index: 45; overflow: auto; border: 1px solid #46515a; border-radius: 12px; background: #161c22; color: #e4e9ef; padding: 20px; box-shadow: 0 22px 70px #0009; }
+.lightGlowHeader { display: flex; justify-content: space-between; align-items: start; gap: 16px; }
+.lightGlowHeader h3 { margin: 0; }.lightGlowHeader p { color: #b3beca; margin: 5px 0 12px; }
+.lightGlowWorkspace { --glow-border: #3c4852; font-size: 13px; line-height: 1.55; }
+.lightGlowWorkspace button, .lightGlowHost > .lightGlowActions button { padding: 7px 12px; border: 1px solid #52616d; border-radius: 6px; background: #27323c; color: inherit; cursor: pointer; }
+.lightGlowWorkspace button:disabled, .lightGlowHost button:disabled { cursor: not-allowed; opacity: .45; }
+.lightGlowWorkspace button[aria-pressed="true"] { border-color: #efc98b; color: #ffe2b5; background: #524438; }
+.lightGlowWorkspace :focus-visible { outline: 2px solid #ffd48e; outline-offset: 3px; }
+.lightGlowBoundary, .lightGlowEvidence, .lightGlowCaption { font-size: 12px; color: #b9c4cf; }
+.lightGlowStatus { min-height: 1.5em; padding: 9px 12px; border-left: 3px solid #d5b57e; background: #242b32; }
+.lightGlowStatus[role="alert"] { border-color: #f59d8b; }
+.lightGlowLayout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(260px, 330px); align-items: start; gap: 20px; }
+.lightGlowSourceColumn, .lightGlowReview, .lightGlowControls { min-width: 0; }
+.lightGlowWorkspace figure { margin: 0; min-width: 0; }
+.lightGlowWorkspace figcaption { color: #bac5d1; font-size: 12px; margin-top: 6px; }
+.lightGlowFrame { position: relative; width: 100%; background: #0c1014; overflow: hidden; border-radius: 6px; }
+.lightGlowFrame > img { display: block; width: 100%; height: 100%; object-fit: contain; }
+.lightGlowFrame > .lightGlowCoverage { position: absolute; inset: 0; pointer-events: none; }
+.lightGlowControls { margin: 0; padding: 12px; border: 1px solid var(--glow-border); border-radius: 8px; }
+.lightGlowControls legend { padding: 0 7px; color: #f0d5ab; }
+.lightGlowModes, .lightGlowPresets, .lightGlowActions { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0; }
+.lightGlowModes > button, .lightGlowPresets > button { flex: 1; padding-inline: 6px; }
+.lightGlowModeDescription { min-height: 3em; color: #d0d7df; font-size: 12px; }
+.lightGlowScalar { display: block; margin: 12px 0; }
+.lightGlowScalar > span { display: flex; justify-content: space-between; gap: 10px; }
+.lightGlowScalar output { color: #eac996; font-variant-numeric: tabular-nums; }
+.lightGlowScalar input[type="range"] { display: block; width: 100%; margin: 6px 0 0; accent-color: #e6bf81; }
+.lightGlowControls h4 { margin: 18px 0 6px; font-weight: 600; }
+.lightGlowEmpty { min-height: 220px; display: grid; place-content: center; padding: 24px; border: 1px dashed var(--glow-border); text-align: center; color: #a8b5c2; }
+.lightGlowReview { margin-top: 20px; border-top: 1px solid var(--glow-border); padding-top: 12px; }
+.lightGlowPair { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); align-items: start; gap: 16px; }
+.lightGlowToggle { display: flex; align-items: start; gap: 8px; margin-top: 14px; }
+.lightGlowToggle input { margin-top: 4px; accent-color: #e6bf81; }
+.lightGlowNotes { padding-left: 20px; color: #c2ccd6; }
+.lightGlowFooter { border-top: 1px solid var(--glow-border); margin-top: 20px; padding-top: 10px; }
+.lightGlowFooter p { color: #c3cdd8; }.lightGlowFooter button { margin: 0 8px 8px 0; }
+.lightGlowWorkspace a { color: #eac996; }
+@media (max-width: 840px) { .lightGlowHost { inset: 1vh 1vw; padding: 14px; }.lightGlowLayout { grid-template-columns: minmax(0, 1fr); }.lightGlowPair { grid-template-columns: minmax(0, 1fr); } }
+@media (prefers-reduced-motion: reduce) { .lightGlowWorkspace * { scroll-behavior: auto; } }
