@@ -561,6 +561,7 @@ class Engine(HVC.HairVolumeHostMixin, PortraitCropEngineMixin, HUC.HairUnificati
               # M5-b 全局撤销/重做：行程、步数上限与手势合并窗口都由引擎说。
               # 前端刻一份"最多 64 步"或"700 ms 算一次手势"，下一轮改口径时漏改的就是它——
               # 而且这一次漏改不会报错，只会让按钮的灰与不灰和真实栈深对不上。
+              "history_navigation_protocol": 1,
               "history_actions": list(self.HISTORY_ACTIONS),
               "history_max": self.HISTORY_MAX,
               "history_group_ms": self.HISTORY_GROUP_MS,
@@ -1426,6 +1427,10 @@ class Engine(HVC.HairVolumeHostMixin, PortraitCropEngineMixin, HUC.HairUnificati
 
     def _history_bind(self, row: dict | None) -> None:
         return self._history_controller().bind(row)
+
+    def cmd_history_navigation(self, p: dict):
+        from .history_navigation import command
+        return command(self, p, emit)
 
     def cmd_history(self, p: dict):
         return self._history_controller().handle_command(p)
@@ -4950,6 +4955,8 @@ class Engine(HVC.HairVolumeHostMixin, PortraitCropEngineMixin, HUC.HairUnificati
         return stop(self)
 
     def _custom_lut_ingress(self, line):
+        from .history_navigation import reader_namespace_allowed
+        if not reader_namespace_allowed(line): return False
         from .read_job_ingress import ingress
         return ingress(self,line)
 
@@ -6899,6 +6906,8 @@ class Engine(HVC.HairVolumeHostMixin, PortraitCropEngineMixin, HUC.HairUnificati
         try:
             msg = json.loads(line)
             request_id = msg.pop("_host_request_id", None)
+            from .history_navigation import admit_namespace
+            admit_namespace(msg)  # Before handler selection or any controller/finalizer ownership.
             name = msg.get("cmd", "")
             fn = table.get(name)
             if fn is None:
@@ -6908,6 +6917,8 @@ class Engine(HVC.HairVolumeHostMixin, PortraitCropEngineMixin, HUC.HairUnificati
                 fn(msg); return  # Exact read-only receipt query survives broken pipelines and expired previews.
             from .white_balance_auto_recovery import guard as auto_wb_guard
             auto_wb_guard(self, name, msg)
+            from .history_navigation import guard as navigation_guard
+            navigation_guard(self, name, msg)
             WOH.guard_command(self, name, msg)
             ISH.guard_command(self, name, msg)
             from .project_recovery_runtime import begin
@@ -6939,6 +6950,8 @@ class Engine(HVC.HairVolumeHostMixin, PortraitCropEngineMixin, HUC.HairUnificati
                 fn(msg); return  # The reviewed copy transaction owns source fences and history.
             if name == 'expression_replacement':
                 fn(msg); return  # Dedicated exact source/copy transaction owns its history and receipts.
+            if name == 'history_navigation' and msg.get('action') == 'state':
+                fn(msg); return  # Metadata only: no capture invalidation, revision or history write.
             if name == 'creative_document' and msg.get('action') == 'state':
                 fn(msg); return  # Read-only polling must not revoke capture/edit owners.
             if name in ('project_recovery', 'managed_import', 'ingest_session', 'workflow_owner', 'project_package', 'source_relocation', 'virtual_copy', 'canvas_guides', 'background_material_library', 'background_material_library_cancel'):
@@ -7115,6 +7128,9 @@ class Engine(HVC.HairVolumeHostMixin, PortraitCropEngineMixin, HUC.HairUnificati
             emit({"event": "error", "error": f"{type(e).__name__}: {e}"})
         finally:
             try:
+                if dispatch_error and name == 'history_navigation':
+                    from .history_navigation import dispatch_rejected as navigation_rejected
+                    navigation_rejected(self, msg, dispatch_error, bool(recovery_boundary and recovery_boundary['started']), emit)
                 if dispatch_error and name == 'final_canvas_flip':
                     from .final_canvas_flip_host import dispatch_rejected as flip_rejected
                     flip_rejected(self, msg, dispatch_error, bool(recovery_boundary and recovery_boundary['started']), emit)

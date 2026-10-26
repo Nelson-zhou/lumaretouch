@@ -5,7 +5,7 @@ import json,math,struct
 import numpy as np
 
 
-def fingerprint(value):
+def fingerprint(value, *, exact=False):
     h=sha256();visited=set();nodes=0
     def token(tag,payload=b''):
         h.update(tag);h.update(struct.pack('>Q',len(payload)));h.update(payload)
@@ -38,7 +38,7 @@ def fingerprint(value):
                 if isinstance(item,dict):
                     if any(type(k) is not str for k in item):raise ValueError('目标候选状态字典键无效')
                     from .final_canvas_flip_state import active, check
-                    keys = [key for key in item if key not in ('_final_canvas_flip', 'final_canvas_flip') or active(check(item[key]))]
+                    keys = [key for key in item if exact or key not in ('_final_canvas_flip', 'final_canvas_flip') or active(check(item[key]))]
                     token(b'D',str(len(keys)).encode())
                     for key in sorted(keys):visit(key,depth+1);visit(item[key],depth+1)
                 elif is_dataclass(item):

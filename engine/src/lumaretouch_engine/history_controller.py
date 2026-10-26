@@ -86,7 +86,7 @@ class HistoryController:
         self.redo = list((row or {}).get("redo") or [])
         self.group, self.group_ns = "", 0
 
-    def handle_command(self, p: dict) -> dict:
+    def handle_command(self, p: dict, *, trace: dict | None = None) -> dict:
         """Return a truthful transaction outcome in addition to legacy UI events.
 
         Callers must not infer success from stack sizes. Once restore/stack writes
@@ -95,7 +95,7 @@ class HistoryController:
         """
         outcome = {"status": "rejected"}
         try:
-            return self._handle_command(p, outcome)
+            return self._handle_command(p, outcome, trace)
         except Exception as error:
             message = f"history 操作未完成：{type(error).__name__}: {error}"
             if outcome["status"] == "unknown":
@@ -106,7 +106,7 @@ class HistoryController:
                 pass  # Even a failed event sink must leave a structured outcome.
             return {"status": outcome["status"], "message": message}
 
-    def _handle_command(self, p: dict, outcome: dict) -> dict:
+    def _handle_command(self, p: dict, outcome: dict, trace: dict | None = None) -> dict:
         """撤销/重做：整条链只有一份实现——装回快照，然后用 _attach_pipeline 按
         那些字段重放图层（与换设备、切文档同一条路），不写第二份重放。"""
         unknown = set(p) - {"cmd", "action"}
@@ -158,6 +158,7 @@ class HistoryController:
         t0 = self.clock()
         outcome["status"] = "unknown"
         try:
+            if trace is not None: trace["restore_entered"] = True
             fr = self.ports.restore_frame(snap, f"history_{action}")
         except Exception as e:
             # 半截状态不许留在 live 上：退回执行前那一份，并按它重建一次会话

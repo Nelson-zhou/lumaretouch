@@ -49,6 +49,8 @@ def finish(engine, boundary, error=None):
     message = boundary['message']
     from .white_balance_auto_recovery import finish as auto_wb_finish
     if auto_wb_finish(engine, boundary, error): return
+    from .history_navigation import finish as navigation_finish
+    if navigation_finish(engine, boundary): return
     from .final_canvas_flip_recovery import finish as flip_finish
     if flip_finish(engine, boundary): return
     from .portrait_crop_recovery import finish as crop_finish

@@ -10,7 +10,7 @@ struct Pending { command: Value, composite_history: Option<Value> }
 impl Pending { fn composite(&self)->bool {preset_alias::applies(&self.command)||crate::people_api::decoration_alias::applies(&self.command)||crate::people_api::decoration_support_alias::applies(&self.command)||crate::effect_recovery_host::alias::applies(&self.command)||self.composite_history.is_some()} }
 // Body and neck mutations retain the existing fence until a strict terminal or verified
 // workspace reopen. They do not become composite/alias history operations.
-impl Pending { fn guarded(&self) -> bool { self.command["cmd"] == "final_canvas_flip" || crate::white_balance_api::mutation(&self.command) || self.composite() || crate::batch_host::portrait_preset_group::mutation(&self.command) || crate::hand_shape_api::mutation(&self.command) || crate::hand_tone_api::mutation(&self.command) || crate::limb_vein_api::mutation(&self.command) || crate::fabric_sweat_api::mutation(&self.command) || crate::people_api::skin_reference_body::mutation(&self.command) || crate::people_api::hair_smoothing::mutation(&self.command) || crate::people_api::neck_wrinkle::mutation(&self.command) } }
+impl Pending { fn guarded(&self) -> bool { crate::history_navigation_api::mutation(&self.command) || self.command["cmd"] == "final_canvas_flip" || crate::white_balance_api::mutation(&self.command) || self.composite() || crate::batch_host::portrait_preset_group::mutation(&self.command) || crate::hand_shape_api::mutation(&self.command) || crate::hand_tone_api::mutation(&self.command) || crate::limb_vein_api::mutation(&self.command) || crate::fabric_sweat_api::mutation(&self.command) || crate::people_api::skin_reference_body::mutation(&self.command) || crate::people_api::hair_smoothing::mutation(&self.command) || crate::people_api::neck_wrinkle::mutation(&self.command) } }
 fn pending()->&'static Mutex<HashMap<([u8;16],String),Pending>> {
     static STORE:OnceLock<Mutex<HashMap<([u8;16],String),Pending>>=OnceLock::new();
     STORE.get_or_init(||Mutex::new(HashMap::new()))
@@ -19,11 +19,11 @@ pub(crate) fn issued(epoch:[u8;16], command:&Value)->Result<(),String>{
     let mut store=pending().lock().map_err(|_|"恢复回执屏障锁不可用")?;
     if command["cmd"]=="project" && command["action"]=="create"
         && store.iter().any(|((owner_epoch,_),request)|*owner_epoch==epoch
-            && (request.command["cmd"]=="final_canvas_flip" || crate::white_balance_api::mutation(&request.command) || crate::people_api::hair_smoothing::mutation(&request.command))) {
-        return Err("原翻转/自动白平衡/头发柔顺结果尚未确认；新建工程保留当前照片，不能用作恢复，请打开已确认工程".into());
+            && (crate::history_navigation_api::mutation(&request.command) || request.command["cmd"]=="final_canvas_flip" || crate::white_balance_api::mutation(&request.command) || crate::people_api::hair_smoothing::mutation(&request.command))) {
+        return Err("原历史跳转/翻转/自动白平衡/头发柔顺结果尚未确认；新建工程保留当前照片，不能用作恢复，请打开已确认工程".into());
     }
     if store.iter().any(|((owner_epoch,_),request)|*owner_epoch==epoch
-        && crate::people_api::hair_smoothing::mutation(&request.command)) {
+        && (crate::history_navigation_api::mutation(&request.command) || crate::people_api::hair_smoothing::mutation(&request.command))) {
         // Receipt status queries are served locally by people_api before dispatch.
         // A pending smoothing mutation must not start another panel's new review.
         let query_or_reopen = match command["cmd"].as_str() {
@@ -34,7 +34,7 @@ pub(crate) fn issued(epoch:[u8;16], command:&Value)->Result<(),String>{
             _ => false,
         };
         if !query_or_reopen || !preset_alias::safe_during_pending(command) {
-            return Err("原头发柔顺修改结果未确认；仅可查询原请求或打开已确认工程，不能开始新审核或重发".into());
+            return Err("原历史跳转或头发柔顺修改结果未确认；仅可查询原请求或打开已确认工程，不能开始新审核或重发".into());
         }
         return Ok(());
     }
@@ -112,7 +112,7 @@ pub(crate) fn observed(epoch:[u8;16], value:&Value){
         if replaced {
             crate::final_canvas_flip_api::verified_workspace_opened(epoch);
         }
-        store.retain(|(e,_),request|*e!=epoch || if crate::people_api::hair_smoothing::mutation(&request.command) {
+        store.retain(|(e,_),request|*e!=epoch || if crate::history_navigation_api::mutation(&request.command) || crate::people_api::hair_smoothing::mutation(&request.command) {
             true // Exact idle-baselined native status abandons this owner later.
         } else if request.command["cmd"]=="final_canvas_flip" || crate::white_balance_api::mutation(&request.command) {
             !replaced // A new empty project keeps the old live document recipes.
@@ -126,6 +126,9 @@ pub(crate) fn observed(epoch:[u8;16], value:&Value){
     let command=&request.command;
     if (crate::white_balance_api::mutation(command) || (event=="white_balance_result" && value["action"]=="auto"))
         && (!crate::white_balance_api::mutation(command) || !crate::white_balance_api::matches_request(command,value)) {return;}
+    if (command["cmd"] == "history_navigation" || event == "history_navigation_result")
+        && (command["cmd"] != "history_navigation" || event != "history_navigation_result"
+            || !crate::history_navigation_api::matches_request(command,value)) { return; }
     if (command["cmd"] == "final_canvas_flip" || event == "final_canvas_flip_result")
         && (command["cmd"] != "final_canvas_flip" || event != "final_canvas_flip_result"
             || value["original_request"] != *command) { return; }
@@ -212,6 +215,27 @@ pub(crate) fn white_balance_auto_pending(epoch:[u8;16], command:&Value)->bool {
     let Some(id)=command["request_id"].as_str() else{return false;};
     pending().lock().map(|store|store.get(&(epoch,id.to_owned()))
         .is_some_and(|entry|entry.command==*command)).unwrap_or(true)
+}
+
+pub(crate) fn verified_history_workspace_open(value:&Value)->bool {
+    value["event"]=="project_opened" && preset_alias::reopened(value)
+}
+pub(crate) fn abandon_history_navigation(epoch:[u8;16], command:&Value) {
+    if !crate::history_navigation_api::mutation(command) {return;}
+    let Some(id)=command["request_id"].as_str() else{return;};
+    let Ok(mut store)=pending().lock() else{return;};
+    let key=(epoch,id.to_owned());
+    if store.get(&key).is_some_and(|row|row.command==*command) {store.remove(&key);}
+}
+
+/// Namespace admission makes retained navigation identities exclusive even after
+/// settlement/read-only completion. Preserve explicit foreign-fence defense for
+/// injected/internal fixtures instead of letting an old row suppress that owner.
+pub(crate) fn history_navigation_identity_uncontested(epoch:[u8;16], command:&Value)->bool {
+    if crate::history_navigation_protocol::checked(command).is_err() { return false; }
+    let Some(id)=command["request_id"].as_str() else{return false;};
+    pending().lock().map(|store|store.get(&(epoch,id.to_owned()))
+        .map_or(true,|entry|entry.command==*command)).unwrap_or(true)
 }
 
 pub(crate) fn proof(epoch:[u8;16])->Result<Value,String>{

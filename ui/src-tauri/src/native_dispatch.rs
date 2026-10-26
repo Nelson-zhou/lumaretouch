@@ -33,7 +33,7 @@ impl AppState {
 
     /// Owned receipts must never dispatch into a replacement engine epoch.
     pub(crate) fn send_to_engine_at_epoch(&self, cmd: Value, expected_epoch: [u8; 16]) -> Result<(), String> {
-        if !matches!(cmd["cmd"].as_str(), Some("final_canvas_flip" | "ingest_session" | "workflow_owner" | "creative_selection" | "hair_unification" | "hair_volume" | "fabric_sweat" | "hand_shape" | "hand_tone" | "limb_vein")) {
+        if !matches!(cmd["cmd"].as_str(), Some("history_navigation" | "final_canvas_flip" | "ingest_session" | "workflow_owner" | "creative_selection" | "hair_unification" | "hair_volume" | "fabric_sweat" | "hand_shape" | "hand_tone" | "limb_vein")) {
             return Err("Epoch-bound dispatch is restricted to owned ingestion protocols".into());
         }
         self.send_to_engine_bound(cmd, Some(expected_epoch))
@@ -48,7 +48,7 @@ impl AppState {
         // Arm selection and owned proposal queries/cancellation do not alter
         // image pixels or revoke unrelated capture lifetimes.
         // A library view changes neither image history nor any capture lease.
-        if name == "canvas_guides" || name == "project_recovery" || crate::managed_import_api::read_only(&cmd) || crate::ingest_session_api::read_only(&cmd) || crate::local_workflow_host::read_only(&cmd) || (name == "session" && cmd.get("action").and_then(Value::as_str) == Some("query"))
+        if crate::history_navigation_api::read_only(&cmd) || name == "canvas_guides" || name == "project_recovery" || crate::managed_import_api::read_only(&cmd) || crate::ingest_session_api::read_only(&cmd) || crate::local_workflow_host::read_only(&cmd) || (name == "session" && cmd.get("action").and_then(Value::as_str) == Some("query"))
             || (name == "virtual_copy" && matches!(cmd.get("action").and_then(Value::as_str), Some("state") | Some("query"))) {
             let guard = self.engine.lock().map_err(|_| "引擎锁中毒".to_string())?;
             let handle = guard.as_ref().ok_or("引擎未启动")?;

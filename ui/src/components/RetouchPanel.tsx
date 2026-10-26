@@ -102,6 +102,8 @@ export interface RetouchProps {
   fringeRepairOwner?: FringeRepairOwner;
   presetPanel?: React.ReactNode;
   sampleLibraryPanel?: React.ReactNode;
+  historyPanel?: React.ReactNode;
+  historyNavigationBusy?: boolean;
   shoulderPanel?: React.ReactNode;
   expressionPanel?: React.ReactNode;
   hairUnificationPanel?: React.ReactNode;
@@ -599,7 +601,7 @@ const ARCHIVE_IDS = new Set([
 
 export default function RetouchPanel(props: RetouchProps) {
   const { doc, status } = props;
-  const dim = !props.hasImage||!!props.hairWorkflowBusy||props.hairPort.pending()||!!props.colorActions?.owner.pending||(props.people.state.pending && props.people.state.pendingAction !== 'patch')||props.people.state.uncertain;
+  const dim = !!props.historyNavigationBusy||!props.hasImage||!!props.hairWorkflowBusy||props.hairPort.pending()||!!props.colorActions?.owner.pending||(props.people.state.pending && props.people.state.pendingAction !== 'patch')||props.people.state.uncertain;
   const capturedPeople = peopleContext(doc?.people);
   const skinReady = skinMaskReady(status?.precompute?.mask_channels, status?.precompute?.mask_nonzero_pixels);
   const skinWhy = skinReady ? "" : "尚无有效皮肤掩膜，请先完成人像分析";
@@ -1360,7 +1362,7 @@ export default function RetouchPanel(props: RetouchProps) {
     disabled={dim || status?.ready_caps?.common_background_protocol !== 1}/>;
 
   const historyBlock = (
-    <div className="specSeg">
+    <div><div className="specSeg">
       <span>历史</span>
       <button disabled={dim || !doc?.history.can_undo}
         onClick={() => ok(runHistory("undo"), props)}>
@@ -1370,7 +1372,7 @@ export default function RetouchPanel(props: RetouchProps) {
         onClick={() => ok(runHistory("redo"), props)}>
         重做（{doc?.history.redo_steps ?? 0}）
       </button>
-    </div>
+    </div>{props.historyPanel}</div>
   );
 
   const brushBlock = (

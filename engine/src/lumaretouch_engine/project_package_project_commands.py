@@ -237,6 +237,9 @@ def handle(self, p: dict, emit, _current_writer):
               "assets": len(prj.get("assets") or {}),
               "notes": notes[:12], "notes_count": len(notes),
               **self._project_state()})
+        # Only this actual state-replacing open clears an uncertain navigation.
+        # A project create, load selection or failed/prevalidation open does not.
+        self.__dict__.pop('_history_navigation_unresolved', None)
         self.emit_session_state()
         if target is not None:
             cmd = {"path": target["path"], "document_id": target["document_id"]}

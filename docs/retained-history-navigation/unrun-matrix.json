@@ -1,0 +1,272 @@
+{
+  "status": "AUTHORED / UNRUN",
+  "runtime_acceptance": false,
+  "owner": "Qoder local validation",
+  "cases": [
+    {
+      "id": "read-only",
+      "status": "UNRUN",
+      "expectation": "Read retained metadata does not alter recipe/history/dirty/capture/revision; no full snapshots on wire."
+    },
+    {
+      "id": "labels",
+      "status": "UNRUN",
+      "expectation": "Oldest retained position says retained start, not original; no invented edit labels; all retained positions listed."
+    },
+    {
+      "id": "retention",
+      "status": "UNRUN",
+      "expectation": "More than 64 authored gestures trims only via existing owner; timeline reflects actual retained segment."
+    },
+    {
+      "id": "legacy-wide",
+      "status": "UNRUN",
+      "expectation": "Persisted undo+redo each <=64 but total>limit lists accurately and refuses jump without eviction."
+    },
+    {
+      "id": "gesture",
+      "status": "UNRUN",
+      "expectation": "Coalescing changes digest even if counts unchanged; reverse-to-start gesture removal reflected."
+    },
+    {
+      "id": "branch",
+      "status": "UNRUN",
+      "expectation": "New edit after undo truncates redo only through existing owner; previous digest cannot replay target number."
+    },
+    {
+      "id": "owner",
+      "status": "UNRUN",
+      "expectation": "Reject other workspace/stable row document ID/load ID/revision/exact digest, including same path virtual copies."
+    },
+    {
+      "id": "transition-digest",
+      "status": "UNRUN",
+      "expectation": "Changing only sparse transition or monotonic ownership metadata invalidates old selection."
+    },
+    {
+      "id": "tiny-float",
+      "status": "UNRUN",
+      "expectation": "Exact digest sees below-history-rounding scalar changes and all retained array content."
+    },
+    {
+      "id": "undo",
+      "status": "UNRUN",
+      "expectation": "Click older retained step runs exact canonical adjacent undo count and reaches proved actual cursor."
+    },
+    {
+      "id": "redo",
+      "status": "UNRUN",
+      "expectation": "Click newer retained step runs exact canonical adjacent redo count and reaches proved actual cursor."
+    },
+    {
+      "id": "noop",
+      "status": "UNRUN",
+      "expectation": "Current cursor generates no history entry; UI current row is disabled."
+    },
+    {
+      "id": "people-unrelated",
+      "status": "UNRUN",
+      "expectation": "Same-photo different face/override leaf and other-photo later graph edits survive sparse traversal."
+    },
+    {
+      "id": "people-overlap",
+      "status": "UNRUN",
+      "expectation": "Overlapping later graph write retains original protected refusal; never bypass by target snapshot."
+    },
+    {
+      "id": "shared-batch",
+      "status": "UNRUN",
+      "expectation": "Association/person/group/alias/batch histories retain original refusal and batch ownership."
+    },
+    {
+      "id": "body-chain",
+      "status": "UNRUN",
+      "expectation": "Real body_pose_history_chain sparse patches, monotonic fences/support banks and unrelated bodies preserved."
+    },
+    {
+      "id": "derived-source",
+      "status": "UNRUN",
+      "expectation": "Canonical source-switch and proxy transition guards apply at every edge without raw target restore."
+    },
+    {
+      "id": "prewrite",
+      "status": "UNRUN",
+      "expectation": "Busy guard/proxy mismatch/stale selection returns known refusal and no target success."
+    },
+    {
+      "id": "known-partial",
+      "status": "UNRUN",
+      "expectation": "First edge succeeds, later pre-restore refusal: exact unchanged checkpoint, actual partial cursor, no automatic continuation."
+    },
+    {
+      "id": "render-failure",
+      "status": "UNRUN",
+      "expectation": "Failure after restore enters, even normal legacy rollback return: unknown reached=null, retained last-confirmed only."
+    },
+    {
+      "id": "rollback-failure",
+      "status": "UNRUN",
+      "expectation": "Graph/body/frame restore or rollback failure: unknown; no hidden retry or continued traversal."
+    },
+    {
+      "id": "stack-failure",
+      "status": "UNRUN",
+      "expectation": "Failure after render during pop/decorate/remember/publication: unknown; counts cannot settle."
+    },
+    {
+      "id": "proof-failure",
+      "status": "UNRUN",
+      "expectation": "Changed ownership/checkpoint or unsupported exact digest content: fail closed, never target reached."
+    },
+    {
+      "id": "recovery-phase",
+      "status": "UNRUN",
+      "expectation": "Known partial is not false global unknown taint; unknown blocks autosave/save/export/history/edit."
+    },
+    {
+      "id": "queue-ack",
+      "status": "UNRUN",
+      "expectation": "requested:true never moves selected/current cursor or clears pending; status loop sends no edit commands."
+    },
+    {
+      "id": "identity-duplicate",
+      "status": "UNRUN",
+      "expectation": "Concurrent same-ID same request never dispatches twice; conflicting request cannot replace original."
+    },
+    {
+      "id": "raw-malformed",
+      "status": "UNRUN",
+      "expectation": "Oversized/duplicate-key/malformed/renamed result cannot settle native fence or enter App events."
+    },
+    {
+      "id": "epoch",
+      "status": "UNRUN",
+      "expectation": "Other engine epoch/owner result cannot settle new request or refresh replacement canvas."
+    },
+    {
+      "id": "family-forward",
+      "status": "UNRUN",
+      "expectation": "Another family result with same ID cannot clear navigation fence."
+    },
+    {
+      "id": "family-reverse",
+      "status": "UNRUN",
+      "expectation": "Navigation result/native not_sent with colliding ID cannot settle or suppress another current owner."
+    },
+    {
+      "id": "first-terminal",
+      "status": "UNRUN",
+      "expectation": "Retain first exact terminal; duplicate or contradictory late packet cannot overwrite it."
+    },
+    {
+      "id": "ui-repeat",
+      "status": "UNRUN",
+      "expectation": "Rapid double clicks, target changes during request and Ctrl/Cmd+Z/Y cannot start another jump."
+    },
+    {
+      "id": "ui-close",
+      "status": "UNRUN",
+      "expectation": "Close history/category/panel/workspace: original query and terminal notice remain at App lifetime."
+    },
+    {
+      "id": "ui-context",
+      "status": "UNRUN",
+      "expectation": "Document/load/history publication invalidates timeline; late read cannot repopulate old selection."
+    },
+    {
+      "id": "ui-curves",
+      "status": "UNRUN",
+      "expectation": "Pending curve barrier settles before dispatch; native rechecks exact digest if curve changes history."
+    },
+    {
+      "id": "ui-storage",
+      "status": "UNRUN",
+      "expectation": "Persist exact request before send; failure to persist prevents send; restored pending is query-only."
+    },
+    {
+      "id": "lost-mailbox",
+      "status": "UNRUN",
+      "expectation": "Observation-only reservation cannot be replayed into a new mutation; require later verified recovery."
+    },
+    {
+      "id": "query-only",
+      "status": "UNRUN",
+      "expectation": "Timeout/transport loss/unchanged pending never auto-resubmits or infers no-write from elapsed time."
+    },
+    {
+      "id": "create",
+      "status": "UNRUN",
+      "expectation": "project_create preserves live documents and cannot clear native or engine unknown navigation."
+    },
+    {
+      "id": "older-open",
+      "status": "UNRUN",
+      "expectation": "An open queued before unresolved+idle baseline does not authorize abandonment."
+    },
+    {
+      "id": "later-open",
+      "status": "UNRUN",
+      "expectation": "Only strict later verified project_opened + idle, or new engine, permits explicit abandonment."
+    },
+    {
+      "id": "malformed-open",
+      "status": "UNRUN",
+      "expectation": "Bare/failed/duplicate-key/keyed-renamed project_opened is not reset evidence."
+    },
+    {
+      "id": "abandon",
+      "status": "UNRUN",
+      "expectation": "Explicit proved abandon removes only exact original fence, preserves unknown receipt and never sends an edit."
+    },
+    {
+      "id": "output",
+      "status": "UNRUN",
+      "expectation": "Real rendered frame/pipeline, full-quality output and saved project match canonical adjacent result."
+    },
+    {
+      "id": "roundtrip",
+      "status": "UNRUN",
+      "expectation": "Existing save/reopen history format and ordinary undo/redo behavior unchanged; no extra persistence schema."
+    },
+    {
+      "id": "capacity",
+      "status": "UNRUN",
+      "expectation": "64-step protocol/u64 revision/4096 receipt bounds fail closed without silent eviction/replay."
+    },
+    {
+      "id": "saved-dirty",
+      "status": "UNRUN",
+      "expectation": "After save dirty=false, each proved moved edge marks dirty and enables canonical checkpoint; known partial dirty, no-op/prewrite refusal unchanged, no new history record."
+    },
+    {
+      "id": "post-fence-checkpoint",
+      "status": "UNRUN",
+      "expectation": "Source missing/changed after revision fence but before exact capture yields unknown reached=null, old last_confirmed only historical, no guessed dirty or rollback."
+    },
+    {
+      "id": "readonly-id-collision",
+      "status": "UNRUN",
+      "expectation": "Earlier/later cross-family reads cannot borrow history-nav-v1: IDs: native central/control lanes refuse before queue/write; engine reader invokes no read/cancel controller and executor rejects before handler/finalizer selection. Ordinary legacy IDs retain unchanged receipt routes; no genuine admitted terminal is silently suppressed."
+    },
+    {
+      "id": "stripped-receipt-open",
+      "status": "UNRUN",
+      "expectation": "Rename unknown receipt project_opened, strip request_id, inject plausible project fields: forbidden receipt/nav fields still prevent recovery generation."
+    },
+    {
+      "id": "no-change-exact",
+      "status": "UNRUN",
+      "expectation": "Zero-step no_change with altered digest but same cursor/owner is rejected by native and UI readers."
+    },
+    {
+      "id": "namespace-all-admission-lanes",
+      "status": "UNRUN",
+      "expectation": "Exercise every native send/interactive/direct-control lane and Python reader/executor. Include nested target_request_id, capture_id (color_picker_capture compatibility alias), operation_id and original_request_id. Refuse reserved non-nav identity before side effects, preserve command_done, never create a family terminal; namespaced navigation and ordinary IDs retain normal behavior."
+    },
+    {
+      "id": "late-and-stripped-nav-raw-guard",
+      "status": "UNRUN",
+      "expectation": "After exact successful no_change/applied settlement and readonly state completion, duplicate terminals renamed project_opened/history_state/frame/ready remain suppressed. Stripped request_id still classified by original_request.cmd or exclusive top-level completed_steps/reached/last_confirmed. Unrelated canonical project_opened and common protocol/phase-only packets remain unaffected; injected foreign active fence defense retained."
+    }
+  ]
+}

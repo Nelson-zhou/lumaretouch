@@ -1051,6 +1051,7 @@ export interface EngineStatus {
    *  这些“引擎说什么能力”的清单都从这一份读。老宿主没报时为 undefined——那时那一排
    *  控件按“引擎没说”处理（不画/禁用），而不是前端自己猜一份。 */
   ready_caps?: {
+    history_navigation_protocol?: number;
     upscale_restore_protocol?: number;
     upscale_restore_capability?: unknown;
     light_glow_protocol?: number;
@@ -1893,6 +1894,14 @@ export const runPick = (
  *  哪几层进历史全在引擎里——在这里刻一份就会漂一份。 */
 export const runHistory = (action: "undo" | "redo" | "state" | "clear") =>
   invoke<{ requested: boolean }>("history", { action });
+
+/** Exact retained-history ownership; reads/status never imply a mutation. */
+export async function historyNavigationRequest<T>(request:import('./historyNavigation/model').HistoryRequest):Promise<T>{
+  if(request.action==='navigate'){await settleCurveEdit();notifyInspectionEditIntent();}
+  return tauriInvoke<T>('history_navigation',{request});
+}
+export const historyNavigationStatus=<T,>(request:import('./historyNavigation/model').HistoryRequest)=>tauriInvoke<T>('history_navigation_status',{request});
+export const historyNavigationAbandon=<T,>(request:import('./historyNavigation/model').HistoryRequest)=>tauriInvoke<T>('history_navigation_abandon',{request});
 
 /** 整条底片条：格子元信息 + 缩略图。只在 session_rev 变了的时候取。 */
 export const fetchFilmstrip = () => invoke<Filmstrip>("filmstrip");

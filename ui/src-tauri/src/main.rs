@@ -20,6 +20,8 @@ mod parametric_core;
 mod curve_api;
 mod edit_commands;
 mod final_canvas_flip_api;
+mod history_navigation_api;
+mod history_navigation_protocol;
 #[path = "../../../core/levels/levels.rs"]
 mod levels_core;
 mod levels_api;
@@ -1993,7 +1995,7 @@ fn main() {
             photo_detail_api::photo_detail_request, photo_detail_api::photo_detail_status, photo_detail_api::photo_detail_cancel,
             extended_tone_api::extended_tone_request, extended_tone_api::extended_tone_status, extended_tone_api::extended_tone_cancel,
             custom_lut_api::custom_lut_choose, custom_lut_api::custom_lut_request, custom_lut_api::custom_lut_status, custom_lut_api::custom_lut_cancel,
-            inpaint, light, portrait_api::deform, lut, grade, portrait_api::enhance, background, export, session, filmstrip, history,
+            inpaint, light, portrait_api::deform, lut, grade, portrait_api::enhance, background, export, session, filmstrip, history, history_navigation_api::history_navigation, history_navigation_api::history_navigation_status, history_navigation_api::history_navigation_abandon,
             light_glow_api::light_glow_request, light_glow_api::light_glow_status, light_glow_api::light_glow_cancel, light_glow_api::light_glow_capability,
             upscale_restore_api::upscale_restore_request, upscale_restore_api::upscale_restore_status, upscale_restore_api::upscale_restore_cancel, upscale_restore_api::upscale_restore_capability,
             portrait_crop_api::portrait_crop, portrait_crop_api::portrait_crop_status, portrait_crop_api::portrait_crop_cancel_read,

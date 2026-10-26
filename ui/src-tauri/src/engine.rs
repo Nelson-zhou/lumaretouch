@@ -45,6 +45,7 @@ pub struct EngineHandle {
 impl EngineHandle {
     pub fn epoch(&self)->[u8;16]{self.epoch}
     pub fn send(&self, cmd: Value) -> Result<(), String> {
+        crate::history_navigation_protocol::admission(&cmd)?;
         crate::hair_unification_api::blocks_mutation(self.epoch, &cmd)?;
         crate::hair_volume_api::blocks_mutation(self.epoch, &cmd)?;
         crate::creative_selection_api::blocks_mutation(self.epoch, &cmd)?;
@@ -91,7 +92,9 @@ impl EngineHandle {
     /// reader while the acknowledged command is still rendering/importing.
     pub(crate) fn cancel_light_glow_read(&self, request_id: &str, request: &Value) -> Result<(), String> {
         if !self.is_alive() { return Err("原发光引擎已结束；取消结果未确认".into()); }
-        let mut line=serde_json::to_vec(&json!({"cmd":"light_glow_cancel_read","request_id":request_id,"request":request})).map_err(|e|e.to_string())?;
+        let command=json!({"cmd":"light_glow_cancel_read","request_id":request_id,"request":request});
+        crate::history_navigation_protocol::admission(&command)?;
+        let mut line=serde_json::to_vec(&command).map_err(|e|e.to_string())?;
         line.push(b'\n');
         if let Err(error)=self.input.with_writer(|writer|writer.write_all(&line).and_then(|_|writer.flush())) {
             self.dispatcher.close(); self.input.close();
@@ -101,7 +104,9 @@ impl EngineHandle {
     }
     pub(crate) fn cancel_upscale_restore_read(&self, request_id: &str, request: &Value) -> Result<(), String> {
         if !self.is_alive() { return Err("原AI 超清引擎已结束；取消结果未确认".into()); }
-        let mut line=serde_json::to_vec(&json!({"cmd":"upscale_restore_cancel_read","request_id":request_id,"request":request})).map_err(|e|e.to_string())?;
+        let command=json!({"cmd":"upscale_restore_cancel_read","request_id":request_id,"request":request});
+        crate::history_navigation_protocol::admission(&command)?;
+        let mut line=serde_json::to_vec(&command).map_err(|e|e.to_string())?;
         line.push(b'\n');
         if let Err(error)=self.input.with_writer(|writer|writer.write_all(&line).and_then(|_|writer.flush())) {
             self.dispatcher.close(); self.input.close();
@@ -111,7 +116,9 @@ impl EngineHandle {
     }
     pub(crate) fn cancel_lens_blur_read(&self, request_id: &str, request: &Value) -> Result<(), String> {
         if !self.is_alive() { return Err("原镜头引擎已结束；取消结果未确认".into()); }
-        let mut line=serde_json::to_vec(&json!({"cmd":"lens_blur_cancel_read","request_id":request_id,"request":request})).map_err(|e|e.to_string())?;
+        let command=json!({"cmd":"lens_blur_cancel_read","request_id":request_id,"request":request});
+        crate::history_navigation_protocol::admission(&command)?;
+        let mut line=serde_json::to_vec(&command).map_err(|e|e.to_string())?;
         line.push(b'\n');
         if let Err(error)=self.input.with_writer(|writer|writer.write_all(&line).and_then(|_|writer.flush())) {
             self.dispatcher.close(); self.input.close();
@@ -121,7 +128,9 @@ impl EngineHandle {
     }
     pub(crate) fn cancel_portrait_crop_read(&self, request_id: &str, command_sha256: &str) -> Result<(), String> {
         if !self.is_alive() { return Err("原引擎已结束；取消结果未确认".into()); }
-        let mut line=serde_json::to_vec(&json!({"cmd":"portrait_crop_cancel","request_id":request_id,"command_sha256":command_sha256})).map_err(|e|e.to_string())?;
+        let command=json!({"cmd":"portrait_crop_cancel","request_id":request_id,"command_sha256":command_sha256});
+        crate::history_navigation_protocol::admission(&command)?;
+        let mut line=serde_json::to_vec(&command).map_err(|e|e.to_string())?;
         line.push(b'\n');
         if let Err(error)=self.input.with_writer(|writer|writer.write_all(&line).and_then(|_|writer.flush())) {
             self.dispatcher.close(); self.input.close();
@@ -131,7 +140,9 @@ impl EngineHandle {
     }
     pub(crate) fn cancel_expression_replacement(&self, request_id: &str, command_sha256: &str) -> Result<(), String> {
         if !self.is_alive() { return Err("原引擎已结束；取消结果未确认".into()); }
-        let mut line=serde_json::to_vec(&json!({"cmd":"expression_replacement_cancel","request_id":request_id,"command_sha256":command_sha256})).map_err(|e|e.to_string())?;
+        let command=json!({"cmd":"expression_replacement_cancel","request_id":request_id,"command_sha256":command_sha256});
+        crate::history_navigation_protocol::admission(&command)?;
+        let mut line=serde_json::to_vec(&command).map_err(|e|e.to_string())?;
         line.push(b'\n');
         if let Err(error)=self.input.with_writer(|writer|writer.write_all(&line).and_then(|_|writer.flush())) {
             self.dispatcher.close(); self.input.close();
@@ -143,6 +154,7 @@ impl EngineHandle {
     pub(crate) fn cancel_creative_selection(&self, request: &Value) -> Result<(), String> {
         if !self.is_alive() { return Err("原选区引擎已结束；取消结果未确认".into()); }
         if request["cmd"] != "creative_selection" || request["action"] != "cancel" { return Err("无效选区取消控制".into()); }
+        crate::history_navigation_protocol::admission(request)?;
         let mut line = serde_json::to_vec(request).map_err(|error| error.to_string())?;
         line.push(b'\n');
         if let Err(error) = self.input.with_writer(|writer| writer.write_all(&line).and_then(|_|writer.flush())) {
@@ -157,7 +169,9 @@ impl EngineHandle {
     pub(crate) fn cancel_semantic_colour(&self,request_id:&str)->Result<(),String>{self.cancel_owned_request("semantic_colour_cancel",request_id)}
     fn cancel_owned_request(&self, command:&str, request_id: &str) -> Result<(), String> {
         if !self.is_alive() { return Err("引擎已结束；取消结果未确认".into()); }
-        let mut line = serde_json::to_vec(&json!({"cmd":command, "request_id":request_id}))
+        let command=json!({"cmd":command, "request_id":request_id});
+        crate::history_navigation_protocol::admission(&command)?;
+        let mut line = serde_json::to_vec(&command)
             .map_err(|error| error.to_string())?;
         line.push(b'\n');
         if let Err(error) = self.input.with_writer(|writer| writer.write_all(&line).and_then(|_| writer.flush())) {
@@ -169,6 +183,7 @@ impl EngineHandle {
     }
 
     pub fn send_interactive(&self, key: String, cmd: Value) -> Result<(), String> {
+        crate::history_navigation_protocol::admission(&cmd)?;
         crate::hair_unification_api::blocks_mutation(self.epoch, &cmd)?;
         crate::hair_volume_api::blocks_mutation(self.epoch, &cmd)?;
         crate::creative_selection_api::blocks_mutation(self.epoch, &cmd)?;
@@ -296,6 +311,8 @@ pub fn spawn(py: &str, engine_src: &str, session: &str, state: Arc<AppState>,
         let d = dispatcher.clone();
         thread::spawn(move || {
             while let Ok(line) = rx.recv() {
+                crate::history_navigation_api::observe_project_line(inspection_epoch, &line);
+                if let Some(marker)=crate::history_navigation_api::observe_line(inspection_epoch, &line) { crate::project_recovery_fence::observed(inspection_epoch, &marker); }
                 if let Some(marker)=crate::final_canvas_flip_api::observe_line(inspection_epoch, &line) { crate::project_recovery_fence::observed(inspection_epoch, &marker); }
                 if let Some(marker)=crate::light_glow_api::observe_line(inspection_epoch, &line) { crate::project_recovery_fence::observed(inspection_epoch, &marker); }
                 if let Some(marker)=crate::upscale_restore_api::observe_line(inspection_epoch, &line) { crate::project_recovery_fence::observed(inspection_epoch, &marker); }
@@ -326,6 +343,7 @@ pub fn spawn(py: &str, engine_src: &str, session: &str, state: Arc<AppState>,
                     }
                     // Owned outcomes were already processed from duplicate-key-checked raw JSON.
                     // A renamed event must not enter another generic receipt or readiness path.
+                    if crate::history_navigation_api::guards_packet(inspection_epoch,&v) { continue; }
                     if v["request_id"].as_str().is_some_and(|id| crate::hair_volume_api::guards_result(inspection_epoch, id)) { continue; }
                     crate::background_material_api::receive(inspection_epoch, &v);
                     if let Some(marker) = crate::creative_selection_api::receive(inspection_epoch, &v) { crate::project_recovery_fence::observed(inspection_epoch, &marker); }
@@ -355,7 +373,7 @@ pub fn spawn(py: &str, engine_src: &str, session: &str, state: Arc<AppState>,
                             || crate::final_canvas_flip_api::guards_result(inspection_epoch,id)
                             || crate::lens_blur_api::guards_result(inspection_epoch,id)
                     });
-                    if !scalar_review && !(v["event"]=="white_balance_result" && v["action"]=="auto") && v["event"] != "final_canvas_flip_result" && v["event"] != "hand_shape_result" && v["event"] != "hand_tone_result" && v["event"] != "limb_vein_result" && v["event"] != "fabric_sweat_result" && v["event"] != "portrait_crop_result" && v["event"] != "hair_unification_result" && v["event"] != "hair_volume_result" && v["event"] != "creative_selection_result" && v["event"] != "ingest_session_result" && v["event"] != "workflow_owner_result" && v["event"] != "light_glow_result" && v["event"] != "upscale_restore_result" && v["event"] != "lens_blur_result" && v["event"] != "expression_replacement_result" && v["event"] != "common_background_result" && v["event"] != "fringe_repair_result" && v["event"] != "id_background_result" && v["event"] != "torso_length_result" && v["event"] != "waist_length_result" && v["event"] != "head_size_result" && v["event"] != "body_slim_result" {
+                    if !scalar_review && !(v["event"]=="white_balance_result" && v["action"]=="auto") && v["event"] != "history_navigation_result" && v["event"] != "final_canvas_flip_result" && v["event"] != "hand_shape_result" && v["event"] != "hand_tone_result" && v["event"] != "limb_vein_result" && v["event"] != "fabric_sweat_result" && v["event"] != "portrait_crop_result" && v["event"] != "hair_unification_result" && v["event"] != "hair_volume_result" && v["event"] != "creative_selection_result" && v["event"] != "ingest_session_result" && v["event"] != "workflow_owner_result" && v["event"] != "light_glow_result" && v["event"] != "upscale_restore_result" && v["event"] != "lens_blur_result" && v["event"] != "expression_replacement_result" && v["event"] != "common_background_result" && v["event"] != "fringe_repair_result" && v["event"] != "id_background_result" && v["event"] != "torso_length_result" && v["event"] != "waist_length_result" && v["event"] != "head_size_result" && v["event"] != "body_slim_result" {
                         crate::project_recovery_fence::observed(inspection_epoch, &v);
                     }
                     if v["event"]=="ready" && v["command_ack"].as_u64()!=Some(1) {
@@ -447,8 +465,9 @@ fn handle_event(state: &Arc<AppState>, line: &str,inspection_epoch:[u8;16]) {
             return;
         }
     };
-    // An owned hair-volume ID cannot borrow another event name to refresh state,
-    // reopen a workspace, or reach an unrelated receipt owner after raw rejection.
+    // Retained navigation identities/markers and owned hair-volume IDs cannot
+    // borrow another event name to refresh state or reopen a workspace.
+    if crate::history_navigation_api::guards_packet(inspection_epoch,&v) { return; }
     if v["request_id"].as_str().is_some_and(|id| crate::hair_volume_api::guards_result(inspection_epoch, id)) { return; }
     match v.get("event").and_then(|e| e.as_str()).unwrap_or("") {
         "inspection_snapshot"=>state.on_inspection_event(inspection_epoch,&v),
@@ -479,6 +498,7 @@ fn handle_event(state: &Arc<AppState>, line: &str,inspection_epoch:[u8;16]) {
         "limb_vein_result" => { if let Some(result)=crate::limb_vein_api::receive(inspection_epoch,&v) { if result.get("doc_state").is_some_and(|d|d.is_object()) { state.on_layer_frame(&result); } } },
         "hand_shape_result" => { if let Some(result)=crate::hand_shape_api::receive(inspection_epoch,&v) { if result.get("doc_state").is_some_and(|d|d.is_object()) { state.on_layer_frame(&result); } } },
         "hand_tone_result" => { if let Some(result)=crate::hand_tone_api::receive(inspection_epoch,&v) { if result.get("doc_state").is_some_and(|d|d.is_object()) { state.on_layer_frame(&result); } } },
+        "history_navigation_result" => {}, // Metadata-only, strict raw receipt owner; canonical history_state refreshes the canvas.
         "final_canvas_flip_result" => {}, // Already validated from bounded unique-key raw JSON.
         "photo_detail_result" | "photo_detail_readback" => { crate::photo_detail_api::receive(inspection_epoch, &v); if v.get("doc_state").is_some_and(|d|d.is_object()) { state.on_layer_frame(&v); } },
         "extended_tone_result" | "extended_tone_readback" => { crate::extended_tone_api::receive(inspection_epoch, &v); if v.get("doc_state").is_some_and(|d|d.is_object()) { state.on_layer_frame(&v); } },

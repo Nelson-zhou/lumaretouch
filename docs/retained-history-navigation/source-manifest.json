@@ -1,0 +1,212 @@
+{
+  "feature": "bounded-retained-history-navigation",
+  "status": "SOURCE FROZEN FOR INDEPENDENT REVIEW / AUTHORED UNRUN",
+  "base_local_head": "439979b541056cdd0d5b5621eeb9a50f668c6451",
+  "base_remote_commit": "d85b0a1cadddf1051699a18142913e69c561c437",
+  "base_tree": "37eb49487b7d0619c24c0c6e57f2423901c312c3",
+  "source_owner": "implement_retained_history_navigation",
+  "validation": {
+    "python_ast": "PARSED ONLY: 8 files; no product imports",
+    "json": "DECODED ONLY",
+    "whitespace": "git diff --check clean",
+    "typescript_rust_syntax": "UNRUN: parsers unavailable; no install",
+    "tests_build_typecheck_runtime_inference": "UNRUN"
+  },
+  "scope": "Existing retained history only; no parallel ledger, snapshot library, edit labels or persistence changes",
+  "manifest_self_excluded": true,
+  "files": [
+    {
+      "path": "docs/retained-history-navigation/README.md",
+      "sha256": "b6d19734c6ead1392438897ee5ec34a4c4b380173d3554d5feef88354f247497",
+      "base_sha256": null
+    },
+    {
+      "path": "docs/retained-history-navigation/unrun-matrix.json",
+      "sha256": "557949841f50130f293c7c17fea3e56bd643c24e79f25fb185829932176acee2",
+      "base_sha256": null
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/command_registry.py",
+      "sha256": "801f227362edf253356ee97f5427ec0aea13d01b0c770573c46cc92fc08c322b",
+      "base_sha256": "d16547bf760a6e591bec72b1f682617ae9f0642de619e32ae9455178dedd2565"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/history_controller.py",
+      "sha256": "2f24ef24f61525bdc7c2c67b8b3063428fdc672e96bdb02079d5836c93cce6fa",
+      "base_sha256": "a98850c825f343540058e5bc697b7de8045c1757f5719cf34a13a806c5e1cc80"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/history_navigation.py",
+      "sha256": "359c7d7aa062d28cc0d51798be5624fa949c3e128de5600567a06d1b89ed54e4",
+      "base_sha256": null
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/optics_candidate_identity.py",
+      "sha256": "3073dd783be3546c431292358f912e8e7389473960e1c067c6cb3c7fdc0b7583",
+      "base_sha256": "9e01d78745a34740277d1090ef8e63d496101307d4f6211f889de530cb42b29d"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/project_package_project_commands.py",
+      "sha256": "bed0918908ff5819bba4788fd25ce39bb776ed90fd5f6aa52a88c54ab4f79403",
+      "base_sha256": "f30bb6a7c530a21f4b1e34f1c6cc9f938f5a0ee933d7077881f8f4d4775c13cb"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/project_recovery_runtime.py",
+      "sha256": "fbd7dfb33426c82f533b465d10610de8a750f3f9792480660dfb655d7c755608",
+      "base_sha256": "d4e571cccd7ef0809533e5f17a7f206909fd45d518f6c9711b7a6f38def371f4"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/server.py",
+      "sha256": "5ed5bb71ebf4f1d41fbc417de76918d650f6239b54628d056acd0b19f72a9f87",
+      "base_sha256": "24c92e4d86bba655402422ef6e1a33d48bdeaec4ecf52d5c7a7809bea9026419"
+    },
+    {
+      "path": "engine/tests/test_history_navigation_unrun.py",
+      "sha256": "60e22b2f7ba482af7909da317873c7ce42755f0b1991e7655b3fd44bac61f83c",
+      "base_sha256": null
+    },
+    {
+      "path": "ui/src-tauri/src/engine.rs",
+      "sha256": "817cf3cb0c4654524040914ca4c5ead61c882c699f37c1a8b59181c3685f1692",
+      "base_sha256": "39ed4180f36dec15588806481c9d397dd2b5b3ee092ebeaa335e23ebbcb00cc7"
+    },
+    {
+      "path": "ui/src-tauri/src/history_navigation_api.rs",
+      "sha256": "5174177a3f397a3fbd3f7bc235f88ee5c0c3eb9a0fd908ffa09b44b8f1462f10",
+      "base_sha256": null
+    },
+    {
+      "path": "ui/src-tauri/src/history_navigation_protocol.rs",
+      "sha256": "6973e5d49ba15bbd9ea7d70a6f8d55bb27b6dcfcc81194029393bf2eff2f3ac7",
+      "base_sha256": null
+    },
+    {
+      "path": "ui/src-tauri/src/main.rs",
+      "sha256": "5000cbe9dd4ada921bef012bed61ed7762048347cd29c1d4f3e2932044119a3d",
+      "base_sha256": "7f4e8e83f64a8df320da52f3a43617e072aa34a1863d2b4e106358c3fbd509e8"
+    },
+    {
+      "path": "ui/src-tauri/src/native_dispatch.rs",
+      "sha256": "04cc59844f3b76d4a3ce32340353e6156eec47a3873b7649a4cefc7041cf7381",
+      "base_sha256": "a74935f696d1095256acb198076f76e2dacd9aa03c0ecd51f77b829a44535846"
+    },
+    {
+      "path": "ui/src-tauri/src/project_recovery_fence.rs",
+      "sha256": "9ab2d7ff679932754b4a70fd3a963dc83a88676f235a76105061a8280f4a4046",
+      "base_sha256": "4614bdddb21133a50f47c4bef5dcb724071753229788214c8286d90281314709"
+    },
+    {
+      "path": "ui/src/App.tsx",
+      "sha256": "652c79d1c0b0a9dedfab75103f05b5ee5bff54de22fa5386a6a77faa735f67be",
+      "base_sha256": "84c90faf429351550726bb1f097fd7349b373a2dd3d123acd96ddfa6dd9e2891"
+    },
+    {
+      "path": "ui/src/components/RetouchPanel.tsx",
+      "sha256": "1c90ec2f31eeb7aa8731347286e0c287d001b8d056de958b5cf9c039f31590e1",
+      "base_sha256": "be305eff4983bfed38e3bc7768becaac7b527e6204a644fff867c4f7046373ea"
+    },
+    {
+      "path": "ui/src/historyNavigation/HistoryPanel.tsx",
+      "sha256": "42171eab8cbbec6659cbdce72fa4f1aaeee1c4e2becda514a754d0a7627c0bd2",
+      "base_sha256": null
+    },
+    {
+      "path": "ui/src/historyNavigation/model.ts",
+      "sha256": "9606275abbe40ee77c43f8c4893b7a9cb26be208dd5af4ad73b9c2997817cd32",
+      "base_sha256": null
+    },
+    {
+      "path": "ui/src/historyNavigation/model.unrun.test.ts",
+      "sha256": "116ccfe52ebfe543e918d75884f3ffb0b956096108429cc5ea2894f4a281542b",
+      "base_sha256": null
+    },
+    {
+      "path": "ui/src/historyNavigation/owner.ts",
+      "sha256": "9ad2634f4ff67958514c996cb895b5ff90d9530763fb4c37ade6b6f2f364cfeb",
+      "base_sha256": null
+    },
+    {
+      "path": "ui/src/native.ts",
+      "sha256": "f97fd768a2fba2fa8800cbb10aa9e5cd9409a416fca0efccdc89afd2140c4c1c",
+      "base_sha256": "8bfd5c86f5f936385d38426c72ac9929fe4fe6b3e1fbbaba061ffc817326d940"
+    }
+  ],
+  "read_only_dependencies": [
+    {
+      "path": "engine/src/lumaretouch_engine/people_document_history.py",
+      "sha256": "fba7ec203041cf86d6b37ff040576c08738e1bc8a0c18b971eb1c32407270e8b"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/body_pose_history_chain.py",
+      "sha256": "3b27571f51505e8e8d230ac24dc17ce9dc9d9e88ffcc16ca0ac8d38d66261b8f"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/body_pose_document_history.py",
+      "sha256": "623ae185e39c5753e2eac450964c7ec218091f2e660892c661f205a8cd3fea0a"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_graph_owner.py",
+      "sha256": "ad230d96c81644c7fdfa8fef74151e8b19215a883f32f7e1adcd87e13bfa7480"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_graph_patch.py",
+      "sha256": "f8bdb171f24c3fcf25682f8b5e8ba253875217bbe654a8062907966082efca67"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_host.py",
+      "sha256": "531ad4bad242645ff05c4cdcba6d058400f2151ca41ace5361aa2afd49fe6b7a"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/document_versions.py",
+      "sha256": "2f669357047fd65ba73004b50cc8f8811659b4ddd31f3b84d15a0d2380a85693"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_history_persistence.py",
+      "sha256": "873898f890e6d477a2e7127001942ca763c6a6d1566238eecf94c78c90ca4a00"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/history_policy.py",
+      "sha256": "09362c5b31fdf9a7a0f29b580275e5537ca9af1feb819700217ffc3704dfa164"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/creative_document_host.py",
+      "sha256": "2cab0b1bd78a543b1a70e7d5b478f67f75bc3d382e8e7a6b35802129da860076"
+    },
+    {
+      "path": "ui/src/spec/workflows.json",
+      "sha256": "314560caa62f378a35a110b05b8cea78ede23b83a82db7392858ee8ee8362429"
+    },
+    {
+      "path": "ui/src/spec/refine.json",
+      "sha256": "ec7e04d962fdb6bbe6b15bf0d4ebdcad853a64f80e4a1f196539aba131cda967"
+    },
+    {
+      "path": "ui/src-tauri/src/preset_alias_recovery_fence.rs",
+      "sha256": "131f2e6bbedf07b1b44bd8340f69251739ff0519a957c628ce89d28e9251e40f"
+    },
+    {
+      "path": "ui/src-tauri/src/portrait_crop_protocol.rs",
+      "sha256": "e004bd1a4158b6d386e7aaeb9935f644fc1d9a12a7c53b5fa2fb81dd76f0db82"
+    },
+    {
+      "path": "ui/src/finalCanvasFlip/owner.ts",
+      "sha256": "a32291e56fb642b1086484521eb71221cff5f6609b865e2cf3a9ce4940512a19"
+    },
+    {
+      "path": "ui/src-tauri/src/final_canvas_flip_api.rs",
+      "sha256": "6d92e46de230630500f5237252af1613ce4909f6060b5db71f04afbe54a6e5dc"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/read_job_ingress.py",
+      "sha256": "ffbd3eb3e72c910eb5520eb9ed249c2bfcba3b82d20d639e792a45f740722c3a"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/command_reader.py",
+      "sha256": "6bbf057ea03bdd27785dc35f7f20ee1d6b3d028b8a4a6fdd3b3ba574a9399386"
+    },
+    {
+      "path": "ui/src-tauri/src/dispatch.rs",
+      "sha256": "5f6de2cd05d242b607c076b573f071fd0b2eead6568dc3ef59bbc2ef7b0a6779"
+    }
+  ]
+}
