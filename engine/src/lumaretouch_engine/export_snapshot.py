@@ -58,6 +58,19 @@ def state_to_export_snap(self,st,*,device,scale,upscale_backend,sharpen,source_p
                     precompute=st.get("_precompute"),
                     device=device, scale=scale, upscale_backend=upscale_backend,
                     sharpen=sharpen)
+    from . import portrait_protection_state as PPS
+    snap['portrait_protection']=PPS.check(st.get(PPS.KEY))
+    if PPS.needs_analysis(snap['portrait_protection']):
+        from .creative_derived_source import binding as portrait_binding
+        portrait_path=source_path or self._doc_path
+        portrait_source=snap['portrait_protection']['source']
+        PPS.check_owner(snap['portrait_protection'],st.get('_face_manual'),None if people is None else people['state'])
+        portrait_stamp=LM.file_stamp(portrait_path)
+        if portrait_binding(st,portrait_path,(portrait_source['width'],portrait_source['height']))!=portrait_source:
+            raise ValueError('Portrait snapshot belongs to another effective source')
+        if LM.file_stamp(portrait_path)!=portrait_stamp:raise ValueError('Portrait source changed during snapshot')
+        snap['portrait_protection_path']=portrait_path
+        snap['portrait_protection_stamp']=list(portrait_stamp)
     if snap['fringe_repair']['source'] is not None:
         from .creative_derived_source import binding as source_binding
         path = source_path or self._doc_path

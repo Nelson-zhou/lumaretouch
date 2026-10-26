@@ -1,6 +1,7 @@
 """One neutral RGB16 pass-through policy for live and frozen export state."""
 from .ops import curves as CURVES,levels as LEVELS
 from . import photo_grain_state as PGS
+from . import portrait_protection_state as PPS
 from . import fringe_repair_state as FRS
 from . import colour_editor_state as CES
 from . import white_balance_recipe as WB,local_grade_layers as LG,effect_recovery_state as ERS
@@ -39,6 +40,7 @@ class Master16PolicyMixin:
         fields['_creative_base'] = snap.get('creative_base')
         fields["_colour_editor"] = CES.check(snap["colour_editor"]) if "colour_editor" in snap else CES.neutral()
         fields["_photo_grain"] = PGS.check(snap["photo_grain"]) if "photo_grain" in snap else PGS.neutral()
+        fields[PPS.KEY]=PPS.check(snap.get("portrait_protection"))
         fields["_fringe_repair"] = FRS.check(snap["fringe_repair"]) if "fringe_repair" in snap else FRS.neutral()
         for key, module in (('colour_grading', CGS), ('selective_colour', SCLS), ('primary_calibration', PCS)):
             fields['_' + key] = module.check(snap[key]) if key in snap else module.neutral()
@@ -97,6 +99,8 @@ class Master16PolicyMixin:
             b.append('创意合成底图（须使用真实全尺寸合成像素，不能直通原文件）')
         if CES.active(getattr(self,"_colour_editor",CES.neutral())):b.append("连续色彩编辑器（全源图统一目标，不可直通）")
         if PGS.active(getattr(self,"_photo_grain",PGS.neutral())):b.append("确定性源像素颗粒（须完整浮点编辑，不能直通）")
+        portrait=PPS.check(getattr(self,PPS.KEY,None))
+        if PPS.needs_analysis(portrait):b.append('有限祛瑕/自动保护蒙版（必须完整源图浮点重放）')
         if FRS.active(getattr(self,"_fringe_repair",FRS.neutral())):b.append("黑白边缘修复（逐图重算边缘支持，不可直通）")
         if CGS.active(getattr(self, '_colour_grading', CGS.neutral())):b.append('分区色彩分级（须完整浮点编辑，不可直通）')
         if SCLS.active(getattr(self, '_selective_colour', SCLS.neutral())):b.append('可选颜色（须完整浮点编辑，不可直通）')

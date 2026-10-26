@@ -133,6 +133,7 @@ class PreviewPipeline:
             device = "cpu"
         else:
             self.fallback = None
+        self.portrait_delta = None; self.portrait_support = None; self.portrait_overlay = None
         self.device = torch.device(device)
         self.fabric = FabricStage(self.device)
         self.limb_vein = LimbVeinStage(self.device)
@@ -605,6 +606,11 @@ class PreviewPipeline:
                 else (1.0 - strength) * base + strength * result
             # Recover only smoothing's contribution, preserving repair and light.
             out = self.effect_recovery.apply('skin_smoothing', base, out)
+        if self.portrait_support is not None:
+            base = self.lighten_source()
+            out = base + (out-base)*self.portrait_support
+        from .ops.portrait_protection import apply_delta_t
+        out = apply_delta_t(out, self.portrait_delta)
         # Actual order: repair/light + smoothing/recovery -> fabric/recovery ->
         # studio -> body/own-face match -> reviewed body chroma -> collarbone -> face chroma -> skin colour ->
         # facial wrinkles/recovery ->

@@ -1,0 +1,16 @@
+{
+  "status": "AUTHORED_UNRUN_NOT_RUNTIME_EVIDENCE",
+  "request": {"cmd":"portrait_protection","request_id":"portrait-fixture-1","document_id":"17","revision":"9","controls":{"enabled":true,"strength":0.25,"protect_identity_marks":true,"analysis_enabled":true,"overlay_visible":false,"feather":8,"protected_regions":[[0.2,0.3,0.4,0.5]]}},
+  "expectations": [
+    "applied requires result_revision 10 and exact original request/spec",
+    "no_change requires result_revision 9",
+    "unknown requires success false, outcome_unknown true, requires_reload true; retain pending",
+    "requested true alone never resolves pending",
+    "native not_sent must not settle another command family's colliding ID",
+    "duplicate-key or malformed optional boolean project_opened never increments portrait generation",
+    "malformed or duplicate command_done taints same-epoch idle proof without changing other dispatchers",
+    "old buffered project_opened and project_created never establish a later recovery baseline",
+    "read-only status with missing native receipt cannot prove the mutation was not sent",
+    "strength numeric zero must accept engine canonical float zero without accepting strings"
+  ]
+}

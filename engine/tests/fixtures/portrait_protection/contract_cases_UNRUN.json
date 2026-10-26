@@ -1,0 +1,87 @@
+{
+  "status": "AUTHORED_UNRUN",
+  "execution": "No product imports, tests, inference, build or typecheck performed",
+  "cases": [
+    {
+      "case": "neutral",
+      "expect": "disabled/zero strength leaves RGB bitwise unchanged; analysis/overlay off"
+    },
+    {
+      "case": "bad-controls",
+      "reject": [
+        "boolean strength",
+        "NaN",
+        "infinity",
+        "strength > 1",
+        "feather fractional/negative/>256",
+        "unknown controls",
+        "inverted boxes"
+      ]
+    },
+    {
+      "case": "bad-evidence",
+      "reject": [
+        "synthetic/template",
+        "two/zero/unknown faces",
+        "missing face_skin",
+        "wrong source hash",
+        "wrong model digest format",
+        "landmark digest mismatch",
+        "decompression bomb",
+        "trailing compressed stream"
+      ]
+    },
+    {
+      "case": "small-outlier",
+      "expect": "bounded compact candidate receives <= .12*strength channel delta, no outside-support changes"
+    },
+    {
+      "case": "identity-veto",
+      "expect": "dark candidate and halo unchanged by default; no claim all identity marks detected"
+    },
+    {
+      "case": "explicit-region",
+      "expect": "normalized protected rectangle always unchanged with protect_identity_marks false too"
+    },
+    {
+      "case": "mask-feather",
+      "expect": "zero hard edge; positive source-pixel feather only shrinks support; overlay never exported"
+    },
+    {
+      "case": "replay",
+      "expect": "saved recipe/evidence/model hashes/history retained; cache clearing cannot select another face"
+    },
+    {
+      "case": "native16-tiles",
+      "expect": "active recipe denies passthrough; same full-source field slices across every tile; no RGB8 intermediate"
+    },
+    {
+      "case": "causal-receipt",
+      "expect": "duplicate same ID returns retained terminal result; changed payload rejected; missing receipt remains unknown; no mutation from readback"
+    },
+    {
+      "case": "failures",
+      "expect": "full prior state/history restored or explicit unknown/reload; stale doc/revision/source rejects before commit"
+    },
+    {
+      "case": "resource-bound",
+      "expect": "budget refusal precedes full-grid temporary allocation; cancellation publishes no partial field"
+    },
+    {
+      "case": "disabled-owner",
+      "expect": "persisted disabled/manual/ambiguous owner suspends live operation and rejects export; cache eviction cannot re-enable"
+    },
+    {
+      "case": "empty-load-token",
+      "expect": "failed-load empty token refuses mutation and availability before old loaded buffers can be reused"
+    },
+    {
+      "case": "diagnostic-isolation",
+      "expect": "all scope/analysis/capture canonical pixels equal overlay-off pixels; only final copied shm presentation is tinted after aligned geometry"
+    },
+    {
+      "case": "receipt-readonly",
+      "expect": "query neither cancels inspection/preview nor invalidates captures; no dirty/history/revision mutation"
+    }
+  ]
+}

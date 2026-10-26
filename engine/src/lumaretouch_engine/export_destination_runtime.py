@@ -164,7 +164,9 @@ def decorate(result, payload, key):
             result['outputs'] = [{'path':result['out'], 'format':result.get('format'),
                 'variant':'clean', 'bits':result['bits'], 'skipped':bool(result.get('out_skipped')),
                 'bytes':result.get('bytes'), 'encoded_sha256':result.get('encoded_sha256'),
-                'encoder_quality':result.get('encoder_quality')}]
+                'encoder_quality':result.get('encoder_quality'),
+                **({'quality_mapping_version':result['quality_mapping_version']}
+                   if 'quality_mapping_version' in result else {})}]
     by_target = {e.target:e for e in plan.entries if e.item_id in (key,key+'::clean')}
     for output in result.get('outputs') or []:
         planned = by_target.get(output.get('path'))

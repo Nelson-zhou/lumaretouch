@@ -366,34 +366,35 @@ MODULES: dict[str, dict] = {
         "write": lambda st, v: st.update(_strength=_strength_from(v)),
     },
     OP_BLEMISH: {
-        "params": ("strength", "enabled"), "state_fields": ("_strength",),
-        "single_face": True, "transferable": True, "cmd": "set_strength",
-        # 注册表里还有一条 `protect_identity_marks`（保留痣/斑），本版本没有那个通路：
-        # 磨皮是高低频整体作用，没有“跳过这一像素”的独立开关。把它当“预设能带的参数”
-        # 接进来只会得到一个不动任何像素的勾选框（假控件），所以这里**记账为未建模**，
-        # 导入带这一参数的预设时整条拒并给出原因。
-        "unmodeled": {"protect_identity_marks":
-                      "本版本磨皮没有“保护痣/斑”的独立通路（高低频整体作用），"
-                      "这一参数不接受，也不做成不动画面的勾选框"},
-        "read": lambda st: {"strength": float(st["_strength"]),
-                            "enabled": bool(float(st["_strength"]) > 0.0)},
-        "write": lambda st, v: st.update(_strength=_strength_from(v)),
+        "params": ("strength", "enabled", "protect_identity_marks"),
+        "state_fields": ("_portrait_protection",), "single_face": True,
+        "transferable": False, "cmd": "portrait_protection",
+        "why_not": "有限祛瑕有独立源绑定证据；请在当前单脸照片内使用专属控件，不复用磨皮强度",
+        "read": lambda st: _portrait_controls(st, ("strength", "enabled", "protect_identity_marks")),
+        "write": lambda st, v: _reject_portrait_transfer(),
     },
     OP_MASK: {
         "params": ("analysis_enabled", "overlay_visible", "feather"),
-        "state_fields": (), "single_face": True, "transferable": False, "cmd": None,
-        "why_not": "蒙版叠加/羽化本版本未接通（右侧那一栏显式禁用并写了原因），"
-                   "不进预设也不进批量作用域",
-        "unmodeled": {k: "未接通：见本模块 why_not" for k in
-                      ("analysis_enabled", "overlay_visible", "feather")},
-        "read": lambda st: {},
-        "write": lambda st, v: None,
+        "state_fields": ("_portrait_protection",), "single_face": True,
+        "transferable": False, "cmd": "portrait_protection",
+        "why_not": "自动保护蒙版保留当前照片的实际证据，不跨照片套用",
+        "read": lambda st: _portrait_controls(st, ("analysis_enabled", "overlay_visible", "feather")),
+        "write": lambda st, v: _reject_portrait_transfer(),
     },
 }
 
-#: 磨皮与祛瑕在引擎里共用同一位强度（注册表把这条写进了 reason：两个"强度"必须同含义）。
-#: 因此一份预设/一次批量里同时出现这两个模块时，它们的 strength 必须相等，否则整条拒。
-SHARED_STRENGTH_OPS = (OP_SKIN, OP_BLEMISH)
+# Blemish no longer aliases smoothing; source-bound controls have their own owner.
+SHARED_STRENGTH_OPS = ()
+
+
+def _portrait_controls(state, keys):
+    from .portrait_protection_state import check, KEY
+    value=check(state.get(KEY))['controls']
+    return {key:value[key] for key in keys}
+
+
+def _reject_portrait_transfer():
+    raise ScopeError('Source-bound portrait controls require the dedicated current-document owner')
 
 
 def _strength_from(params: dict) -> float:
@@ -788,7 +789,7 @@ def apply_modules(state: dict, mods: dict[str, dict], *, local_replace_legacy=Fa
         MODULES[op]["write"](out, clean)
     if OP_LOCAL_GRADE in ops and local_replace_legacy: LOCAL_GRADE.clear_legacy(out)
     # 磨皮那位共用强度：两个模块都出现时，后一次 write 不该把前一次的解释推翻掉
-    if all(op in ops for op in SHARED_STRENGTH_OPS):
+    if SHARED_STRENGTH_OPS and all(op in ops for op in SHARED_STRENGTH_OPS):
         s = _strength_from(mods[OP_SKIN] if OP_SKIN in mods else mods[OP_BLEMISH])
         out["_strength"] = s
     return out

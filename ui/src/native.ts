@@ -172,6 +172,7 @@ export interface DocState {
   /** Frozen current pre-WB input, not a presented/manual-picker proof. */
   white_balance_auto_input?: {input_id:string;recipe_document_id:string;recipe_revision:string}|null;
   final_canvas_flip?: import('./finalCanvasFlip/model').FlipReport;
+  portrait_protection?: import('./portraitProtection/model').ProtectionReport;
   canvas_guides?: import('./canvasGuides/model').GuideReport;
   id_background?: import('./idBackground/model').Report;
   colour_grading?: {recipe:import('./colourGrading/model').Recipe;algorithm:string;note:string};

@@ -33,7 +33,7 @@ impl AppState {
 
     /// Owned receipts must never dispatch into a replacement engine epoch.
     pub(crate) fn send_to_engine_at_epoch(&self, cmd: Value, expected_epoch: [u8; 16]) -> Result<(), String> {
-        if !matches!(cmd["cmd"].as_str(), Some("history_navigation" | "final_canvas_flip" | "ingest_session" | "workflow_owner" | "creative_selection" | "hair_unification" | "hair_volume" | "fabric_sweat" | "hand_shape" | "hand_tone" | "limb_vein")) {
+        if !matches!(cmd["cmd"].as_str(), Some("history_navigation" | "final_canvas_flip" | "portrait_protection" | "ingest_session" | "workflow_owner" | "creative_selection" | "hair_unification" | "hair_volume" | "fabric_sweat" | "hand_shape" | "hand_tone" | "limb_vein")) {
             return Err("Epoch-bound dispatch is restricted to owned ingestion protocols".into());
         }
         self.send_to_engine_bound(cmd, Some(expected_epoch))

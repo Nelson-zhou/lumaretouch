@@ -10,7 +10,7 @@ struct Pending { command: Value, composite_history: Option<Value> }
 impl Pending { fn composite(&self)->bool {preset_alias::applies(&self.command)||crate::people_api::decoration_alias::applies(&self.command)||crate::people_api::decoration_support_alias::applies(&self.command)||crate::effect_recovery_host::alias::applies(&self.command)||self.composite_history.is_some()} }
 // Body and neck mutations retain the existing fence until a strict terminal or verified
 // workspace reopen. They do not become composite/alias history operations.
-impl Pending { fn guarded(&self) -> bool { crate::history_navigation_api::mutation(&self.command) || self.command["cmd"] == "final_canvas_flip" || crate::white_balance_api::mutation(&self.command) || self.composite() || crate::batch_host::portrait_preset_group::mutation(&self.command) || crate::hand_shape_api::mutation(&self.command) || crate::hand_tone_api::mutation(&self.command) || crate::limb_vein_api::mutation(&self.command) || crate::fabric_sweat_api::mutation(&self.command) || crate::people_api::skin_reference_body::mutation(&self.command) || crate::people_api::hair_smoothing::mutation(&self.command) || crate::people_api::neck_wrinkle::mutation(&self.command) } }
+impl Pending { fn guarded(&self) -> bool { crate::history_navigation_api::mutation(&self.command) || self.command["cmd"] == "final_canvas_flip" || self.command["cmd"] == "portrait_protection" || crate::white_balance_api::mutation(&self.command) || self.composite() || crate::batch_host::portrait_preset_group::mutation(&self.command) || crate::hand_shape_api::mutation(&self.command) || crate::hand_tone_api::mutation(&self.command) || crate::limb_vein_api::mutation(&self.command) || crate::fabric_sweat_api::mutation(&self.command) || crate::people_api::skin_reference_body::mutation(&self.command) || crate::people_api::hair_smoothing::mutation(&self.command) || crate::people_api::neck_wrinkle::mutation(&self.command) } }
 fn pending()->&'static Mutex<HashMap<([u8;16],String),Pending>> {
     static STORE:OnceLock<Mutex<HashMap<([u8;16],String),Pending>>=OnceLock::new();
     STORE.get_or_init(||Mutex::new(HashMap::new()))
@@ -19,8 +19,8 @@ pub(crate) fn issued(epoch:[u8;16], command:&Value)->Result<(),String>{
     let mut store=pending().lock().map_err(|_|"恢复回执屏障锁不可用")?;
     if command["cmd"]=="project" && command["action"]=="create"
         && store.iter().any(|((owner_epoch,_),request)|*owner_epoch==epoch
-            && (crate::history_navigation_api::mutation(&request.command) || request.command["cmd"]=="final_canvas_flip" || crate::white_balance_api::mutation(&request.command) || crate::people_api::hair_smoothing::mutation(&request.command))) {
-        return Err("原历史跳转/翻转/自动白平衡/头发柔顺结果尚未确认；新建工程保留当前照片，不能用作恢复，请打开已确认工程".into());
+            && (crate::history_navigation_api::mutation(&request.command) || request.command["cmd"]=="final_canvas_flip" || request.command["cmd"]=="portrait_protection" || crate::white_balance_api::mutation(&request.command) || crate::people_api::hair_smoothing::mutation(&request.command))) {
+        return Err("原历史跳转/翻转/人像保护/自动白平衡/头发柔顺结果尚未确认；新建工程保留当前照片，不能用作恢复，请打开已确认工程".into());
     }
     if store.iter().any(|((owner_epoch,_),request)|*owner_epoch==epoch
         && (crate::history_navigation_api::mutation(&request.command) || crate::people_api::hair_smoothing::mutation(&request.command))) {
@@ -112,7 +112,7 @@ pub(crate) fn observed(epoch:[u8;16], value:&Value){
         if replaced {
             crate::final_canvas_flip_api::verified_workspace_opened(epoch);
         }
-        store.retain(|(e,_),request|*e!=epoch || if crate::history_navigation_api::mutation(&request.command) || crate::people_api::hair_smoothing::mutation(&request.command) {
+        store.retain(|(e,_),request|*e!=epoch || if crate::history_navigation_api::mutation(&request.command) || crate::people_api::hair_smoothing::mutation(&request.command) || request.command["cmd"]=="portrait_protection" {
             true // Exact idle-baselined native status abandons this owner later.
         } else if request.command["cmd"]=="final_canvas_flip" || crate::white_balance_api::mutation(&request.command) {
             !replaced // A new empty project keeps the old live document recipes.
@@ -131,6 +131,9 @@ pub(crate) fn observed(epoch:[u8;16], value:&Value){
             || !crate::history_navigation_api::matches_request(command,value)) { return; }
     if (command["cmd"] == "final_canvas_flip" || event == "final_canvas_flip_result")
         && (command["cmd"] != "final_canvas_flip" || event != "final_canvas_flip_result"
+            || value["original_request"] != *command) { return; }
+    if (command["cmd"] == "portrait_protection" || event == "portrait_protection_result")
+        && (command["cmd"] != "portrait_protection" || event != "portrait_protection_result"
             || value["original_request"] != *command) { return; }
 
     // Receipt hosts can share an epoch but not command/action identity. A late
@@ -203,6 +206,24 @@ pub(crate) fn hand_shape_pending(epoch:[u8;16],command:&Value)->bool {
 /// they must not suppress a different family's later/colliding request ID.
 pub(crate) fn final_canvas_flip_pending(epoch:[u8;16], command:&Value)->bool {
     if command["cmd"]!="final_canvas_flip" { return false; }
+    let Some(id)=command["request_id"].as_str() else { return false; };
+    pending().lock().map(|store|store.get(&(epoch,id.to_owned()))
+        .is_some_and(|entry|entry.command==*command)).unwrap_or(true)
+}
+
+/// Only native idle-baselined recovery may release this exact original portrait fence.
+pub(crate) fn abandon_portrait_protection(epoch:[u8;16],command:&Value) {
+    if command["cmd"]!="portrait_protection" { return; }
+    let Some(id)=command["request_id"].as_str() else { return; };
+    if let Ok(mut store)=pending().lock() {
+        let key=(epoch,id.to_owned());
+        if store.get(&key).is_some_and(|row|row.command==*command) {store.remove(&key);}
+    }
+}
+
+/// Protect only this exact portrait request, not an unrelated ID collision.
+pub(crate) fn portrait_protection_pending(epoch:[u8;16], command:&Value)->bool {
+    if command["cmd"]!="portrait_protection" { return false; }
     let Some(id)=command["request_id"].as_str() else { return false; };
     pending().lock().map(|store|store.get(&(epoch,id.to_owned()))
         .is_some_and(|entry|entry.command==*command)).unwrap_or(true)

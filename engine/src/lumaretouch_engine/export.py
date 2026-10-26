@@ -226,6 +226,9 @@ class ExportSpec:
     exposure_ref_k: float | None = None
     wb_options: dict | None = None
     photo_grain: dict | None = None
+    portrait_protection: dict | None = None
+    portrait_protection_path: str | None = None
+    portrait_protection_stamp: list | None = None
     photo_detail: dict | None = None
     fringe_repair: dict | None = None
     fringe_repair_path: str | None = None
@@ -334,6 +337,8 @@ class ExportSpec:
         self.extended_tone=check_tone(self.extended_tone)
         from .photo_detail_state import check as check_detail
         self.photo_detail=check_detail(self.photo_detail)
+        from .portrait_protection_state import check as check_portrait
+        self.portrait_protection=check_portrait(self.portrait_protection)
         from .fringe_repair_state import check as check_fringe, neutral as neutral_fringe
         self.fringe_repair=neutral_fringe() if self.fringe_repair is None else check_fringe(self.fringe_repair)
         from .photo_grain_state import check as check_grain, neutral as neutral_grain
@@ -1023,6 +1028,8 @@ def _export_image_impl(src_u8: np.ndarray, spec: ExportSpec, *, device: str,
         raise ExportError("导出需要 torch（装 rocm/cuda/cpu 任一变体）")
     base_f=None;repair_stats={}
     if spec.repair:base_f,repair_stats=apply_repair_full(src_u8,spec.repair,device,spec=spec)
+    from .portrait_protection_runtime import prepare_export as prepare_portrait, install as install_portrait
+    portrait_field=prepare_portrait(spec,src_u8,base_f,divisor,cancelled=mask_cancelled)
     from .people_export import prepare as prepare_people
     people_start=time.perf_counter();people_prepared=prepare_people(spec,src_u8,base_f,cancelled=mask_cancelled)
     people_prepare_ms=(time.perf_counter()-people_start)*1000.0 if people_prepared is not None else 0.0
@@ -1118,6 +1125,7 @@ def _export_image_impl(src_u8: np.ndarray, spec: ExportSpec, *, device: str,
             pipe.load_rgb_f32(np.ascontiguousarray(src_u8[cy0:cy1, cx0:cx1], dtype=np.float32) / divisor)
         else:
             pipe.load_rgb_u8(src_u8[cy0:cy1, cx0:cx1])
+        install_portrait(pipe,portrait_field,bounds=(cy0,cx0,cy1,cx1))
         pipe.primary_calibration=primary_stage(spec)
         pipe.primary_calibration.cancelled=tone_cancelled
         pipe.teeth_colour_cancelled=tone_cancelled

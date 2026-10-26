@@ -20,6 +20,7 @@ mod parametric_core;
 mod curve_api;
 mod edit_commands;
 mod final_canvas_flip_api;
+mod portrait_protection_api;
 mod history_navigation_api;
 mod history_navigation_protocol;
 #[path = "../../../core/levels/levels.rs"]
@@ -2060,7 +2061,7 @@ fn main() {
             source_relocation_api::source_relocation_request, source_relocation_api::source_relocation_status,
             project_recovery_api::project_recovery_request, project_recovery_api::project_recovery_status,
             project_package_api::project_package_request, project_package_api::project_package_status,
-            project, task, edit_commands::exposure, edit_commands::hsl, edit_commands::curves, edit_commands::curve_preview, curve_api::curve_parametric_drag, edit_commands::crop, final_canvas_flip_api::final_canvas_flip, final_canvas_flip_api::final_canvas_flip_status, final_canvas_flip_api::final_canvas_flip_abandon, levels_api::levels, fabric_api::fabric, fabric_sweat_api::fabric_sweat_request, fabric_sweat_api::fabric_sweat_status, limb_vein_api::limb_vein_request, limb_vein_api::limb_vein_status, hand_tone_api::hand_tone_request, hand_tone_api::hand_tone_status, hand_shape_api::hand_shape_request, hand_shape_api::hand_shape_status, lip_makeup_api::lip_makeup, brow_shape_api::brow_shape, nose_shape_api::nose_shape, eye_shape_api::eye_shape, mouth_shape_api::mouth_shape, color_scopes_api::color_scopes, preset_api::preset, preset_api::preset_result, preset_organisation_api::preset_organisation, preset_organisation_api::preset_organisation_result, white_balance_api::white_balance, white_balance_api::white_balance_result, batch_api::batch, batch_api::batch_result, face, pick,
+            project, task, edit_commands::exposure, edit_commands::hsl, edit_commands::curves, edit_commands::curve_preview, curve_api::curve_parametric_drag, edit_commands::crop, final_canvas_flip_api::final_canvas_flip, final_canvas_flip_api::final_canvas_flip_status, final_canvas_flip_api::final_canvas_flip_abandon, portrait_protection_api::portrait_protection, portrait_protection_api::portrait_protection_status, portrait_protection_api::portrait_protection_abandon, levels_api::levels, fabric_api::fabric, fabric_sweat_api::fabric_sweat_request, fabric_sweat_api::fabric_sweat_status, limb_vein_api::limb_vein_request, limb_vein_api::limb_vein_status, hand_tone_api::hand_tone_request, hand_tone_api::hand_tone_status, hand_shape_api::hand_shape_request, hand_shape_api::hand_shape_status, lip_makeup_api::lip_makeup, brow_shape_api::brow_shape, nose_shape_api::nose_shape, eye_shape_api::eye_shape, mouth_shape_api::mouth_shape, color_scopes_api::color_scopes, preset_api::preset, preset_api::preset_result, preset_organisation_api::preset_organisation, preset_organisation_api::preset_organisation_result, white_balance_api::white_balance, white_balance_api::white_balance_result, batch_api::batch, batch_api::batch_result, face, pick,
             prompted_mask_api::prompted_masks, prompted_mask_api::prompted_masks_status,
             prompted_model_api::prompted_model, prompted_model_api::prompted_model_status,
             native_dispatch::report, app_shutdown::quit

@@ -51,6 +51,19 @@ def finish(engine, boundary, error=None):
     if auto_wb_finish(engine, boundary, error): return
     from .history_navigation import finish as navigation_finish
     if navigation_finish(engine, boundary): return
+    if message.get('cmd') == 'portrait_protection_receipt': return
+    if message.get('cmd') == 'portrait_protection':
+        if not boundary['started']: return
+        outcome=engine.__dict__.get('_portrait_protection_outcome')
+        runtime=engine.__dict__.get('_project_recovery_runtime')
+        if outcome in ('no_write','rolled_back'): return
+        if outcome=='applied':
+            if runtime is not None: runtime.revision += 1
+            return
+        if runtime is not None and not runtime.tainted:
+            runtime.tainted=True
+            runtime.reason='有限祛瑕事务未确认；请重新打开已确认工程'
+        return
     from .final_canvas_flip_recovery import finish as flip_finish
     if flip_finish(engine, boundary): return
     from .portrait_crop_recovery import finish as crop_finish

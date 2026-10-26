@@ -75,6 +75,8 @@ def build_export_spec(snap: dict, eh: int, ew: int, *, for_document: bool):
                       scale=int(snap.get("scale", 1)),
                       upscale_backend=str(snap.get("upscale_backend", "lanczos3")),
                       sharpen_amount=float(snap.get("sharpen", 0.0)))
+    from .portrait_protection_runtime import configure_export as configure_portrait
+    configure_portrait(spec,snap,for_document=for_document)
     from .common_background_source import configure_export as configure_common
     _common_replay = configure_common(spec,snap,for_document=for_document)
     from .extended_tone_project import configure_export as configure_extended_tone

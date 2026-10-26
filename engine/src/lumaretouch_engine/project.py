@@ -250,6 +250,9 @@ def validate(p: object) -> None:
     try: validate_hand_tone(p,allowed=(sv in (IDENTITY_SCHEMA, SCHEMA)))
     except ValueError as error: raise ProjectError(str(error)) from error
     _validate_flip_records(p, allowed=(sv == SCHEMA))
+    from .portrait_protection_state import validate_records as validate_portrait
+    try: validate_portrait(p)
+    except (ValueError,TypeError,KeyError) as error: raise ProjectError(str(error)) from error
     _validate_fringe_records(p, allowed=(sv in (IDENTITY_SCHEMA, SCHEMA)))
     from .primary_calibration_adapters import validate_records as validate_primary
     try:validate_primary(p,allowed=sv in (PRIMARY_SCHEMA,DETAIL_SCHEMA,GRAIN_SCHEMA,COLOUR_EDITOR_SCHEMA,IDENTITY_SCHEMA,SCHEMA))
@@ -811,6 +814,9 @@ def _encode(value: object, assets: dict, dropped: list, at: str) -> object:
         if '_photo_grain' in value:
             from .photo_grain_state import check as check_grain
             check_grain(value['_photo_grain'])
+        if '_portrait_protection' in value:
+            from .portrait_protection_state import check as check_portrait
+            check_portrait(value['_portrait_protection'])
         if '_photo_detail' in value:
             from .photo_detail_state import check as check_photo_detail
             check_photo_detail(value['_photo_detail'])
@@ -961,6 +967,9 @@ def _decode(value: object, assets: dict, dropped: list, at: str,
         if '_photo_grain' in value:
             from .photo_grain_state import check as check_grain
             check_grain(value['_photo_grain'])
+        if '_portrait_protection' in value:
+            from .portrait_protection_state import check as check_portrait
+            check_portrait(value['_portrait_protection'])
         if '_photo_detail' in value:
             from .photo_detail_state import check as check_photo_detail
             check_photo_detail(value['_photo_detail'])
