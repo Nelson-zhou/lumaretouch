@@ -2,6 +2,8 @@
 import {useLayoutEffect, useState, useSyncExternalStore, type MouseEvent} from 'react';
 import {PortraitCropController} from './controller';
 import {PortraitCropImage} from './PortraitCropImage';
+import {RulePresetPanel} from './rulePresets/RulePresetPanel';
+import type {RulePresetCatalogue} from './rulePresets/controller';
 import {PORTRAIT_CROP_CONTROLS, imageKey, type AnchorName, type RuleDraft} from './model';
 import './portraitCrop.css';
 const ANCHORS: AnchorName[] = ['crown', 'chin', 'face_center'];
@@ -17,9 +19,9 @@ const RULES: {key: keyof RuleDraft; label: string; min: number; max: number; con
   {key: 'head_fraction', label: '头部高度 ÷ 画幅高度', min: 0, max: 1, control: PORTRAIT_CROP_CONTROLS.headFraction, detail: '真实头顶到下巴的垂直高度；必须大于 0。'},
   {key: 'horizontal_position', label: '人脸中心水平位置 ÷ 画幅宽度', min: 0, max: 1, control: PORTRAIT_CROP_CONTROLS.facePosition, detail: '0 为左侧，0.5 为居中，1 为右侧。'},
 ];
-export type PortraitCropPanelProps = {controller: PortraitCropController; disabled?: boolean; onClose?: () => void};
-/** Current-photo manual-assisted portrait composition; no preset or automatic-crown claim. */
-export function PortraitCropPanel({controller, disabled = false, onClose}: PortraitCropPanelProps) {
+export type PortraitCropPanelProps = {controller: PortraitCropController; catalogue: RulePresetCatalogue; disabled?: boolean; onClose?: () => void};
+/** Current-photo manual-assisted composition with rules-only preset drafts. */
+export function PortraitCropPanel({controller, catalogue, disabled = false, onClose}: PortraitCropPanelProps) {
   const state = useSyncExternalStore(controller.subscribe, controller.snapshot, controller.snapshot);
   const [target, setTarget] = useState<AnchorName>('crown'), [coordinates, setCoordinates] = useState<[string, string]>(['', '']);
   const [error, setError] = useState('');
@@ -121,7 +123,7 @@ export function PortraitCropPanel({controller, disabled = false, onClose}: Portr
         <p>应用通过现有裁剪与历史记录通道完成。来源、修复、分析或任何编辑状态变化都会使此候选失效。</p>
       </section>}
     </>}
-    <p className="portrait-crop-notice" data-control-id={PORTRAIT_CROP_CONTROLS.presets}>构图预设保存（PC-32478:18）本轮未实现。当前仅处理单张照片，不会把这次锚点复制成其他照片的自动定位。</p>
+    <RulePresetPanel catalogue={catalogue} draft={state.rules} loadDisabled={blocked} onLoad={draft => controller.loadRulePreset(draft)}/>
     {state.historicalUnknown && <p className="portrait-crop-notice">历史{state.historicalUnknown.action === 'apply' ? '裁剪应用' : '来源/候选准备或会话清理'}请求 {state.historicalUnknown.request_id} 的结果仍未知。工程已确认重新打开，但这不证明原操作成功、失败或取消；不会重发原请求。{state.historicalUnknown.action !== 'apply' && '该请求不是裁剪应用。'}</p>}
     {state.message && <p role={state.phase === 'uncertain' ? 'alert' : 'status'}>{state.message}</p>}
     {state.pending && <small>原请求：{state.pending.request_id}</small>}

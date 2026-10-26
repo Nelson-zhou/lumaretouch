@@ -58,6 +58,9 @@ mod body_slim_api;
 mod light_glow_api;
 mod upscale_restore_api;
 mod portrait_crop_api;
+#[path = "../../../core/portrait_crop_rules/lib.rs"]
+mod portrait_crop_rules_core;
+mod portrait_crop_rules_api;
 mod portrait_crop_protocol;
 mod lens_blur_api;
 mod lens_blur_protocol;
@@ -1988,6 +1991,7 @@ fn main() {
             light_glow_api::light_glow_request, light_glow_api::light_glow_status, light_glow_api::light_glow_cancel, light_glow_api::light_glow_capability,
             upscale_restore_api::upscale_restore_request, upscale_restore_api::upscale_restore_status, upscale_restore_api::upscale_restore_cancel, upscale_restore_api::upscale_restore_capability,
             portrait_crop_api::portrait_crop, portrait_crop_api::portrait_crop_status, portrait_crop_api::portrait_crop_cancel_read,
+            portrait_crop_rules_api::portrait_crop_rules,
             lens_blur_api::lens_blur_request, lens_blur_api::lens_blur_status, lens_blur_api::lens_blur_cancel, lens_blur_api::lens_blur_capability,
             expression_replacement_api::expression_replacement_request, expression_replacement_api::expression_replacement_status, expression_replacement_api::expression_replacement_cancel, expression_replacement_api::expression_replacement_capability,
             people_api::people, shoulder_shape_api::shoulder_shape, leg_shape_api::leg_shape, waist_shape_api::waist_shape, leg_length_api::leg_length, torso_length_api::torso_length, waist_length_api::waist_length, head_size_api::head_size, body_slim_api::body_slim, neck_shape_api::neck_shape, arm_shape_api::arm_shape, body_pose_model_api::body_pose_model, body_pose_model_api::body_pose_model_status, semantic_colour_api::semantic_colour, hair_colour_api::hair_colour, hair_unification_api::hair_unification, hair_unification_api::hair_unification_status,

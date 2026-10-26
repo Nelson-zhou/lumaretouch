@@ -79,6 +79,15 @@ export class PortraitCropController {
     this.emit({confirmations: {...this.value.confirmations, [name]: confirmed}, ...this.invalidate()});
   }
   setRules(rules: RuleDraft) {this.current(); this.emit({rules: clone(rules), ...this.invalidate(), message: ''});}
+  /** A catalogue entry is intent only; no capture/anchors/review can be loaded. */
+  loadRulePreset(draft: RuleDraft) {
+    this.idle();
+    const rules = checkedRules(draft);
+    this.emit({rules: {aspect_ratio: String(rules.aspect_ratio), headroom_fraction: String(rules.headroom_fraction),
+      head_fraction: String(rules.head_fraction), horizontal_position: String(rules.horizontal_position)},
+      confirmations: clearConfirmations(), ...this.invalidate(),
+      message: '仅载入四项构图规则草稿，旧候选及复核已失效。请复核本张照片的真实锚点，重新生成并审核候选；尚未应用。'});
+  }
   sourceImageReady(key: string, ready: boolean) {
     const current = this.value.current;
     if (!current || key !== `${current.session_id}:${imageKey(current.source.image)}`) return;

@@ -3,6 +3,8 @@ import {useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore} from '
 import {PortraitCropController} from './controller';
 import {PortraitCropPanel} from './PortraitCropPanel';
 import {createPortraitCropTransport} from './transport';
+import {RulePresetCatalogue} from './rulePresets/controller';
+import {createRulePresetTransport} from './rulePresets/transport';
 export type PortraitCropWorkspaceHostProps = {
   /** Exact source/document/epoch/revision/edit/repair/analysis identity; not a file path. */
   contextKey: string | null;
@@ -25,6 +27,7 @@ export function PortraitCropWorkspaceHost({contextKey, enabled, onChanged, onBus
     canUse: () => live.current.enabled && live.current.open,
     contextKey: () => live.current.contextKey,
   }), () => live.current.onChanged()), []);
+  const catalogue = useMemo(() => new RulePresetCatalogue(createRulePresetTransport()), []);
   const state = useSyncExternalStore(controller.subscribe, controller.snapshot, controller.snapshot);
   useLayoutEffect(() => {controller.setContext(contextKey); controller.setEnabled(enabled);}, [controller, contextKey, enabled]);
   useLayoutEffect(() => {live.current.onBusy?.(open || state.pending !== null);}, [open, state.pending]);
@@ -69,7 +72,7 @@ export function PortraitCropWorkspaceHost({contextKey, enabled, onChanged, onBus
         <button type="button" disabled={reopening} onClick={() => void reopenProject()}>{reopening ? '正在等待工程重开确认…' : '通过现有工程流程重新打开'}</button>
         {reopenError && <p role="alert">{reopenError}</p>}
       </section>}
-      <PortraitCropPanel controller={controller} disabled={!enabled} onClose={close}/>
+      <PortraitCropPanel controller={controller} catalogue={catalogue} disabled={!enabled} onClose={close}/>
     </div>}
   </>;
 }

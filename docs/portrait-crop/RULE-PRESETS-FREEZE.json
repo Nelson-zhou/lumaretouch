@@ -1,0 +1,130 @@
+{
+  "schema_version": 1,
+  "date": "2026-10-26",
+  "baseline_local_commit": "35ef3ec2c8be305ad79ca0c8fc069cf54ff37d70",
+  "parent_supplied_exact_remote_baseline": "fda13661154113e4d7a18b77208c84519a8483de",
+  "status": "SOURCE_CONNECTED_RULE_PRESET_CATALOGUE_V1_ALL_EXECUTION_UNRUN",
+  "requirements": [
+    "control:PC-32478:18"
+  ],
+  "scope": "Separate local catalogue of names plus four existing portrait intent scalars; list/create/rename/explicit-update/delete and draft-only load; no source identities, anchors, rectangle, candidate, review, engine dispatch, photo apply or ordinary crop preset conversion.",
+  "manifest_policy": "Exact 20 payload files plus this self-excluded manifest. No git commit/push by source writer. Old portrait-crop freeze remains historical.",
+  "source_checks": {
+    "whitespace": "git diff --check and explicit EOF/trailing-whitespace scan for all 20 payload files passed.",
+    "json": "This manifest generated and parsed as JSON; no application JSON changed.",
+    "python_ast": "Not applicable: no Python product source changed.",
+    "typescript_rust_parsers": "Unavailable/not run; none installed.",
+    "execution": "No tests, build, compile, typecheck, inference, product imports, app/browser execution, installs, downloads or new Codex task.",
+    "independent_review": "Parent static review found first-initialization directory replacement/reset race. Repaired with anchored no-follow mkdirat/openat, ancestor permissions/ownership checks and exclusive canonical initialization; independent re-review pending. Authored fixtures remain UNRUN."
+  },
+  "limitations": [
+    "No runtime, numerical, photographic, performance, storage-crash or UI acceptance is claimed.",
+    "Linux-only app-local persistence; non-Linux fails explicitly unavailable.",
+    "Atomic old/new canonical recovery; unknown schema/corrupt/missing existing catalogue never defaults or migrates. Interrupted first empty initialization intentionally fails closed and needs manual inspection.",
+    "Lost/invalid write receipt is unknown; unchanged snapshot cannot unlock potentially delayed write. Pending native I/O is not falsely timed out; stuck operation may require external diagnosis/restart.",
+    "Catalogue validates intent only. Existing planner remains final authority; every photo needs its own measured anchors and new reviewed candidate.",
+    "Batch/cohort transfer, automatic crown detection, arbitrary-rotation composition, ordinary flips and ordinary crop-preset conversion excluded."
+  ],
+  "files": [
+    {
+      "path": "core/portrait_crop_rules/README.md",
+      "sha256": "09dfdbebc6f830e86f95bb61bc3c5e769c3a72a0d2bdbc2cc5182308542c0809",
+      "bytes": 1850
+    },
+    {
+      "path": "core/portrait_crop_rules/lib.rs",
+      "sha256": "50b325987d8bf539db37371163ff91636b4c16a47c9ef55a5daab8b539483f8e",
+      "bytes": 8322
+    },
+    {
+      "path": "core/portrait_crop_rules/tests_unrun.rs",
+      "sha256": "ff28d62327b5de514a621fb463c0e344970b576efac17f6296261d6984ce261c",
+      "bytes": 5014
+    },
+    {
+      "path": "docs/portrait-crop/INTEGRATION.md",
+      "sha256": "f6c0de084c90aa1c201cb5c3f3a10ac4299790c2e970fd80a66da638c0c5691d",
+      "bytes": 4488
+    },
+    {
+      "path": "docs/portrait-crop/RULE-PRESETS.md",
+      "sha256": "0f35bbee684e90d3f9348e2fefee768ade6fce1ee6495c0620d483401b4e7729",
+      "bytes": 11502
+    },
+    {
+      "path": "docs/portrait-crop/UI.md",
+      "sha256": "3f8e9a7204a17032c4f3ecb0f42f94b84913312dd4c7aa908c24963730bd0234",
+      "bytes": 12429
+    },
+    {
+      "path": "ui/src-tauri/src/main.rs",
+      "sha256": "7bf75a49bc9e0f1351982facea8e2d5779ef70e0973ab3644026b7768c7cd2bc",
+      "bytes": 102591
+    },
+    {
+      "path": "ui/src-tauri/src/portrait_crop_rules_api.rs",
+      "sha256": "a877dba30563226b9949df11183c0c4c653b9279d5f40c2602d176e86f1bc939",
+      "bytes": 1757
+    },
+    {
+      "path": "ui/src-tauri/src/portrait_crop_rules_store.rs",
+      "sha256": "fd0be06725873a8b873b182caf34b76cfaadae24a3876964e9b2e3ac14a0fa8b",
+      "bytes": 12174
+    },
+    {
+      "path": "ui/src-tauri/src/portrait_crop_rules_store_unrun.rs",
+      "sha256": "1fc6f703dfa52e6e8bae8e405b32473927f84506def4f22b1e089807a4137d21",
+      "bytes": 5479
+    },
+    {
+      "path": "ui/src/portraitCrop/PortraitCropPanel.tsx",
+      "sha256": "bffd90b6575afb4acbd0c6d7e20b22b9f1bdd990ed6c485f3f380d833070bf61",
+      "bytes": 15263
+    },
+    {
+      "path": "ui/src/portraitCrop/PortraitCropWorkspaceHost.tsx",
+      "sha256": "060b2cda46cca61c948267bbd0814e1492711a2e1102e39bfbf99707cd101695",
+      "bytes": 5267
+    },
+    {
+      "path": "ui/src/portraitCrop/controller.ts",
+      "sha256": "d29461ffa6c0774f6f8bfff9f02e492f13c5901c4c844ea400e6c3b5eb996e82",
+      "bytes": 19439
+    },
+    {
+      "path": "ui/src/portraitCrop/portraitCrop.css",
+      "sha256": "e7290181852353b66ce90f7b3c9576251ed897bec587d22ea69998eb922f1631",
+      "bytes": 3063
+    },
+    {
+      "path": "ui/src/portraitCrop/rulePresets/RulePresetPanel.tsx",
+      "sha256": "f78878b6f1e4815705354c04cf314913ee1b1b9b4da27d95162ec767c2a95977",
+      "bytes": 5757
+    },
+    {
+      "path": "ui/src/portraitCrop/rulePresets/controller.ts",
+      "sha256": "598cdb8bbd5a6e66826e50e05a4657f02cd69929cce6694cefd33f01927d0873",
+      "bytes": 5613
+    },
+    {
+      "path": "ui/src/portraitCrop/rulePresets/integration.unrun.test.ts",
+      "sha256": "287414bef9b18d5d7ab5fae929cc3ca62c14179ce91d94b52f4abe347de6febf",
+      "bytes": 1890
+    },
+    {
+      "path": "ui/src/portraitCrop/rulePresets/model.ts",
+      "sha256": "6cd0f8a115bb762486b7018d1b406d4389f63dc5176d5c9b097005d880063103",
+      "bytes": 4979
+    },
+    {
+      "path": "ui/src/portraitCrop/rulePresets/model.unrun.test.ts",
+      "sha256": "e6f3c1563279b538807a053f1b0dd61c79d026fc5ee88276fecf2447e4b6bb97",
+      "bytes": 3621
+    },
+    {
+      "path": "ui/src/portraitCrop/rulePresets/transport.ts",
+      "sha256": "149dc3fc6bdbdf2b1f31d5cfb370afe3a96cf7252646d477fbbd41d86cab5dec",
+      "bytes": 359
+    }
+  ]
+}

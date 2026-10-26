@@ -34,6 +34,9 @@ The original Rust scalar planner produces a bounded rectangle, not new pixels.
   before/after PNG proofs, manual ACK, bounded polling and query-only recovery.
   Read cancellation means a request until the original computation unwinds.
 
+Rule presets are a separate local-only catalogue and draft load; they never
+store source identities, measured anchors, rectangles or review state.
+
 Registration uses the existing command catalogue, reader control lane, native
 engine epoch, dedicated Tauri API and an app-lifetime workspace component.
 The old crop/rotate modal remains available and unchanged. The new module does
@@ -52,8 +55,9 @@ This is built-in replaceable module registration, not runtime plugin loading.
   independent slider. Requested and integer-rounded achieved values are distinct.
 - No padding, content generation or silent rectangle clamp. Infeasible requests
   remain rejected with their original intent intact.
-- Crop-rule preset saving (`:18`), batch/cohort transfer and arbitrary-rotation
-  composition are unfinished. This slice does not claim them as supported.
+- Crop-rule preset saving (`:18`) now has a separate source-connected rules-only
+  catalogue; see RULE-PRESETS.md. All execution/acceptance remains UNRUN.
+  Batch/cohort transfer and arbitrary-rotation composition remain unfinished.
 - Existing opaque SDR full-candidate source/budget limits remain. RGB8 review
   images do not claim RGB8 master precision, HDR/alpha support or 24MP acceptance.
 - Verified reopen recovery is scoped to the same live native engine epoch. An

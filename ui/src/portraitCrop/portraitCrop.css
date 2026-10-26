@@ -31,3 +31,6 @@
 @media (max-width: 650px) { .portrait-crop-overlay { inset: 5px; } }
 
 .portrait-crop-reopen { margin: 12px 18px 0; padding: 12px; border: 1px solid #bda25e; border-radius: 8px; }
+
+.portrait-crop-rule-presets { border-top: 1px solid #53606d; margin-top: 20px; padding-top: 12px; }
+.portrait-crop-rule-presets input[type="text"] { width: 100%; box-sizing: border-box; padding: 7px 8px; }

@@ -9,9 +9,10 @@ photographic quality, persistence and runtime acceptance are **UNRUN**.
 The isolated module is `ui/src/portraitCrop/`. It covers the current-photo
 workspace `control:PC-32478:9`, headroom `control:PC-32478:15`, head proportion
 `control:PC-32478:16`, and horizontal face position `control:PC-32478:17`.
-Preset saving `control:PC-32478:18` is explicitly unfinished. There is no batch
-recalculation, hidden automatic crown detection, official ID-photo compliance
-claim, fabricated preview, or automatic apply.
+Preset saving `control:PC-32478:18` now has a separate local rules-only catalogue
+and explicit draft-only load; see RULE-PRESETS.md for its source-only/UNRUN scope.
+There is no batch recalculation, hidden automatic crown detection, official
+ID-photo compliance claim, fabricated preview, or automatic apply.
 
 The official guide, <https://www.pixcakeai.com/guide/32478>, does not disclose
 numeric defaults/ranges, denominator conventions or independent face-position
