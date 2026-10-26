@@ -4,6 +4,9 @@ use serde_json::{json, Value};
 pub(crate) const MAX_RECORDS: usize = 32;
 const MAX_RESULT_BYTES: usize = 8 * 1024 * 1024;
 const MAX_BYTES: usize = 16 * 1024 * 1024;
+// Three bounded PNGs in the existing people ledger; not another review store.
+const HAIR_SMOOTHING_RESULT_BYTES: usize = 18 * 1024 * 1024;
+const HAIR_SMOOTHING_LEDGER_BYTES: usize = 32 * 1024 * 1024;
 pub(crate) trait ReceiptKind {
     const NAME: &'static str;
     const ACTIONS: &'static [&'static str];
@@ -211,6 +214,12 @@ impl ReviewBinding {
             if bytes > 256 * 1024 { return Err("reference-choice identity exceeds people receipt budget".into()); }
             return Ok(Some(Self { fields, bytes,
                 read_only: crate::people_api::skin_reference_choice::read_only(value), strict_failure_identity: true }));
+        }
+        if let Some(fields) = crate::people_api::hair_smoothing::binding(value)? {
+            let bytes = fields.to_string().len();
+            if bytes > 256 * 1024 { return Err("hair smoothing identity exceeds people receipt budget".into()); }
+            return Ok(Some(Self { fields, bytes,
+                read_only: crate::people_api::hair_smoothing::read_only(value), strict_failure_identity: true }));
         }
         if let Some(fields) = crate::people_api::neck_wrinkle::binding(value)? {
             let bytes = fields.to_string().len();
@@ -425,8 +434,15 @@ impl ReviewBinding {
         }
     }
 }
-struct Receipt { id: String, action: String, document: Option<String>, review: Option<ReviewBinding>, result: Option<Value>, bytes: usize, native_unknown: bool, late_terminal_workspace: Option<String>, body_review_digest: Option<String>, choice_source_catalog: Option<Value> }
+struct Receipt { id: String, action: String, document: Option<String>, review: Option<ReviewBinding>, result: Option<Value>, bytes: usize, native_unknown: bool, late_terminal_workspace: Option<String>, body_review_digest: Option<String>, choice_source_catalog: Option<Value>, smoothing_admission_pending: bool, smoothing_idle_baseline: Option<u64>, smoothing_abandoned: bool }
 impl Receipt {
+    fn hair_smoothing_read(&self) -> bool {
+        self.review.as_ref().is_some_and(|review| review.read_only
+            && review.fields.get(crate::people_api::hair_smoothing::MARKER).is_some())
+    }
+    fn result_limit(&self) -> usize {
+        if self.hair_smoothing_read() { HAIR_SMOOTHING_RESULT_BYTES } else { MAX_RESULT_BYTES }
+    }
     fn evictable(&self) -> bool {
         self.result.as_ref().is_some_and(|result| self.review.is_none() || result["outcome_unknown"] != true
             || self.review.as_ref().is_some_and(|r|r.read_only&&r.fields.get("fabric_sweat_request").is_some())
@@ -435,7 +451,7 @@ impl Receipt {
             || self.review.as_ref().is_some_and(|r|r.read_only&&r.fields.get("hand_tone_request").is_some())
             // Only explicitly classified head/collarbone preflight or paged
             // image reads may expire; an unknown commit remains guarded.
-            || (matches!(self.action.as_str(), "skin_reference_choice" | "skin_reference_body_catalog" | "skin_reference_body_preview" | "skin_reference_body_image" | "skin_reference_match_catalog" | "skin_reference_match_preview" | "skin_reference_match_image" | "face_decoration_support_alias_preview" | "face_decoration_support_alias_image" | "face_decoration_alias_preview" | "face_decoration_alias_image" | "face_decoration_cohort_visual" | "preflight" | "face_decoration_visual" | "collarbone_visual" | "eye_bag_visual" | "eye_bag_cohort_visual" | "face_style_visual" | "portrait_cohort_visual" | "face_style_catalog" | "face_style_preview" | "face_style_image" | "eye_bag_source_image" | "eye_bag_reference" | "eye_bag_preview" | "eye_bag_image" | "face_decoration_reference" | "facial_sculpt_reference" | "eye_makeup_enhance_reference") && self.review.as_ref().is_some_and(|review| review.read_only)))
+            || (matches!(self.action.as_str(), "hair_smoothing_reference" | "hair_smoothing_preview" | "hair_smoothing_crop" | "skin_reference_choice" | "skin_reference_body_catalog" | "skin_reference_body_preview" | "skin_reference_body_image" | "skin_reference_match_catalog" | "skin_reference_match_preview" | "skin_reference_match_image" | "face_decoration_support_alias_preview" | "face_decoration_support_alias_image" | "face_decoration_alias_preview" | "face_decoration_alias_image" | "face_decoration_cohort_visual" | "preflight" | "face_decoration_visual" | "collarbone_visual" | "eye_bag_visual" | "eye_bag_cohort_visual" | "face_style_visual" | "portrait_cohort_visual" | "face_style_catalog" | "face_style_preview" | "face_style_image" | "eye_bag_source_image" | "eye_bag_reference" | "eye_bag_preview" | "eye_bag_image" | "face_decoration_reference" | "facial_sculpt_reference" | "eye_makeup_enhance_reference") && self.review.as_ref().is_some_and(|review| review.read_only)))
     }
 }
 pub(crate) struct ReceiptHost<K: ReceiptKind> {
@@ -473,6 +489,18 @@ impl<K: ReceiptKind> ReceiptHost<K> {
                     && crate::white_balance_api::mutation(&review.fields["original_request"])));
         if owned {self.failed(id,error);}
     }
+    pub fn bound_hair_smoothing(&self, epoch:[u8;16], value:&Value) -> bool {
+        if K::NAME != "people" || epoch == [0;16] || epoch != self.epoch { return false; }
+        value["request_id"].as_str().is_some_and(|id| self.records.iter().any(|record|
+            record.id == id && value["action"].as_str() == Some(record.action.as_str())
+                && record.review.as_ref().is_some_and(|review|
+                    review.fields.get(crate::people_api::hair_smoothing::MARKER).is_some() && review.matches(value))))
+    }
+    pub fn failed_bound_hair_smoothing(&mut self, epoch:[u8;16], value:&Value, reason:&str) {
+        if self.bound_hair_smoothing(epoch,value) {
+            if let Some(id)=value["request_id"].as_str() { self.failed(id,reason); }
+        }
+    }
     pub fn begin(&mut self, epoch: [u8; 16], id: &str, action: &str) -> Result<(), String> {
         self.begin_bound(epoch, id, action, None)
     }
@@ -501,6 +529,8 @@ impl<K: ReceiptKind> ReceiptHost<K> {
         record.bytes = review.as_ref().map_or(0, |binding| binding.bytes) + late_terminal_workspace.as_ref().map_or(0, |workspace| workspace.len())
             + body_review_digest.as_ref().map_or(0, String::len)
             + choice_source_catalog.as_ref().map_or(0, |value| value.to_string().len());
+        record.smoothing_admission_pending = review.as_ref().is_some_and(|binding|
+            binding.fields.get(crate::people_api::hair_smoothing::MARKER).is_some());
         record.review = review;
         record.late_terminal_workspace = late_terminal_workspace;
         record.body_review_digest = body_review_digest;
@@ -537,7 +567,8 @@ impl<K: ReceiptKind> ReceiptHost<K> {
         Ok(captured)
     }
     fn trim_bytes(&mut self) {
-        while self.records.iter().map(|record| record.bytes).sum::<usize>() > MAX_BYTES {
+        let limit = if self.records.iter().any(Receipt::hair_smoothing_read) { HAIR_SMOOTHING_LEDGER_BYTES } else { MAX_BYTES };
+        while self.records.iter().map(|record| record.bytes).sum::<usize>() > limit {
             if let Some(index) = self.records.iter().position(Receipt::evictable) { self.records.remove(index); } else { break; }
         }
     }
@@ -552,7 +583,7 @@ impl<K: ReceiptKind> ReceiptHost<K> {
             let index = self.records.iter().position(Receipt::evictable).ok_or_else(|| format!("too many pending or uncertain {} requests", K::NAME))?;
             self.records.remove(index);
         }
-        self.records.push_back(Receipt { id: id.into(), action: action.into(), document: document.map(str::to_owned), review: None, result: None, bytes: 0, native_unknown: false, late_terminal_workspace: None, body_review_digest: None, choice_source_catalog: None });
+        self.records.push_back(Receipt { id: id.into(), action: action.into(), document: document.map(str::to_owned), review: None, result: None, bytes: 0, native_unknown: false, late_terminal_workspace: None, body_review_digest: None, choice_source_catalog: None, smoothing_admission_pending: false, smoothing_idle_baseline: None, smoothing_abandoned: false });
         Ok(())
     }
     fn unknown(record: &Receipt, error: &str) -> Value {
@@ -565,7 +596,20 @@ impl<K: ReceiptKind> ReceiptHost<K> {
         if epoch != self.epoch || epoch == [0; 16] { return; }
         let Some(id) = value["request_id"].as_str() else { return };
         let Some(record) = self.records.iter_mut().find(|r| r.id == id) else { return };
-        if value["action"].as_str() != Some(record.action.as_str()) { return; }
+        if value["action"].as_str() != Some(record.action.as_str()) || record.smoothing_abandoned { return; }
+        // An unrelated same-ID family or unbound malformed echo cannot poison
+        // this operation's original pending request. Current epoch was checked first.
+        if K::NAME == "people" {
+            let smoothing_owner = record.review.as_ref().is_some_and(|review|
+                review.fields.get(crate::people_api::hair_smoothing::MARKER).is_some());
+            let smoothing_event = value.get(crate::people_api::hair_smoothing::MARKER).is_some()
+                || crate::people_api::hair_smoothing::action(value);
+            // Symmetric ownership: an old smoothing zero-patch cannot settle a
+            // newer ordinary patch with the same ID/action/document, or vice versa.
+            if (smoothing_owner || smoothing_event) && (!smoothing_owner
+                || !record.review.as_ref().is_some_and(|review| review.matches(value))) { return; }
+        }
+        let result_limit = record.result_limit();
         if let Some(previous) = &record.result {
             // A read can outlive a transport failure. Reconcile only this exact
             // retained eye-bag read after its actual terminal arrives. Never
@@ -575,7 +619,14 @@ impl<K: ReceiptKind> ReceiptHost<K> {
                 && record.review.as_ref().is_some_and(|review| review.read_only
                     && review.fields.get("eye_bag_request").is_some() && review.matches(value))
                 && value["outcome_unknown"] == false && K::valid(value, record.document.as_deref())
-                && value.to_string().len() <= MAX_RESULT_BYTES;
+                && value.to_string().len() <= result_limit;
+            // Query-only reconciliation of the same original smoothing read.
+            // Neither a write nor a known terminal gains replay authority.
+            let smoothing_read_reconciliation = K::NAME == "people" && previous["outcome_unknown"] == true
+                && record.hair_smoothing_read()
+                && record.review.as_ref().is_some_and(|review| review.matches(value))
+                && value["event"] == "people_result" && value["outcome_unknown"] == false
+                && K::valid(value, record.document.as_deref()) && value.to_string().len() <= result_limit;
             // Only this family's exact captured reads may settle after a lost
             // read response. Confirm and clear never acquire replay authority.
             let skin_read_reconciliation = K::NAME == "people" && previous["outcome_unknown"] == true
@@ -583,14 +634,14 @@ impl<K: ReceiptKind> ReceiptHost<K> {
                 && record.review.as_ref().is_some_and(|review| review.read_only
                     && review.fields.get(crate::people_api::skin_reference_match::MARKER).is_some() && review.matches(value))
                 && value["event"] == "people_result" && value["outcome_unknown"] == false
-                && K::valid(value, record.document.as_deref()) && value.to_string().len() <= MAX_RESULT_BYTES;
+                && K::valid(value, record.document.as_deref()) && value.to_string().len() <= result_limit;
             // Body reads share transport reconciliation, never face/body write authority.
             let body_read_reconciliation = K::NAME == "people" && previous["outcome_unknown"] == true
                 && matches!(record.action.as_str(), "skin_reference_body_catalog" | "skin_reference_body_preview" | "skin_reference_body_image")
                 && record.review.as_ref().is_some_and(|review| review.read_only
                     && review.fields.get(crate::people_api::skin_reference_body::MARKER).is_some() && review.matches(value))
                 && value["event"] == "people_result" && value["outcome_unknown"] == false
-                && K::valid(value, record.document.as_deref()) && value.to_string().len() <= MAX_RESULT_BYTES;
+                && K::valid(value, record.document.as_deref()) && value.to_string().len() <= result_limit;
             let choice_read_reconciliation = K::NAME == "people" && previous["outcome_unknown"] == true
                 && record.action == crate::people_api::skin_reference_choice::ACTION
                 && record.review.as_ref().is_some_and(|review| review.read_only
@@ -598,7 +649,7 @@ impl<K: ReceiptKind> ReceiptHost<K> {
                 && value["event"] == "people_result" && value["outcome_unknown"] == false
                 && record.choice_source_catalog.as_ref().is_some_and(|binding|
                     crate::people_api::skin_reference_choice::matches_source_catalog(binding, value))
-                && K::valid(value, record.document.as_deref()) && value.to_string().len() <= MAX_RESULT_BYTES;
+                && K::valid(value, record.document.as_deref()) && value.to_string().len() <= result_limit;
             // The dedicated support protocol may reconcile a locally synthesized
             // transport unknown with the original exact engine terminal.
             // An engine-issued unknown or any known terminal stays immutable.
@@ -606,7 +657,7 @@ impl<K: ReceiptKind> ReceiptHost<K> {
                 && value["event"] == "people_result"
                 && matches!(record.action.as_str(), "face_decoration_support_alias_preview" | "face_decoration_support_alias_image" | "face_decoration_support_alias_confirm")
                 && record.review.as_ref().is_some_and(|review| review.fields.get("face_decoration_support_alias_request").is_some() && review.matches(value))
-                && K::valid(value, record.document.as_deref()) && value.to_string().len() <= MAX_RESULT_BYTES;
+                && K::valid(value, record.document.as_deref()) && value.to_string().len() <= result_limit;
             // The support-bank history route uses its existing batch protocol,
             // but only a native-observed exact workspace + marker may reconcile.
             // Generic/scalar history, changed workspaces and rejected summaries
@@ -617,7 +668,7 @@ impl<K: ReceiptKind> ReceiptHost<K> {
                     review.fields.get(crate::people_api::decoration_support_alias::MARKER).is_some() && review.matches(value)
                     && record.late_terminal_workspace.as_ref().is_some_and(|workspace|
                         crate::project_recovery_fence::support_history_workspace(epoch, &review.fields).as_ref() == Some(workspace)))
-                && K::valid(value, record.document.as_deref()) && value.to_string().len() <= MAX_RESULT_BYTES;
+                && K::valid(value, record.document.as_deref()) && value.to_string().len() <= result_limit;
             // Only a transport-generated unknown may reconcile for decoration
             // mixed-preset apply/history. Capture and compare workspace without
             // changing ordinary preset/scalar/eye-bag terminal semantics.
@@ -629,7 +680,7 @@ impl<K: ReceiptKind> ReceiptHost<K> {
                         || (K::NAME == "batch" && review.fields.get(crate::preset_api::face_decoration::ALIAS_MARKER).is_some()))
                     && record.late_terminal_workspace.as_ref().is_some_and(|workspace|
                         crate::project_recovery_fence::decoration_preset_workspace(epoch, &review.fields).as_ref() == Some(workspace)))
-                && K::valid(value, record.document.as_deref()) && value.to_string().len() <= MAX_RESULT_BYTES;
+                && K::valid(value, record.document.as_deref()) && value.to_string().len() <= result_limit;
             // An admitted group export can finish after an uncertain start
             // reply. Only its engine-owned task read may reconcile that exact
             // original start; no new dispatch, generic retry or other mutation.
@@ -639,7 +690,7 @@ impl<K: ReceiptKind> ReceiptHost<K> {
                 && value["export_task_id"].as_str().is_some_and(|id|!id.is_empty() && id.len()<=128)
                 && (record.native_unknown || previous["export_task_id"].as_str().is_some_and(|id|value["export_task_id"]==id))
                 && record.review.as_ref().is_some_and(|review|review.fields["delivery"]==true && review.matches(value))
-                && K::valid(value,record.document.as_deref()) && value.to_string().len()<=MAX_RESULT_BYTES;
+                && K::valid(value,record.document.as_deref()) && value.to_string().len()<=result_limit;
             // Hand-shape only: exact current-epoch transport unknown may settle
             // from its original engine event while its mutation fence is intact.
             // Never reopen an engine-issued unknown or a known terminal.
@@ -647,10 +698,10 @@ impl<K: ReceiptKind> ReceiptHost<K> {
                 && previous["outcome_unknown"]==true
                 && record.review.as_ref().is_some_and(|review|review.matches(value)
                     && crate::hand_shape_api::late_bound_event(epoch,&review.fields["hand_shape_request"],value))
-                && K::valid(value,record.document.as_deref()) && value.to_string().len()<=MAX_RESULT_BYTES;
+                && K::valid(value,record.document.as_deref()) && value.to_string().len()<=result_limit;
             let support_reconciliation = (bound_support_event || bound_support_history_event || bound_decoration_preset_event || bound_hand_event) && value["outcome_unknown"] == false;
             let support_engine_unknown = (bound_support_event || bound_support_history_event || bound_decoration_preset_event || bound_hand_event) && value["outcome_unknown"] == true;
-            if !read_reconciliation && !skin_read_reconciliation && !body_read_reconciliation && !choice_read_reconciliation && !support_reconciliation && !support_engine_unknown && !group_export_reconciliation { return; }
+            if !read_reconciliation && !smoothing_read_reconciliation && !skin_read_reconciliation && !body_read_reconciliation && !choice_read_reconciliation && !support_reconciliation && !support_engine_unknown && !group_export_reconciliation { return; }
             // An exact engine unknown replaces the transport diagnostic, not
             // its authority: it closes late-terminal reconciliation and stays fenced.
             if support_engine_unknown { record.native_unknown = false; }
@@ -661,7 +712,7 @@ impl<K: ReceiptKind> ReceiptHost<K> {
                 !crate::people_api::skin_reference_choice::matches_source_catalog(binding, value))
             || (value["success"] == true && record.body_review_digest.as_ref().is_some_and(|expected|
                 crate::people_api::skin_reference_body::frozen_digest(&value["payload"]["review"]) != *expected))
-            || value.to_string().len() > MAX_RESULT_BYTES;
+            || value.to_string().len() > result_limit;
         let mut result = if invalid {
             Self::unknown(record, &format!("invalid or oversized {} receipt; inspect actual state", K::NAME))
         } else { value.clone() };
@@ -740,6 +791,32 @@ impl<K: ReceiptKind> ReceiptHost<K> {
     pub fn read_review_binding(&self, id: &str) -> Option<Value> {
         self.records.iter().find(|r| r.id == id).and_then(|r| r.review.as_ref())
             .filter(|review| review.read_only).map(|review| review.fields.clone())
+    }
+    pub fn hair_smoothing_admission_finished(&mut self, id: &str) {
+        if let Some(record) = self.records.iter_mut().find(|r| r.id == id) {
+            record.smoothing_admission_pending = false;
+        }
+    }
+    /// Status owns the ordering proof: caller samples FIFO queue idle BEFORE
+    /// sampling the verified-open serial, then supplies the current live epoch.
+    /// An earlier buffered open only becomes this baseline, never an escape.
+    pub fn hair_smoothing_recovery(&mut self, id: &str, owner_epoch: [u8;16], current_epoch: [u8;16], opened: u64, queue: &Value) -> Option<Value> {
+        if K::NAME != "people" || owner_epoch == [0;16] || current_epoch == [0;16]
+            || opened == 0 || opened > 9_007_199_254_740_991 { return None; }
+        let record = self.records.iter_mut().find(|r| r.id == id)?;
+        let binding = record.review.as_ref()?.fields.get(crate::people_api::hair_smoothing::MARKER)?.clone();
+        let idle = queue["pending"].as_u64() == Some(0) && queue["in_flight"] == false && queue["closed"] == false;
+        let unresolved = record.result.as_ref().map_or(true,|r| r["outcome_unknown"] == true);
+        if !unresolved || record.smoothing_admission_pending || !idle { return None; }
+        if owner_epoch == current_epoch && record.smoothing_idle_baseline.is_none() {
+            record.smoothing_idle_baseline = Some(opened);
+        }
+        let replaced = owner_epoch != current_epoch || record.smoothing_idle_baseline.is_some_and(|baseline| opened > baseline);
+        if !replaced { return None; }
+        record.smoothing_abandoned = true; // Original result remains unchanged/unknown.
+        Some(json!({"authority":"native-verified-replacement","previous_outcome":"unknown",
+            "request_id":id,"hair_smoothing_request":binding,"owner_engine_epoch":crate::frame_identity::hex(owner_epoch),
+            "replacement_engine_epoch":crate::frame_identity::hex(current_epoch),"replacement_serial":opened}))
     }
     pub fn status(&self, id: &str) -> Value {
         match self.records.iter().find(|r| r.id == id) {

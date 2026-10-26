@@ -54,6 +54,8 @@ def capture(engine, snapshot, precompute, binding, *, source_path):
     needed = any(face['asset_sha256'] == asset and face['enabled'] and S.active(R.materialize(
         R.resolve(state, face['face_instance_id'], {S.OPERATION: {'/style': S.neutral()['style'], '/strength': 0., '/gloss': 0.}}),
         S.OPERATION, S.neutral(), S.check)) for face in state['faces'].values())
+    from .hair_smoothing_inputs import needed as smoothing_needed
+    needed = needed or smoothing_needed(state, asset)
     snapshot[KEY] = A.check_store(store(engine))
     snapshot['hair_colour_evidence'] = SAVED.current(engine, binding, precompute) if needed else None
     snapshot['hair_colour_source_path'] = source_path
@@ -94,6 +96,8 @@ def preview_kwargs(engine, candidate=None):
     binding = engine._people_source(); asset = binding['sha256']
     needed = any(face['asset_sha256'] == asset and face['enabled'] and S.active(R.materialize(
         R.resolve(graph, face['face_instance_id'], PA.defaults()), S.OPERATION, S.neutral(), S.check)) for face in graph['faces'].values())
+    from .hair_smoothing_inputs import needed as smoothing_needed
+    needed = needed or smoothing_needed(graph, asset)
     return {'hair_assets': A.check_store(store(engine)),
             'hair_evidence': SAVED.current(engine, binding) if needed else None,
             'hair_source_path': engine._doc_path}

@@ -27,6 +27,7 @@ def digest(state, asset):
     defaults.pop('lnx.facial_sculpt.v1',None)
     defaults.pop('lnx.eye_makeup_enhance.v1',None)
     defaults.pop('lnx.hair_unification.v1',None)
+    defaults.pop('lnx.hair_smoothing.v1',None)
     defaults.pop('lnx.hair_volume.v1',None)
     defaults.pop('lnx.skin_reference_match.v1',None)
     defaults.pop('lnx.skin_reference_body_match.v1',None)

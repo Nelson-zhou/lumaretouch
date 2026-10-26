@@ -56,6 +56,9 @@ class PeopleHostMixin:
         self._body_skin_evenness_reference=None;self._body_skin_evenness_preview=None
         self._collarbone_reference=None;self._collarbone_preview=None
         self._neck_wrinkle_reference=None;self._neck_wrinkle_preview=None
+        self._hair_smoothing_reference=None;self._hair_smoothing_preview=None
+        from .hair_smoothing_host import discard_publication as discard_smoothing
+        discard_smoothing(self)
         from .neck_wrinkle_host import discard_publication
         discard_publication(self)
         self._body_face_match_reference=None;self._body_face_match_preview=None
@@ -178,6 +181,8 @@ class PeopleHostMixin:
             result['skin_finish_body']=skin_body_report(self,state,source,self._people_cursors.get(asset),family='skin_finish')
             from .neck_wrinkle_host import report as neck_report
             result['neck_wrinkle']=neck_report(self,state,source,self._people_cursors.get(asset))
+            from .hair_smoothing_host import report as smoothing_report
+            result['hair_smoothing']=smoothing_report(self,state,source,self._people_cursors.get(asset))
             result['collarbone']=skin_body_report(self,state,source,self._people_cursors.get(asset),family='collarbone',operation_id='lnx.collarbone.v1')
             result['body_skin_evenness']=skin_body_report(self,state,source,self._people_cursors.get(asset),family='body_skin_evenness',operation_id='lnx.body_skin_evenness.v1')
             result['body_face_match']=skin_body_report(self,state,source,self._people_cursors.get(asset),family='body_face_match',operation_id='lnx.body_face_match.v1')
@@ -262,6 +267,8 @@ class PeopleHostMixin:
         from .people_project import validate_records
         from .people_history_persistence import prepare
         validate_records(project);HAIR.validate(project)
+        from .hair_smoothing_project import validate_project as validate_smoothing
+        validate_smoothing(project)
         from .hair_unification_project import validate as validate_unification
         validate_unification(project)
         from .hair_volume_project import validate as validate_volume
@@ -277,6 +284,8 @@ class PeopleHostMixin:
     def _people_load(self,project,prepared_history=None):
         from .people_project import validate_records
         validate_records(project)
+        from .hair_smoothing_project import validate_project as validate_smoothing
+        validate_smoothing(project)
         from .hair_volume_project import validate as validate_volume
         validate_volume(project)
         from .people_cross_owner_project import validate_project
@@ -284,6 +293,9 @@ class PeopleHostMixin:
         self._body_skin_evenness_reference=None;self._body_skin_evenness_preview=None
         self._collarbone_reference=None;self._collarbone_preview=None
         self._neck_wrinkle_reference=None;self._neck_wrinkle_preview=None
+        self._hair_smoothing_reference=None;self._hair_smoothing_preview=None
+        from .hair_smoothing_host import discard_publication as discard_smoothing
+        discard_smoothing(self)
         from .neck_wrinkle_host import discard_publication
         discard_publication(self)
         self._body_face_match_reference=None;self._body_face_match_preview=None
@@ -348,6 +360,8 @@ class PeopleHostMixin:
             freeze_reference_match(result,source)
             from .neck_wrinkle_inputs import freeze as freeze_neck
             freeze_neck(result,source,document_state=state,source_path=source_path)
+            from .hair_smoothing_inputs import freeze as freeze_smoothing
+            freeze_smoothing(result,source,document_state=state,source_path=source_path)
             from .creative_derived_hair import capture as capture_hair
             capture_hair(retained_host,state,result,pc,source)
             from .hair_unification_project import capture_derived as capture_unification
@@ -359,6 +373,8 @@ class PeopleHostMixin:
         freeze_reference_match(result,binding,source_path=source_path)
         from .neck_wrinkle_inputs import freeze as freeze_neck
         freeze_neck(result,binding,document_state=state,source_path=source_path)
+        from .hair_smoothing_inputs import freeze as freeze_smoothing
+        freeze_smoothing(result,binding,document_state=state,source_path=source_path)
         HAIR.capture(retained_host,result,pc,binding,source_path=source_path)
         from .hair_unification_project import capture as capture_unification
         capture_unification(retained_host,result,pc,binding,source_path=source_path)
@@ -392,6 +408,8 @@ class PeopleHostMixin:
         require_hair_volume_transition(self,before,candidate)
         from .neck_wrinkle_host import require_transition as require_neck_transition
         require_neck_transition(self,before,candidate)
+        from .hair_smoothing_host import require_transition as require_smoothing_transition
+        require_smoothing_transition(self,before,candidate)
         from .skin_reference_match_project import require_transition as require_reference_transition
         require_reference_transition(self,before,candidate)
         from .skin_reference_body_project import require_transition as require_body_reference_transition

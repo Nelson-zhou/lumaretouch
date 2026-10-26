@@ -106,6 +106,7 @@ export interface RetouchProps {
   expressionPanel?: React.ReactNode;
   hairUnificationPanel?: React.ReactNode;
   hairVolumePanel?: React.ReactNode;
+  hairSmoothingPanel?: React.ReactNode;
   hairWorkflowBusy?: boolean;
   skinReferencePanel?: React.ReactNode;
   skinReferenceBodyPanel?: React.ReactNode;
@@ -1492,6 +1493,7 @@ export default function RetouchPanel(props: RetouchProps) {
                     if(f.id==='PC-32472'&&['发色选择','头发光泽'].includes(leaf.path))return null;
                     if(f.id==='PC-32472'&&props.hairVolumePanel&&['颅顶调整&颅顶调整（头顶）','发量调整'].includes(leaf.path))return null;
                     if(f.id==='PC-32472'&&props.hairUnificationPanel&&leaf.path==='发色统一')return null;
+                    if(f.id==='PC-32472'&&leaf.path==='头发柔顺'&&props.hairSmoothingPanel)return props.hairSmoothingPanel;
                     if (f.id === "PC-32481" && leaf.path === "背景调整涂抹笔" && props.studioBackgroundPanel)
                       return <div className="toolRouteNote"><button className="toolRouteLink" onClick={()=>navigateTool("PC-32474")}>背景调整恢复画笔</button><p>进入背景调整，在编辑范围中选择对应的恢复目标。</p></div>;
                     if (f.id === "PC-32481" && leaf.path === "换天空涂抹笔" && props.skyReplacementPanel)

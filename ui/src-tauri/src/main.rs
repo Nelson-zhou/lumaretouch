@@ -1735,6 +1735,7 @@ fn engine_status(state: State<'_, Arc<AppState>>) -> Value {
            "tasks": state.tasks.lock().unwrap().clone(),
            "task_rev": *state.task_rev.lock().unwrap(),
            "ready_caps": state.ready_caps.lock().unwrap().clone(),
+           "hair_smoothing_recovery": crate::people_api::recovery_status(),
            "history_edit_cmds": state.history_edit_cmds.lock().unwrap().clone(),
            // 发布自证（M5-c）：壳选的是哪个解释器（含它从哪一档候选里来）、引擎报的
            // 版本与包账单、以及进程现在还在不在。"引擎起不来"的三种成因（没运行时 /

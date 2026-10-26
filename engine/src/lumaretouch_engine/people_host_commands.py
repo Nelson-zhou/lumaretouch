@@ -11,6 +11,7 @@ from .people_reference_dispatch import ACTIONS as SKIN_REFERENCE_ACTIONS, READS 
 
 
 from .neck_wrinkle_actions import ACTIONS as NECK_ACTIONS, READS as NECK_READS, WRITES as NECK_WRITES, is_neck_command
+from .hair_smoothing_actions import ACTIONS as SMOOTHING_ACTIONS, READS as SMOOTHING_READS, WRITES as SMOOTHING_WRITES, is_hair_smoothing_command
 
 FACE_STYLE_READS = frozenset(('face_style_catalog','face_style_preview','face_style_image'))
 FACE_STYLE_ACTIONS = FACE_STYLE_READS | {'face_style_confirm'}
@@ -93,13 +94,17 @@ def checked(engine,p):
     eye_makeup_action=p.get('action') in EYE_MAKEUP_ACTIONS
     reference_action=p.get('action') in SKIN_REFERENCE_ACTIONS
     neck_action=is_neck_command(p)
+    smoothing_action=is_hair_smoothing_command(p)
     if p.get('action')=='patch':
         body=p.get('payload')
         patches=body.get('patches',[]) if isinstance(body,dict) else []
         if isinstance(patches,list) and any(isinstance(row,dict) and row.get('operation_id')==A.NECK_WRINKLE.OP for row in patches):
             from .neck_wrinkle_actions import neutral_patch
             if not neutral_patch(p):raise ValueError('Neck changes require reviewed confirmation; direct patch accepts only one explicit zero')
-    if style_action or eye_bag_action or decoration_action or sculpt_action or eye_makeup_action or reference_action or neck_action:
+        if isinstance(patches,list) and any(isinstance(row,dict) and row.get('operation_id')==A.HAIR_SMOOTHING.OP for row in patches):
+            from .hair_smoothing_actions import neutral_patch as smoothing_neutral
+            if not smoothing_neutral(p):raise ValueError('Hair smoothing needs independent review; direct patch accepts only one explicit zero')
+    if style_action or eye_bag_action or decoration_action or sculpt_action or eye_makeup_action or reference_action or neck_action or smoothing_action:
         from .people_preset_plan import require_active_owner
         owner=require_active_owner(engine)
     else:
@@ -109,6 +114,9 @@ def checked(engine,p):
     asset=binding['asset_sha256']
     if (target['scope']=='face' and target['face_ref']['asset_sha256']!=asset) or (target['scope']=='all_people' and target['target_id']!=asset):
         raise ValueError('People command targets another source asset')
+    if p.get('action') in SMOOTHING_ACTIONS:
+        from .hair_smoothing_actions import check_action as check_smoothing_action
+        check_smoothing_action(p['action'],p.get('payload'),target)
     if p.get("action") in NECK_ACTIONS:
         from .neck_wrinkle_actions import check_action
         check_action(p['action'],p.get('payload'),target)
@@ -223,6 +231,13 @@ def apply(engine,raw,emit):
         from . import face_style_review as style_review
         method={'face_style_catalog':style_review.catalogue,'face_style_preview':style_review.preview,'face_style_image':style_review.image}[action]
         records[request]['payload']=method(engine,state,target,payload)
+        frame=None
+    elif action in SMOOTHING_READS:
+        from . import hair_smoothing_host as smoothing_review
+        method={'hair_smoothing_reference':smoothing_review.reference,
+                'hair_smoothing_preview':smoothing_review.preview,'hair_smoothing_crop':smoothing_review.crop}[action]
+        records[request]['payload']=method(engine,state,target,payload)
+        smoothing_review.bound_receipt_payloads(records)
         frame=None
     elif action in NECK_READS:
         from . import neck_wrinkle_host as neck_review
@@ -348,6 +363,14 @@ def apply(engine,raw,emit):
             from . import face_style_review as style_review
             candidate,records[request]['payload']=style_review.confirm(engine,state,target,payload)
             before_publish=lambda:style_review.verify_before_publish(engine,state,target,payload,candidate,records[request]['payload'])
+        elif action in SMOOTHING_WRITES:
+            from . import hair_smoothing_host as smoothing_review
+            if action=='hair_smoothing_confirm':
+                candidate,records[request]['payload']=smoothing_review.confirm(engine,state,target,payload,
+                    mark_started=lambda:records[request].update(side_effects_started=True))
+                before_publish=lambda:smoothing_review.verify_before_publish(engine,state,candidate)
+            else:
+                candidate,records[request]['payload']=smoothing_review.detach(engine,state,target,payload)
         elif action in NECK_WRITES:
             from . import neck_wrinkle_host as neck_review
             if action=='neck_wrinkle_confirm':
@@ -435,6 +458,9 @@ def apply(engine,raw,emit):
                     batch_id,frame=style_review.publish_alias(engine,state,target,payload,candidate,records[request]['payload'],request_id=request)
                 elif action=='eye_bag_confirm' and records[request]['payload'].get('alias_members') is not None:
                     batch_id,frame=eye_bag_review.publish_alias(engine,state,target,payload,candidate,records[request]['payload'],request_id=request)
+                elif action=='hair_smoothing_confirm':
+                    with smoothing_review.reviewed_transition(engine,state,candidate):
+                        batch_id,frame=publish(engine,state,candidate,request,shared=shared,before_publish=before_publish)
                 elif action=='neck_wrinkle_confirm':
                     with neck_review.reviewed_transition(engine,state,candidate):
                         batch_id,frame=publish(engine,state,candidate,request,shared=shared,before_publish=before_publish)
@@ -448,7 +474,7 @@ def apply(engine,raw,emit):
                 # A rejected preparation may leave only append-only unused
                 # support bytes. With an unchanged graph fence no pixels/recipe
                 # were published; do not manufacture an uncertain edit lock.
-                if action in ('neck_wrinkle_confirm','skin_body_confirm','skin_finish_body_confirm','body_skin_evenness_confirm','collarbone_confirm','body_face_match_confirm') and engine._people_owner().fence==records[request]['before_fence']:
+                if action in ('hair_smoothing_confirm','neck_wrinkle_confirm','skin_body_confirm','skin_finish_body_confirm','body_skin_evenness_confirm','collarbone_confirm','body_face_match_confirm') and engine._people_owner().fence==records[request]['before_fence']:
                     records[request]['side_effects_started']=False
                 raise
         if action=='face_decoration_support_alias_confirm':
@@ -476,7 +502,8 @@ def finish(engine,p,error,emit):
     eye_bag_action=p.get('action') in EYE_BAG_ACTIONS
     reference_action=p.get('action') in SKIN_REFERENCE_ACTIONS
     neck_action=is_neck_command(p)
-    review_read=p.get("action") in NECK_READS or style_read or p.get('action') in SKIN_REFERENCE_READS or p.get('action') in EYE_BAG_READS or p.get('action') in ('face_decoration_alias_image','face_decoration_support_alias_image')
+    smoothing_action=is_hair_smoothing_command(p)
+    review_read=p.get("action") in SMOOTHING_READS or p.get("action") in NECK_READS or style_read or p.get('action') in SKIN_REFERENCE_READS or p.get('action') in EYE_BAG_READS or p.get('action') in ('face_decoration_alias_image','face_decoration_support_alias_image')
     echo={'face_style_request':deepcopy({key:p.get(key) for key in ('action','document_id','document_epoch','document_revision','state_revision','association_revision','target','payload')})} if style_action else {}
     if p.get('action') in EYE_MAKEUP_ACTIONS:
         echo={'eye_makeup_enhance_request':deepcopy({key:p.get(key) for key in ('action','document_id','document_epoch','document_revision','state_revision','association_revision','target','payload')})}
@@ -488,6 +515,8 @@ def finish(engine,p,error,emit):
         echo={'face_decoration_alias_request':deepcopy({key:p.get(key) for key in ('action','document_id','document_epoch','document_revision','state_revision','association_revision','target','payload')})}
     if p.get('action') in DECORATION_SUPPORT_ALIAS_ACTIONS:
         echo={'face_decoration_support_alias_request':deepcopy({key:p.get(key) for key in ('action','document_id','document_epoch','document_revision','state_revision','association_revision','target','payload')})}
+    if smoothing_action:
+        echo={'hair_smoothing_request':deepcopy({key:p.get(key) for key in ('action','document_id','document_epoch','document_revision','state_revision','association_revision','target','payload')})}
     if neck_action:
         echo={'neck_wrinkle_request':deepcopy({key:p.get(key) for key in ('action','document_id','document_epoch','document_revision','state_revision','association_revision','target','payload')})}
     if eye_bag_action:
@@ -499,14 +528,14 @@ def finish(engine,p,error,emit):
         emit({'event':'people_result','protocol':1,'action':p.get('action'),'request_id':p['request_id'],'document_id':p.get('document_id'),
               'success':False,'error':'People request identity was reused with different content','outcome_unknown':False,
               **({'outcome_unknown':True,'no_write':False,'rolled_back':False,'requires_reload':False} if p.get('action') in DECORATION_SUPPORT_ALIAS_ACTIONS else {}),
-              **echo,**({} if neck_action or review_read or reference_action or p.get('action') in DECORATION_SUPPORT_ALIAS_ACTIONS else {'doc_state':engine.doc_state()})});return
+              **echo,**({} if smoothing_action or neck_action or review_read or reference_action or p.get('action') in DECORATION_SUPPORT_ALIAS_ACTIONS else {'doc_state':engine.doc_state()})});return
     if 'result' in old:emit(old['result']);return
     if p.get('action') in EYE_BAG_READS:
         from .eye_bag_review_jobs import controller
         controller(engine).retire(p['request_id'])
     # Publication can succeed before status emission or history recording fails.
     # Rollback also advances the graph fence; neither case is a proven refusal.
-    guarded_review=neck_action or reference_action or style_action or eye_bag_action or p.get('action') in DECORATION_ACTIONS or p.get('action') in SCULPT_ACTIONS or p.get('action') in EYE_MAKEUP_ACTIONS
+    guarded_review=smoothing_action or neck_action or reference_action or style_action or eye_bag_action or p.get('action') in DECORATION_ACTIONS or p.get('action') in SCULPT_ACTIONS or p.get('action') in EYE_MAKEUP_ACTIONS
     owner=engine.__dict__.get('_people_graph_owner') if guarded_review else None
     fence_changed=(old.get('before_fence') is not None and
                    ((owner is None or owner.fence!=old['before_fence']) if guarded_review else engine._people_owner().fence!=old['before_fence']))
@@ -545,14 +574,19 @@ def finish(engine,p,error,emit):
         # Failed previews and attempted confirmations are never publication
         # evidence. Preserve only verified terminal/uncertain ledger diagnostics.
         result.pop('payload',None);result.pop('doc_state',None);result.pop('payload_released',None)
-    if (neck_action or reference_action) and not result['success']:
+    if (smoothing_action or neck_action or reference_action) and not result['success']:
         result.pop('payload',None);result.pop('doc_state',None);result.pop('payload_released',None)
+    if smoothing_action:
+        from .hair_smoothing_host import discard_publication as discard_smoothing
+        discard_smoothing(engine)
     if neck_action:
         from .neck_wrinkle_host import discard_publication
         discard_publication(engine)
     records[p['request_id']]={'result':result,'digest':digest}
     from .neck_wrinkle_host import bound_receipt_payloads as bound_neck_images
     bound_neck_images(records)
+    from .hair_smoothing_host import bound_receipt_payloads as bound_smoothing_images
+    bound_smoothing_images(records)
     from .people_reference_dispatch import bound_receipt_images as bound_reference_images
     bound_reference_images(records)
     from .facial_sculpt_host import bound_receipt_images as bound_sculpt_images

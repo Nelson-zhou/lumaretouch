@@ -192,3 +192,8 @@ No external anatomical model or third-party numerical code; see docs/limb-vein/.
 Hand neutral-gray correction (core/hand_tone): original GPL-3.0-or-later
 source-grid local log-luminance band correction, reusing local limb_vein ABI
 infrastructure. No external model or copied numerical code. See docs/hand-tone/.
+
+Visible-hair directional smoothing: core/hair_smoothing is an original
+GPL-3.0-or-later implementation. Corresponding Rust modules, ABI header,
+manifest, license and authored/unrun acceptance notes are staged under
+third_party/hair_smoothing. It is not a new model or a neck/skin operator.

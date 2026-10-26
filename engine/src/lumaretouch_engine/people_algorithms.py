@@ -23,6 +23,7 @@ from . import body_face_match_state as BODY_FACE_MATCH
 from . import body_skin_evenness_state as BODY_SKIN_EVENNESS
 from . import collarbone_state as COLLARBONE
 from . import neck_wrinkle_state as NECK_WRINKLE
+from . import hair_smoothing_state as HAIR_SMOOTHING
 from . import skin_evenness_state as SKIN_EVENNESS
 from . import lip_texture_state as LIP_TEXTURE
 from . import eye_bag_preserve_state as EYE_BAG_PRESERVE
@@ -51,6 +52,7 @@ def specifications():
             BODY_SKIN_EVENNESS.OP: (BODY_SKIN_EVENNESS.neutral(), BODY_SKIN_EVENNESS.check),
             COLLARBONE.OP: (COLLARBONE.neutral(), COLLARBONE.check),
             NECK_WRINKLE.OP: (NECK_WRINKLE.neutral(), NECK_WRINKLE.check),
+            HAIR_SMOOTHING.OP: (HAIR_SMOOTHING.neutral(), HAIR_SMOOTHING.check),
             SKIN_EVENNESS.OP: (SKIN_EVENNESS.neutral(), SKIN_EVENNESS.check),
             EYE_BAG_PRESERVE.OP: (EYE_BAG_PRESERVE.neutral(), EYE_BAG_PRESERVE.check),
             LIP_TEXTURE.OP: (LIP_TEXTURE.neutral(), LIP_TEXTURE.check),

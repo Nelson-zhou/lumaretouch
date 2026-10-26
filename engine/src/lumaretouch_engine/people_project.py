@@ -61,6 +61,8 @@ def validate_records(value):
                 validate_body_face_match_graph(value[key])
                 from .neck_wrinkle_project import validate_graph as validate_neck_graph
                 validate_neck_graph(value[key])
+                from .hair_smoothing_project import validate_graph as validate_smoothing_graph
+                validate_smoothing_graph(value[key])
                 from .collarbone_project import validate_graph as validate_collarbone_graph
                 validate_collarbone_graph(value[key])
                 from .iris_makeup_state import validate_graph as validate_iris_graph

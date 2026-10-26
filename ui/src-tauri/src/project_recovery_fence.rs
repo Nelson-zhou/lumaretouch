@@ -10,7 +10,7 @@ struct Pending { command: Value, composite_history: Option<Value> }
 impl Pending { fn composite(&self)->bool {preset_alias::applies(&self.command)||crate::people_api::decoration_alias::applies(&self.command)||crate::people_api::decoration_support_alias::applies(&self.command)||crate::effect_recovery_host::alias::applies(&self.command)||self.composite_history.is_some()} }
 // Body and neck mutations retain the existing fence until a strict terminal or verified
 // workspace reopen. They do not become composite/alias history operations.
-impl Pending { fn guarded(&self) -> bool { self.command["cmd"] == "final_canvas_flip" || crate::white_balance_api::mutation(&self.command) || self.composite() || crate::batch_host::portrait_preset_group::mutation(&self.command) || crate::hand_shape_api::mutation(&self.command) || crate::hand_tone_api::mutation(&self.command) || crate::limb_vein_api::mutation(&self.command) || crate::fabric_sweat_api::mutation(&self.command) || crate::people_api::skin_reference_body::mutation(&self.command) || crate::people_api::neck_wrinkle::mutation(&self.command) } }
+impl Pending { fn guarded(&self) -> bool { self.command["cmd"] == "final_canvas_flip" || crate::white_balance_api::mutation(&self.command) || self.composite() || crate::batch_host::portrait_preset_group::mutation(&self.command) || crate::hand_shape_api::mutation(&self.command) || crate::hand_tone_api::mutation(&self.command) || crate::limb_vein_api::mutation(&self.command) || crate::fabric_sweat_api::mutation(&self.command) || crate::people_api::skin_reference_body::mutation(&self.command) || crate::people_api::hair_smoothing::mutation(&self.command) || crate::people_api::neck_wrinkle::mutation(&self.command) } }
 fn pending()->&'static Mutex<HashMap<([u8;16],String),Pending>> {
     static STORE:OnceLock<Mutex<HashMap<([u8;16],String),Pending>>=OnceLock::new();
     STORE.get_or_init(||Mutex::new(HashMap::new()))
@@ -19,8 +19,24 @@ pub(crate) fn issued(epoch:[u8;16], command:&Value)->Result<(),String>{
     let mut store=pending().lock().map_err(|_|"恢复回执屏障锁不可用")?;
     if command["cmd"]=="project" && command["action"]=="create"
         && store.iter().any(|((owner_epoch,_),request)|*owner_epoch==epoch
-            && (request.command["cmd"]=="final_canvas_flip" || crate::white_balance_api::mutation(&request.command))) {
-        return Err("原翻转/自动白平衡结果尚未确认；新建工程保留当前照片，不能用作恢复，请打开已确认工程".into());
+            && (request.command["cmd"]=="final_canvas_flip" || crate::white_balance_api::mutation(&request.command) || crate::people_api::hair_smoothing::mutation(&request.command))) {
+        return Err("原翻转/自动白平衡/头发柔顺结果尚未确认；新建工程保留当前照片，不能用作恢复，请打开已确认工程".into());
+    }
+    if store.iter().any(|((owner_epoch,_),request)|*owner_epoch==epoch
+        && crate::people_api::hair_smoothing::mutation(&request.command)) {
+        // Receipt status queries are served locally by people_api before dispatch.
+        // A pending smoothing mutation must not start another panel's new review.
+        let query_or_reopen = match command["cmd"].as_str() {
+            Some("hello" | "shutdown") => true,
+            Some("session") => command["action"] == "query",
+            Some("project") => matches!(command["action"].as_str(),Some("state" | "open")),
+            Some("project_recovery") => matches!(command["action"].as_str(),Some("list" | "status" | "trash_list" | "inspect" | "cancel")),
+            _ => false,
+        };
+        if !query_or_reopen || !preset_alias::safe_during_pending(command) {
+            return Err("原头发柔顺修改结果未确认；仅可查询原请求或打开已确认工程，不能开始新审核或重发".into());
+        }
+        return Ok(());
     }
     if store.iter().any(|((owner_epoch,_),request)|*owner_epoch==epoch&&request.guarded()) {
         // Read only the exact group whose original export admission is pending.
@@ -59,11 +75,21 @@ pub(crate) fn issued(epoch:[u8;16], command:&Value)->Result<(),String>{
     // Check a pending ID collision first: read-only status cannot release or
     // replace an already-issued mutation belonging to another receipt host.
     if crate::hand_shape_api::read_only(command) || crate::hand_tone_api::read_only(command) || crate::limb_vein_api::read_only(command) || crate::fabric_sweat_api::read_only(command) || crate::batch_api::read_only(command) || crate::torso_transfer_protocol::read_only_head_preflight(command) || crate::preset_api::read_only(command)
-        || crate::people_api::neck_wrinkle::read_only(command) || crate::people_api::skin_reference_choice::read_only(command) || crate::people_api::skin_reference_body::read_only(command) || crate::people_api::skin_reference_match::read_only(command)
+        || crate::people_api::hair_smoothing::read_only(command) || crate::people_api::neck_wrinkle::read_only(command) || crate::people_api::skin_reference_choice::read_only(command) || crate::people_api::skin_reference_body::read_only(command) || crate::people_api::skin_reference_match::read_only(command)
         || crate::people_api::face_style::read_only(command) || crate::people_api::eye_bag::read_only(command)
         || crate::people_api::face_decoration::read_only(command) || crate::people_api::facial_sculpt::read_only(command) || crate::people_api::eye_makeup_enhance::read_only(command) || crate::people_api::decoration_alias::read_only(command) || crate::people_api::decoration_support_alias::read_only(command) {return Ok(());}
     if store.len()>=4096{return Err("未确认请求超过恢复屏障容量，请查询原请求或重新打开工程".into());}
     store.insert(key,Pending{command:command.clone(),composite_history}); Ok(())
+}
+/// Remove only the original smoothing fence after its existing native receipt
+/// owner proves later idle replacement. Never settle or relabel its old outcome.
+pub(crate) fn abandon_hair_smoothing(epoch:[u8;16], id:&str, request:&Value) {
+    let Ok(mut store) = pending().lock() else { return; };
+    let key = (epoch,id.to_owned());
+    let owned = store.get(&key).is_some_and(|row| crate::people_api::hair_smoothing::mutation(&row.command)
+        && crate::people_api::hair_smoothing::binding(&row.command).ok().flatten()
+            .is_some_and(|binding| binding[crate::people_api::hair_smoothing::MARKER] == *request));
+    if owned { store.remove(&key); }
 }
 pub(crate) fn composite_history_marker(epoch:[u8;16],command:&Value)->Result<Option<Value>,String>{preset_alias_history::marker(epoch,command)}
 pub(crate) fn shared_history_markers(epoch:[u8;16],command:&Value)->Result<Option<Value>,String>{preset_alias_history::markers(epoch,command)}
@@ -74,14 +100,21 @@ pub(crate) fn decoration_preset_workspace(epoch: [u8;16], binding: &Value) -> Op
     preset_alias_history::decoration_workspace(epoch, binding)
 }
 pub(crate) fn observed(epoch:[u8;16], value:&Value){
+    if value["event"] == "project_opened" && preset_alias::reopened(value) {
+        crate::people_api::recovery_reopened(epoch);
+    }
     let Ok(mut store)=pending().lock() else{return;};
     preset_alias_history::observe_session(epoch,value);
     if matches!(value["event"].as_str(),Some("project_opened"|"project_created")) {
         let reopened=preset_alias::reopened(value);
         let replaced=reopened && value["event"]=="project_opened";
         if reopened {preset_alias_history::clear(epoch);}
-        if replaced {crate::final_canvas_flip_api::verified_workspace_opened(epoch);}
-        store.retain(|(e,_),request|*e!=epoch || if request.command["cmd"]=="final_canvas_flip" || crate::white_balance_api::mutation(&request.command) {
+        if replaced {
+            crate::final_canvas_flip_api::verified_workspace_opened(epoch);
+        }
+        store.retain(|(e,_),request|*e!=epoch || if crate::people_api::hair_smoothing::mutation(&request.command) {
+            true // Exact idle-baselined native status abandons this owner later.
+        } else if request.command["cmd"]=="final_canvas_flip" || crate::white_balance_api::mutation(&request.command) {
             !replaced // A new empty project keeps the old live document recipes.
         } else {request.guarded()&&!reopened});return;
     }
@@ -114,6 +147,11 @@ pub(crate) fn observed(epoch:[u8;16], value:&Value){
     if crate::limb_vein_api::mutation(command) && !crate::limb_vein_api::matches_request(command,value) {return;}
     if crate::hand_shape_api::mutation(command) && !crate::hand_shape_api::matches_request(command,value) {return;}
     if crate::hand_tone_api::mutation(command) && !crate::hand_tone_api::matches_request(command,value) {return;}
+    if (crate::people_api::hair_smoothing::mutation(command)
+        || value.get(crate::people_api::hair_smoothing::MARKER).is_some()
+        || crate::people_api::hair_smoothing::action(value))
+        && (!crate::people_api::hair_smoothing::mutation(command)
+            || !crate::people_api::hair_smoothing::matches_request(command, value)) { return; }
     if crate::people_api::neck_wrinkle::mutation(command)
         && !crate::people_api::neck_wrinkle::matches_request(command, value) { return; }
     if preset_alias::applies(command) {

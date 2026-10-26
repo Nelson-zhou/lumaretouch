@@ -189,8 +189,17 @@ def build_export_spec(snap: dict, eh: int, ew: int, *, for_document: bool):
     validate_stacks(snap)
     from .repair_source_materialization import materialize as materialize_repairs
     spec.repair = materialize_repairs(snap["repair_ops"], (eh, ew))
-    # Private frozen fitting input; never a persisted raster or alternate stack.
-    spec._neck_wrinkle_repair_inputs = tuple(snap["repair_ops"])
+    # Private frozen fitting inputs exist only for actual active frozen people
+    # requests. Neutral ExportSpec identity/storage stays exactly legacy-shaped;
+    # strict creative edited-capture admission is not widened for unused fields.
+    people = spec.people
+    if people is not None:
+        from .neck_wrinkle_inputs import needed as needs_neck_wrinkle
+        from .hair_smoothing_inputs import needed as needs_hair_smoothing
+        if needs_neck_wrinkle(people['state'], people['asset_sha256']):
+            spec._neck_wrinkle_repair_inputs = tuple(snap["repair_ops"])
+        if needs_hair_smoothing(people['state'], people['asset_sha256']):
+            spec._hair_smoothing_repair_inputs = tuple(snap["repair_ops"])
     spec.light = [LightOp(op_id=op.op_id,
                           weight=resample_field(op.weight, (eh, ew), uint8=True),
                           sign=op.sign) for op in snap["light_ops"]]

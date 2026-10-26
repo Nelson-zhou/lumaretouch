@@ -480,6 +480,7 @@ class Engine(HVC.HairVolumeHostMixin, PortraitCropEngineMixin, HUC.HairUnificati
         from .body_skin_evenness_state import capability as body_skin_evenness_capability
         from .collarbone_state import capability as collarbone_capability
         from .neck_wrinkle_state import capability as neck_capability
+        from .hair_smoothing_state import capability as smoothing_capability
         from .skin_evenness_state import capability as skin_evenness_capability
         from .lip_texture_state import capability as lip_texture_capability
         from .face_decoration_state import capability as face_decoration_capability
@@ -499,7 +500,7 @@ class Engine(HVC.HairVolumeHostMixin, PortraitCropEngineMixin, HUC.HairUnificati
               # packaging/VERSION 同步下来的 __version__。发布校验把两者对起来——分叉时
               # 装机 UI 上显示的版本与真正在跑的引擎版本就是两句话。
               # 协议号不动（加键属兼容扩展，宿主只读不判）。
-              "version": __version__, **skin_colour_capability(), **skin_finish_capability(), **skin_gloss_capability(), **skin_texture_capability(), **face_contour_capability(),**face_size_capability(), **lower_face_capability(), **mid_face_capability(), **chin_shape_capability(), **chin_length_capability(), **philtrum_capability(), **eye_symmetry_capability(), **brow_enhance_capability(), **lip_texture_capability(), **skin_evenness_capability(), **body_skin_evenness_capability(), **collarbone_capability(), **neck_capability(), **body_face_match_capability(),
+              "version": __version__, **skin_colour_capability(), **skin_finish_capability(), **skin_gloss_capability(), **skin_texture_capability(), **face_contour_capability(),**face_size_capability(), **lower_face_capability(), **mid_face_capability(), **chin_shape_capability(), **chin_length_capability(), **philtrum_capability(), **eye_symmetry_capability(), **brow_enhance_capability(), **lip_texture_capability(), **skin_evenness_capability(), **body_skin_evenness_capability(), **collarbone_capability(), **neck_capability(), **smoothing_capability(), **body_face_match_capability(),
               "upscale_restore_protocol": 1, "upscale_restore_capability": upscale_restore_capability(), "light_glow_protocol": 1, "light_glow_capability": light_glow_capability(), "lens_blur_protocol": 3, "lens_blur_capability": lens_blur_capability(), "expression_replacement_protocol": 1, "expression_replacement_operation_id": "lnx.expression_replacement.v1", "expression_replacement_available": expression_capability()["available"], "eye_bags_protocol": 2, **eye_bag_preserve_capability(), **face_decoration_capability(), **facial_sculpt_capability(), **eye_makeup_enhance_capability(), "skin_reference_match_protocol": 1, **skin_reference_capability(), "skin_reference_body_protocol": 1, "skin_reference_choice_protocol": 1, **skin_reference_body_capability(), "face_decoration_alias_protocol": 1, "face_decoration_support_alias_protocol": 1, "face_decoration_preset_alias_protocol": 1,
               "runtime": runtime_report(),
               "privacy": policy_status(),
@@ -6987,6 +6988,9 @@ class Engine(HVC.HairVolumeHostMixin, PortraitCropEngineMixin, HUC.HairUnificati
             from .eye_bag_preset_store import read_only as eye_bag_preset_read_only
             if eye_bag_preset_read_only(msg):
                 fn(msg); return  # Exact preset reads retain capture/receipt fences; controller verifies source and plan.
+            from .hair_smoothing_actions import read_only as smoothing_read_only
+            if smoothing_read_only(msg):
+                fn(msg); return  # Exact private original-source hair review, existing ownership/receipt fences.
             from .neck_wrinkle_actions import read_only as neck_read_only
             if neck_read_only(msg):
                 fn(msg); return  # Exact non-mutating native neck review; ownership fences remain.

@@ -10,7 +10,7 @@ from .facial_wrinkle_layer import FacialWrinkleLayer, bounds as wrinkle_bounds
 from .under_eye_layer import UnderEyeLayer, bounds as eye_bounds, KEYS as EYE_KEYS
 from .ops import enhance as H
 
-STAGES = ('skin_reference_match', 'skin_reference_body_match', 'body_face_match', 'body_skin_evenness', 'collarbone', 'neck_wrinkle', 'skin_evenness', 'skin_colour', 'facial_wrinkles', 'facial_sculpt', 'eye_makeup_enhance', 'eye_detail', 'eye_bag_preserve', 'lip_texture', 'lip_makeup', 'enhance', 'hair_colour', 'hair_unification', 'eye_light', 'blush_makeup', 'face_decoration', 'lipstick','eyeliner','eyelash','brow_enhance','brow_makeup','iris_makeup')
+STAGES = ('skin_reference_match', 'skin_reference_body_match', 'body_face_match', 'body_skin_evenness', 'collarbone', 'neck_wrinkle', 'skin_evenness', 'skin_colour', 'facial_wrinkles', 'facial_sculpt', 'eye_makeup_enhance', 'eye_detail', 'eye_bag_preserve', 'lip_texture', 'lip_makeup', 'enhance', 'hair_colour', 'hair_unification', 'hair_smoothing', 'eye_light', 'blush_makeup', 'face_decoration', 'lipstick','eyeliner','eyelash','brow_enhance','brow_makeup','iris_makeup')
 
 
 @dataclass(frozen=True)
@@ -24,6 +24,7 @@ class LocalEffect:
     facts: object = None
     chroma_shift: object = None
     log_gain: object = None
+    eligibility: object = None  # Separate exact source-context admission, not nonzero signal.
 
     def contribution(self, current):
         y, x, h, w = self.window
@@ -87,7 +88,7 @@ def prepare(face_ref, landmarks, recipes, source, *, excluded, skin, backend, se
                           'requested': amounts[key], 'native_solver': 'rust-teeth-colour-v1'}
         records.append(LocalEffect(ref, 'enhance', window, weights=weights, amounts=amounts, facts=facts))
     for record in records:
-        for array in (record.delta, record.weights, record.chroma_shift, record.log_gain):
+        for array in (record.delta, record.weights, record.chroma_shift, record.log_gain, record.eligibility):
             if array is not None: array.setflags(write=False)
     return records
 
@@ -123,6 +124,9 @@ def apply(stage, current, records, *, recovery=None):
         return apply_records_np(current, records, recovery)
     if stage == 'facial_sculpt':
         from .facial_sculpt_composition import apply_records_np
+        return apply_records_np(current, records, recovery)
+    if stage == 'hair_smoothing':
+        from .hair_smoothing_composition import apply_records_np
         return apply_records_np(current, records, recovery)
     if stage == 'neck_wrinkle':
         from .neck_wrinkle_composition import apply_records_np

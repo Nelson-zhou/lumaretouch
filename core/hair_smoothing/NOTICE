@@ -1,0 +1,6 @@
+LumaRetouch visible-hair directional smoothing, 2026.
+Original implementation licensed GPL-3.0-or-later. See LICENSE.
+No third-party numerical algorithm source is incorporated into this module.
+The independent neck-wrinkle numerical implementation is not linked or reused.
+AUTHORED / UNRUN: source supplied; no build, runtime or photographic acceptance
+is implied. The manual ownership/visibility review is a separate host contract.

@@ -1024,7 +1024,7 @@ def _export_image_impl(src_u8: np.ndarray, spec: ExportSpec, *, device: str,
     base_f=None;repair_stats={}
     if spec.repair:base_f,repair_stats=apply_repair_full(src_u8,spec.repair,device,spec=spec)
     from .people_export import prepare as prepare_people
-    people_start=time.perf_counter();people_prepared=prepare_people(spec,src_u8,base_f)
+    people_start=time.perf_counter();people_prepared=prepare_people(spec,src_u8,base_f,cancelled=mask_cancelled)
     people_prepare_ms=(time.perf_counter()-people_start)*1000.0 if people_prepared is not None else 0.0
     delta, peak = (None, 0.0)
     field_ms = 0.0
@@ -1121,6 +1121,7 @@ def _export_image_impl(src_u8: np.ndarray, spec: ExportSpec, *, device: str,
         pipe.primary_calibration=primary_stage(spec)
         pipe.primary_calibration.cancelled=tone_cancelled
         pipe.teeth_colour_cancelled=tone_cancelled
+        pipe.people_cancelled=tone_cancelled
         # Rasterize once at source dimensions, then take the identical tile halo
         # used by all operators. RGB8/RGB16 share this float recovery stage.
         if people_prepared is not None:

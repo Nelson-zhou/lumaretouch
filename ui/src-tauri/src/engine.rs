@@ -74,7 +74,7 @@ impl EngineHandle {
         // revoke unrelated sample-library/semantic-colour capture ownership.
         if cmd["cmd"] == "fringe_repair_preview" { return self.dispatcher.enqueue(None, cmd); }
         if cmd["cmd"]=="project_recovery" || cmd["cmd"]=="canvas_guides" {return self.dispatcher.enqueue(None,cmd);}
-        if crate::people_api::neck_wrinkle::read_only(&cmd) || crate::people_api::skin_reference_choice::read_only(&cmd) || crate::people_api::skin_reference_body::read_only(&cmd) || crate::people_api::skin_reference_match::read_only(&cmd) || crate::people_api::face_style::read_only(&cmd) || crate::people_api::eye_bag::read_only(&cmd) || crate::people_api::face_decoration::read_only(&cmd) || crate::people_api::facial_sculpt::read_only(&cmd) || crate::people_api::eye_makeup_enhance::read_only(&cmd) || crate::people_api::decoration_alias::read_only(&cmd) || crate::people_api::decoration_support_alias::read_only(&cmd) || crate::managed_import_api::read_only(&cmd) || crate::batch_api::read_only(&cmd) || crate::preset_api::read_only(&cmd) { return self.dispatcher.enqueue(None, cmd); }
+        if crate::people_api::hair_smoothing::read_only(&cmd) || crate::people_api::neck_wrinkle::read_only(&cmd) || crate::people_api::skin_reference_choice::read_only(&cmd) || crate::people_api::skin_reference_body::read_only(&cmd) || crate::people_api::skin_reference_match::read_only(&cmd) || crate::people_api::face_style::read_only(&cmd) || crate::people_api::eye_bag::read_only(&cmd) || crate::people_api::face_decoration::read_only(&cmd) || crate::people_api::facial_sculpt::read_only(&cmd) || crate::people_api::eye_makeup_enhance::read_only(&cmd) || crate::people_api::decoration_alias::read_only(&cmd) || crate::people_api::decoration_support_alias::read_only(&cmd) || crate::managed_import_api::read_only(&cmd) || crate::batch_api::read_only(&cmd) || crate::preset_api::read_only(&cmd) { return self.dispatcher.enqueue(None, cmd); }
         if cmd["cmd"] == "virtual_copy" && matches!(cmd["action"].as_str(), Some("state" | "query")) {
             return self.dispatcher.enqueue(None, cmd);
         }
@@ -317,6 +317,7 @@ pub fn spawn(py: &str, engine_src: &str, session: &str, state: Arc<AppState>,
                     }
                 }
                 if let Ok(v)=serde_json::from_str::<Value>(&line) {
+                    if crate::people_api::reject_malformed_hair_smoothing(inspection_epoch,&line,&v) { continue; }
                     if v["event"]=="white_balance_result" && v["action"]=="auto"
                         && crate::portrait_crop_protocol::unique_json(&line,16384).is_err() {
                         st.white_balance_results.lock().unwrap().failed_bound_auto_white_balance(
@@ -593,6 +594,7 @@ fn handle_event(state: &Arc<AppState>, line: &str,inspection_epoch:[u8;16]) {
             }
         }
         "ready" => {
+            crate::people_api::recovery_ready(inspection_epoch);
             let mut inspection=state.inspection.lock().unwrap();
             if inspection.epoch!=inspection_epoch{return;}
             inspection.ready(inspection_epoch,v["inspection_protocol"].as_u64()==Some(1));

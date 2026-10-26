@@ -1,0 +1,6 @@
+# This file is intentionally dependency-free. AUTHORED / UNRUN.
+version = 3
+
+[[package]]
+name = "lrt_hair_smoothing"
+version = "0.1.0"

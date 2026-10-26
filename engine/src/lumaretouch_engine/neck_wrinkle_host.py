@@ -180,7 +180,26 @@ def _render(engine, state, capture, *, candidate=None, assets=None, rect=None,
     size = [int(rgb.shape[1]), int(rgb.shape[0])]
     if proof.get('output_size') != size or proof.get('source_proof') != capture['identity']['source_proof']:
         raise ValueError('Neck complete comparison omitted its actual output/source proof')
-    measurements = proof.get('neck_wrinkle_measurements')
+    from . import people_resolver as RESOLVER
+    from .neck_wrinkle_state import active, check, neutral
+    rendered_graph = P.check(state if candidate is None else candidate)
+    expected_faces = set()
+    for face in rendered_graph['faces'].values():
+        if face['asset_sha256'] != capture['source']['sha256'] or not face['enabled']:
+            continue
+        resolved = RESOLVER.resolve(rendered_graph, face['face_instance_id'], {OP: {'/amount': 0.}})
+        if active(RESOLVER.materialize(resolved, OP, neutral(), check)):
+            ref = P.face_ref(face)
+            expected_faces.add(tuple(ref[name] for name in ('asset_sha256', 'face_instance_id', 'analysis_revision')))
+    # Only an actually inactive rendered graph may omit optional diagnostics.
+    # Active before renders and exact candidates must prove every active owner;
+    # absent, empty, foreign or stale measurements are never blanket-defaulted.
+    if 'neck_wrinkle_measurements' not in proof:
+        if expected_faces or measurement_key is not None:
+            raise ValueError('Neck active renderer omitted its actual prepared measurement identities')
+        measurements = []
+    else:
+        measurements = proof['neck_wrinkle_measurements']
     if type(measurements) is not list or len(measurements) > 4096:
         raise ValueError('Neck renderer omitted its actual prepared measurement identities')
     seen = set()
@@ -192,6 +211,8 @@ def _render(engine, state, capture, *, candidate=None, assets=None, rect=None,
         if key in seen:
             raise ValueError('Neck renderer returned ambiguous repeated face measurement provenance')
         seen.add(key)
+    if seen != expected_faces:
+        raise ValueError('Neck renderer measurement owners do not match the exact active rendered graph')
     if measurement_key is not None and {'face_ref': capture['ref'], 'measurement_key': measurement_key} not in measurements:
         raise ValueError('Neck actual mixed renderer measured a different source/support/algorithm')
     full_sha = IMAGES.raster_hash(rgb, cancelled=cancelled)

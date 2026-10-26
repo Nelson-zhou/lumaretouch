@@ -71,7 +71,9 @@ def verify_analysis(face, analysis, shape):
 
 
 def prepare(state, asset_sha256, source, analyses, *, byte_budget, document_id=None, max_faces=32, recovery_assets=None, repaired=None,
-            creative_source=None, creative_repair_evidence=None, skin_reference_match_assets=None, skin_reference_match_source=None, hair_assets=None, hair_volume_assets=None, hair_unification_assets=None, hair_unification_source=None, full_source_verified=False, hair_evidence=None, hair_source_path=None, force_hair_prompted=False, eye_light_assets=None, blush_makeup_assets=None, face_decoration_assets=None,facial_sculpt_assets=None,eye_makeup_enhance_assets=None, lipstick_assets=None,eyeliner_assets=None,eyelash_assets=None,brow_makeup_assets=None,iris_makeup_assets=None,skin_colour_body_assets=None,skin_finish_body_assets=None,body_skin_evenness_assets=None,body_face_match_assets=None,collarbone_assets=None,neck_wrinkle_assets=None,neck_wrinkle_source=None,eye_bag_preserve_assets=None,body_bank=None):
+            creative_source=None, creative_repair_evidence=None, skin_reference_match_assets=None, skin_reference_match_source=None, hair_assets=None, hair_volume_assets=None, hair_unification_assets=None, hair_unification_source=None, full_source_verified=False, hair_evidence=None, hair_source_path=None, force_hair_prompted=False, eye_light_assets=None, blush_makeup_assets=None, face_decoration_assets=None,facial_sculpt_assets=None,eye_makeup_enhance_assets=None, lipstick_assets=None,eyeliner_assets=None,eyelash_assets=None,brow_makeup_assets=None,iris_makeup_assets=None,skin_colour_body_assets=None,skin_finish_body_assets=None,body_skin_evenness_assets=None,body_face_match_assets=None,collarbone_assets=None,neck_wrinkle_assets=None,neck_wrinkle_source=None,hair_smoothing_assets=None,hair_smoothing_source=None,eye_bag_preserve_assets=None,body_bank=None,cancelled=None):
+    if cancelled is not None and not callable(cancelled):raise TypeError('Portrait cancellation must be callable')
+    if cancelled is not None and cancelled():raise InterruptedError('Portrait preparation cancelled')
     state = S.check(state)
     from . import hair_unification_project as UNIFY
     UNIFY.validate_graph(state)
@@ -170,6 +172,8 @@ def prepare(state, asset_sha256, source, analyses, *, byte_budget, document_id=N
         raise ValueError('Requested photograph-wide portrait parameters have no retained face; add or analyse a face before rendering')
     from .neck_wrinkle_project import validate_graph as validate_neck_graph
     validate_neck_graph(state)
+    from .hair_smoothing_project import validate_graph as validate_smoothing_graph
+    validate_smoothing_graph(state)
     h,w = source.shape[:2]
     if source_only:
         from .creative_derived_recovery import validate_fields
@@ -183,6 +187,7 @@ def prepare(state, asset_sha256, source, analyses, *, byte_budget, document_id=N
                    total_budget=max_faces, available_evidence=evidence, operation_check=lambda _face,_resolved:[])
     failures = []; fields = []; effects = []; facts = {}; owned_recovery = {}
     for entry in plan['entries']:
+        if cancelled is not None and cancelled():raise InterruptedError('Portrait preparation cancelled')
         key = entry['face_ref']['face_instance_id']
         try:
             if entry['status'] != 'ready': raise ValueError(', '.join(entry['reasons']))
@@ -192,7 +197,7 @@ def prepare(state, asset_sha256, source, analyses, *, byte_budget, document_id=N
             face = state['faces'][key]; analysis = analyses[key]
             for asset in face['local_assets'].values():
                 stage = asset['kind']
-                if stage in ('skin_reference_match_body_visibility','skin_reference_match_relation','skin_colour_body_visibility','skin_finish_body_visibility','body_skin_evenness_visibility','body_face_match_visibility','collarbone_visibility','neck_wrinkle_visibility','eye_bag_ridge_visibility','face_decoration_visibility','facial_sculpt_visibility','eye_makeup_enhance_visibility'):
+                if stage in ('skin_reference_match_body_visibility','skin_reference_match_relation','skin_colour_body_visibility','skin_finish_body_visibility','body_skin_evenness_visibility','body_face_match_visibility','collarbone_visibility','neck_wrinkle_visibility','hair_smoothing_visibility','eye_bag_ridge_visibility','face_decoration_visibility','facial_sculpt_visibility','eye_makeup_enhance_visibility'):
                     # Separate operation-owned support, never generic recovery.
                     # Resolve each only when its own recipe is active below;
                     # dormant review cannot prevent disabling its own recipe.
@@ -312,7 +317,7 @@ def prepare(state, asset_sha256, source, analyses, *, byte_budget, document_id=N
                             seen_arrays.add(id(array)); analysis_bytes += array.nbytes
                 prior_bytes = sum(f.resident_bytes() for f in fields) + field.resident_bytes()
                 prior_bytes += sum(a.nbytes for record in (*effects,*local)
-                                   for a in (record.delta,record.weights,record.chroma_shift,record.log_gain) if a is not None)
+                                   for a in (record.delta,record.weights,record.chroma_shift,record.log_gain,record.eligibility) if a is not None)
                 local.extend(prepare_skin_colour(entry['face_ref'], analysis, others, effect_source,
                     values[A.SKIN_COLOUR.OP], byte_budget=byte_budget-analysis_bytes-prior_bytes,
                     protected_boxes=protected_boxes,people_state=state,
@@ -339,7 +344,7 @@ def prepare(state, asset_sha256, source, analyses, *, byte_budget, document_id=N
                             seen.add(id(array)); owned += array.nbytes
                 owned += sum(f.resident_bytes() for f in fields) + field.resident_bytes()
                 owned += sum(a.nbytes for r in (*effects, *local)
-                             for a in (r.delta, r.weights, r.chroma_shift, r.log_gain) if a is not None)
+                             for a in (r.delta, r.weights, r.chroma_shift, r.log_gain, r.eligibility) if a is not None)
                 local.extend(prepare_skin_evenness(entry['face_ref'], analysis, effect_source,
                     values[A.SKIN_EVENNESS.OP], byte_budget=byte_budget-owned,
                     protected_boxes=evenness_neighbors))
@@ -352,7 +357,7 @@ def prepare(state, asset_sha256, source, analyses, *, byte_budget, document_id=N
                             seen.add(id(array)); owned += array.nbytes
                 owned += sum(f.resident_bytes() for f in fields) + field.resident_bytes()
                 owned += sum(a.nbytes for r in (*effects, *local)
-                             for a in (r.delta, r.weights, r.chroma_shift, r.log_gain) if a is not None)
+                             for a in (r.delta, r.weights, r.chroma_shift, r.log_gain, r.eligibility) if a is not None)
                 local.extend(prepare_body_evenness(entry['face_ref'], analysis, effect_source,
                     values[A.BODY_SKIN_EVENNESS.OP], people_state=state,
                     body_assets=body_skin_evenness_assets or {}, body_bank=body_bank,
@@ -366,11 +371,27 @@ def prepare(state, asset_sha256, source, analyses, *, byte_budget, document_id=N
                             seen.add(id(array)); owned += array.nbytes
                 owned += sum(f.resident_bytes() for f in fields) + field.resident_bytes()
                 owned += sum(a.nbytes for r in (*effects, *local)
-                             for a in (r.delta, r.weights, r.chroma_shift, r.log_gain) if a is not None)
+                             for a in (r.delta, r.weights, r.chroma_shift, r.log_gain, r.eligibility) if a is not None)
                 local.extend(prepare_body_face_match(entry['face_ref'], analysis, effect_source,
                     values[A.BODY_FACE_MATCH.OP], people_state=state,
                     body_assets=body_face_match_assets or {}, body_bank=body_bank,
                     byte_budget=byte_budget-owned))
+            if A.HAIR_SMOOTHING.active(values[A.HAIR_SMOOTHING.OP]):
+                if creative_source is not None:
+                    raise ValueError('Visible-hair smoothing currently requires authenticated original source pixels')
+                from .hair_smoothing_layer import prepare as prepare_smoothing
+                seen = set(); owned = source.nbytes + (0 if repaired is None else repaired.nbytes)
+                for row in analyses.values():
+                    for array in row.values():
+                        if isinstance(array, np.ndarray) and id(array) not in seen:
+                            seen.add(id(array)); owned += array.nbytes
+                owned += sum(f.resident_bytes() for f in fields) + field.resident_bytes()
+                owned += sum(a.nbytes for r in (*effects, *local)
+                             for a in (r.delta, r.weights, r.chroma_shift, r.log_gain, r.eligibility) if a is not None)
+                local.extend(prepare_smoothing(entry['face_ref'], analysis, values[A.HAIR_SMOOTHING.OP],
+                    people_state=state, assets=hair_smoothing_assets or {}, hair_assets=hair_assets or {},
+                    hair_evidence=hair_evidence, full_source=hair_smoothing_source,
+                    byte_budget=byte_budget-owned, render_shape=(h,w), cancelled=cancelled))
             if A.NECK_WRINKLE.active(values[A.NECK_WRINKLE.OP]):
                 from .neck_wrinkle_layer import prepare as prepare_neck
                 seen = set(); owned = source.nbytes + (0 if repaired is None else repaired.nbytes)
@@ -380,7 +401,7 @@ def prepare(state, asset_sha256, source, analyses, *, byte_budget, document_id=N
                             seen.add(id(array)); owned += array.nbytes
                 owned += sum(f.resident_bytes() for f in fields) + field.resident_bytes()
                 owned += sum(a.nbytes for r in (*effects, *local)
-                             for a in (r.delta, r.weights, r.chroma_shift, r.log_gain) if a is not None)
+                             for a in (r.delta, r.weights, r.chroma_shift, r.log_gain, r.eligibility) if a is not None)
                 local.extend(prepare_neck(entry['face_ref'], analysis, values[A.NECK_WRINKLE.OP],
                     people_state=state, body_assets=neck_wrinkle_assets or {}, body_bank=body_bank,
                     full_source=neck_wrinkle_source, byte_budget=byte_budget-owned, render_shape=(h,w)))
@@ -393,7 +414,7 @@ def prepare(state, asset_sha256, source, analyses, *, byte_budget, document_id=N
                             seen.add(id(array)); owned += array.nbytes
                 owned += sum(f.resident_bytes() for f in fields) + field.resident_bytes()
                 owned += sum(a.nbytes for r in (*effects, *local)
-                             for a in (r.delta, r.weights, r.chroma_shift, r.log_gain) if a is not None)
+                             for a in (r.delta, r.weights, r.chroma_shift, r.log_gain, r.eligibility) if a is not None)
                 local.extend(prepare_collarbone(entry['face_ref'], analysis, effect_source,
                     values[A.COLLARBONE.OP], people_state=state,
                     body_assets=collarbone_assets or {}, body_bank=body_bank,
@@ -407,7 +428,7 @@ def prepare(state, asset_sha256, source, analyses, *, byte_budget, document_id=N
                             seen.add(id(array)); owned += array.nbytes
                 owned += sum(f.resident_bytes() for f in fields) + field.resident_bytes()
                 owned += sum(a.nbytes for r in (*effects, *local)
-                             for a in (r.delta, r.weights, r.chroma_shift, r.log_gain) if a is not None)
+                             for a in (r.delta, r.weights, r.chroma_shift, r.log_gain, r.eligibility) if a is not None)
                 # Painted ridge geometry remains owned by the canonical source;
                 # the unchanged bag solver reads this exact frozen repair base.
                 # Review transactions fence the full repair stack, not a proxy
@@ -487,12 +508,14 @@ def prepare(state, asset_sha256, source, analyses, *, byte_budget, document_id=N
                         record.weights[2] *= mouth.teeth_support[y:y+rh,x:x+rw]
                         record.weights.setflags(write=False)
             resident = sum(f.resident_bytes() for f in fields)+field.resident_bytes()
-            resident += sum(a.nbytes for record in (*effects,*local) for a in (record.delta,record.weights,record.chroma_shift,record.log_gain) if a is not None)
+            resident += sum(a.nbytes for record in (*effects,*local) for a in (record.delta,record.weights,record.chroma_shift,record.log_gain,record.eligibility) if a is not None)
             if resident+h*w*256+128*1024*1024 > byte_budget: raise ValueError('Accumulated portrait fields exceed memory budget')
             fields.append(field); effects.extend(local)
             facts[key] = {record.stage:record.facts for record in local}
             neck_facts = [record.facts for record in local if record.stage == 'neck_wrinkle']
             if neck_facts: facts[key]['neck_wrinkle'] = neck_facts
+            smoothing_facts = [record.facts for record in local if record.stage == 'hair_smoothing']
+            if smoothing_facts: facts[key]['hair_smoothing'] = smoothing_facts
             if slim_facts is not None: facts[key]['slim_face_v2'] = slim_facts
             if size_facts is not None: facts[key]['face_size'] = size_facts
             if lower_facts is not None: facts[key]['lower_face'] = lower_facts
@@ -511,6 +534,8 @@ def prepare(state, asset_sha256, source, analyses, *, byte_budget, document_id=N
             eye_facts=[record.facts for record in local if record.stage=='eye_light']
             if eye_facts:facts[key]['eye_light']={'eyes':eye_facts,'stage':'source-working-srgb','physical_light_recovery':False}
             facts[key].update({name:part.facts for name,part in zip(('brow_shape','nose_shape','eye_shape','mouth_shape'),field.fields) if part is not None})
+        except InterruptedError:
+            raise  # Cancellation never becomes a later-face partial preparation.
         except (ValueError, RuntimeError, OSError, MemoryError) as error:
             failures.append({'face_instance_id':key,'reason':str(error)})
     if failures: raise PeoplePreparationRefused(failures)
@@ -564,7 +589,7 @@ def prepare(state, asset_sha256, source, analyses, *, byte_budget, document_id=N
 
 def retained_bytes(prepared,*,include_geometry=True):
     total=sum(field.resident_bytes() for field in (*prepared.face_fields,*prepared.body_fields,*prepared.document_fields))
-    total+=sum(array.nbytes for record in prepared.effects for array in (record.delta,record.weights,record.chroma_shift,record.log_gain) if array is not None)
+    total+=sum(array.nbytes for record in prepared.effects for array in (record.delta,record.weights,record.chroma_shift,record.log_gain,record.eligibility) if array is not None)
     total+=sum(record['weight'].nbytes for record in prepared.recovery.values())
     total+=sum(record.amounts.resident_bytes() for record in prepared.effects if record.stage in ('skin_reference_match','skin_reference_body_match'))
     if include_geometry:total+=prepared.geometry.delta.nbytes+prepared.geometry.owner.nbytes

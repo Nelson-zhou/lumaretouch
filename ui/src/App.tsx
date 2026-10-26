@@ -7,6 +7,7 @@ import {LimbVeinPanel,useLimbVeinPort} from './limbVein';
 import {limbVeinRequest,limbVeinStatus} from './native';
 import {FabricSweatPanel,useFabricSweatPort} from './fabricSweat';
 import {NeckWrinkleControl, useNeckWrinklePort} from './neckWrinkle';
+import {HairSmoothingControl, useHairSmoothingPort} from './hairSmoothing';
 import {PortraitCropWorkspaceHost} from './portraitCrop';
 import {createStartEngineAction} from './engine/startEngineAction';
 import {SkinReferenceMatchPanel} from './skinReferenceMatch/SkinReferenceMatchPanel';
@@ -1894,7 +1895,9 @@ export default function App() {
     available:!!status?.engine_alive&&hasImage&&status.image?.load_id===doc?.document_id&&caps?.upscale_restore_protocol===UPSCALE_PROTOCOL&&validUpscaleCapability(upscaleCapability),
     externalBusy:glow.busy||glowOpen||imageToolBusy||idBackgroundBusy||creative.pending||expression.busy||expressionOpen||lens.busy||lensOpen||colorSampler.active||sampleLibrary.open,queueBusy:!!status?.edit_queue?.in_flight||!!status?.edit_queue?.pending},refreshFromEngine);
   const hairFamily=useHairFamily({status,doc,peopleEnabled:peopleWorkflow.enabled,refresh:refreshFromEngine,engineAlive,onStartEngine,
-    externalBusy:hairToolBusy||portraitCropBusy||idBackgroundBusy||creative.pending||expression.busy||expressionOpen||lens.busy||lensOpen||glow.busy||glowOpen||upscale.busy||upscaleOpen||colorSampler.active||sampleLibrary.open});
+    externalBusy:peopleWorkflow.state.pending||peopleWorkflow.state.uncertain||peopleWorkflow.state.hairSmoothingRefreshRequired||hairToolBusy||portraitCropBusy||idBackgroundBusy||creative.pending||expression.busy||expressionOpen||lens.busy||lensOpen||glow.busy||glowOpen||upscale.busy||upscaleOpen||colorSampler.active||sampleLibrary.open});
+  const hairSmoothingPort=useHairSmoothingPort({people:peopleWorkflow,capability:{protocol:caps?.hair_smoothing_protocol,available:caps?.hair_smoothing_available,reason:caps?.hair_smoothing_reason},
+    blocked:hairBusy||portraitCropBusy||hairFamily.workflowBusy||idBackgroundBusy||creative.pending||expression.busy||expressionOpen||lens.busy||lensOpen||glow.busy||glowOpen||upscale.busy||upscaleOpen||colorSampler.active||sampleLibrary.open||!!status?.edit_queue?.closed});
   const neckWrinklePort=useNeckWrinklePort({people:peopleWorkflow,capability:{protocol:caps?.neck_wrinkle_protocol,available:caps?.neck_wrinkle_available,reason:caps?.neck_wrinkle_reason},
     blocked:hairBusy||portraitCropBusy||hairFamily.workflowBusy||idBackgroundBusy||creative.pending||expression.busy||expressionOpen||lens.busy||lensOpen||glow.busy||glowOpen||upscale.busy||upscaleOpen||colorSampler.active||sampleLibrary.open||!!status?.edit_queue?.closed});
   const fabricSweatPort=useFabricSweatPort({bindingKey:hasImage?JSON.stringify([pid,doc?.document_id,doc?.fabric_sweat?.revision]):null,
@@ -1984,6 +1987,7 @@ export default function App() {
                         people={peopleWorkflow}
                         skinReferencePanel={<SkinReferenceMatchPanel choiceAvailable={status?.ready_caps?.skin_reference_choice_protocol===1} people={peopleWorkflow} available={status?.ready_caps?.skin_reference_match_protocol===1} blocked={hairBusy||hairFamily.workflowBusy||!!status?.edit_queue?.in_flight||!!status?.edit_queue?.pending||!!status?.edit_queue?.closed}/> }
                         neckWrinklePanel={<NeckWrinkleControl port={neckWrinklePort}/>}
+                        hairSmoothingPanel={<HairSmoothingControl port={hairSmoothingPort}/>}
                         fabricSweatPanel={<FabricSweatPanel port={fabricSweatPort} disabled={handShapePort.snapshot.pending||handShapePort.snapshot.uncertain||handShapePort.snapshot.refreshRequired||handTonePort.snapshot.pending||handTonePort.snapshot.uncertain||handTonePort.snapshot.refreshRequired||limbVeinPort.snapshot.pending||limbVeinPort.snapshot.uncertain||limbVeinPort.snapshot.refreshRequired}/>}
                         limbVeinPanel={<LimbVeinPanel port={limbVeinPort} disabled={handShapePort.snapshot.pending||handShapePort.snapshot.uncertain||handShapePort.snapshot.refreshRequired||handTonePort.snapshot.pending||handTonePort.snapshot.uncertain||handTonePort.snapshot.refreshRequired}/>}
                         handTonePanel={<HandTonePanel port={handTonePort} disabled={handShapePort.snapshot.pending||handShapePort.snapshot.uncertain||handShapePort.snapshot.refreshRequired}/>}

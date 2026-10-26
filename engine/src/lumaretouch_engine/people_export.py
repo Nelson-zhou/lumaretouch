@@ -97,7 +97,7 @@ def isolated_snapshot(snapshot,*,for_document):
     return snap
 
 
-def prepare(spec,source,repaired):
+def prepare(spec,source,repaired,*,cancelled=None):
     if getattr(spec,'people',None) is None:return None
     if getattr(spec, '_creative_capture_original_source', None) is not None:
         # Opt-in bounded original-colour capture only. Keep the graph on spec;
@@ -124,10 +124,12 @@ def prepare(spec,source,repaired):
         require_graph(snapshot['state'],snapshot['creative_source'],document_id=document_id)
         from .creative_derived_recovery import validate_supports
         validate_supports(snapshot['state'],snapshot.get('support_assets',{}),snapshot['creative_source'])
+    from .hair_smoothing_source import from_export as smoothing_source
+    smoothing_resolver=smoothing_source(spec,snapshot)
     from .neck_wrinkle_source import from_export as neck_source
     neck_resolver=neck_source(spec,snapshot)
     recovery=ASSETS.raster(snapshot['state'],snapshot.get('support_assets',{}),snapshot['asset_sha256'],source.shape[:2])
-    return prepare_export(snapshot,source,repaired,document_id=document_id,creative_repair_evidence=replay_evidence,byte_budget=available_estimate(),recovery_assets=recovery,body_pose=getattr(spec,'body_pose',None),hand_shape=getattr(spec,'hand_shape',None),body_source_path=None if snapshot.get('creative_source') is not None else getattr(spec,'body_pose_source_path',None),source_materialization_version=1,neck_wrinkle_source=neck_resolver)
+    return prepare_export(snapshot,source,repaired,document_id=document_id,creative_repair_evidence=replay_evidence,byte_budget=available_estimate(),recovery_assets=recovery,body_pose=getattr(spec,'body_pose',None),hand_shape=getattr(spec,'hand_shape',None),body_source_path=None if snapshot.get('creative_source') is not None else getattr(spec,'body_pose_source_path',None),source_materialization_version=1,neck_wrinkle_source=neck_resolver,hair_smoothing_source=smoothing_resolver,cancelled=cancelled)
 
 
 def verify_source(snapshot,path):

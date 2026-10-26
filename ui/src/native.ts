@@ -956,6 +956,8 @@ export interface EngineRuntime {
 }
 
 export interface EngineStatus {
+  /** Native-only replacement authority; no navigation/create/timeout inference. */
+  hair_smoothing_recovery?: import('./hairSmoothing/recovery').HairSmoothingRecovery | null;
   /** 引擎运行时的来历与包账单（M5-c 开箱即用）。整块都取可选：ready 里没报就是
    *  这一版引擎不说自己是谁，UI 该什么都不显示——把可选字段声明成必存，谎报发生在
    *  JSON 边界上，编译期抓不到，运行期一个 TypeError 把整棵树拆掉（M5-b 那一课）。 */
@@ -1151,6 +1153,7 @@ export interface EngineStatus {
     semantic_colour_protocol?: number;
     semantic_colour_workflow_protocol?: number;
     neck_wrinkle_protocol?: number; neck_wrinkle_available?: boolean; neck_wrinkle_reason?: string | null;
+    hair_smoothing_protocol?: number; hair_smoothing_available?: boolean; hair_smoothing_reason?: string | null;
     skin_reference_body_protocol?: number; skin_reference_choice_protocol?: number; skin_reference_body_available?: boolean; skin_reference_body_reason?: string | null;
     skin_reference_match_protocol?: number; skin_reference_match_available?: boolean; skin_reference_match_reason?: string | null;
     portrait_crop?: {version:number;operation_id:string;available:boolean;reason?:string|null};

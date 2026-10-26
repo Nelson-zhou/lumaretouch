@@ -133,6 +133,7 @@ def render(engine,row,candidate_state,document_id,revision,*,people_graph=None,s
     from .final_canvas_flip_state import active as flip_active
     rgb,stats=export_float(pixels,spec,geometry=geometry,progress=checkpoint,provenance=not flip_active(spec.final_canvas_flip))
     neck_measurements=[]
+    smoothing_measurements=[]
     people_stats=stats.get("people") or {}
     for face_id, facts in sorted(people_stats.get("facts",{}).items()):
         for fact in facts.get("neck_wrinkle",[]):
@@ -140,10 +141,25 @@ def render(engine,row,candidate_state,document_id,revision,*,people_graph=None,s
                 raise ValueError("Full neck comparison cannot authorize a projected display field")
             neck_measurements.append({"face_ref":deepcopy(fact["face_ref"]),
                                       "measurement_key":fact["measurement_key"]})
+    for face_id, facts in sorted(people_stats.get("facts",{}).items()):
+        for fact in facts.get("hair_smoothing",[]):
+            if fact.get("review_authority") is not True or fact.get("display_projection") is not None:
+                raise ValueError("Full hair smoothing comparison cannot authorize a display projection")
+            smoothing_measurements.append({"face_ref":deepcopy(fact["face_ref"]),
+                                           "measurement_key":fact["measurement_key"]})
     checkpoint()
     if rgb.ndim!=3 or rgb.shape[2]!=3 or (rgb.shape[1],rgb.shape[0])!=expected or not np.issubdtype(rgb.dtype,np.floating) or not np.isfinite(rgb).all():
         raise ValueError('Complete candidate is not finite float RGB at its exact geometry')
     latest,_,_=identity(engine,row,candidate_state,document_id,revision,people_graph=people_graph,staged_people_context=staged_people_context)
     if M.file_stamp(path)!=stamp or latest!=proof:raise ValueError('Target changed during complete preparation')
-    return rgb,{**proof,'source_size':[w,h],'output_size':list(expected),
-                'neck_wrinkle_measurements':neck_measurements}
+    return rgb,_render_proof(proof,[w,h],expected,neck_measurements,smoothing_measurements)
+
+
+def _render_proof(identity, source_size, output_size, neck_measurements, smoothing_measurements):
+    # Preserve the exact historical identity+extent proof for neutral renders.
+    # These optional diagnostics describe actual prepared operators, not a
+    # global schema extension for unrelated strict full-candidate consumers.
+    result={**identity,'source_size':list(source_size),'output_size':list(output_size)}
+    if neck_measurements:result['neck_wrinkle_measurements']=neck_measurements
+    if smoothing_measurements:result['hair_smoothing_measurements']=smoothing_measurements
+    return result

@@ -269,6 +269,12 @@ mkdir -p "$stage/lumaretouch_engine/third_party/hair_volume"
 cp "$here/../core/hair_volume/"{lib.rs,tests.rs,hair_volume.h,Cargo.toml,build_hair_volume.sh} "$here/../LICENSE" "$stage/lumaretouch_engine/third_party/hair_volume/"
 cp "$here/../docs/hair-volume/"{CORE.md,SUPPORT.md,RESEARCH.md} "$stage/lumaretouch_engine/third_party/hair_volume/"
 
+# Original Rust visible-hair directional smoothing. Build and acceptance UNRUN.
+bash "$here/../core/hair_smoothing/build_hair_smoothing.sh" "$stage/lumaretouch_engine/bin/liblrt_hair_smoothing.so"
+mkdir -p "$stage/lumaretouch_engine/third_party/hair_smoothing"
+cp "$here/../core/hair_smoothing/"*.rs "$here/../core/hair_smoothing/"*.h "$here/../core/hair_smoothing/"{Cargo.toml,Cargo.lock,build_hair_smoothing.sh,README.md,LICENSE,NOTICE} "$stage/lumaretouch_engine/third_party/hair_smoothing/"
+cp "$here/../docs/hair-smoothing/"*.md "$stage/lumaretouch_engine/third_party/hair_smoothing/"
+
 # Independent manually referenced hair unification. Source only, build UNRUN.
 bash "$here/../core/hair_unification/build_hair_unification.sh" "$stage/lumaretouch_engine/bin/liblrt_hair_unification.so"
 mkdir -p "$stage/lumaretouch_engine/third_party/hair_unification"

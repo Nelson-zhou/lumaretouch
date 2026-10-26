@@ -275,6 +275,9 @@ def validate(p: object) -> None:
     from .hair_colour_project import validate as validate_hair
     try:validate_hair(p,allowed=(sv in (HAIR_SCHEMA,CUBE_SCHEMA,TONE_SCHEMA,GRADING_SCHEMA,SELECTIVE_SCHEMA,PRIMARY_SCHEMA,DETAIL_SCHEMA,GRAIN_SCHEMA,COLOUR_EDITOR_SCHEMA,IDENTITY_SCHEMA,SCHEMA)))
     except (ValueError,TypeError,KeyError) as error:raise ProjectError(str(error)) from error
+    from .hair_smoothing_project import validate_project as validate_smoothing
+    try:validate_smoothing(p)
+    except (ValueError,TypeError,KeyError) as error:raise ProjectError(str(error)) from error
     from .neck_wrinkle_project import validate_project as validate_neck
     try:validate_neck(p)
     except (ValueError,TypeError,KeyError) as error:raise ProjectError(str(error)) from error

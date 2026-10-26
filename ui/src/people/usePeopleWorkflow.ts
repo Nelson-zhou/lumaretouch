@@ -24,6 +24,9 @@ export function usePeopleWorkflow(status: EngineStatus | null, doc: DocState | n
     refresh: () => refreshRef.current(),
   }), []);
   const state = useSyncExternalStore(workflow.subscribe, workflow.snapshot, workflow.snapshot);
+  useLayoutEffect(() => {
+    if (status?.engine_alive === true) workflow.observeHairSmoothingRecovery(status.hair_smoothing_recovery);
+  }, [workflow, status?.engine_alive, status?.hair_smoothing_recovery?.engine_epoch, status?.hair_smoothing_recovery?.replacement_serial]);
   useLayoutEffect(()=>subscribeSupportAliasWorkspace(value=>workflow.retireDecorationSupportWorkspace(value)),[workflow]);
   const [historyRefreshError, setHistoryRefreshError] = useState(''), [historyRefreshing, setHistoryRefreshing] = useState(false);
   const recoveryReadback=useRef<{id:string;epoch:string;batchId:string;action:'undo'|'redo';marker:RecoveryAliasMarker;terminalKnown:boolean}|null>(null);
@@ -182,6 +185,8 @@ export function usePeopleWorkflow(status: EngineStatus | null, doc: DocState | n
     if (historyBusy) throw Error('共享来源批次历史仍在处理或查询中，不能重发修改。');
     if (action === 'skin_reference_choice' && status?.ready_caps?.skin_reference_choice_protocol !== 1)
       throw Error('当前引擎未提供已测人脸亮度建议协议，不会以旧图或人物置信度代替。');
+    if (action?.startsWith('hair_smoothing_') && action !== 'hair_smoothing_detach' && status?.ready_caps?.hair_smoothing_protocol !== 1)
+      throw Error('当前引擎未提供可见头发方向纹理柔顺审核协议。');
     if (action?.startsWith('neck_wrinkle_') && status?.ready_caps?.neck_wrinkle_protocol !== 1)
       throw Error('当前引擎未提供颈部细纹审核协议。');
     if (action && isSkinReferenceBodyAction(action) && status?.ready_caps?.skin_reference_body_protocol !== 1)

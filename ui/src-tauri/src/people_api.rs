@@ -10,6 +10,8 @@ pub(crate) mod face_style;
 pub(crate) mod skin_reference_match;
 #[path = "neck_wrinkle_people.rs"]
 pub(crate) mod neck_wrinkle;
+#[path = "hair_smoothing_people.rs"]
+pub(crate) mod hair_smoothing;
 #[path = "skin_reference_body_people.rs"]
 pub(crate) mod skin_reference_body;
 #[path = "skin_reference_choice_people.rs"]
@@ -27,7 +29,7 @@ pub(crate) mod decoration_alias;
 #[path = "face_decoration_support_alias_protocol.rs"]
 pub(crate) mod decoration_support_alias;
 
-const PEOPLE_ACTIONS: &[&str] = &["neck_wrinkle_reference", "neck_wrinkle_preview", "neck_wrinkle_crop", "neck_wrinkle_confirm", "neck_wrinkle_detach", "skin_reference_choice", "skin_reference_body_catalog", "skin_reference_body_preview", "skin_reference_body_image", "skin_reference_body_confirm", "skin_reference_body_clear", "skin_reference_match_catalog", "skin_reference_match_preview", "skin_reference_match_image", "skin_reference_match_confirm", "skin_reference_match_clear", "eye_makeup_enhance_reference", "eye_makeup_enhance_review", "facial_sculpt_reference", "facial_sculpt_review", "face_decoration_support_alias_preview", "face_decoration_support_alias_image", "face_decoration_support_alias_confirm", "face_decoration_alias_preview", "face_decoration_alias_image", "face_decoration_alias_confirm", "face_decoration_reference", "face_decoration_review", "eye_bag_source_image", "eye_bag_reference", "eye_bag_preview", "eye_bag_image", "eye_bag_confirm", "face_style_catalog", "face_style_preview", "face_style_image", "face_style_confirm", "patch", "link", "group", "face_status", "manual_add", "create_person", "select", "target", "analyse_face", "resolve_legacy", "eye_light_reference", "eye_light_review", "blush_palette", "blush_reference", "blush_review", "lipstick_palette", "lipstick_reference", "lipstick_review", "eyeliner_palette", "eyeliner_reference", "eyeliner_review", "iris_reference", "iris_review", "eyelash_palette", "eyelash_reference", "eyelash_review", "brow_makeup_palette", "brow_makeup_reference", "brow_makeup_review", "skin_body_reference", "skin_body_preview", "skin_body_confirm", "skin_body_detach", "skin_finish_body_reference", "skin_finish_body_preview", "skin_finish_body_confirm", "skin_finish_body_detach", "body_skin_evenness_reference", "body_skin_evenness_preview", "body_skin_evenness_confirm", "body_skin_evenness_detach", "body_face_match_reference", "body_face_match_preview", "body_face_match_confirm", "body_face_match_detach", "collarbone_reference", "collarbone_preview", "collarbone_confirm", "collarbone_detach"];
+const PEOPLE_ACTIONS: &[&str] = &["hair_smoothing_reference", "hair_smoothing_preview", "hair_smoothing_crop", "hair_smoothing_confirm", "hair_smoothing_detach", "neck_wrinkle_reference", "neck_wrinkle_preview", "neck_wrinkle_crop", "neck_wrinkle_confirm", "neck_wrinkle_detach", "skin_reference_choice", "skin_reference_body_catalog", "skin_reference_body_preview", "skin_reference_body_image", "skin_reference_body_confirm", "skin_reference_body_clear", "skin_reference_match_catalog", "skin_reference_match_preview", "skin_reference_match_image", "skin_reference_match_confirm", "skin_reference_match_clear", "eye_makeup_enhance_reference", "eye_makeup_enhance_review", "facial_sculpt_reference", "facial_sculpt_review", "face_decoration_support_alias_preview", "face_decoration_support_alias_image", "face_decoration_support_alias_confirm", "face_decoration_alias_preview", "face_decoration_alias_image", "face_decoration_alias_confirm", "face_decoration_reference", "face_decoration_review", "eye_bag_source_image", "eye_bag_reference", "eye_bag_preview", "eye_bag_image", "eye_bag_confirm", "face_style_catalog", "face_style_preview", "face_style_image", "face_style_confirm", "patch", "link", "group", "face_status", "manual_add", "create_person", "select", "target", "analyse_face", "resolve_legacy", "eye_light_reference", "eye_light_review", "blush_palette", "blush_reference", "blush_review", "lipstick_palette", "lipstick_reference", "lipstick_review", "eyeliner_palette", "eyeliner_reference", "eyeliner_review", "iris_reference", "iris_review", "eyelash_palette", "eyelash_reference", "eyelash_review", "brow_makeup_palette", "brow_makeup_reference", "brow_makeup_review", "skin_body_reference", "skin_body_preview", "skin_body_confirm", "skin_body_detach", "skin_finish_body_reference", "skin_finish_body_preview", "skin_finish_body_confirm", "skin_finish_body_detach", "body_skin_evenness_reference", "body_skin_evenness_preview", "body_skin_evenness_confirm", "body_skin_evenness_detach", "body_face_match_reference", "body_face_match_preview", "body_face_match_confirm", "body_face_match_detach", "collarbone_reference", "collarbone_preview", "collarbone_confirm", "collarbone_detach"];
 fn text(value: &Value) -> bool { value.as_str().is_some_and(|s| !s.is_empty() && s.len() <= 128) }
 fn revision(value: &Value) -> bool { value.as_u64().is_some_and(|n| n <= 9_007_199_254_740_991) }
 fn digest(value: &Value) -> bool {
@@ -68,11 +70,11 @@ impl ReceiptKind for PeopleKind {
     fn valid(value: &Value, document: Option<&str>) -> bool {
         if value["protocol"] != 1 || value["document_id"].as_str() != document
             || !value["success"].is_boolean() || !value["outcome_unknown"].is_boolean() { return false; }
-        if !neck_wrinkle::receipt(value) || !skin_reference_choice::receipt(value) || !skin_reference_body::receipt(value) || !skin_reference_match::receipt(value) || !decoration_support_alias::receipt(value) || !decoration_alias::receipt(value) || !face_style::receipt(value) || !eye_bag::receipt(value) || !face_decoration::receipt(value) || !facial_sculpt::receipt(value) || !eye_makeup_enhance::receipt(value) { return false; }
+        if !hair_smoothing::receipt(value) || !neck_wrinkle::receipt(value) || !skin_reference_choice::receipt(value) || !skin_reference_body::receipt(value) || !skin_reference_match::receipt(value) || !decoration_support_alias::receipt(value) || !decoration_alias::receipt(value) || !face_style::receipt(value) || !eye_bag::receipt(value) || !face_decoration::receipt(value) || !facial_sculpt::receipt(value) || !eye_makeup_enhance::receipt(value) { return false; }
         if value["success"] != true { return value["error"].is_string(); }
         // This family already checks complete source-wide report publication;
         // reads/tombstones intentionally carry no selected-face document view.
-        if neck_wrinkle::action(value) || neck_wrinkle::neutral_patch(value) || skin_reference_choice::action(value) || skin_reference_body::action(value) || skin_reference_match::action(value) { return true; }
+        if hair_smoothing::action(value) || hair_smoothing::neutral_patch(value) || neck_wrinkle::action(value) || neck_wrinkle::neutral_patch(value) || skin_reference_choice::action(value) || skin_reference_body::action(value) || skin_reference_match::action(value) { return true; }
         if face_decoration::released_reference(value) || facial_sculpt::released_reference(value) || eye_makeup_enhance::released_reference(value) { return true; }
         if decoration_alias::action(value) || decoration_support_alias::action(value) {return true;}
         if (face_style::action(value) && value["action"] != "face_style_confirm") || (eye_bag::action(value) && value["action"] != "eye_bag_confirm") {
@@ -129,18 +131,58 @@ impl ReceiptKind for PeopleKind {
     }
 }
 #[derive(Default)]
-struct Mailbox { epoch: [u8; 16], host: ReceiptHost<PeopleKind> }
+struct Mailbox { epoch: [u8; 16], host: ReceiptHost<PeopleKind>, recovery_epoch: [u8;16], recovery_serial: u64 }
 fn mailbox() -> &'static Mutex<Mailbox> {
     static BOX: OnceLock<Mutex<Mailbox>> = OnceLock::new();
     BOX.get_or_init(|| Mutex::new(Mailbox::default()))
+}
+// Native authority metadata in the existing owner, not another request ledger.
+// It advances only for an actually ready replacement engine or verified replacing
+// project open. Death, navigation, creation, status refresh and timeout do not.
+const MAX_RECOVERY_SERIAL: u64 = 9_007_199_254_740_991;
+fn advance_recovery(mailbox: &mut Mailbox) {
+    mailbox.recovery_serial = if mailbox.recovery_serial < MAX_RECOVERY_SERIAL {
+        mailbox.recovery_serial + 1
+    } else { MAX_RECOVERY_SERIAL + 1 }; // Exhaustion fails closed; never wraps.
+}
+pub(crate) fn recovery_ready(epoch: [u8;16]) {
+    if epoch == [0;16] { return; }
+    if let Ok(mut mailbox) = mailbox().lock() {
+        if mailbox.recovery_epoch != epoch {
+            mailbox.recovery_epoch = epoch; advance_recovery(&mut mailbox);
+        }
+    }
+}
+pub(crate) fn recovery_reopened(epoch: [u8;16]) {
+    if let Ok(mut mailbox) = mailbox().lock() {
+        if epoch != [0;16] && mailbox.recovery_epoch == epoch { advance_recovery(&mut mailbox); }
+    }
+}
+pub(crate) fn recovery_status() -> Value {
+    let Ok(mailbox) = mailbox().lock() else { return Value::Null; };
+    if mailbox.recovery_epoch == [0;16] || mailbox.recovery_serial == 0
+        || mailbox.recovery_serial > MAX_RECOVERY_SERIAL { return Value::Null; }
+    json!({"engine_epoch":crate::frame_identity::hex(mailbox.recovery_epoch),"replacement_serial":mailbox.recovery_serial})
 }
 pub(crate) fn receive(epoch: [u8; 16], value: &Value) -> bool {
     if let Ok(mut mailbox) = mailbox().lock() {
         let guarded = value["request_id"].as_str().is_some_and(|id| mailbox.host.guards_review(mailbox.epoch, id));
         mailbox.host.receive(epoch, value);
-        return (!neck_wrinkle::action(value) && !neck_wrinkle::neutral_patch(value) && !skin_reference_choice::action(value) && !skin_reference_body::action(value) && !skin_reference_match::action(value) && !face_style::action(value) && !eye_bag::action(value) && !face_decoration::action(value) && !facial_sculpt::action(value) && !eye_makeup_enhance::action(value) && !decoration_alias::action(value) && !decoration_support_alias::action(value) && !guarded) || (mailbox.epoch == epoch
+        return (!hair_smoothing::action(value) && !hair_smoothing::neutral_patch(value) && !neck_wrinkle::action(value) && !neck_wrinkle::neutral_patch(value) && !skin_reference_choice::action(value) && !skin_reference_body::action(value) && !skin_reference_match::action(value) && !face_style::action(value) && !eye_bag::action(value) && !face_decoration::action(value) && !facial_sculpt::action(value) && !eye_makeup_enhance::action(value) && !decoration_alias::action(value) && !decoration_support_alias::action(value) && !guarded) || (mailbox.epoch == epoch
             && value["request_id"].as_str().is_some_and(|id|
                 mailbox.host.status(id)["result"] == *value && value["success"] == true));
+    }
+    false
+}
+/// Raw JSON proof is checked before generic result dispatch. Bare IDs and
+/// obsolete engine generations cannot invalidate another retained request.
+pub(crate) fn reject_malformed_hair_smoothing(epoch:[u8;16], raw:&str, value:&Value) -> bool {
+    if let Ok(mut mailbox)=mailbox().lock() {
+        if !mailbox.host.bound_hair_smoothing(epoch,value) { return false; }
+        if crate::portrait_crop_protocol::unique_json(raw,18*1024*1024).is_err() {
+            mailbox.host.failed_bound_hair_smoothing(epoch,value,"malformed or oversized original hair smoothing receipt");
+            return true;
+        }
     }
     false
 }
@@ -205,7 +247,24 @@ pub(crate) fn people(state: tauri::State<'_, std::sync::Arc<crate::AppState>>, r
     }
     if request["action"] == "status" {
         if fields.len() != 2 { return Err("人物查询字段无效".into()); }
-        return Ok(mailbox().lock().map_err(|_| "人物结果锁失败")?.host.status(id));
+        let engine = state.engine.lock().map_err(|_| "引擎锁失败")?;
+        let handle = engine.as_ref().filter(|h| h.is_alive());
+        let queue = handle.map(|h| h.queue_stats()); // FIFO idle BEFORE replacement serial.
+        let mut mailbox = mailbox().lock().map_err(|_| "人物结果锁失败")?;
+        let mut result = mailbox.host.status(id);
+        let owner_epoch = mailbox.epoch;
+        let opened = mailbox.recovery_serial;
+        let recovery = if let (Some(handle),Some(queue)) = (handle,queue.as_ref()) {
+            if mailbox.recovery_epoch == handle.epoch() {
+                mailbox.host.hair_smoothing_recovery(id,owner_epoch,handle.epoch(),opened,queue)
+            } else { None }
+        } else { None };
+        drop(mailbox);
+        if let Some(proof) = recovery {
+            crate::project_recovery_fence::abandon_hair_smoothing(owner_epoch,id,&proof[hair_smoothing::MARKER]);
+            result["hair_smoothing_recovery"] = proof;
+        }
+        return Ok(result);
     }
     if fields.len() != 9 || !request["action"].as_str().is_some_and(|a| PEOPLE_ACTIONS.contains(&a))
         || !request["payload"].is_object() || request.to_string().len() > 256 * 1024 {
@@ -220,6 +279,11 @@ pub(crate) fn people(state: tauri::State<'_, std::sync::Arc<crate::AppState>>, r
         rows.iter().any(|row| row["operation_id"] == "lnx.neck_wrinkle.v1")) && !neck_wrinkle::neutral_patch(&request) {
         return Err("颈部细纹须审核后确认；直接参数修改仅允许独立归零".into());
     }
+    if request["action"] == "patch" && request["payload"]["patches"].as_array().is_some_and(|rows|
+        rows.iter().any(|row| row["operation_id"] == "lnx.hair_smoothing.v1")) && !hair_smoothing::neutral_patch(&request) {
+        return Err("头发柔顺须独立审核；直接参数修改仅允许独立归零".into());
+    }
+    hair_smoothing::command(&request)?;
     neck_wrinkle::command(&request)?;
     skin_reference_body::command(&request)?;
     skin_reference_choice::command(&request)?;
@@ -242,6 +306,10 @@ pub(crate) fn people(state: tauri::State<'_, std::sync::Arc<crate::AppState>>, r
     }
     if skin_reference_choice::action(&command) && state.ready_caps.lock().map_err(|_| "能力锁失败")?["skin_reference_choice_protocol"] != 1 {
         return Err("引擎未提供完整源图测量的只读参照建议协议".into());
+    }
+    if hair_smoothing::action(&command) && !hair_smoothing::neutral_patch(&command) && command["action"] != "hair_smoothing_detach"
+        && state.ready_caps.lock().map_err(|_| "能力锁失败")?["hair_smoothing_protocol"] != 1 {
+        return Err("可见头发柔顺审核协议不可用".into());
     }
     if neck_wrinkle::action(&command) && !neck_wrinkle::neutral_patch(&command) && command["action"] != "neck_wrinkle_detach"
         && state.ready_caps.lock().map_err(|_| "能力锁失败")?["neck_wrinkle_protocol"] != 1 {
@@ -295,14 +363,17 @@ pub(crate) fn people(state: tauri::State<'_, std::sync::Arc<crate::AppState>>, r
                 return Err("共用源图支撑审核凭据已过期或未完成，请重新读取当前人物原图".into());
             }
         }
-        if neck_wrinkle::action(&command) || neck_wrinkle::neutral_patch(&command) || skin_reference_choice::action(&command) || skin_reference_body::action(&command) || skin_reference_match::action(&command) || face_style::action(&command) || eye_bag::action(&command) || face_decoration::action(&command) || facial_sculpt::action(&command) || eye_makeup_enhance::action(&command) || decoration_alias::action(&command) || decoration_support_alias::action(&command) { mailbox.host.begin_command(epoch, &command)?; }
+        if hair_smoothing::action(&command) || hair_smoothing::neutral_patch(&command) || neck_wrinkle::action(&command) || neck_wrinkle::neutral_patch(&command) || skin_reference_choice::action(&command) || skin_reference_body::action(&command) || skin_reference_match::action(&command) || face_style::action(&command) || eye_bag::action(&command) || face_decoration::action(&command) || facial_sculpt::action(&command) || eye_makeup_enhance::action(&command) || decoration_alias::action(&command) || decoration_support_alias::action(&command) { mailbox.host.begin_command(epoch, &command)?; }
         else { mailbox.host.begin_bound(epoch, id, request["action"].as_str().unwrap(), request["document_id"].as_str())?; }
     }
     command["host_epoch"] = json!(crate::frame_identity::hex(epoch));
-    if let Err(error) = state.send_to_engine(command) {
-        mailbox().lock().map_err(|_| "人物结果锁失败")?.host.failed(id, &error);
-        return Err(error);
+    let dispatched = state.send_to_engine(command);
+    {
+        let mut mailbox = mailbox().lock().map_err(|_| "人物结果锁失败")?;
+        mailbox.host.hair_smoothing_admission_finished(id);
+        if let Err(error) = &dispatched { mailbox.host.failed(id,error); }
     }
+    dispatched?;
     Ok(json!({"requested": true}))
 }
 
@@ -318,3 +389,7 @@ mod eye_bag_cancel_tests;
 #[cfg(test)]
 #[path = "eye_bag_alias_host_unrun.rs"]
 mod eye_bag_alias_host_tests;
+
+#[cfg(test)]
+#[path = "hair_smoothing_recovery_unrun.rs"]
+mod hair_smoothing_recovery_tests;
