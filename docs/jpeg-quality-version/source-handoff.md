@@ -9,8 +9,7 @@ Status: source implementation only; fixtures AUTHORED / UNRUN.
   in the writer result. Explicit null remains null; absent remains absent. No
   codec, quality value, or mapping version is inferred from the frozen plan.
 - `server.Engine._task_item_locked`: add the field to the existing conditional
-  receipt selection shared by success, skip, and failure outcomes. This one-line
-  integration was applied by the concurrent server owner.
+  receipt selection shared by success, skip, and failure outcomes. The field is integrated into the canonical server receipt path.
 - Existing variant receipts and retry retention remain unchanged. Existing
   quality scale `lrt.quality.v1` and writer behavior remain unchanged.
 
@@ -38,8 +37,8 @@ Original adapter fixtures cover reported/missing codecs and versions and keeping
 variant-specific quality facts. Plan doubles test propagation, not encoding.
 
 Only static AST syntax inspection and source reading were performed. No runtime,
-test execution, build, typecheck, project import, inference, install, download,
-commit, or push was performed by this package owner. Source closure is scoped to
+test execution, build, typecheck, project import, inference, install or download
+was performed for this source audit. Source closure is scoped to
 the known field-loss boundaries, not runtime FORMAT-001 acceptance or product
 approval of the quality scale. Real export/event/save/reopen comparison remains
 unrun, including ordinary and target-size JPEG and Original multi-output retry.

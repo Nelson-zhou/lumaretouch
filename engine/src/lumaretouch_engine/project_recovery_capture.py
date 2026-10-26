@@ -5,7 +5,7 @@ also does not erase _precompute or unknown tensors. Unsupported values stop auto
 an actionable error rather than silently changing the reopened image.
 """
 from copy import deepcopy
-from . import project as PJ, tasks as T
+from . import project as PJ
 from .project_recovery_store import RecoveryError, no_dropped
 from .virtual_copy_project import save_row, save_receipts
 
@@ -45,7 +45,8 @@ def capture(engine, *, revision, native_receipts, transaction_open):
     order = {row['document_id']: i for i, row in enumerate(engine._docs)}
     project['docs'].sort(key=lambda row: order[row['document_id']])
     # for_json reads copies; do not mark live tasks persisted as a capture side effect.
-    project['tasks'] = [T.for_json(deepcopy(task)) for task in engine._tasks.values()]
+    from .export_task_recovery import serialize as serialize_tasks
+    project['tasks'] = serialize_tasks(engine, project)
     engine._people_save(project)
     save_receipts(engine, project)
     from .managed_import_project import save_receipts as save_import_receipts

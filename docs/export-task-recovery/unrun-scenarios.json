@@ -1,0 +1,101 @@
+{
+  "status": "all_unrun",
+  "scope": "saved/recovery-snapshot tasks only; L2 partial",
+  "scenarios": [
+    {
+      "id": "saved-pause-reopen",
+      "expected": "Pause CPU global-edit export, save, reopen; no worker until exact fresh resume; same task and original recipe despite later slider edits.",
+      "status": "not_run"
+    },
+    {
+      "id": "original-type-identity",
+      "expected": "Original snapshots contain nested tuple/list/dataclass fields; round-trip keeps exact recipe_sha256 and decisions without re-resolving formats.",
+      "status": "not_run"
+    },
+    {
+      "id": "retained-full-selection",
+      "expected": "Retry a failed subset twice, save/reopen; full original selection remains, all successful receipts retained and never rerun.",
+      "status": "not_run"
+    },
+    {
+      "id": "assets-corruption",
+      "expected": "Missing/truncated/hash-mismatched arrays, custom LUT or bytes block; unknown classes/fields and dropped codec values never become neutral.",
+      "status": "not_run"
+    },
+    {
+      "id": "tuple-shape-adversarial",
+      "expected": "Reject duplicate/nonexistent/non-list/oversized paths and malformed typed segments; no arbitrary constructor/import.",
+      "status": "not_run"
+    },
+    {
+      "id": "dependency-change",
+      "expected": "Change runtime version, engine source, device or active unsupported model feature; retain ledger and block without fallback.",
+      "status": "not_run"
+    },
+    {
+      "id": "source-change",
+      "expected": "Change full source bytes or document/source identity; relocation and package-rewritten paths block; current recipe is never adopted.",
+      "status": "not_run"
+    },
+    {
+      "id": "verified-output",
+      "expected": "Reopen saved successful first item plus pending second; hash/stat authenticate first, resume writes only second.",
+      "status": "not_run"
+    },
+    {
+      "id": "commit-window",
+      "expected": "Output exists but saved snapshot lacks complete receipt; fail closed, preserve target, no rename or assumed success.",
+      "status": "not_run"
+    },
+    {
+      "id": "output-replaced",
+      "expected": "Remove, replace, alter, symlink or change stamped completed output; block without recreating/deleting it.",
+      "status": "not_run"
+    },
+    {
+      "id": "durability-failure",
+      "expected": "Commit receipt with directory_fsync/durability false is never certified; retain successful byte facts without claiming recoverability.",
+      "status": "not_run"
+    },
+    {
+      "id": "owner-stale",
+      "expected": "Switch/create projects and replay old native tokens; reject. Save cannot bless prior-workspace tasks. Explicit open issues fresh tokens only.",
+      "status": "not_run"
+    },
+    {
+      "id": "legacy-ledger",
+      "expected": "Legacy tasks without recipe envelope remain readable/cancellable/deletable as appropriate, no resume/retry.",
+      "status": "not_run"
+    },
+    {
+      "id": "worker-conflict",
+      "expected": "Restored resume while another worker/focus owner is live fails before state transition; repeated requests cannot launch two workers.",
+      "status": "not_run"
+    },
+    {
+      "id": "restore-all-complete",
+      "expected": "Interrupted saved ledger whose items are all complete verifies outputs, then explicit resume completes bookkeeping without worker.",
+      "status": "not_run"
+    },
+    {
+      "id": "bounds-and-disk-failure",
+      "expected": "Large snapshot budgets/unsupported objects/malformed asset shape/save failures produce blocked reason without silent reduced recipe or output writes.",
+      "status": "not_run"
+    },
+    {
+      "id": "unsupported-aggregate",
+      "expected": "Watermark, derivative, layout, owned-workflow lease, custom ICC, GPU and model-dependent task recovery stay explicitly blocked.",
+      "status": "not_run"
+    },
+    {
+      "id": "quality-map",
+      "expected": "JPEG version/encoder quality remains present through destination receipt, saved task, reopen and verified-output reconciliation.",
+      "status": "not_run"
+    },
+    {
+      "id": "manual-versus-auto",
+      "expected": "Manual paused save captures stable ledger; existing recovery runtime does not accidentally capture a running or paused live worker outside its guard.",
+      "status": "not_run"
+    }
+  ]
+}

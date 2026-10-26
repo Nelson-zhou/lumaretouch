@@ -193,3 +193,30 @@ def decorate(result, payload, key):
                         # Keep the actual writer receipt. Lack of proof blocks
                         # later reuse; it must not erase a successful commit.
                         output['output_identity_error'] = str(error)
+
+    # Saved-task recovery also needs ordinary explicit-format receipts. Never
+    # manufacture proof from a target pathname alone: bind the writer's encoded
+    # bytes, actual output identity and the original destination plan together.
+    if not result.get('outputs') and result.get('out') and not result.get('error'):
+        result['outputs'] = [{key:result[key] for key in
+            ('format', 'bits', 'bytes', 'encoded_sha256', 'encoder_quality',
+             'quality_mapping_version', 'directory_fsync') if key in result} |
+            {'path':result['out'], 'skipped':bool(result.get('out_skipped'))}]
+    for output in result.get('outputs') or []:
+        if (output.get('path') not in by_target or result.get('error')
+                or output.get('error') or output.get('skipped')
+                or output.get('verification_failed') or output.get('committed') is False
+                or output.get('durability_confirmed') is False
+                or output.get('directory_fsync') is False
+                or result.get('directory_fsync') is False or output.get('bytes', 0) <= 0):
+            continue
+        try:
+            from .export_format_receipts import identity
+            proof = identity(output['path'])
+            if (proof['sha256'] != (output.get('encoded_sha256') or output.get('sha256'))
+                    or proof['bytes'] != output['bytes']):
+                raise ValueError('Encoded output bytes do not match the writer receipt')
+            output['output_identity'] = proof
+            output['recovery_plan_id'] = plan.plan_id
+        except (OSError, ValueError) as error:
+            output['recovery_identity_error'] = str(error)

@@ -226,7 +226,7 @@ def begin_retry(task: dict) -> tuple[dict, list]:
 
 def for_json(task: dict) -> dict:
     """进工程文件的那一份（纯 JSON，无活对象）。"""
-    t = {k: v for k, v in task.items() if k not in ("control", "_control_token", "_control_result", "_control_owner")}
+    t = {k: v for k, v in task.items() if k != "control" and not k.startswith("_")}
     t["counts"] = counts(task)
     return t
 
@@ -240,12 +240,34 @@ def from_json(obj: dict) -> dict:
     """
     if not isinstance(obj, dict) or obj.get("schema_version") != SCHEMA:
         raise TaskError(f"任务记录不是 {SCHEMA}：{obj.get('schema_version') if isinstance(obj, dict) else type(obj).__name__}")
+    from .export_task_recovery import _json_bounds
+    try: _json_bounds(obj)
+    except ValueError as error: raise TaskError(str(error)) from error
     for k in ("task_id", "kind", "state", "items", "inputs"):
         if k not in obj:
             raise TaskError(f"任务记录缺 {k!r}")
     if obj["state"] not in STATES:
         raise TaskError(f"任务 {obj['task_id']} 的状态不认识：{obj['state']!r}")
-    t = {**obj, "persisted": True}
+    if (type(obj['task_id']) is not str or not obj['task_id'] or obj['kind'] != 'export'
+            or type(obj['inputs']) is not dict or type(obj['items']) is not list
+            or not 1 <= len(obj['items']) <= 100000):
+        raise TaskError('Invalid persisted task identity/selection')
+    seen = set()
+    for item in obj['items']:
+        if (type(item) is not dict or type(item.get('path')) is not str or not item['path']
+                or item['path'] in seen or item.get('state') not in (*STATES, 'skipped')
+                or type(item.get('outputs', [])) is not list
+                or any(type(output) is not dict for output in item.get('outputs', []))):
+            raise TaskError('Invalid/duplicate persisted task item')
+        seen.add(item['path'])
+    if type(obj.get('attempt', 0)) is not int or obj.get('attempt', 0) < 0:
+        raise TaskError('Invalid persisted attempt count')
+    if type(obj.get('history', [])) is not list:
+        raise TaskError('Invalid persisted task history')
+    t = {**copy.deepcopy(obj), "persisted": True}
+    for key in list(t):
+        if key.startswith('_'): t.pop(key)
+    t['updated_ns'] = now_ns()
     t.pop("_control_owner", None)
     t.pop("_control_token", None)
     t.pop("_control_result", None)

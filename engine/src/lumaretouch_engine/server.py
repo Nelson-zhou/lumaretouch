@@ -2646,11 +2646,9 @@ class Engine(HVC.HairVolumeHostMixin, PortraitCropEngineMixin, HUC.HairUnificati
             prow["label"] = row.get("label")
         order = {row["document_id"]:i for i,row in enumerate(self._docs)}
         prj["docs"].sort(key=lambda row:order[row["document_id"]])
-        # 任务台账跟着工程走（TASK-004/008）：persisted 那一份只存参数快照与结局，
-        # 配方快照（带 numpy 图层）不存——所以重开后重试会被拒而不是偷换配方
-        for t in self._tasks.values():
-            t["persisted"] = True
-        prj["tasks"] = [T.for_json(t) for t in self._tasks.values()]
+        # Task snapshots use the same immutable project assets as document recipes.
+        from .export_task_recovery import serialize as serialize_tasks
+        prj["tasks"] = serialize_tasks(self, prj)
         self._people_save(prj)
         from .virtual_copy_project import save_receipts
         save_receipts(self, prj)
@@ -2661,30 +2659,35 @@ class Engine(HVC.HairVolumeHostMixin, PortraitCropEngineMixin, HUC.HairUnificati
                      "fingerprinted": hashed}
 
     def _tasks_restore(self, prj: dict) -> list:
-        """从工程文件读回任务台账（TASK-004/008）：一律 paused，不自动重跑。
+        """Restore only exact saved snapshots; interrupted work stays paused.
 
-        依赖变化在这一层就能判：那一批的输入路径不在新底片条里、或文件已不在
-        磁盘上，就置 blocked_reason 并说清是哪几张。`tasks.from_json` 已经把
-        “进程曾中断”那些“正在做”的说法一律回落到 paused，这里只补依赖那一句。"""
+        Legacy/unsupported/mismatched recipes retain readable blocked ledgers.
+        Opening a project never starts a worker or substitutes current edits.
+        """
         self._tasks = {}
-        paths = {d["path"] for d in self._docs}
+        self._task_args = {}
         notes = []
         for obj in prj.get("tasks") or []:
             try:
                 t = T.from_json(obj)
+                if t['task_id'] in self._tasks:
+                    raise T.TaskError('Duplicate restored task identity')
             except T.TaskError as e:
                 notes.append({"reason": f"旧任务记录读不进来：{e}"})
                 continue
+            t["recipe_persisted"] = False
+            try:
+                from .export_task_recovery import restore as restore_task
+                args = restore_task(self, prj, t)
+                self._task_args[t['task_id']] = args
+                t['recipe_persisted'] = True
+                t['blocked_reason'] = None
+            except (ValueError, TypeError, KeyError, OSError, RuntimeError) as error:
+                t['blocked_reason'] = str(error)
+            # Explicit project open is the only restoration authority boundary.
+            # Unverified rows may be cancelled/deleted, never resumed/retried.
             from .export_task_controls import bind
             bind(self, t)
-            t["recipe_persisted"] = False
-            gone = [p for p in t["inputs"].get("images") or [] if p not in paths
-                    or not os.path.isfile(p)]
-            if gone:
-                t["blocked_reason"] = (f"依赖变了：{len(gone)} 个输入不在本工程或已不在磁盘上"
-                                       f"（{gone[:3]}）——这一批不能重跑")
-            else:
-                t["blocked_reason"] = ("配方快照只活在本次会话：重开后请打开那张图再重新导出")
             self._tasks[t["task_id"]] = t
             notes.append({"task_id": t["task_id"], "state": t["state"],
                           "blocked": t["blocked_reason"]})
@@ -6251,6 +6254,8 @@ class Engine(HVC.HairVolumeHostMixin, PortraitCropEngineMixin, HUC.HairUnificati
             item.update({key:entry[key] for key in ("document_id","source_asset_id","recipe_version_id","copy_number") if key in entry})
         from .export_task_controls import bind
         bind(self, task)
+        from .export_task_recovery import origin as recovery_origin
+        recovery_origin(self, task)
         task["recipe_persisted"] = True
         self._tasks[task["task_id"]] = task
         # 参数快照按 task_id 收：只拿 `self._export_args` （会话里最后那一批）当快照，
@@ -6431,7 +6436,7 @@ class Engine(HVC.HairVolumeHostMixin, PortraitCropEngineMixin, HUC.HairUnificati
         changed = []
         try:
             for t in targets:
-                if action in ("pause", "resume") and not self._task_worker_is_live(t):
+                if action == "pause" and not self._task_worker_is_live(t):
                     # 对“现在根本没在跑的那批”说暂停/继续，只能把台账写成一个
                     # 永远醒不过来的状态（RESUMING 而没 worker）：必须拒并说清为什么
                     t["blocked_reason"] = ("这条批次没有正在跑的 worker（重开后的旧台账）："
@@ -6447,6 +6452,10 @@ class Engine(HVC.HairVolumeHostMixin, PortraitCropEngineMixin, HUC.HairUnificati
                         ctl.pause.set()
                         ctl.resume.clear()
                 elif action == "resume":
+                    if not self._task_worker_is_live(t):
+                        self._task_retry(t, restored_resume=True)
+                        changed.append(t)
+                        continue
                     T.request_resume(t)
                     self._emit_task(t, f"用户 {action}")
                     if ctl is not None and t is self._export_task:
@@ -6499,13 +6508,14 @@ class Engine(HVC.HairVolumeHostMixin, PortraitCropEngineMixin, HUC.HairUnificati
             if action not in ("retry", "delete", "pause", "resume", "cancel"):
                 self._emit_task(t, f"用户 {action}")
 
-    def _task_retry(self, t: dict) -> None:
-        """重试：同一 task_id、attempt+1、输入用当时那份快照。
+    def _task_retry(self, t: dict, *, restored_resume=False) -> None:
+        """Reuse the complete retained recipe; restored resume requires fresh proof.
 
-        从盘上读回来的任务没有配方快照（它只活在会话里）——这里必须**拒**，而不是
-        拿现在的滑块重跑：TASK-002 写的是“固定输入”，TASK-008 写的是“不自动重跑
-        或切换最新配方”，两句加起来只有拒这一个答案。想重跑请先打开那张图。
+        Retry increments attempt; an explicit paused restore resumes the original
+        attempt. Neither action accepts current document inputs or retargeting.
         """
+        from .export_task_controls import require_owner
+        require_owner(self, t)
         from .pick_focus_host import active as focus_active
         if focus_active(self):
             raise T.TaskError("Original focus review is running; stop or await it before retry")
@@ -6536,12 +6546,29 @@ class Engine(HVC.HairVolumeHostMixin, PortraitCropEngineMixin, HUC.HairUnificati
                     worker_decision(args[8], key, args[8]["document_entries"][key], args[9][key][0])
             except (ValueError, KeyError, TypeError) as error:
                 raise T.TaskError(f"Original 冻结来源/配方/格式计划不一致，拒绝重试：{error}") from error
-        _task, pend = T.begin_retry(t)
+        if t.get('_restored_snapshot'):
+            from .export_task_recovery import verify as verify_recovery
+            try: verify_recovery(self, t, args)
+            except (ValueError, TypeError, KeyError, OSError, RuntimeError) as error:
+                t['blocked_reason'] = str(error)
+                raise T.TaskError(str(error)) from error
+        if restored_resume:
+            if not t.get('_restored_snapshot'):
+                raise T.TaskError('No authenticated restored snapshot')
+            T.request_resume(t)
+            pend = T.pending_items(t)
+            if not pend:
+                T.transit(t, T.RUNNING, '已核对保存的全部提交回执')
+                T.transit(t, T.SUCCEEDED, '全部输出已认证；无需重新执行')
+                self._emit_task(t, '恢复回执核对完成')
+                return
+        else:
+            _task, pend = T.begin_retry(t)
         images, out_dir, fmt, quality, tile, doc, snap, bit_depth, opts, snap_by_path = args
         # 只跑没成功的，输入一律取自这条批次自己的快照，不是 live 字段也不是“最后那批”
         self._export_args = ([p for p in images if p in set(pend)], out_dir, fmt, quality,
                              tile, doc, snap, bit_depth, opts, snap_by_path)
-        self._task_args[t["task_id"]] = self._export_args
+        # Keep the complete immutable snapshot, not this attempt's pending subset.
         self._export_task = t
         self._task_ctl = _TaskControl()
         # 不再回 queued：begin_retry 已经把这一步记成 retrying，而转移表里

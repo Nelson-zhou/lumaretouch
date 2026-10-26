@@ -42,7 +42,9 @@ def metadata(host, task):
     allowed = []
     if live and state in (T.QUEUED, T.RUNNING, T.RETRYING):
         allowed.append('pause')
-    if live and state == T.PAUSED:
+    restored = bool(task.get('_restored_snapshot') and task.get('recipe_persisted')
+                    and host._task_args.get(task['task_id']))
+    if state == T.PAUSED and (live or (restored and not (host._export and host._export.is_alive()))):
         allowed.append('resume')
     if state in T.LIVE_STATES and state != T.CANCELLING:
         allowed.append('cancel')
@@ -80,8 +82,13 @@ def preflight(host, targets, action):
         require_owner(host, task)
         sample = copy.deepcopy(task)
         live = host._task_worker_is_live(task)
-        if action in ('pause', 'resume') and not live:
-            raise T.TaskError('旧台账没有 worker；恢复配方快照尚未持久化，不能继续')
+        if action == 'pause' and not live:
+            raise T.TaskError('任务没有正在运行的 worker')
+        if action == 'resume' and not live:
+            if (not task.get('_restored_snapshot') or not task.get('recipe_persisted')
+                    or not host._task_args.get(task['task_id'])
+                    or (host._export and host._export.is_alive())):
+                raise T.TaskError('没有可恢复的认证快照或已有 worker；不能继续')
         if action == 'pause': T.request_pause(sample)
         elif action == 'resume': T.request_resume(sample)
         elif action == 'cancel':
