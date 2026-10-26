@@ -296,6 +296,7 @@ pub fn spawn(py: &str, engine_src: &str, session: &str, state: Arc<AppState>,
         let d = dispatcher.clone();
         thread::spawn(move || {
             while let Ok(line) = rx.recv() {
+                if let Some(marker)=crate::final_canvas_flip_api::observe_line(inspection_epoch, &line) { crate::project_recovery_fence::observed(inspection_epoch, &marker); }
                 if let Some(marker)=crate::light_glow_api::observe_line(inspection_epoch, &line) { crate::project_recovery_fence::observed(inspection_epoch, &marker); }
                 if let Some(marker)=crate::upscale_restore_api::observe_line(inspection_epoch, &line) { crate::project_recovery_fence::observed(inspection_epoch, &marker); }
                 if let Some(marker)=crate::portrait_crop_api::observe_line(inspection_epoch, &line) { crate::project_recovery_fence::observed(inspection_epoch, &marker); }
@@ -343,9 +344,10 @@ pub fn spawn(py: &str, engine_src: &str, session: &str, state: Arc<AppState>,
                             || crate::light_glow_api::guards_result(inspection_epoch,id)
                             || crate::upscale_restore_api::guards_result(inspection_epoch,id)
                             || crate::portrait_crop_api::guards_result(inspection_epoch,id)
+                            || crate::final_canvas_flip_api::guards_result(inspection_epoch,id)
                             || crate::lens_blur_api::guards_result(inspection_epoch,id)
                     });
-                    if !scalar_review && v["event"] != "hand_shape_result" && v["event"] != "hand_tone_result" && v["event"] != "limb_vein_result" && v["event"] != "fabric_sweat_result" && v["event"] != "portrait_crop_result" && v["event"] != "hair_unification_result" && v["event"] != "hair_volume_result" && v["event"] != "creative_selection_result" && v["event"] != "ingest_session_result" && v["event"] != "workflow_owner_result" && v["event"] != "light_glow_result" && v["event"] != "upscale_restore_result" && v["event"] != "lens_blur_result" && v["event"] != "expression_replacement_result" && v["event"] != "common_background_result" && v["event"] != "fringe_repair_result" && v["event"] != "id_background_result" && v["event"] != "torso_length_result" && v["event"] != "waist_length_result" && v["event"] != "head_size_result" && v["event"] != "body_slim_result" {
+                    if !scalar_review && v["event"] != "final_canvas_flip_result" && v["event"] != "hand_shape_result" && v["event"] != "hand_tone_result" && v["event"] != "limb_vein_result" && v["event"] != "fabric_sweat_result" && v["event"] != "portrait_crop_result" && v["event"] != "hair_unification_result" && v["event"] != "hair_volume_result" && v["event"] != "creative_selection_result" && v["event"] != "ingest_session_result" && v["event"] != "workflow_owner_result" && v["event"] != "light_glow_result" && v["event"] != "upscale_restore_result" && v["event"] != "lens_blur_result" && v["event"] != "expression_replacement_result" && v["event"] != "common_background_result" && v["event"] != "fringe_repair_result" && v["event"] != "id_background_result" && v["event"] != "torso_length_result" && v["event"] != "waist_length_result" && v["event"] != "head_size_result" && v["event"] != "body_slim_result" {
                         crate::project_recovery_fence::observed(inspection_epoch, &v);
                     }
                     if v["event"]=="ready" && v["command_ack"].as_u64()!=Some(1) {
@@ -469,6 +471,7 @@ fn handle_event(state: &Arc<AppState>, line: &str,inspection_epoch:[u8;16]) {
         "limb_vein_result" => { if let Some(result)=crate::limb_vein_api::receive(inspection_epoch,&v) { if result.get("doc_state").is_some_and(|d|d.is_object()) { state.on_layer_frame(&result); } } },
         "hand_shape_result" => { if let Some(result)=crate::hand_shape_api::receive(inspection_epoch,&v) { if result.get("doc_state").is_some_and(|d|d.is_object()) { state.on_layer_frame(&result); } } },
         "hand_tone_result" => { if let Some(result)=crate::hand_tone_api::receive(inspection_epoch,&v) { if result.get("doc_state").is_some_and(|d|d.is_object()) { state.on_layer_frame(&result); } } },
+        "final_canvas_flip_result" => {}, // Already validated from bounded unique-key raw JSON.
         "photo_detail_result" | "photo_detail_readback" => { crate::photo_detail_api::receive(inspection_epoch, &v); if v.get("doc_state").is_some_and(|d|d.is_object()) { state.on_layer_frame(&v); } },
         "extended_tone_result" | "extended_tone_readback" => { crate::extended_tone_api::receive(inspection_epoch, &v); if v.get("doc_state").is_some_and(|d|d.is_object()) { state.on_layer_frame(&v); } },
         "custom_lut_result" => { crate::custom_lut_api::receive(inspection_epoch, &v); if v.get("doc_state").is_some_and(|d|d.is_object()) { state.on_layer_frame(&v); } },

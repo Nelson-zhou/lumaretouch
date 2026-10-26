@@ -113,6 +113,6 @@ def render(engine,row,state,document_id,revision,*,cancelled=lambda:False):
         if cancelled():raise InterruptedError('AI 追色冻结已取消')
     # Keep actual uint16 samples through the single source-to-working ICC
     # conversion, before float editing; never color-manage RGB8 a second time.
-    rgb,_=_export_image_impl(working_rgb(decoded),spec,device='cpu',tile=DEFAULT_TILE,progress=progress,bits=bits,geometry=(snap['crop_rect'],snap['crop_rotation']))
+    rgb,_=_export_image_impl(working_rgb(decoded),spec,device='cpu',tile=DEFAULT_TILE,progress=progress,bits=bits,geometry=(snap['crop_rect'],snap['crop_rotation']),output_domain='processing')
     if cancelled() or M.file_stamp(path)!=stamp or str(versions.version(row).revision)!=str(revision):raise ValueError('AI 追色冻结期间目标或源图改变')
     return freeze(rgb,source=source,geometry_sha256=geometry,state_key=key,document_id=document_id,revision=revision,owned=True)

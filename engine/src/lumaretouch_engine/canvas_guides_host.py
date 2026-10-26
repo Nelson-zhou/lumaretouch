@@ -65,6 +65,8 @@ class CanvasGuides:
             row = current_row(e)
             changed = False
             if action != 'state':
+                from .final_canvas_flip_state import require_processing_capture
+                require_processing_capture(e)
                 if (row is None or row.get('trashed') or not getattr(e, '_image_loaded', False)
                         or not getattr(e, '_load_id', '')):
                     raise ValueError('请先打开一张照片再编辑参考线')

@@ -26,6 +26,8 @@ class ColorPickerCapture:
             try:path.rmdir()
             except OSError:pass
     def _context(self):
+        from .final_canvas_flip_state import require_processing_capture
+        require_processing_capture(self.engine)
         e=self.engine;why=e._guard_editable('color picker')
         if why:raise ValueError(why)
         inspection=e._inspection_controller()

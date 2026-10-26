@@ -39,7 +39,8 @@ def _internal_geometry(spec):
     from . import colour_grading_state as grading, colour_editor_state as editor
     from . import selective_colour_state as selective, photo_detail_state as detail
     from . import photo_grain_state as grain, fringe_repair_state as fringe
-    return (reference.active(spec.reference_color) or semantic.active(spec.semantic_colour)
+    from .final_canvas_flip_state import active as flip_active
+    return (flip_active(spec.final_canvas_flip) or reference.active(spec.reference_color) or semantic.active(spec.semantic_colour)
         or grading.active(spec.colour_grading) or editor.active(spec.colour_editor)
         or selective.active(spec.selective_colour) or detail.active(spec.photo_detail)
         or grain.active(spec.photo_grain) or fringe.active(spec.fringe_repair))

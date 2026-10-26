@@ -117,10 +117,10 @@ def render_preview(engine, *, pack=True, editor_mode=None):
         if d.source_icc and not creative_base:
             from .color16 import convert_rgb16
             source=convert_rgb16(source,d.source_icc,_srgb_bytes())
-        full,_=export_image16(source,spec,device='cpu',progress=progress,crop_rect=geometry[0],rotation_degrees=geometry[1])
+        full,_=export_image16(source,spec,device='cpu',progress=progress,crop_rect=geometry[0],rotation_degrees=geometry[1],output_domain='final' if pack else 'processing')
     elif source.dtype==np.uint8:
         if not creative_base and ((d.raw or {}) or int(d.src_bits)>8):raise ValueError('High-bit-depth grain source cannot use RGB8')
-        full,_=export_image(source,spec,device='cpu',progress=progress,geometry=geometry)
+        full,_=export_image(source,spec,device='cpu',progress=progress,geometry=geometry,output_domain='final' if pack else 'processing')
     else:raise ValueError('Unsupported original grain source precision')
     progress()
     if file_stamp(path)!=before:raise ValueError('Grain source changed during render')

@@ -158,6 +158,8 @@ class PaintSource:
         self.record = None
 
     def _proof(self, request):
+        from .final_canvas_flip_state import require_processing_capture
+        require_processing_capture(self.engine)
         from .spill_removal_review import _context
         from .full_candidate_render import identity
         from . import creative_derived_source as D, local_mask_state as M

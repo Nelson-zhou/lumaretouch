@@ -6,6 +6,8 @@
  * 与文件里写的像素数是同一份数（引擎报，前端不自己乘）。
  */
 import { useEffect, useMemo, useState } from "react";
+import {FlipControls} from "../finalCanvasFlip/FlipControls";
+import type {FlipReport} from "../finalCanvasFlip/model";
 
 export interface CropState {
   rect: number[];
@@ -30,6 +32,9 @@ export default function CropModal(props: {
   imgW: number;
   imgH: number;
   crop: CropState | null;
+  flip?: FlipReport;
+  flipDisabled: boolean;
+  onFlipChanged: () => Promise<void>;
   onClose: () => void;
   onApply: (rect: number[], rotation: number) => void;
   onClear: () => void;
@@ -117,6 +122,8 @@ export default function CropModal(props: {
             }} />
           <em>{rot}°</em>
         </div>
+
+        <FlipControls report={props.flip} disabled={props.flipDisabled} onChanged={props.onFlipChanged}/>
 
         <div className="cropFoot">
           <span>

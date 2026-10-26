@@ -36,7 +36,7 @@ def parse(data):
     value=Presentation(document,width,height,geometry,kind);value.pack();return value
 
 
-def make(document,source,rect=(0.,0.,1.,1.),rotation=0.,kind='edited'):
+def make(document,source,rect=(0.,0.,1.,1.),rotation=0.,kind='edited',*,flip=None):
     if kind not in KINDS:raise ValueError('unknown presentation kind')
     width,height=map(int,source)
     if width<1 or height<1:raise ValueError('invalid presentation source')
@@ -45,6 +45,9 @@ def make(document,source,rect=(0.,0.,1.,1.),rotation=0.,kind='edited'):
         output=out_size(width,height,tuple(rect),float(rotation))
         recipe=([width,height,'uncropped'] if is_identity(rect,rotation) else [width,height,list(rect),float(rotation)])
     else:output=(width,height);recipe=[width,height,'uncropped']
+    from .final_canvas_flip_state import active, check
+    if kind == 'edited' and active(flip):
+        recipe = [*recipe, 'lnx.final_canvas_flip.v1', check(flip)]
     digest=hashlib.blake2b(json.dumps(recipe,separators=(',',':'),allow_nan=False).encode(),digest_size=8).digest()
     result=Presentation(int(document),int(output[0]),int(output[1]),int.from_bytes(digest,'little') or 1,KINDS[kind])
     result.pack();return result

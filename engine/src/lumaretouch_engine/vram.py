@@ -291,6 +291,7 @@ class PreviewPipeline:
         # 中性默认 (0,0,0)：这一层的 identity 必须是逐字节恒等（ADR-0003 定的容差 0），
         # 所以没点火时 apply 一步直接递回原张量，一个算子也不跑。
         self.crop_rect: tuple = (0.0, 0.0, 1.0, 1.0)      # 归一化裁剪框（P0 lnx.crop.v1）
+        self.final_canvas_flip = {"horizontal": False, "vertical": False}
         self.crop_rotation: float = 0.0                   # 角度，正=顺时针
         self.last_geometry_ms = 0.0
         # (ev, temperature_shift, tint_shift, contrast, highlights, shadows, saturation)
@@ -2213,7 +2214,8 @@ class PreviewPipeline:
 
     def render(self, strength: float, channel: str | None = None, **kw) -> None:
         """按当前全部编辑层出帧；strength=0 只关闭磨皮，原图对比用 render_original。"""
-        self.pack(self.retouch(strength, channel=channel, **kw))
+        from .final_canvas_output import processing_to_final
+        self.pack(processing_to_final(self.retouch(strength, channel=channel, **kw), self.final_canvas_flip))
 
     def read_back(self) -> np.ndarray:
         """一次 D2H，返回可直接交给 shm.write_frame 的连续 (H,W,4) uint8。"""

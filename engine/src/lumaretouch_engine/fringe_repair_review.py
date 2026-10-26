@@ -11,6 +11,8 @@ FIELDS={'cmd','action','preview_id','session_id','document_id'}
 
 
 def proof(engine):
+    from .final_canvas_flip_state import require_processing_capture
+    require_processing_capture(engine)
     from .local_mask_state import file_stamp
     if engine._vram is None or not engine._doc_path:raise ValueError('Fringe review requires the actual loaded source')
     row=engine._docs[engine._doc_index]

@@ -27,6 +27,9 @@ class Projection:
 
     @classmethod
     def from_pipeline(cls, pipeline):
+        from .final_canvas_flip_state import active, REASON
+        if active(getattr(pipeline, "final_canvas_flip", None)):
+            raise ValueError(REASON)
         width, height = pipeline.w, pipeline.h
         if type(width) is not int or type(height) is not int or width<1 or height<1:
             raise ValueError('Invalid WB input dimensions')

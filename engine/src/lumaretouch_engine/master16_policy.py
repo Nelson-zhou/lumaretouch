@@ -29,6 +29,8 @@ class Master16PolicyMixin:
             "curves": CURVES.default_curves(), "levels": LEVELS.default_levels(),
         }
         fields = {"_" + key: snap.get(key, value) for key, value in defaults.items()}
+        from .final_canvas_flip_state import check, neutral
+        fields['_final_canvas_flip'] = check(snap['final_canvas_flip']) if 'final_canvas_flip' in snap else neutral()
         fields['_creative_base'] = snap.get('creative_base')
         fields["_colour_editor"] = CES.check(snap["colour_editor"]) if "colour_editor" in snap else CES.neutral()
         fields["_photo_grain"] = PGS.check(snap["photo_grain"]) if "photo_grain" in snap else PGS.neutral()
@@ -67,6 +69,9 @@ class Master16PolicyMixin:
         也不能默默降级。
         """
         b: list = []
+        from .final_canvas_flip_state import active
+        if active(getattr(self, "_final_canvas_flip", None)):
+            b.append("最终画布翻转（须通过编辑输出边界，不可直通原文件）")
         if getattr(self, '_creative_base', None) is not None:
             b.append('创意合成底图（须使用真实全尺寸合成像素，不能直通原文件）')
         if CES.active(getattr(self,"_colour_editor",CES.neutral())):b.append("连续色彩编辑器（全源图统一目标，不可直通）")

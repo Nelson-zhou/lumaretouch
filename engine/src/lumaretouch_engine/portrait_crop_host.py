@@ -37,8 +37,11 @@ FIELDS = {
 def capability(engine):
     from .portrait_crop_planner import capability as planner_capability
     reason = None
+    from .final_canvas_flip_state import active as flip_active, REASON as FLIP_REASON
     planner = planner_capability()
-    if not planner['available']:
+    if flip_active(getattr(engine, '_final_canvas_flip', None)):
+        reason = FLIP_REASON
+    elif not planner['available']:
         reason = planner.get('reason') or 'Packaged portrait crop planner is unavailable'
     elif not callable(getattr(engine, '_commit_portrait_crop_candidate', None)):
         reason = 'Canonical portrait crop history integration is unavailable'
@@ -134,6 +137,8 @@ class Service:
             raise ValueError('Portrait crop receipt memory budget reached; no new work submitted')
 
     def _guard(self):
+        from .final_canvas_flip_state import require_processing_capture
+        require_processing_capture(self.engine)
         if self.uncertain is not None:
             raise ValueError('原人像裁剪提交结果尚未核实，请只查询原请求，不要重复应用或假装取消')
         from .sample_library_capture import capture_reason

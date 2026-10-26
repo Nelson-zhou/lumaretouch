@@ -6,7 +6,7 @@ import type {PeopleOwner} from './usePeopleWorkflow';
 import {OPERATION_ID as EYE_BAGS} from '../eyeBagPreserve/model';
 import './people.css';
 
-type Props = {owner: PeopleOwner; busy: boolean; thumb?: string; onFaceAdd: () => void; faceAdding: boolean};
+type Props = {owner: PeopleOwner; busy: boolean; thumb?: string; onFaceAdd: () => void; faceAdding: boolean; coordinateCaptureDisabled?: boolean};
 function FaceAvatar({face, thumb}: {face: FaceChoice; thumb?: string}) {
   if (!thumb) return <i className="faceAv ph">人</i>;
   const [x0, y0, x1, y1] = face.box;
@@ -18,7 +18,7 @@ function FaceAvatar({face, thumb}: {face: FaceChoice; thumb?: string}) {
 }
 
 /** Engine-selected cursor and scope, with unsaved form drafts kept separate. */
-export function PeoplePanel({owner, busy, thumb, onFaceAdd, faceAdding}: Props) {
+export function PeoplePanel({owner, busy, thumb, onFaceAdd, faceAdding, coordinateCaptureDisabled}: Props) {
   const value = owner.value;
   const [error, setError] = useState('');
   const [label, setLabel] = useState(''), [groupName, setGroupName] = useState('');
@@ -115,7 +115,7 @@ export function PeoplePanel({owner, busy, thumb, onFaceAdd, faceAdding}: Props) 
       </div>)}
       <p>候选不会同步参数。解除关联保留本地覆盖和历史，但停止继承该匿名人物的默认值。</p>
     </fieldset></details>
-    <details><summary>补充漏检人脸区域</summary><fieldset disabled={disabled}>
+    <details><summary>补充漏检人脸区域</summary>{coordinateCaptureDisabled&&<p role="status">请先关闭水平/垂直翻转，再补充人脸区域。</p>}<fieldset disabled={disabled||coordinateCaptureDisabled}>
       <button type="button" disabled={faceAdding} onClick={onFaceAdd}>{faceAdding ? '正在画面中框选…' : '在画面中框选人脸并分析'}</button>
       {(['左', '上', '右', '下'] as const).map((name, index) => <label key={name}>{name}（0–1）<input type="number" min={0} max={1} step={.01} value={box[index]}
         onChange={event => {const number = event.currentTarget.valueAsNumber; setBox(old => old.map((item, i) => i === index ? number : item) as typeof box);}}/></label>)}

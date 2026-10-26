@@ -15,8 +15,8 @@ def pointer(value):
 def inventory(project, include_originals=False, include_references=False):
     if type(include_originals) is not bool or type(include_references) is not bool:
         raise ValueError('包含原片/外部参考必须明确选择')
-    if project.get('schema_version') != 'lrt.project.v23':
-        raise ValueError('便携包需要 v23 工程；旧版工程请先正常打开并保存以完成既有迁移')
+    if project.get('schema_version') not in ('lrt.project.v23', 'lrt.project.v24'):
+        raise ValueError('便携包需要 v23/v24 工程；旧版工程请先正常打开并保存以完成既有迁移')
     rows = []
     for source_id, source in project.get('source_assets', {}).items():
         prefix = '/source_assets/' + pointer(source_id)

@@ -68,7 +68,7 @@ def render(engine,row,candidate_state,document_id,revision,*,reference=False,can
     verify_export(snap,path,(decoded.h,decoded.w))
     # RGB16 decoders retain source ICC encoding; the float renderer consumes
     # working sRGB. RGB8 was already converted in load_full and is not redone.
-    rgb,_=export_float(working_rgb(decoded),spec,geometry=(snap['crop_rect'],snap['crop_rotation']),progress=check_cancel)
+    rgb,_=export_float(working_rgb(decoded),spec,geometry=(snap['crop_rect'],snap['crop_rotation']),progress=check_cancel,output_domain='processing')
     check_cancel()
     if (M.file_stamp(path)!=stamp or str(versions.version(row).revision)!=str(revision)
             or fingerprint(candidate_state)!=candidate_key):

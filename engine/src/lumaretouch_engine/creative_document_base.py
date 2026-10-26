@@ -239,6 +239,9 @@ def _neutral_snapshot(snapshot):
     from . import extended_tone_state as ET, photo_detail_state as PD, fringe_repair_state as FR
     from . import colour_grading_state as CG, selective_colour_state as SC
     from . import primary_calibration_state as PC, id_background_state as ID
+    from .final_canvas_flip_state import active as flip_active
+    if flip_active(snapshot.get('final_canvas_flip')):
+        return False
     bare = dict(snapshot)
     bare['creative_base'] = None
     if Master16PolicyMixin._master16_snapshot_blockers(bare):
@@ -285,6 +288,8 @@ def capture_current_asset(engine, row, state, assets, *, cancelled=lambda: False
     and commits only after its final revision check. This function changes no live
     document, source file, sliders, history, or comparison buffer.
     """
+    from .final_canvas_flip_state import require_capture_state
+    require_capture_state(state)
     import numpy as np
     from pathlib import Path
     from . import local_mask_state as LM, virtual_copy_people as VP

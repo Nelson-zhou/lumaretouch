@@ -47,6 +47,8 @@ def finish(engine, boundary, error=None):
     if boundary is None:
         return
     message = boundary['message']
+    from .final_canvas_flip_recovery import finish as flip_finish
+    if flip_finish(engine, boundary): return
     from .portrait_crop_recovery import finish as crop_finish
     if crop_finish(engine, boundary, error): return
     from .hair_volume_recovery import finish as hair_volume_finish
@@ -131,7 +133,7 @@ def finish(engine, boundary, error=None):
         runtime.tainted = True
         runtime.reason = '上次命令未确认完整提交；请保存前检查，或重新打开已确认的工程'
     elif message.get('cmd') in engine.EDIT_CMDS or message.get('cmd') in (
-        'project','session','history','virtual_copy','managed_import','source_relocation',
+        'final_canvas_flip','project','session','history','virtual_copy','managed_import','source_relocation',
         'people','hair_volume','batch','primary_calibration','colour_editor','selective_colour','colour_grading',
         'photo_grain','photo_detail','extended_tone','shoulder_shape','leg_shape','arm_shape',
         'waist_shape','leg_length','neck_shape','torso_length','waist_length','head_size','body_slim','custom_lut','semantic_colour','creative_document','common_background','expression_replacement','lens_blur','light_glow','upscale_restore'):

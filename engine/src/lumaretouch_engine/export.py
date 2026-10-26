@@ -117,6 +117,7 @@ class ExportSpec:
     重放）同一条路。
     """
 
+    final_canvas_flip: dict = field(default_factory=lambda: {'horizontal': False, 'vertical': False})
     strength: float = 0.5
     radius: int = 12
     eps: float = 6e-4
@@ -327,6 +328,8 @@ class ExportSpec:
         """参数在进入昂贵通路之前先过一遍唯一校验口径（与各层 setter 同源）。"""
         from .creative_document_base import check as check_creative_base
         check_creative_base(self.creative_base)
+        from .final_canvas_flip_state import check as check_flip
+        self.final_canvas_flip = check_flip(self.final_canvas_flip)
         from .extended_tone_state import check as check_tone
         self.extended_tone=check_tone(self.extended_tone)
         from .photo_detail_state import check as check_detail
@@ -735,33 +738,33 @@ def _rest(op, cls):
 
 
 def export_image(src_u8: np.ndarray, spec: ExportSpec, *, device: str = "cuda",
-                 tile: int = DEFAULT_TILE, progress=None, geometry=None) -> tuple:
+                 tile: int = DEFAULT_TILE, progress=None, geometry=None, output_domain='final') -> tuple:
     """Existing RGB8 entry point; do not silently promote source precision."""
     return _run_export(src_u8, spec, device=device, tile=tile,
-                       progress=progress, bits=8, geometry=geometry)
+                       progress=progress, bits=8, geometry=geometry, output_domain=output_domain)
 
 
-def export_float(src, spec, *, geometry, progress=None, provenance=True, capture_finishing=None):
+def export_float(src, spec, *, geometry, progress=None, provenance=True, capture_finishing=None, output_domain='final'):
     """Internal actual fully edited original-resolution RGB and provenance tap."""
     spec.float_output=True;spec.provenance_output=bool(provenance)
     return _run_export(src,spec,device='cpu',tile=DEFAULT_TILE,progress=progress,
                        bits=16 if src.dtype==np.uint16 else 8,geometry=geometry,
-                       capture_finishing=capture_finishing)
+                       capture_finishing=capture_finishing, output_domain=output_domain)
 
 
 def export_image16(src_u16: np.ndarray, spec: ExportSpec, *, device: str = "cuda",
                    tile: int = DEFAULT_TILE, progress=None,
-                   crop_rect=(0.0, 0.0, 1.0, 1.0), rotation_degrees: float = 0.0) -> tuple:
+                   crop_rect=(0.0, 0.0, 1.0, 1.0), rotation_degrees: float = 0.0, output_domain='final') -> tuple:
     """Working-sRGB RGB16 through the same editing chain, float until final RGB16.
 
     This is the editing-library entry point used by the application's end-to-end
     RAW/TIFF decode, recipe, crop and color-managed file-export integration.
     """
     return _run_export(src_u16, spec, device=device, tile=tile,
-                       progress=progress, bits=16, geometry=(crop_rect, rotation_degrees))
+                       progress=progress, bits=16, geometry=(crop_rect, rotation_degrees), output_domain=output_domain)
 
 
-def _run_export(source, spec, *, device, tile, progress, bits, geometry, capture_finishing=None):
+def _run_export(source, spec, *, device, tile, progress, bits, geometry, capture_finishing=None, output_domain='final'):
     """Resolve a creative source once, outside recursive full-frame prepasses.
 
     Source precision and file precision are independent. Creative pixels remain
@@ -769,11 +772,16 @@ def _run_export(source, spec, *, device, tile, progress, bits, geometry, capture
     here only after an explicit alpha/HDR admissibility check. Internal float
     captures preserve extended results instead of quantizing them for display.
     """
+    if output_domain not in ('processing', 'final'):
+        raise ExportError('Unknown canvas output domain')
+    from .final_canvas_flip_state import active as flip_active
+    if output_domain == 'final' and spec.provenance_output and flip_active(spec.final_canvas_flip):
+        raise ExportError('Source provenance requires processing-domain export; final reflection is display/delivery only')
     if capture_finishing is not None and spec.creative_base is not None:
         raise ExportError('Private finishing cannot resolve a creative source')
     if spec.creative_base is None:
         return _export_image_impl(source, spec, device=device, tile=tile,
-            progress=progress, bits=bits, geometry=geometry, capture_finishing=capture_finishing)
+            progress=progress, bits=bits, geometry=geometry, capture_finishing=capture_finishing, output_domain=output_domain)
     from copy import copy
     from .creative_document_base import export_source, require_rebound_spec
     require_rebound_spec(spec)
@@ -823,7 +831,7 @@ def _run_export(source, spec, *, device, tile, progress, bits, geometry, capture
         from .creative_derived_body_export import stamp_pixels
         stamp_pixels(resolved,source)
     frame, facts = _export_image_impl(source, resolved, device=device, tile=tile,
-        progress=progress, bits=bits, geometry=geometry)
+        progress=progress, bits=bits, geometry=geometry, output_domain=output_domain)
     if hasattr(resolved, '_colour_editor_capture_coverage'):
         # The input picker consumes coverage through its caller-owned spec.
         # Source resolution uses a private shallow copy, not a different owner.
@@ -845,7 +853,7 @@ def _run_export(source, spec, *, device, tile, progress, bits, geometry, capture
 
 
 def _export_image_impl(src_u8: np.ndarray, spec: ExportSpec, *, device: str,
-                       tile: int, progress, bits: int, geometry=None, capture_finishing=None) -> tuple:
+                       tile: int, progress, bits: int, geometry=None, capture_finishing=None, output_domain='processing') -> tuple:
     if capture_finishing is not None:
         from .creative_capture_finishing_export import validate_request
         validate_request(capture_finishing, spec, geometry=geometry, device=device, tile=tile)
@@ -873,14 +881,16 @@ def _export_image_impl(src_u8: np.ndarray, spec: ExportSpec, *, device: str,
     fringe_active=fringe_state.active(fringe_recipe)
     fringe_needed=(fringe_active or getattr(spec,'_fringe_repair_capture_coverage',False)) and editor_mode=='render' and not getattr(spec,'_extended_tone_prepass',False)
     if fringe_needed:fringe_render.admit(src_u8.shape[1],src_u8.shape[0],geometry)
-    if (grain_active(grain_recipe) or editor_needed or fringe_needed) and not getattr(spec,'_extended_tone_prepass',False):
+    from .final_canvas_flip_state import active as flip_active
+    final_reflection = output_domain == 'final' and flip_active(spec.final_canvas_flip)
+    if (grain_active(grain_recipe) or editor_needed or fringe_needed or final_reflection) and not getattr(spec,'_extended_tone_prepass',False):
         from .photo_grain_runtime import admit
         admit(src_u8.shape[1],src_u8.shape[0],int(spec.scale))
         # Grain is a source-resolution effect. Delivery resize/sharpen follow the
         # entire source edit chain; geometry/colour/detail order stays unchanged.
         if int(spec.scale)!=1 or float(spec.sharpen_amount)!=0:
             from .photo_grain_export import render_delivery
-            return render_delivery(src_u8,spec,renderer=_export_image_impl,device=device,tile=tile,progress=progress,bits=bits,geometry=geometry)
+            return render_delivery(src_u8,spec,renderer=lambda *args, **kwargs: _export_image_impl(*args, output_domain=output_domain, **kwargs),device=device,tile=tile,progress=progress,bits=bits,geometry=geometry)
     from .extended_tone_state import check as check_tone, active as tone_active
     from .extended_tone_stage import ExtendedToneStage
     from .extended_tone_native import admit as admit_tone
@@ -1304,18 +1314,22 @@ def _export_image_impl(src_u8: np.ndarray, spec: ExportSpec, *, device: str,
     if geometry is not None:
         from .ops.geometry import crop_rotate_np, is_identity
         t_geometry = time.perf_counter()
-        out = crop_rotate_np(out, *geometry, uint8=False)
+        out = crop_rotate_np(out, *geometry, uint8=not floating)
         if fringe_guide is not None:fringe_guide=crop_rotate_np(fringe_guide,*geometry,uint8=False)
         if support is not None: support=crop_rotate_np(support,*geometry,uint8=False)
         if editor_mask is not None:editor_mask=crop_rotate_np(editor_mask,*geometry,uint8=False)
         out_h, out_w = out.shape[:2]
         geometry_facts = {"crop_applied": not is_identity(*geometry),
                           "geometry_ms": round((time.perf_counter() - t_geometry) * 1000, 2)}
-    if fringe_needed:
-        # Arbitrary-angle NumPy crop uses f64 sampling. The established edit
-        # domain and native finishing ABI are f32, not an RGB8 detour.
+    if floating:
+        # Geometry samples arbitrary angles in f64. Return to the established
+        # normalized f32 processing/finishing ABI before *all* native stages,
+        # including neutral detail validation. This is floating rounding, never
+        # an RGB8 detour: RGB16/RAW quantization remains after final reflection.
         out=np.ascontiguousarray(out,dtype=np.float32)
         if fringe_guide is not None:fringe_guide=np.ascontiguousarray(fringe_guide,dtype=np.float32)
+        if support is not None:support=np.ascontiguousarray(support,dtype=np.float32)
+        if editor_mask is not None:editor_mask=np.ascontiguousarray(editor_mask,dtype=np.float32)
     out=reference_stage.apply_np(out)
     out=semantic_stage.apply_np(out)
     if capture_finishing is None:
@@ -1364,6 +1378,9 @@ def _export_image_impl(src_u8: np.ndarray, spec: ExportSpec, *, device: str,
     verify_hair_source(spec)
     fringe_render.verify_export(spec,(h,w))
     if support is not None: spec.provenance_result=np.all(support>=.999999,axis=2)
+    if output_domain == 'final':
+        from .final_canvas_output import processing_to_final
+        out = processing_to_final(out, spec.final_canvas_flip)
     if bits == 16 and not spec.float_output:
         out = quantize16_np(out)
     elif floating and not spec.float_output:
@@ -2140,7 +2157,7 @@ def export_master_16bit(path: str, out_path: str, *, device: str | None = None,
 def render_edited_rgb16(decoded, spec: ExportSpec, *, device: str = "cpu",
                         tile: int = DEFAULT_TILE, crop_rect=(0.0, 0.0, 1.0, 1.0),
                         rotation_degrees: float = 0.0, output_profile: str = "srgb",
-                        progress=None):
+                        progress=None, output_domain="final"):
     """Shared high-precision render/ICC path. Returns pixels, ICC and facts; no file IO."""
     creative_source = spec.creative_base is not None
     if not creative_source and (decoded.rgb.dtype != np.uint16 or (decoded.raw or {}).get("used_preview")):
@@ -2156,7 +2173,7 @@ def render_edited_rgb16(decoded, spec: ExportSpec, *, device: str = "cpu",
         input_converted = decoded.source_icc != working_icc
     input_color_ms = (time.perf_counter() - t_color) * 1000
     frame, render_stats = export_image16(source, spec, device=device, tile=tile,
-                                         crop_rect=crop_rect, rotation_degrees=rotation_degrees, progress=progress)
+                                         crop_rect=crop_rect, rotation_degrees=rotation_degrees, progress=progress, output_domain=output_domain)
     t_color = time.perf_counter()
     output_converted = bool(target_icc and target_icc != working_icc)
     if output_converted:

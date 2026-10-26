@@ -169,6 +169,7 @@ export const dragParametricCurve=(spec:CurveSpec,region:number,target:number)=>i
 export const previewCurves = (spec:CurveSpec) => invoke<CurvePreview>("curve_preview",{spec});
 
 export interface DocState {
+  final_canvas_flip?: import('./finalCanvasFlip/model').FlipReport;
   canvas_guides?: import('./canvasGuides/model').GuideReport;
   id_background?: import('./idBackground/model').Report;
   colour_grading?: {recipe:import('./colourGrading/model').Recipe;algorithm:string;note:string};

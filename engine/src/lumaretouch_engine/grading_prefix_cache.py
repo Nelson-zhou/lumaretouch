@@ -99,6 +99,9 @@ def preview_context(engine, mode, original):
     captures every input of allowed exposure/WB/HSL operators. None means
     uncertain. The production default remains off pending local acceptance.
     """
+    from .final_canvas_flip_state import active
+    if active(getattr(engine, '_final_canvas_flip', None)):
+        return None
     pipe = engine._vram
     cache = pipe.grading_prefix_cache
     if (not cache.enabled or original

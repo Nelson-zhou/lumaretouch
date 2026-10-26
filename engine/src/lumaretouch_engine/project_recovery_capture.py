@@ -1,7 +1,7 @@
 """Lossless encoded capture, called only after a proven committed command.
 
-Unlike manual _project_build this retains inactive named versions/assets and does
-not erase _precompute or unknown tensors. Unsupported values stop autosave with
+Like manual _project_build this retains inactive named versions/assets; recovery
+also does not erase _precompute or unknown tensors. Unsupported values stop autosave with
 an actionable error rather than silently changing the reopened image.
 """
 from copy import deepcopy

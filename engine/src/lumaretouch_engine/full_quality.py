@@ -92,7 +92,8 @@ def render_inspection_roi(decoded, spec: ExportSpec, roi, *, max_source_pixels: 
         from .photo_grain_state import active as grain_active
         from .fringe_repair_state import active as fringe_active
         from .colour_editor_state import active as editor_active, neutral as editor_neutral
-        matching=editor_active(spec.colour_editor if spec.colour_editor is not None else editor_neutral()) or reference_active(spec.reference_color) or detail_active(spec.photo_detail) or grain_active(spec.photo_grain) or fringe_active(spec.fringe_repair)
+        from .final_canvas_flip_state import active as flip_active
+        matching=flip_active(spec.final_canvas_flip) or editor_active(spec.colour_editor if spec.colour_editor is not None else editor_neutral()) or reference_active(spec.reference_color) or detail_active(spec.photo_detail) or grain_active(spec.photo_grain) or fringe_active(spec.fringe_repair)
         full,_=export_image(source,spec,device=device,tile=tile,progress=progress,geometry=(crop_rect,rotation_degrees) if matching else None)
         check_cancel()
         if not matching:full=crop_rotate_np(full,crop_rect,rotation_degrees)

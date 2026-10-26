@@ -25,7 +25,8 @@ def state_to_export_snap(self,st,*,device,scale,upscale_backend,sharpen,source_p
     document_id=capture_owner(self,st,source_path or self._doc_path,
         document_id=people_document_id,context_supplied=people_context is not None)
     people = self._people_export_snapshot(st,source_path,people_graph,context=people_context,document_id=document_id)
-    snap = dict(people_document_id=document_id,creative_base=creative_base, id_background=IDBS.check(st.get("_id_background")), id_background_bundle=deepcopy(st.get("_id_background_bundle")), people=people, strength=float(st.get("_strength", 0.0)),
+    from .final_canvas_flip_state import from_state as flip_from_state
+    snap = dict(final_canvas_flip=flip_from_state(st), people_document_id=document_id,creative_base=creative_base, id_background=IDBS.check(st.get("_id_background")), id_background_bundle=deepcopy(st.get("_id_background_bundle")), people=people, strength=float(st.get("_strength", 0.0)),
                     params=dict(st.get("_params") or self._params),
                     grade=tuple(st.get("_grade", (0.0, 0.0, 0.0, 1.0))),
                     grade_scope=str(st.get("_grade_scope") or "all"),

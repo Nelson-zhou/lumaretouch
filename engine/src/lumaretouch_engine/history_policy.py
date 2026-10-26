@@ -7,7 +7,11 @@ def state_signature(st: dict) -> str:
     （1e-16 的差不能算"改过"），_deform/_grade 又是嵌套结构。"""
     d = {}
     for k, v in st.items():
-        if k == "_creative_asset_records":
+        if k == '_final_canvas_flip':
+            from .final_canvas_flip_state import active, check
+            if active(check(v)):
+                d[k] = check(v)
+        elif k == "_creative_asset_records":
             d[k] = sorted(v or {})
         elif k == "_creative_base":
             d[k] = None if v is None else v["id"]

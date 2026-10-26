@@ -51,10 +51,10 @@ def render_target(decoded,spec,*,path,document_id,revision,source,decoded_stamp,
         if cancelled():raise InterruptedError('自动镜头/透视预检已取消')
     progress()
     if decoded.rgb.dtype==np.uint16:
-        rendered,_,_=render_edited_rgb16(decoded,spec,device='cpu',crop_rect=(0.,0.,1.,1.),rotation_degrees=0.,output_profile='srgb',progress=progress)
+        rendered,_,_=render_edited_rgb16(decoded,spec,device='cpu',crop_rect=(0.,0.,1.,1.),rotation_degrees=0.,output_profile='srgb',progress=progress,output_domain='processing')
         divisor=65535.
     elif decoded.rgb.dtype==np.uint8 and not (decoded.raw or {}) and int(decoded.src_bits)<=8:
-        rendered,_=export_image(decoded.rgb,spec,device='cpu',progress=progress);divisor=255.
+        rendered,_=export_image(decoded.rgb,spec,device='cpu',progress=progress,output_domain='processing');divisor=255.
     else:raise ValueError('高位深目标必须提供真实 RGB16 解码')
     if rendered.shape!=(decoded.h,decoded.w,3):raise ValueError('自动分析输入不是完整未裁剪的编辑画布')
     progress()

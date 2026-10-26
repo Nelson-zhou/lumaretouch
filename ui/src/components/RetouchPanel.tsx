@@ -1,3 +1,4 @@
+import {FlipControls} from '../finalCanvasFlip/FlipControls';
 import {EyeMakeupEnhanceControl} from '../eyeMakeupEnhance/EyeMakeupEnhanceControl';
 import {FacialSculptPanel} from '../facialSculpt/FacialSculptPanel';
 import {FringeRepairPanel} from '../fringeRepair/FringeRepairPanel';
@@ -471,6 +472,8 @@ const WIRED: Record<string, string> = {
   "PC-32478|旋转/顺时针": "crop.cw",
   "PC-32478|旋转/逆时针": "crop.ccw",
   "PC-32478|旋转/倾斜角度": "crop.open",
+  "PC-32478|旋转/水平翻转": "crop.flip_h",
+  "PC-32478|旋转/垂直翻转": "crop.flip_v",
   // 手动修复
   // F13（P2-4）：只有“污点修复画笔”背后是真·heal 笔迹（按落点扩散、无独立采样）。
   // 来源区域修补由独立 sourcePatchPanel 接入，不借 brush.heal；仿制图章由独立 cloneStampPanel 接入。
@@ -532,6 +535,8 @@ const WIRE_LABEL: Record<string, string> = {
   "crop.open": "裁剪",
   "crop.cw": "顺时针 90°",
   "crop.ccw": "逆时针 90°",
+  "crop.flip_h": "水平翻转",
+  "crop.flip_v": "垂直翻转",
   "brush.heal": "修复画笔",
   "history.undo": "撤销",
   "history.redo": "重做",
@@ -1174,6 +1179,12 @@ export default function RetouchPanel(props: RetouchProps) {
             <b>{label}</b><em>打开</em>
           </button>
         );
+      case "crop.flip_h":
+      case "crop.flip_v": {
+        return <FlipControls key={leaf.path} report={doc?.final_canvas_flip} disabled={dim}
+          axis={kind === "crop.flip_h" ? 'horizontal' : 'vertical'} label={label}
+          onChanged={async()=>{props.onDone();}}/>;
+      }
       case "crop.cw":
       case "crop.ccw":
         return (
@@ -1396,7 +1407,7 @@ export default function RetouchPanel(props: RetouchProps) {
         patch={async patches=>{props.people.patch(patches);}} refresh={props.refreshHair}/>
       {props.people.state.message&&<p role="status">{props.people.state.message}</p>}
     </>;
-    if (fid === "PC-32455") return <>{doc?.document_id && <ConnectedPrimaryCalibrationPanel documentId={doc.document_id} hostRevision={status?.doc_rev ?? 0} disabled={dim} available={status?.ready_caps?.primary_calibration_protocol===1}/>}{doc?.document_id && <ConnectedColourGradingPanel documentId={doc.document_id} hostRevision={status?.doc_rev ?? 0} disabled={dim} available={status?.ready_caps?.colour_grading_protocol===1}/>}{doc?.document_id && <ConnectedSelectiveColourPanel documentId={doc.document_id} hostRevision={status?.doc_rev ?? 0} disabled={dim} available={status?.ready_caps?.selective_colour_protocol===1}/>}{doc?.document_id && <ConnectedExtendedTonePanel documentId={doc.document_id} revision={status?.doc_rev ?? 0} disabled={dim} available={status?.ready_caps?.extended_tone_protocol===1}/>}{doc?.document_id && <ConnectedPhotoDetailPanel documentId={doc.document_id} revision={status?.doc_rev ?? 0} disabled={dim} available={status?.ready_caps?.photo_detail_protocol===1}/>}{doc?.document_id && <ConnectedPhotoGrainPanel documentId={doc.document_id} hostRevision={status?.doc_rev ?? 0} disabled={dim} available={status?.ready_caps?.photo_grain_protocol===1}/>}{doc?.document_id && <ConnectedColourEditorPanel documentId={doc.document_id} hostRevision={status?.doc_rev ?? 0} disabled={dim} available={status?.ready_caps?.colour_editor_protocol===1}/>}{lutBlock}{doc?.document_id && <ConnectedCustomLutPanel documentId={doc.document_id} hostRevision={status?.doc_rev ?? 0} assetId={doc.lut.asset_id ?? null} amount={doc.lut.amount} />}</>;
+    if (fid === "PC-32455") return <>{doc?.document_id && <ConnectedPrimaryCalibrationPanel documentId={doc.document_id} hostRevision={status?.doc_rev ?? 0} disabled={dim} available={status?.ready_caps?.primary_calibration_protocol===1}/>}{doc?.document_id && <ConnectedColourGradingPanel documentId={doc.document_id} hostRevision={status?.doc_rev ?? 0} disabled={dim} available={status?.ready_caps?.colour_grading_protocol===1}/>}{doc?.document_id && <ConnectedSelectiveColourPanel documentId={doc.document_id} hostRevision={status?.doc_rev ?? 0} disabled={dim} available={status?.ready_caps?.selective_colour_protocol===1}/>}{doc?.document_id && <ConnectedExtendedTonePanel documentId={doc.document_id} revision={status?.doc_rev ?? 0} disabled={dim} available={status?.ready_caps?.extended_tone_protocol===1}/>}{doc?.document_id && <ConnectedPhotoDetailPanel documentId={doc.document_id} revision={status?.doc_rev ?? 0} disabled={dim} available={status?.ready_caps?.photo_detail_protocol===1}/>}{doc?.document_id && <ConnectedPhotoGrainPanel documentId={doc.document_id} hostRevision={status?.doc_rev ?? 0} disabled={dim} available={status?.ready_caps?.photo_grain_protocol===1}/>}{doc?.document_id && <ConnectedColourEditorPanel pickerDisabled={doc?.final_canvas_flip?.active===true} documentId={doc.document_id} hostRevision={status?.doc_rev ?? 0} disabled={dim} available={status?.ready_caps?.colour_editor_protocol===1}/>}{lutBlock}{doc?.document_id && <ConnectedCustomLutPanel documentId={doc.document_id} hostRevision={status?.doc_rev ?? 0} assetId={doc.lut.asset_id ?? null} amount={doc.lut.amount} />}</>;
     if (fid === "PC-32452") return <>{props.sampleLibraryPanel}{props.presetPanel}{lutBlock}</>;
     if (fid === "PC-32454") return gradeBlock;
     if (fid === "PC-32481") return props.effectRecoveryPanel;
@@ -1423,7 +1434,7 @@ export default function RetouchPanel(props: RetouchProps) {
       <div className="rtTitle">{q.trim() ? "功能搜索" : TOOL_GROUPS.find(g => g.id === toolGroup)?.label}</div>
 
       <div data-spec-family="PC-47211" hidden={toolGroup !== "portrait" || !!query}>
-        <PeoplePanel owner={props.people} busy={dim || portraitRequestsBusy() || !!status?.edit_queue?.in_flight || !!status?.edit_queue?.pending}
+        <PeoplePanel coordinateCaptureDisabled={doc?.final_canvas_flip?.active===true} owner={props.people} busy={dim || portraitRequestsBusy() || !!status?.edit_queue?.in_flight || !!status?.edit_queue?.pending}
           thumb={props.thumb} onFaceAdd={props.onFaceAdd} faceAdding={props.faceAdding}/>
       </div>
 

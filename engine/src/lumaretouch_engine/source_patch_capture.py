@@ -87,6 +87,8 @@ class CaptureController:
             except OSError:pass
 
     def _context(self):
+        from .final_canvas_flip_state import require_processing_capture
+        require_processing_capture(self.engine)
         e=self.engine
         why=e._guard_editable('source_patch')
         if why:raise ValueError(why)

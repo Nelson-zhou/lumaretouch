@@ -1,0 +1,471 @@
+{
+  "feature": "original-photo final-canvas horizontal/vertical flip",
+  "operation": "lnx.final_canvas_flip.v1",
+  "controls": [
+    "control:PC-32478:21",
+    "control:PC-32478:22"
+  ],
+  "local_base": "92c1733e6aad0073123d72c9e72bebc3eb148740",
+  "remote_base": "5b2a0b5db7ff6c743044844fc86320e6304c9044",
+  "freeze": "SOURCE_ONLY_FOR_INDEPENDENT_REVIEW",
+  "runtime_acceptance": "UNRUN",
+  "scope_notes": [
+    "Rust exact sample permutation",
+    "Processing/final domains explicit",
+    "New coordinate capture guarded while active",
+    "Creative edited capture explicitly unsupported while active",
+    "v24 writer with complete v23 acceptance",
+    "Old crop and source evidence unchanged"
+  ],
+  "manifest_self_hash": "excluded; outer handoff supplies exact SHA256",
+  "files": [
+    {
+      "path": "core/final_canvas_flip/build_final_canvas_flip.sh",
+      "status": "new",
+      "before_sha256": null,
+      "after_sha256": "680837d2067853f1e5304455f51ed64e2ef0634d2a615e1d0cd0b1d549731b5b",
+      "bytes": 376
+    },
+    {
+      "path": "core/final_canvas_flip/final_canvas_flip.rs",
+      "status": "new",
+      "before_sha256": null,
+      "after_sha256": "aaefff81db3d8562ccbafbd4a36dc999ca9fee1e0ff861b56870b0a306a6ab94",
+      "bytes": 2931
+    },
+    {
+      "path": "docs/final-canvas-flip/ACCEPTANCE-UNRUN.md",
+      "status": "new",
+      "before_sha256": null,
+      "after_sha256": "b2d910bb98ad2671eae74eafdc87be067af7c12f93500c83fb70955300156b47",
+      "bytes": 5977
+    },
+    {
+      "path": "docs/final-canvas-flip/CONTRACT.md",
+      "status": "new",
+      "before_sha256": null,
+      "after_sha256": "349b1b2d3d8f00b529931751759d5e5de50ce9e9d55d8a2d183b12d14164fe9d",
+      "bytes": 8494
+    },
+    {
+      "path": "docs/final-canvas-flip/STATIC-CHECKS.json",
+      "status": "new",
+      "before_sha256": null,
+      "after_sha256": "36334eba1a5334b681500003ee4ebd50e49a7a7e8e7326bc4d9d5552d305675f",
+      "bytes": 3022
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/canvas_guides_host.py",
+      "status": "modified",
+      "before_sha256": "4cae72051f01084372d1064094eeebd425c557616cf0d82cac12630651ec2dd1",
+      "after_sha256": "a91e42187be71202261649a52d2c6031a44bbfa000f28cceffdd3a229e9067f1",
+      "bytes": 5676
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/color_action_sampling.py",
+      "status": "modified",
+      "before_sha256": "2f0d60bfa0e79c700ac29c72957b2bb5cda6d9ea62785d4fe08e61e572c52a24",
+      "after_sha256": "516cc03a2570a9d07e0d887715def5a43602c353641dbebdf30ff5837a0a8b80",
+      "bytes": 6316
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/color_picker_capture.py",
+      "status": "modified",
+      "before_sha256": "b786e4f35c00dbb9929df050457773dd88e4e796010bc82120c602dac088443d",
+      "after_sha256": "319abcc45cf7edc437ba92277aa642b7122a30181d590491676ecb9c5d947256",
+      "bytes": 8699
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/command_registry.py",
+      "status": "modified",
+      "before_sha256": "1c3be3488d5db2a71a2d936cbc1a7816079314cd6010b38986d9c30f6550006f",
+      "after_sha256": "d16547bf760a6e591bec72b1f682617ae9f0642de619e32ae9455178dedd2565",
+      "bytes": 2859
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/creative_document_base.py",
+      "status": "modified",
+      "before_sha256": "3354adfd3f1a534731d0c2fc0d5d8f6d23d7f430c85a459340c52f34c44d20b5",
+      "after_sha256": "0233a5b46ffd9405905884a15ec1407b82e4abab2d8964bdabc730cb20d454ec",
+      "bytes": 25876
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/creative_edited_capture_admission.py",
+      "status": "modified",
+      "before_sha256": "2f1fb9f006d2f09f8129909fb9f2a61ec709ef381aff5ab65ffa2cbb56246eae",
+      "after_sha256": "33caf60abf3e25fab09dac1f1cdd9d882365997b1b413d130f473ebbf1791a8b",
+      "bytes": 47147
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/export.py",
+      "status": "modified",
+      "before_sha256": "64bd0d3a6b5fdcf6bc321f200aaf8c62ff4e35c13ca3c7ee3edcec87badee4e6",
+      "after_sha256": "e66449e50dcaf70fe85bd9b3403c95066c5873881028e5072887b01753e4bf18",
+      "bytes": 137686
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/export_delivery_render.py",
+      "status": "modified",
+      "before_sha256": "c4e77d2cb8fd85720d39818bdb02d6e33245596a22ae318ba10a9488ceba148a",
+      "after_sha256": "3e26f9b96f13ab7a475a562589193babb4d1b2b8f6209f1f174846e05bacf5e6",
+      "bytes": 6260
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/export_recipe.py",
+      "status": "modified",
+      "before_sha256": "e5918cbda7ba4daa091598f7182b10e57e49e21dd892a2e248c40963acd9c85d",
+      "after_sha256": "9b885a866b796c8f09f4d7d43205dd54d40bb054a477d50d367d0708ae62cdeb",
+      "bytes": 22565
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/export_snapshot.py",
+      "status": "modified",
+      "before_sha256": "46200fa9b79882b0b4746dd5ae8536f48a619e5b908c0c52da2891910e4983a4",
+      "after_sha256": "2b5e9b8683fe68195dcaff6ec0c9698e19b227529e6d0da68992cb2f9937e27a",
+      "bytes": 12005
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/final_canvas_flip_host.py",
+      "status": "new",
+      "before_sha256": null,
+      "after_sha256": "6ae17eb1a45ecb2ac332465fb923c51441d432fb8187ff19acea150002eba965",
+      "bytes": 7655
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/final_canvas_flip_project.py",
+      "status": "new",
+      "before_sha256": null,
+      "after_sha256": "e979a88d7d679c0a500ef995286583ae9597f3178dd1c1012ec12eb86981f1a9",
+      "bytes": 773
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/final_canvas_flip_recovery.py",
+      "status": "new",
+      "before_sha256": null,
+      "after_sha256": "87feaec37bab8f3e7170c6cda888aaaba843777f6cb5ce1e071fef9ab0c14901",
+      "bytes": 1365
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/final_canvas_flip_state.py",
+      "status": "new",
+      "before_sha256": null,
+      "after_sha256": "5932ee125dab1d8024a5e3343c305acf58c32048fc5802f89e98292b08963583",
+      "bytes": 1153
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/final_canvas_output.py",
+      "status": "new",
+      "before_sha256": null,
+      "after_sha256": "c2d469a31fd7966cf363127f961fdc3fde714d0e627e351906e40d5f3e1018e8",
+      "bytes": 3059
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/frame_presentation.py",
+      "status": "modified",
+      "before_sha256": "224cb0edbe5975cf483ba03618716b897909805fa6728a85bd818541d3570606",
+      "after_sha256": "34aa149cfbee1ab0a394362a0ff02d6af8853aa2540c65ceda8d9a7d3b47fbc1",
+      "bytes": 2572
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/fringe_repair_review.py",
+      "status": "modified",
+      "before_sha256": "9ade4b43d3f15fdcee7a5ff3d98f6a171126a92fd064da74aa553ff541cc4296",
+      "after_sha256": "0335687c2c9245140e4e9a6513b342f17c4591e5c367996f08bec052c1be7ec1",
+      "bytes": 8473
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/full_candidate_render.py",
+      "status": "modified",
+      "before_sha256": "9f9c595db91991f8449d2fc8bd63f2f259b9dff0b8ee1af63dfc7997bfb218d8",
+      "after_sha256": "6be72953ef5e7222ca09574d1f288d9f966a3c333583c2b202315111d755c9be",
+      "bytes": 10444
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/full_quality.py",
+      "status": "modified",
+      "before_sha256": "3d53833f9d026d8552388caa7f5fb09577f370087e1192f49b128be551c007b0",
+      "after_sha256": "b788fe9300920ce357cc9b09cdd5672c2ea842737b4804b43312383fd715aeec",
+      "bytes": 6558
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/grade_controller.py",
+      "status": "modified",
+      "before_sha256": "ee21cdce42c7c52a0c35a162d6df504e0ce8d1b709d503fbbbac99db209b0736",
+      "after_sha256": "955f083c915827e0af3843de5ff4981f80bbac60b415b857d282813ed07b0189",
+      "bytes": 10324
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/grading_prefix_cache.py",
+      "status": "modified",
+      "before_sha256": "80042486b77baf6591e34026096610e35c1d48473fa7114acdded25dcaed1901",
+      "after_sha256": "cc8ed9ab2e3165f0f9e0dbb6512469176dbe030a0d8fb62fbd7e5ecd20fe9d7c",
+      "bytes": 5728
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/history_policy.py",
+      "status": "modified",
+      "before_sha256": "28ab377c89fa82a127590c84a789e8f8a091dc8c6fc248e35ce0015e2c2471f0",
+      "after_sha256": "09362c5b31fdf9a7a0f29b580275e5537ca9af1feb819700217ffc3704dfa164",
+      "bytes": 8792
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/library_query_facts.py",
+      "status": "modified",
+      "before_sha256": "27e3bf0c6968aaa83288b0e8ece8036b93ba9f60162b5b5d1cca6fd85b3d15a9",
+      "after_sha256": "bc8ff6b33330045ec0d7d9eb2e6c36e8c1cef05b28aca23218abf2af0e31f1f8",
+      "bytes": 8982
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/master16_policy.py",
+      "status": "modified",
+      "before_sha256": "c575db57bf88b4e620642e97a4d3690116184074e6f9265caefdc1e37e4332ae",
+      "after_sha256": "8a559949311a5ea057335a7940e68d3d704435adebe668fe9d7265119b76d698",
+      "bytes": 13213
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/optics_candidate_identity.py",
+      "status": "modified",
+      "before_sha256": "2c1e2652e5d45ab606d4ffce693329b9c4e33513f5da0225a8777422fe7d9a31",
+      "after_sha256": "9e01d78745a34740277d1090ef8e63d496101307d4f6211f889de530cb42b29d",
+      "bytes": 3027
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/optics_transfer_input.py",
+      "status": "modified",
+      "before_sha256": "967b445fe890fc22607a8ad782172df3aaa538b4edd3bfff8961ac99d4cf72a9",
+      "after_sha256": "099d96c9849652882083918f2574da7abfd26a1f7128e63d0c8841ccfbcf6e43",
+      "bytes": 3951
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/original_shadow_paint_source.py",
+      "status": "modified",
+      "before_sha256": "0454b49319b2656116e4443338cb70793f2626429c2aeeadb711c27d2fa20079",
+      "after_sha256": "e8dfd7f2d28df45aef201636f5c87e9c99b4592225f9acd7295e4f5729f90140",
+      "bytes": 5422
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_host_commands.py",
+      "status": "modified",
+      "before_sha256": "baff92fb21e1fa8a978f1bfa725bb3a51b650ceee63539d877cd578cf31ad38f",
+      "after_sha256": "5a8b56d35c60288396de33326937c96da3350c5102df3051f470619e959fcfab",
+      "bytes": 43819
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/photo_grain_runtime.py",
+      "status": "modified",
+      "before_sha256": "e787d7e30a934dd6e2e951b8ce76889b1a89dc97212d098dd9ba7adcece0a86b",
+      "after_sha256": "ce2336948b31ef0668a1a41fcdef61711fa27bea4a5626580de5665fd7448efb",
+      "bytes": 8894
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/portrait_crop_capture.py",
+      "status": "modified",
+      "before_sha256": "5bd88bb8dddcef6811d9678f6c69c11c44ba99d4f548843eb580d2d56fb77306",
+      "after_sha256": "e3eb23f5117b48747f7cbbd454dd83ac901bd514f0179e13e9aec9b389e25e7d",
+      "bytes": 11990
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/portrait_crop_host.py",
+      "status": "modified",
+      "before_sha256": "328c734d60c9af9b07422101cda470c00064c40be28da3b2649625d4d5a09cbb",
+      "after_sha256": "d228d88b1b31a0982eb0b0a22b4d2caec2a664a6c4d96ffc6e9a57327ead9cc5",
+      "bytes": 17201
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/project.py",
+      "status": "modified",
+      "before_sha256": "95c566b9061e05f9a78df88ee6a5e579409d9e6fe8d68504f4120aedcb761243",
+      "after_sha256": "3f442591394c5a8382d072cd9ef134d0d3211b97fb3810f15a96d4c415665c3c",
+      "bytes": 82597
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/project_package_dependencies.py",
+      "status": "modified",
+      "before_sha256": "a92f321c4291e20787a84363807fdbcba0e0c7fe5767be4a96cef00882865275",
+      "after_sha256": "9b673e3b7fa25249637afb78163d682ad48a42180032b5f9e9e2613d59543dab",
+      "bytes": 7521
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/project_recovery_capture.py",
+      "status": "modified",
+      "before_sha256": "54d840553e3b3d62f7a77598557f3589dc6908f85c2c64f36be3974c0eb44508",
+      "after_sha256": "755f2c2cfce8ae2828ac317b4feea6dc8d9cc95cfd66ed5e5f537e3042b2c43b",
+      "bytes": 3359
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/project_recovery_runtime.py",
+      "status": "modified",
+      "before_sha256": "216ead6474d52abe5a96c270072d92735b6bc307327c916eaab26213773b97d3",
+      "after_sha256": "f7334967ce7ca358636513396b3c0fa14154191913a17a1b155f22fd383dfaee",
+      "bytes": 13997
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/reference_color_engine.py",
+      "status": "modified",
+      "before_sha256": "756fef9153cb33620a50eb41d5b6d5b0babb7c7dc655dfd88c400bbd24297ed0",
+      "after_sha256": "907be86d6eed16f02faee1e8745cc694c42ad21c42cf5a8119f900246fc13f66",
+      "bytes": 6540
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/semantic_colour_capture.py",
+      "status": "modified",
+      "before_sha256": "b804d5c4907011896a175ef04c888a6512cd4ecb78c09929a71e6c6f1577164e",
+      "after_sha256": "23d89a676c0067814ba0cc8e1b0a7d0250fd334f28b16d72fe87fdde221dc279",
+      "bytes": 8239
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/server.py",
+      "status": "modified",
+      "before_sha256": "11586f9a012c20dd8506c9cc03a0170ef3698ada05628c443ab3052b995ef5c3",
+      "after_sha256": "d67f5c4d6a2ccdd74bd3358d75e7fd13acb729ad7b7788061e5b7a0902043d4c",
+      "bytes": 485845
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/source_patch_capture.py",
+      "status": "modified",
+      "before_sha256": "a9ad9edd7aed4e5b7919edfd5132b4c810b4cfa0e299e9ce7a6bffc4c292fe90",
+      "after_sha256": "492decac2fbdba20a5bb3f57dff0bd0af0d73403067c3dcaf4ad0272a617d130",
+      "bytes": 14291
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/spill_removal_paint_source.py",
+      "status": "modified",
+      "before_sha256": "2bd7091fbbad5048fbcbcd1f340991d6d1dad7bb2631f05774097e1c7833189c",
+      "after_sha256": "344f8cce7c3115cc1f395607c7dd9ca26221dba777c24e8bcb8b324e7d806216",
+      "bytes": 11531
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/vram.py",
+      "status": "modified",
+      "before_sha256": "1a71bf0e35b8627c1effb24b41d8941aed0c30cd607e35db65e05c49bb73b961",
+      "after_sha256": "7c44e17d34bab00bbceb78fb05dd9551d2f3bce14b487131e15e31d5ce78928f",
+      "bytes": 137542
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/white_balance_capture.py",
+      "status": "modified",
+      "before_sha256": "c23a3e24ad54c9d5926add40782708d9552a6443d8333663544fe58e4b9ce606",
+      "after_sha256": "9937c3161e21412ff3003d5b5c3eb6437c14fe616403add8c7f699d1b109cd16",
+      "bytes": 7397
+    },
+    {
+      "path": "engine/tests/test_final_canvas_flip_unrun.py",
+      "status": "new",
+      "before_sha256": null,
+      "after_sha256": "f6cdec399a4da3e2f40b3019788bba9dff7969c53121812308e10b0fcf711b44",
+      "bytes": 15508
+    },
+    {
+      "path": "packaging/stage-engine.sh",
+      "status": "modified",
+      "before_sha256": "b832b84cc5afdccca1824d42015f8b99ddcde06cf3b2c79750b4098722aa6078",
+      "after_sha256": "28bde2b1b49cbc9db6efbd7df83ec27fba12e7233e8a0a05037a5368b75ae4a9",
+      "bytes": 34694
+    },
+    {
+      "path": "ui/src-tauri/src/engine.rs",
+      "status": "modified",
+      "before_sha256": "11c39258d2eecba7355de24a01f9563f1a77764f74ccf40351e7e635da05bca8",
+      "after_sha256": "7edc559258e7c2683d31aea14e8f7af093afb253bf4e0f1991fc0f30e23ec8a4",
+      "bytes": 59551
+    },
+    {
+      "path": "ui/src-tauri/src/final_canvas_flip_api.rs",
+      "status": "new",
+      "before_sha256": null,
+      "after_sha256": "a2bba07b772959f58c23567dfd68cca1f80ac477fc8a1672c0a3e576dad62b28",
+      "bytes": 21709
+    },
+    {
+      "path": "ui/src-tauri/src/main.rs",
+      "status": "modified",
+      "before_sha256": "dd993322e90018afa6c64ef170fc15c60fa6316ce8e1883e4b2f6684e12b1e55",
+      "after_sha256": "74fff5fb3a3d02b77a0f7b70175de520b322f93baa85004b9f5b36c68fac2477",
+      "bytes": 102976
+    },
+    {
+      "path": "ui/src-tauri/src/native_dispatch.rs",
+      "status": "modified",
+      "before_sha256": "1174c6ac63af0d124eb329821a50b6aa73ab99f84f24a952c7ce5984932d001c",
+      "after_sha256": "fff8e7d523a1f76f779551c804f219376795c1503fd6cc75c3473f4ba6f5d2a3",
+      "bytes": 16128
+    },
+    {
+      "path": "ui/src-tauri/src/project_recovery_fence.rs",
+      "status": "modified",
+      "before_sha256": "9356f55cde60494adb17dd647fb3646f3b1d2d444726811213a920741a1d3edd",
+      "after_sha256": "41a97241b2dd3cf09314ad7cc96356f404ba80a21b970df2c252f09c74f0f8c6",
+      "bytes": 17995
+    },
+    {
+      "path": "ui/src/App.tsx",
+      "status": "modified",
+      "before_sha256": "8dc01d620c14f2d9fec0a31bfd08a8ebb3b4bca34b55d9d468f3a466e07179b9",
+      "after_sha256": "d39524a3711b2e0dc63294b7ac9adebc9f7ec7b4066484fc5ec9c030b3e46724",
+      "bytes": 171963
+    },
+    {
+      "path": "ui/src/colourEditor/ConnectedColourEditorPanel.tsx",
+      "status": "modified",
+      "before_sha256": "4af5aa035e09f96acc34a3f0dd9c6280b25f8dee1597e86b956dbfd9cc738cd4",
+      "after_sha256": "9304bed03b06120cb671c3e305bcc79c73224b152f5f374c69cd7d2ff847623c",
+      "bytes": 3245
+    },
+    {
+      "path": "ui/src/components/CropModal.tsx",
+      "status": "modified",
+      "before_sha256": "2d3ea968925ebca2a4502229ddad577936a2e7235b60d5316ab562ce9ce9c25a",
+      "after_sha256": "b2039bfaee5cd1323dc9b38a69ab593462bc9468e80be4599705774fbfcf2d28",
+      "bytes": 5385
+    },
+    {
+      "path": "ui/src/components/RetouchPanel.tsx",
+      "status": "modified",
+      "before_sha256": "bce1418198d680c9ae38ee1e2a386f765d698fde2622bfd291d8b94c1de95142",
+      "after_sha256": "e59c49d6765cd50d1a246fbea043420fc6fe972f3bb4581c8b75b46f6da15eb6",
+      "bytes": 92094
+    },
+    {
+      "path": "ui/src/finalCanvasFlip/FlipControls.tsx",
+      "status": "new",
+      "before_sha256": null,
+      "after_sha256": "6d261b8fbabf2e6caf63f4b5703a98c11af5d69ac5426d935b41c2ca74ac4601",
+      "bytes": 2522
+    },
+    {
+      "path": "ui/src/finalCanvasFlip/model.ts",
+      "status": "new",
+      "before_sha256": null,
+      "after_sha256": "81c15e0a6b74a7f3ecdd883ca8f77d6fc3437b586be4c077278b7dfe35fa8dd2",
+      "bytes": 409
+    },
+    {
+      "path": "ui/src/finalCanvasFlip/owner.ts",
+      "status": "new",
+      "before_sha256": null,
+      "after_sha256": "a32291e56fb642b1086484521eb71221cff5f6609b865e2cf3a9ce4940512a19",
+      "bytes": 7945
+    },
+    {
+      "path": "ui/src/idBackground/IdBackgroundPanel.tsx",
+      "status": "modified",
+      "before_sha256": "8adab44a9c677be61dc601746fe4b049d2435b89c714dc22f0711da8d0d26599",
+      "after_sha256": "83c342d9bd5b3d4d4be6a5b207173234f0d56d797d62e2e0d52ad0415032422f",
+      "bytes": 17293
+    },
+    {
+      "path": "ui/src/native.ts",
+      "status": "modified",
+      "before_sha256": "279c6d2254743f2b462cbe1ecad38e2a4f43178cc6ed625669b43f53f89ecf6a",
+      "after_sha256": "1a820be112697f62c5e3e69b60edc251f87ff0e2d8d9f895ad2567439896c94e",
+      "bytes": 121574
+    },
+    {
+      "path": "ui/src/people/PeoplePanel.tsx",
+      "status": "modified",
+      "before_sha256": "6eba57df38462150bbb4d494c4c13f76995d44d56f13a65481736d27236dd0c3",
+      "after_sha256": "e7396b7ae91d9389b7b675a57cfe0eefa99c5d40cd3e20c1528cd3ba321f486b",
+      "bytes": 16778
+    }
+  ]
+}

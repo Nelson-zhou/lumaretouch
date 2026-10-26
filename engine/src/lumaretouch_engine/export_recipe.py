@@ -44,13 +44,17 @@ def build_export_spec(snap: dict, eh: int, ew: int, *, for_document: bool):
         if (eh, ew) != (base['height'], base['width']):
             raise ValueError('Export recipe must use the creative canvas dimensions, not the original file geometry')
         require_rebound_snapshot(snap)
+    from .final_canvas_flip_state import active as flip_active
+    if not for_document and flip_active(snap.get('final_canvas_flip')):
+        raise ValueError('Final canvas flip belongs to its frozen document; cross-photo transfer is not admitted')
     p = snap["params"]
     skipped: list = list(snap.get("export_skipped", []))
     if snap.get("channel") and float(snap.get("strength", 0)) != 0:
         if not for_document or snap.get("precompute") is None:
             from .export import ExportError
             raise ExportError("缺少这张图片的蒙版，禁止把局部磨皮扩大为全图")
-    spec = ExportSpec(creative_base=base, strength=float(snap["strength"]), radius=int(p["radius"]),
+    from .final_canvas_flip_state import check as check_flip, neutral as neutral_flip
+    spec = ExportSpec(final_canvas_flip=check_flip(snap['final_canvas_flip']) if 'final_canvas_flip' in snap else neutral_flip(), creative_base=base, strength=float(snap["strength"]), radius=int(p["radius"]),
                       eps=float(p["eps"]), texture_radius=int(p["texture_radius"]),
                       broad_gain=float(p["broad_gain"]), mid_gain=float(p["mid_gain"]),
                       detail_gain=float(p["detail_gain"]),

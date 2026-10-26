@@ -10,7 +10,7 @@ struct Pending { command: Value, composite_history: Option<Value> }
 impl Pending { fn composite(&self)->bool {preset_alias::applies(&self.command)||crate::people_api::decoration_alias::applies(&self.command)||crate::people_api::decoration_support_alias::applies(&self.command)||crate::effect_recovery_host::alias::applies(&self.command)||self.composite_history.is_some()} }
 // Body and neck mutations retain the existing fence until a strict terminal or verified
 // workspace reopen. They do not become composite/alias history operations.
-impl Pending { fn guarded(&self) -> bool { self.composite() || crate::batch_host::portrait_preset_group::mutation(&self.command) || crate::hand_shape_api::mutation(&self.command) || crate::hand_tone_api::mutation(&self.command) || crate::limb_vein_api::mutation(&self.command) || crate::fabric_sweat_api::mutation(&self.command) || crate::people_api::skin_reference_body::mutation(&self.command) || crate::people_api::neck_wrinkle::mutation(&self.command) } }
+impl Pending { fn guarded(&self) -> bool { self.command["cmd"] == "final_canvas_flip" || self.composite() || crate::batch_host::portrait_preset_group::mutation(&self.command) || crate::hand_shape_api::mutation(&self.command) || crate::hand_tone_api::mutation(&self.command) || crate::limb_vein_api::mutation(&self.command) || crate::fabric_sweat_api::mutation(&self.command) || crate::people_api::skin_reference_body::mutation(&self.command) || crate::people_api::neck_wrinkle::mutation(&self.command) } }
 fn pending()->&'static Mutex<HashMap<([u8;16],String),Pending>> {
     static STORE:OnceLock<Mutex<HashMap<([u8;16],String),Pending>>=OnceLock::new();
     STORE.get_or_init(||Mutex::new(HashMap::new()))
@@ -73,7 +73,7 @@ pub(crate) fn observed(epoch:[u8;16], value:&Value){
     preset_alias_history::observe_session(epoch,value);
     if matches!(value["event"].as_str(),Some("project_opened"|"project_created")) {
         let reopened=preset_alias::reopened(value);
-        if reopened {preset_alias_history::clear(epoch);}
+        if reopened {preset_alias_history::clear(epoch);crate::final_canvas_flip_api::verified_workspace_opened(epoch);}
         store.retain(|(e,_),request|*e!=epoch||(request.guarded()&&!reopened));return;
     }
     let Some(id)=value["request_id"].as_str() else{return;};
@@ -82,6 +82,10 @@ pub(crate) fn observed(epoch:[u8;16], value:&Value){
     let key=(epoch,id.to_owned());
     let Some(request)=store.get(&key) else{return;};
     let command=&request.command;
+    if (command["cmd"] == "final_canvas_flip" || event == "final_canvas_flip_result")
+        && (command["cmd"] != "final_canvas_flip" || event != "final_canvas_flip_result"
+            || value["original_request"] != *command) { return; }
+
     // Receipt hosts can share an epoch but not command/action identity. A late
     // read-only preflight (including one whose result omits scope on rejection)
     // must never settle another host's later mutation with a reused request ID.
@@ -141,6 +145,15 @@ pub(crate) fn hand_shape_pending(epoch:[u8;16],command:&Value)->bool {
     let Some(id)=command["request_id"].as_str() else{return false;};
     pending().lock().map(|store|store.get(&(epoch,id.to_owned()))
         .is_some_and(|entry|entry.command==*command)).unwrap_or(false)
+}
+
+/// Retained native flip receipts only guard a currently owned exact flip fence;
+/// they must not suppress a different family's later/colliding request ID.
+pub(crate) fn final_canvas_flip_pending(epoch:[u8;16], command:&Value)->bool {
+    if command["cmd"]!="final_canvas_flip" { return false; }
+    let Some(id)=command["request_id"].as_str() else { return false; };
+    pending().lock().map(|store|store.get(&(epoch,id.to_owned()))
+        .is_some_and(|entry|entry.command==*command)).unwrap_or(true)
 }
 
 pub(crate) fn proof(epoch:[u8;16])->Result<Value,String>{

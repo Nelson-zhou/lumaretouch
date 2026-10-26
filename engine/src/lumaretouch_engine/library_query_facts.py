@@ -55,6 +55,9 @@ def edited_of(state, edits):
     if any(bool(value) for key, value in edits.items() if key not in ('channel', 'lut_preset')):
         return True
     try:
+        from .final_canvas_flip_state import active, from_state
+        if active(from_state(state)):
+            return True
         if (tuple(state.get('_crop_rect', (0, 0, 1, 1))) != (0, 0, 1, 1)
                 or float(state.get('_crop_rotation', 0)) != 0
                 or _nonzero(state.get('_exposure', ()))

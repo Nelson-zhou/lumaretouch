@@ -37,8 +37,10 @@ def fingerprint(value):
             try:
                 if isinstance(item,dict):
                     if any(type(k) is not str for k in item):raise ValueError('目标候选状态字典键无效')
-                    token(b'D',str(len(item)).encode())
-                    for key in sorted(item):visit(key,depth+1);visit(item[key],depth+1)
+                    from .final_canvas_flip_state import active, check
+                    keys = [key for key in item if key not in ('_final_canvas_flip', 'final_canvas_flip') or active(check(item[key]))]
+                    token(b'D',str(len(keys)).encode())
+                    for key in sorted(keys):visit(key,depth+1);visit(item[key],depth+1)
                 elif is_dataclass(item):
                     token(b'C',(type(item).__module__+'.'+type(item).__qualname__).encode())
                     for field in fields(item):visit(field.name,depth+1);visit(getattr(item,field.name),depth+1)

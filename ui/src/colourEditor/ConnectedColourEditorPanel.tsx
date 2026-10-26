@@ -4,7 +4,7 @@ import {VerifiedPicker} from './VerifiedPicker';
 import {ColourEditorPanel} from './ColourEditorPanel';
 import {ColourEditorWorkflow} from './workflow';
 import {abort,readback,send,show,type Readback} from './nativePort';
-export function ConnectedColourEditorPanel({documentId,hostRevision,disabled,available,onPick}:{documentId:string;hostRevision:number;disabled:boolean;available:boolean;onPick?:()=>Promise<Recipe>}){
+export function ConnectedColourEditorPanel({documentId,hostRevision,disabled,available,onPick,pickerDisabled}:{documentId:string;hostRevision:number;disabled:boolean;available:boolean;onPick?:()=>Promise<Recipe>;pickerDisabled?:boolean}){
   const [picker,setPicker]=useState(false);const [value,setValue]=useState<Readback|null>(null);const [message,setMessage]=useState('');
   const context=useRef({document:documentId,revision:0});const currentDocument=useRef(documentId);currentDocument.current=documentId;
   const generation=useRef(0);
@@ -23,7 +23,8 @@ export function ConnectedColourEditorPanel({documentId,hostRevision,disabled,ava
     refresh().catch(e=>setMessage(String(e)));return()=>{++generation.current;};
   },[documentId,hostRevision,available,workflow]);
   useEffect(()=>()=>{void workflow.cancel();workflow.dispose();},[workflow]);
-  return <>{value?.document_id===documentId?<ColourEditorPanel value={value.recipe} workflow={workflow} enabled={!disabled&&available&&value.available} message={message} onDraft={recipe=>setValue(v=>v?{...v,recipe}:v)} onPick={()=>{if(onPick)void pick();else setPicker(true);}}/>:<p role="status">{message||'正在读取色彩编辑器状态'}</p>}
+  useEffect(()=>{if(pickerDisabled)setPicker(false);},[pickerDisabled]);
+  return <>{value?.document_id===documentId?<ColourEditorPanel value={value.recipe} workflow={workflow} enabled={!disabled&&available&&value.available} message={message} onDraft={recipe=>setValue(v=>v?{...v,recipe}:v)} onPick={pickerDisabled?undefined:()=>{if(onPick)void pick();else setPicker(true);}}/>:<p role="status">{message||'正在读取色彩编辑器状态'}</p>}
     {picker&&value&&<VerifiedPicker documentId={documentId} recipe={value.recipe} onClose={()=>setPicker(false)} onSample={recipe=>{setPicker(false);setValue(v=>v?{...v,recipe}:v);workflow.preview(recipe);}}/>}
     <button type="button" onClick={()=>void refresh(true).catch(e=>setMessage(String(e)))}>核对当前状态并解除未确认锁定</button></>;
 }

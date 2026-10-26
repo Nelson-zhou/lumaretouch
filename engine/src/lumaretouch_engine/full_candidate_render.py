@@ -130,7 +130,8 @@ def render(engine,row,candidate_state,document_id,revision,*,people_graph=None,s
     import numpy as np
     geometry=(snap['crop_rect'],snap['crop_rotation']);expected=out_size(w,h,*geometry)
     if expected[0]*expected[1]>limit:raise ValueError('Expanded crop exceeds complete preparation budget')
-    rgb,stats=export_float(pixels,spec,geometry=geometry,progress=checkpoint)
+    from .final_canvas_flip_state import active as flip_active
+    rgb,stats=export_float(pixels,spec,geometry=geometry,progress=checkpoint,provenance=not flip_active(spec.final_canvas_flip))
     neck_measurements=[]
     people_stats=stats.get("people") or {}
     for face_id, facts in sorted(people_stats.get("facts",{}).items()):

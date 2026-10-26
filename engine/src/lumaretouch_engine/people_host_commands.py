@@ -81,6 +81,9 @@ def _review_read_only(raw,actions):
 
 
 def checked(engine,p):
+    if p.get("action") == "manual_add":
+        from .final_canvas_flip_state import require_processing_capture
+        require_processing_capture(engine)
     why=engine._guard_editable('people')
     if why:raise ValueError(why)
     style_action=p.get('action') in FACE_STYLE_ACTIONS

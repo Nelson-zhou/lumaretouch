@@ -67,7 +67,8 @@ PRIMARY_SCHEMA = "lrt.project.v19"
 DETAIL_SCHEMA = "lrt.project.v20"
 GRAIN_SCHEMA = "lrt.project.v21"
 COLOUR_EDITOR_SCHEMA = "lrt.project.v22"
-SCHEMA = "lrt.project.v23"
+IDENTITY_SCHEMA = "lrt.project.v23"
+SCHEMA = "lrt.project.v24"
 SUFFIX = ".lrproject.json"
 
 # 上限：宁可显式丢弃，也不要"保存成功但下次打开少了一半配方"这种事
@@ -84,6 +85,14 @@ __all__ = ["ProjectError", "SCHEMA", "SUFFIX", "new_project", "load", "save",
 class ProjectError(ValueError):
     """项目文件读写与校验的错。刻意继承 ValueError：命令面那侧的守卫
     （`except (ValueError, ...)`）本来就吃它，不需要为持久层再开一条臂。"""
+
+
+def _validate_flip_records(value, *, allowed=True):
+    from .final_canvas_flip_project import validate_records
+    try:
+        validate_records(value, allowed=allowed)
+    except (ValueError, TypeError, KeyError, OverflowError) as error:
+        raise ProjectError(f"Invalid final canvas flip records: {error}") from error
 
 
 def _validate_fringe_records(value, *, allowed=True):
@@ -223,60 +232,61 @@ def validate(p: object) -> None:
     except (ValueError,TypeError,KeyError,AttributeError) as error: raise ProjectError(str(error)) from error
     sv = p.get("schema_version")
     from .skin_reference_match_project import validate as validate_reference_match
-    try:validate_reference_match(p,allowed=sv==SCHEMA)
+    try:validate_reference_match(p,allowed=sv in (IDENTITY_SCHEMA, SCHEMA))
     except (ValueError,TypeError,KeyError) as error:raise ProjectError(str(error)) from error
     from .skin_reference_body_project import validate as validate_reference_body
-    try:validate_reference_body(p,allowed=sv==SCHEMA)
+    try:validate_reference_body(p,allowed=sv in (IDENTITY_SCHEMA, SCHEMA))
     except (ValueError,TypeError,KeyError) as error:raise ProjectError(str(error)) from error
     from .garment_sweat_runtime import validate_records as validate_sweat
-    try: validate_sweat(p,allowed=(sv == SCHEMA))
+    try: validate_sweat(p,allowed=(sv in (IDENTITY_SCHEMA, SCHEMA)))
     except ValueError as error: raise ProjectError(str(error)) from error
     from .limb_vein_runtime import validate_records as validate_vein
-    try: validate_vein(p,allowed=(sv == SCHEMA))
+    try: validate_vein(p,allowed=(sv in (IDENTITY_SCHEMA, SCHEMA)))
     except ValueError as error: raise ProjectError(str(error)) from error
     from .hand_shape_runtime import validate_records as validate_hand_shape
-    try: validate_hand_shape(p,allowed=(sv == SCHEMA))
+    try: validate_hand_shape(p,allowed=(sv in (IDENTITY_SCHEMA, SCHEMA)))
     except ValueError as error: raise ProjectError(str(error)) from error
     from .hand_tone_runtime import validate_records as validate_hand_tone
-    try: validate_hand_tone(p,allowed=(sv == SCHEMA))
+    try: validate_hand_tone(p,allowed=(sv in (IDENTITY_SCHEMA, SCHEMA)))
     except ValueError as error: raise ProjectError(str(error)) from error
-    _validate_fringe_records(p, allowed=(sv == SCHEMA))
+    _validate_flip_records(p, allowed=(sv == SCHEMA))
+    _validate_fringe_records(p, allowed=(sv in (IDENTITY_SCHEMA, SCHEMA)))
     from .primary_calibration_adapters import validate_records as validate_primary
-    try:validate_primary(p,allowed=sv in (PRIMARY_SCHEMA,DETAIL_SCHEMA,GRAIN_SCHEMA,COLOUR_EDITOR_SCHEMA,SCHEMA))
+    try:validate_primary(p,allowed=sv in (PRIMARY_SCHEMA,DETAIL_SCHEMA,GRAIN_SCHEMA,COLOUR_EDITOR_SCHEMA,IDENTITY_SCHEMA,SCHEMA))
     except (ValueError,TypeError,KeyError,RuntimeError,OSError) as error:raise ProjectError(str(error)) from error
     from .selective_colour_adapters import validate_records as validate_selective
-    try:validate_selective(p,allowed=sv in (SELECTIVE_SCHEMA,PRIMARY_SCHEMA,DETAIL_SCHEMA,GRAIN_SCHEMA,COLOUR_EDITOR_SCHEMA,SCHEMA))
+    try:validate_selective(p,allowed=sv in (SELECTIVE_SCHEMA,PRIMARY_SCHEMA,DETAIL_SCHEMA,GRAIN_SCHEMA,COLOUR_EDITOR_SCHEMA,IDENTITY_SCHEMA,SCHEMA))
     except (ValueError,TypeError,KeyError) as error:raise ProjectError(str(error)) from error
     from .colour_grading_adapters import validate_records as validate_grading
-    try:validate_grading(p,allowed=sv in (GRADING_SCHEMA,SELECTIVE_SCHEMA,PRIMARY_SCHEMA,DETAIL_SCHEMA,GRAIN_SCHEMA,COLOUR_EDITOR_SCHEMA,SCHEMA))
+    try:validate_grading(p,allowed=sv in (GRADING_SCHEMA,SELECTIVE_SCHEMA,PRIMARY_SCHEMA,DETAIL_SCHEMA,GRAIN_SCHEMA,COLOUR_EDITOR_SCHEMA,IDENTITY_SCHEMA,SCHEMA))
     except (ValueError,TypeError,KeyError) as error:raise ProjectError(str(error)) from error
     from .colour_editor_adapters import validate_records as validate_editor
-    try:validate_editor(p,allowed=sv in (COLOUR_EDITOR_SCHEMA, SCHEMA))
+    try:validate_editor(p,allowed=sv in (COLOUR_EDITOR_SCHEMA, IDENTITY_SCHEMA, SCHEMA))
     except ValueError as error:raise ProjectError(str(error)) from error
     from .photo_grain_adapters import validate_records as validate_grain
-    try:validate_grain(p,allowed=sv in (GRAIN_SCHEMA,COLOUR_EDITOR_SCHEMA,SCHEMA))
+    try:validate_grain(p,allowed=sv in (GRAIN_SCHEMA,COLOUR_EDITOR_SCHEMA,IDENTITY_SCHEMA,SCHEMA))
     except ValueError as error:raise ProjectError(str(error)) from error
     from .photo_detail_project import validate_records as validate_photo_detail
-    try:validate_photo_detail(p,allowed=sv in (DETAIL_SCHEMA,GRAIN_SCHEMA,COLOUR_EDITOR_SCHEMA,SCHEMA))
+    try:validate_photo_detail(p,allowed=sv in (DETAIL_SCHEMA,GRAIN_SCHEMA,COLOUR_EDITOR_SCHEMA,IDENTITY_SCHEMA,SCHEMA))
     except ValueError as error:raise ProjectError(str(error)) from error
     from .extended_tone_project import validate_records as validate_extended_tone
-    try:validate_extended_tone(p,allowed=sv in (TONE_SCHEMA,GRADING_SCHEMA,SELECTIVE_SCHEMA,PRIMARY_SCHEMA,DETAIL_SCHEMA,GRAIN_SCHEMA,COLOUR_EDITOR_SCHEMA,SCHEMA))
+    try:validate_extended_tone(p,allowed=sv in (TONE_SCHEMA,GRADING_SCHEMA,SELECTIVE_SCHEMA,PRIMARY_SCHEMA,DETAIL_SCHEMA,GRAIN_SCHEMA,COLOUR_EDITOR_SCHEMA,IDENTITY_SCHEMA,SCHEMA))
     except (ValueError,TypeError,KeyError) as error:raise ProjectError(str(error)) from error
     from .hair_colour_project import validate as validate_hair
-    try:validate_hair(p,allowed=(sv in (HAIR_SCHEMA,CUBE_SCHEMA,TONE_SCHEMA,GRADING_SCHEMA,SELECTIVE_SCHEMA,PRIMARY_SCHEMA,DETAIL_SCHEMA,GRAIN_SCHEMA,COLOUR_EDITOR_SCHEMA,SCHEMA)))
+    try:validate_hair(p,allowed=(sv in (HAIR_SCHEMA,CUBE_SCHEMA,TONE_SCHEMA,GRADING_SCHEMA,SELECTIVE_SCHEMA,PRIMARY_SCHEMA,DETAIL_SCHEMA,GRAIN_SCHEMA,COLOUR_EDITOR_SCHEMA,IDENTITY_SCHEMA,SCHEMA)))
     except (ValueError,TypeError,KeyError) as error:raise ProjectError(str(error)) from error
     from .neck_wrinkle_project import validate_project as validate_neck
     try:validate_neck(p)
     except (ValueError,TypeError,KeyError) as error:raise ProjectError(str(error)) from error
     from .hair_volume_project import validate as validate_hair_volume
-    try:validate_hair_volume(p,allowed=(sv == SCHEMA))
+    try:validate_hair_volume(p,allowed=(sv in (IDENTITY_SCHEMA, SCHEMA)))
     except (ValueError,TypeError,KeyError) as error:raise ProjectError(str(error)) from error
     from .hair_unification_project import validate as validate_hair_unification
-    try:validate_hair_unification(p,allowed=(sv == SCHEMA))
+    try:validate_hair_unification(p,allowed=(sv in (IDENTITY_SCHEMA, SCHEMA)))
     except (ValueError,TypeError,KeyError) as error:raise ProjectError(str(error)) from error
-    try:validate_body_pose(p,allowed=(sv in (BODY_SCHEMA,HAIR_SCHEMA,CUBE_SCHEMA,TONE_SCHEMA,GRADING_SCHEMA,SELECTIVE_SCHEMA,PRIMARY_SCHEMA,DETAIL_SCHEMA,GRAIN_SCHEMA,COLOUR_EDITOR_SCHEMA,SCHEMA)))
+    try:validate_body_pose(p,allowed=(sv in (BODY_SCHEMA,HAIR_SCHEMA,CUBE_SCHEMA,TONE_SCHEMA,GRADING_SCHEMA,SELECTIVE_SCHEMA,PRIMARY_SCHEMA,DETAIL_SCHEMA,GRAIN_SCHEMA,COLOUR_EDITOR_SCHEMA,IDENTITY_SCHEMA,SCHEMA)))
     except (ValueError,TypeError,KeyError) as error:raise ProjectError(str(error)) from error
-    if sv not in (LEGACY_SCHEMA, WB_SCHEMA, REPAIR_SCHEMA, MASK_SCHEMA, GRADE_SCHEMA, RECOVERY_SCHEMA, MANUAL_SCHEMA, STUDIO_SCHEMA, OPTICS_SCHEMA, SKY_SCHEMA, SEMANTIC_SKY_SCHEMA, SEMANTIC_COLOUR_SCHEMA, BODY_SCHEMA, HAIR_SCHEMA, CUBE_SCHEMA, TONE_SCHEMA, GRADING_SCHEMA, SELECTIVE_SCHEMA, PRIMARY_SCHEMA, DETAIL_SCHEMA, GRAIN_SCHEMA, COLOUR_EDITOR_SCHEMA, SCHEMA):
+    if sv not in (LEGACY_SCHEMA, WB_SCHEMA, REPAIR_SCHEMA, MASK_SCHEMA, GRADE_SCHEMA, RECOVERY_SCHEMA, MANUAL_SCHEMA, STUDIO_SCHEMA, OPTICS_SCHEMA, SKY_SCHEMA, SEMANTIC_SKY_SCHEMA, SEMANTIC_COLOUR_SCHEMA, BODY_SCHEMA, HAIR_SCHEMA, CUBE_SCHEMA, TONE_SCHEMA, GRADING_SCHEMA, SELECTIVE_SCHEMA, PRIMARY_SCHEMA, DETAIL_SCHEMA, GRAIN_SCHEMA, COLOUR_EDITOR_SCHEMA, IDENTITY_SCHEMA, SCHEMA):
         raise ProjectError(f"项目 schema_version={sv!r}，本版本认 {SCHEMA!r}")
     for k in ("project_id", "name", "docs", "assets"):
         if k not in p:
@@ -285,12 +295,12 @@ def validate(p: object) -> None:
         raise ProjectError("项目的 docs/assets 形状不对（应为 list / dict）")
     # Includes inactive versions and document_history (both undo and redo),
     # before migration or publication. Old files without these keys stay valid.
-    _validate_creative_records(p, p["assets"], allowed=(sv == SCHEMA))
+    _validate_creative_records(p, p["assets"], allowed=(sv in (IDENTITY_SCHEMA, SCHEMA)))
     from .people_cross_owner_project import validate_project as validate_cross_owner
     try: validate_cross_owner(p)
     except (ValueError, TypeError, KeyError) as error:
         raise ProjectError(f'Invalid cross-owner portrait association: {error}') from error
-    if sv == SCHEMA:
+    if sv in (IDENTITY_SCHEMA, SCHEMA):
         try:
             VC.validate_identity(p)
         except (ValueError, TypeError, KeyError) as error:
@@ -305,7 +315,7 @@ def validate(p: object) -> None:
         except (ValueError, TypeError, KeyError) as error:
             raise ProjectError(f'Invalid canvas guides for docs[{i}]: {error}') from error
         rp = row["path"]
-        if rp in seen and sv != SCHEMA:
+        if rp in seen and sv not in (IDENTITY_SCHEMA, SCHEMA):
             raise ProjectError(f"docs[{i}] 的 path 与前面重复：{rp}")
         seen.add(rp)
         if not isinstance(row.get("versions"), list):
@@ -326,41 +336,42 @@ def validate(p: object) -> None:
                     WB.normalize_state(recipe, required=(sv != LEGACY_SCHEMA))
                 except ValueError as error:
                     raise ProjectError(f"Invalid white-balance recipe: {error}") from error
-                if sv in (MANUAL_SCHEMA, STUDIO_SCHEMA, OPTICS_SCHEMA, SKY_SCHEMA, SEMANTIC_SKY_SCHEMA, SEMANTIC_COLOUR_SCHEMA, BODY_SCHEMA, HAIR_SCHEMA, CUBE_SCHEMA, TONE_SCHEMA, GRADING_SCHEMA, SELECTIVE_SCHEMA, PRIMARY_SCHEMA, DETAIL_SCHEMA, GRAIN_SCHEMA, COLOUR_EDITOR_SCHEMA, SCHEMA):
+                if sv in (MANUAL_SCHEMA, STUDIO_SCHEMA, OPTICS_SCHEMA, SKY_SCHEMA, SEMANTIC_SKY_SCHEMA, SEMANTIC_COLOUR_SCHEMA, BODY_SCHEMA, HAIR_SCHEMA, CUBE_SCHEMA, TONE_SCHEMA, GRADING_SCHEMA, SELECTIVE_SCHEMA, PRIMARY_SCHEMA, DETAIL_SCHEMA, GRAIN_SCHEMA, COLOUR_EDITOR_SCHEMA, IDENTITY_SCHEMA, SCHEMA):
                     _check_manual_liquify_record(recipe.get("_manual_liquify"))
         from .sky_replacement_project import validate_records as validate_sky
-        try: validate_sky(row,required=(sv in (SKY_SCHEMA, SEMANTIC_SKY_SCHEMA, SEMANTIC_COLOUR_SCHEMA, BODY_SCHEMA, HAIR_SCHEMA, CUBE_SCHEMA, TONE_SCHEMA, GRADING_SCHEMA, SELECTIVE_SCHEMA, PRIMARY_SCHEMA, DETAIL_SCHEMA, GRAIN_SCHEMA, COLOUR_EDITOR_SCHEMA, SCHEMA)),allowed=(sv in (SKY_SCHEMA, SEMANTIC_SKY_SCHEMA, SEMANTIC_COLOUR_SCHEMA, BODY_SCHEMA, HAIR_SCHEMA, CUBE_SCHEMA, TONE_SCHEMA, GRADING_SCHEMA, SELECTIVE_SCHEMA, PRIMARY_SCHEMA, DETAIL_SCHEMA, GRAIN_SCHEMA, COLOUR_EDITOR_SCHEMA, SCHEMA)),semantic=(sv in (SEMANTIC_SKY_SCHEMA,SEMANTIC_COLOUR_SCHEMA,BODY_SCHEMA,HAIR_SCHEMA,CUBE_SCHEMA,TONE_SCHEMA,GRADING_SCHEMA,SELECTIVE_SCHEMA,PRIMARY_SCHEMA,DETAIL_SCHEMA,GRAIN_SCHEMA,COLOUR_EDITOR_SCHEMA,SCHEMA)))
+        try: validate_sky(row,required=(sv in (SKY_SCHEMA, SEMANTIC_SKY_SCHEMA, SEMANTIC_COLOUR_SCHEMA, BODY_SCHEMA, HAIR_SCHEMA, CUBE_SCHEMA, TONE_SCHEMA, GRADING_SCHEMA, SELECTIVE_SCHEMA, PRIMARY_SCHEMA, DETAIL_SCHEMA, GRAIN_SCHEMA, COLOUR_EDITOR_SCHEMA, IDENTITY_SCHEMA, SCHEMA)),allowed=(sv in (SKY_SCHEMA, SEMANTIC_SKY_SCHEMA, SEMANTIC_COLOUR_SCHEMA, BODY_SCHEMA, HAIR_SCHEMA, CUBE_SCHEMA, TONE_SCHEMA, GRADING_SCHEMA, SELECTIVE_SCHEMA, PRIMARY_SCHEMA, DETAIL_SCHEMA, GRAIN_SCHEMA, COLOUR_EDITOR_SCHEMA, IDENTITY_SCHEMA, SCHEMA)),semantic=(sv in (SEMANTIC_SKY_SCHEMA,SEMANTIC_COLOUR_SCHEMA,BODY_SCHEMA,HAIR_SCHEMA,CUBE_SCHEMA,TONE_SCHEMA,GRADING_SCHEMA,SELECTIVE_SCHEMA,PRIMARY_SCHEMA,DETAIL_SCHEMA,GRAIN_SCHEMA,COLOUR_EDITOR_SCHEMA,IDENTITY_SCHEMA,SCHEMA)))
         except ValueError as error: raise ProjectError(str(error)) from error
         from .brow_shape_project import validate_records as validate_brows
         from .nose_shape_project import validate_records as validate_noses
         from .eye_shape_project import validate_records as validate_eyes
         from .mouth_shape_project import validate_records as validate_mouth
         from .lip_makeup_project import validate_records as validate_lips
-        try: validate_lips(row); validate_brows(row); validate_noses(row); validate_eyes(row); validate_mouth(row); validate_reference(row); validate_semantic_colour(row,allowed=(sv in (SEMANTIC_COLOUR_SCHEMA,BODY_SCHEMA,HAIR_SCHEMA,CUBE_SCHEMA,TONE_SCHEMA,GRADING_SCHEMA,SELECTIVE_SCHEMA,PRIMARY_SCHEMA,DETAIL_SCHEMA,GRAIN_SCHEMA,COLOUR_EDITOR_SCHEMA,SCHEMA)),assets=p["assets"]); validate_body_pose(row,allowed=(sv in (BODY_SCHEMA,HAIR_SCHEMA,CUBE_SCHEMA,TONE_SCHEMA,GRADING_SCHEMA,SELECTIVE_SCHEMA,PRIMARY_SCHEMA,DETAIL_SCHEMA,GRAIN_SCHEMA,COLOUR_EDITOR_SCHEMA,SCHEMA)))
+        try: validate_lips(row); validate_brows(row); validate_noses(row); validate_eyes(row); validate_mouth(row); validate_reference(row); validate_semantic_colour(row,allowed=(sv in (SEMANTIC_COLOUR_SCHEMA,BODY_SCHEMA,HAIR_SCHEMA,CUBE_SCHEMA,TONE_SCHEMA,GRADING_SCHEMA,SELECTIVE_SCHEMA,PRIMARY_SCHEMA,DETAIL_SCHEMA,GRAIN_SCHEMA,COLOUR_EDITOR_SCHEMA,IDENTITY_SCHEMA,SCHEMA)),assets=p["assets"]); validate_body_pose(row,allowed=(sv in (BODY_SCHEMA,HAIR_SCHEMA,CUBE_SCHEMA,TONE_SCHEMA,GRADING_SCHEMA,SELECTIVE_SCHEMA,PRIMARY_SCHEMA,DETAIL_SCHEMA,GRAIN_SCHEMA,COLOUR_EDITOR_SCHEMA,IDENTITY_SCHEMA,SCHEMA)))
         except ValueError as error: raise ProjectError(str(error)) from error
         from .optics_project import validate_records as validate_optics
-        try: validate_optics(row,required=(sv in (OPTICS_SCHEMA,SKY_SCHEMA,SEMANTIC_SKY_SCHEMA,SEMANTIC_COLOUR_SCHEMA,BODY_SCHEMA,HAIR_SCHEMA,CUBE_SCHEMA,TONE_SCHEMA,GRADING_SCHEMA,SELECTIVE_SCHEMA,PRIMARY_SCHEMA,DETAIL_SCHEMA,GRAIN_SCHEMA,COLOUR_EDITOR_SCHEMA,SCHEMA)),allowed=(sv in (OPTICS_SCHEMA,SKY_SCHEMA,SEMANTIC_SKY_SCHEMA,SEMANTIC_COLOUR_SCHEMA,BODY_SCHEMA,HAIR_SCHEMA,CUBE_SCHEMA,TONE_SCHEMA,GRADING_SCHEMA,SELECTIVE_SCHEMA,PRIMARY_SCHEMA,DETAIL_SCHEMA,GRAIN_SCHEMA,COLOUR_EDITOR_SCHEMA,SCHEMA)))
+        try: validate_optics(row,required=(sv in (OPTICS_SCHEMA,SKY_SCHEMA,SEMANTIC_SKY_SCHEMA,SEMANTIC_COLOUR_SCHEMA,BODY_SCHEMA,HAIR_SCHEMA,CUBE_SCHEMA,TONE_SCHEMA,GRADING_SCHEMA,SELECTIVE_SCHEMA,PRIMARY_SCHEMA,DETAIL_SCHEMA,GRAIN_SCHEMA,COLOUR_EDITOR_SCHEMA,IDENTITY_SCHEMA,SCHEMA)),allowed=(sv in (OPTICS_SCHEMA,SKY_SCHEMA,SEMANTIC_SKY_SCHEMA,SEMANTIC_COLOUR_SCHEMA,BODY_SCHEMA,HAIR_SCHEMA,CUBE_SCHEMA,TONE_SCHEMA,GRADING_SCHEMA,SELECTIVE_SCHEMA,PRIMARY_SCHEMA,DETAIL_SCHEMA,GRAIN_SCHEMA,COLOUR_EDITOR_SCHEMA,IDENTITY_SCHEMA,SCHEMA)))
         except ValueError as error: raise ProjectError(str(error)) from error
         from .id_background_project import validate_records as validate_id_background
         try: validate_id_background(row, assets=p['assets'])
         except ValueError as error: raise ProjectError(str(error)) from error
         from .studio_background_project import validate_records as validate_studio
-        try: validate_studio(row, required=(sv in (STUDIO_SCHEMA,OPTICS_SCHEMA,SKY_SCHEMA,SEMANTIC_SKY_SCHEMA,SEMANTIC_COLOUR_SCHEMA,BODY_SCHEMA,HAIR_SCHEMA,CUBE_SCHEMA,TONE_SCHEMA,GRADING_SCHEMA,SELECTIVE_SCHEMA,PRIMARY_SCHEMA,DETAIL_SCHEMA,GRAIN_SCHEMA,COLOUR_EDITOR_SCHEMA,SCHEMA)), allowed=(sv in (STUDIO_SCHEMA,OPTICS_SCHEMA,SKY_SCHEMA,SEMANTIC_SKY_SCHEMA,SEMANTIC_COLOUR_SCHEMA,BODY_SCHEMA,HAIR_SCHEMA,CUBE_SCHEMA,TONE_SCHEMA,GRADING_SCHEMA,SELECTIVE_SCHEMA,PRIMARY_SCHEMA,DETAIL_SCHEMA,GRAIN_SCHEMA,COLOUR_EDITOR_SCHEMA,SCHEMA)))
+        try: validate_studio(row, required=(sv in (STUDIO_SCHEMA,OPTICS_SCHEMA,SKY_SCHEMA,SEMANTIC_SKY_SCHEMA,SEMANTIC_COLOUR_SCHEMA,BODY_SCHEMA,HAIR_SCHEMA,CUBE_SCHEMA,TONE_SCHEMA,GRADING_SCHEMA,SELECTIVE_SCHEMA,PRIMARY_SCHEMA,DETAIL_SCHEMA,GRAIN_SCHEMA,COLOUR_EDITOR_SCHEMA,IDENTITY_SCHEMA,SCHEMA)), allowed=(sv in (STUDIO_SCHEMA,OPTICS_SCHEMA,SKY_SCHEMA,SEMANTIC_SKY_SCHEMA,SEMANTIC_COLOUR_SCHEMA,BODY_SCHEMA,HAIR_SCHEMA,CUBE_SCHEMA,TONE_SCHEMA,GRADING_SCHEMA,SELECTIVE_SCHEMA,PRIMARY_SCHEMA,DETAIL_SCHEMA,GRAIN_SCHEMA,COLOUR_EDITOR_SCHEMA,IDENTITY_SCHEMA,SCHEMA)))
         except ValueError as error: raise ProjectError(str(error)) from error
         # Check the complete owned row, not only its active recipe: inactive
         # versions, document snapshots and nested history must fail together.
         _validate_encoded_repairs(row, p["assets"],
             allow_legacy=(sv in (LEGACY_SCHEMA, WB_SCHEMA)),
-            allow_local_grades=(sv in (GRADE_SCHEMA, RECOVERY_SCHEMA, MANUAL_SCHEMA, STUDIO_SCHEMA, OPTICS_SCHEMA, SKY_SCHEMA, SEMANTIC_SKY_SCHEMA, SEMANTIC_COLOUR_SCHEMA, BODY_SCHEMA, HAIR_SCHEMA, CUBE_SCHEMA, TONE_SCHEMA, GRADING_SCHEMA, SELECTIVE_SCHEMA, PRIMARY_SCHEMA, DETAIL_SCHEMA, GRAIN_SCHEMA, COLOUR_EDITOR_SCHEMA, SCHEMA)),
-            allow_effect_recovery=(sv in (RECOVERY_SCHEMA, MANUAL_SCHEMA, STUDIO_SCHEMA, OPTICS_SCHEMA, SKY_SCHEMA, SEMANTIC_SKY_SCHEMA, SEMANTIC_COLOUR_SCHEMA, BODY_SCHEMA, HAIR_SCHEMA, CUBE_SCHEMA, TONE_SCHEMA, GRADING_SCHEMA, SELECTIVE_SCHEMA, PRIMARY_SCHEMA, DETAIL_SCHEMA, GRAIN_SCHEMA, COLOUR_EDITOR_SCHEMA, SCHEMA)),
-            require_manual_liquify=(sv in (MANUAL_SCHEMA, STUDIO_SCHEMA, OPTICS_SCHEMA, SKY_SCHEMA, SEMANTIC_SKY_SCHEMA, SEMANTIC_COLOUR_SCHEMA, BODY_SCHEMA, HAIR_SCHEMA, CUBE_SCHEMA, TONE_SCHEMA, GRADING_SCHEMA, SELECTIVE_SCHEMA, PRIMARY_SCHEMA, DETAIL_SCHEMA, GRAIN_SCHEMA, COLOUR_EDITOR_SCHEMA, SCHEMA)))
+            allow_local_grades=(sv in (GRADE_SCHEMA, RECOVERY_SCHEMA, MANUAL_SCHEMA, STUDIO_SCHEMA, OPTICS_SCHEMA, SKY_SCHEMA, SEMANTIC_SKY_SCHEMA, SEMANTIC_COLOUR_SCHEMA, BODY_SCHEMA, HAIR_SCHEMA, CUBE_SCHEMA, TONE_SCHEMA, GRADING_SCHEMA, SELECTIVE_SCHEMA, PRIMARY_SCHEMA, DETAIL_SCHEMA, GRAIN_SCHEMA, COLOUR_EDITOR_SCHEMA, IDENTITY_SCHEMA, SCHEMA)),
+            allow_effect_recovery=(sv in (RECOVERY_SCHEMA, MANUAL_SCHEMA, STUDIO_SCHEMA, OPTICS_SCHEMA, SKY_SCHEMA, SEMANTIC_SKY_SCHEMA, SEMANTIC_COLOUR_SCHEMA, BODY_SCHEMA, HAIR_SCHEMA, CUBE_SCHEMA, TONE_SCHEMA, GRADING_SCHEMA, SELECTIVE_SCHEMA, PRIMARY_SCHEMA, DETAIL_SCHEMA, GRAIN_SCHEMA, COLOUR_EDITOR_SCHEMA, IDENTITY_SCHEMA, SCHEMA)),
+            require_manual_liquify=(sv in (MANUAL_SCHEMA, STUDIO_SCHEMA, OPTICS_SCHEMA, SKY_SCHEMA, SEMANTIC_SKY_SCHEMA, SEMANTIC_COLOUR_SCHEMA, BODY_SCHEMA, HAIR_SCHEMA, CUBE_SCHEMA, TONE_SCHEMA, GRADING_SCHEMA, SELECTIVE_SCHEMA, PRIMARY_SCHEMA, DETAIL_SCHEMA, GRAIN_SCHEMA, COLOUR_EDITOR_SCHEMA, IDENTITY_SCHEMA, SCHEMA)))
 
 
 def _migrate(project):
     """Own nested versions; preserve legacy pixels and record explicit heal kinds."""
     result = copy.deepcopy(project)
     previous = result["schema_version"]
-    _validate_fringe_records(result, allowed=(previous == SCHEMA))
+    _validate_flip_records(result, allowed=(previous == SCHEMA))
+    _validate_fringe_records(result, allowed=(previous in (IDENTITY_SCHEMA, SCHEMA)))
     from .fringe_repair_project import migrate_states as migrate_fringe
     # v23 remains the logical-document contract. Optional new state starts
     # disabled in every retained old document/history, never library-wide on.
@@ -369,7 +380,7 @@ def _migrate(project):
         for version in row['versions']:
             if version.get('recipe') is not None:
                 migrate_fringe(version['recipe'], root=True)
-    if previous not in (COLOUR_EDITOR_SCHEMA, SCHEMA):
+    if previous not in (COLOUR_EDITOR_SCHEMA, IDENTITY_SCHEMA, SCHEMA):
         from .manual_liquify_state import migrate_legacy_states as migrate_manual
         from .studio_background_state import migrate_legacy_states as migrate_studio
         from .optics_state import migrate_legacy_states as migrate_optics
@@ -409,7 +420,7 @@ def _migrate(project):
             "v16 adds independent extended tone and original monochrome output mode where explicitly saved; absent recipes stay neutral. v15 adds lossless custom CUBE assets; v14 retains source-owned hair support and lossless semantic evidence; absent hair intent remains neutral. v13 body bank ownership is preserved. "
             "v11 sky semantics are preserved. v12 adds a separate neutral semantic-colour group only where absent; retained masks use their own rendered-canvas domain. "
             "v13 adds source-owned body operation banks without widening shoulder reviews to other anatomy. Readers older than v13 must reject rather than silently drop body edits; v12 semantic colour and v11 sky ownership remain unchanged.")
-    if previous != SCHEMA:
+    if previous not in (IDENTITY_SCHEMA, SCHEMA):
         try:
             VC.ensure_identity(result)
         except (ValueError, TypeError, KeyError) as error:
@@ -418,6 +429,12 @@ def _migrate(project):
         result.setdefault("migration_notes", []).append(
             f"Migrated {previous} to v23: stable logical document/source/recipe identities; "
             "legacy recipes and provenance are unchanged. Independent sources are not deduplicated.")
+        validate(result)
+    if previous == IDENTITY_SCHEMA:
+        result["schema_version"] = SCHEMA
+        result.setdefault("migration_notes", []).append(
+            "Migrated v23 to v24: final canvas reflection recipe; absent fields remain neutral. "
+            "All logical/source/recipe identities and retained history are unchanged.")
         validate(result)
     return result
 
@@ -699,6 +716,7 @@ def _from_png_bytes(raw: bytes, shape: list[int]) -> np.ndarray:
 
 def encode(value: object, assets: dict, dropped: list, at: str) -> object:
     """Validate the complete creative subtree before any asset-table mutation."""
+    _validate_flip_records(value)
     _validate_fringe_records(value)
     _validate_creative_records(value)
     staged_assets = dict(assets)
@@ -881,6 +899,7 @@ def _encode_blob(raw: bytes, assets: dict, dropped: list, at: str, *, kind: str,
 def decode(value: object, assets: dict, dropped: list, at: str,
            dc_types: dict | None = None) -> object:
     """Strictly preflight creative bytes before the generic best-effort codec."""
+    _validate_flip_records(value)
     _validate_fringe_records(value)
     creative_cache = {}
     _validate_creative_records(value, assets, blob_cache=creative_cache)
@@ -1116,13 +1135,14 @@ def add_doc(project: dict, path: str, recipe: object, *, fp: dict | None = None,
     """
     if recipe is not None:
         try:
-            _validate_fringe_records(recipe, allowed=(project.get("schema_version") == SCHEMA))
-            _validate_creative_records(recipe, allowed=(project.get("schema_version") == SCHEMA))
+            _validate_flip_records(recipe, allowed=(project.get("schema_version") == SCHEMA))
+            _validate_fringe_records(recipe, allowed=(project.get("schema_version") in (IDENTITY_SCHEMA, SCHEMA)))
+            _validate_creative_records(recipe, allowed=(project.get("schema_version") in (IDENTITY_SCHEMA, SCHEMA)))
             recipe = WB.normalize_state(recipe)
-            if project.get("schema_version") in (MANUAL_SCHEMA, STUDIO_SCHEMA, OPTICS_SCHEMA, SKY_SCHEMA, SEMANTIC_SKY_SCHEMA, SEMANTIC_COLOUR_SCHEMA, BODY_SCHEMA, HAIR_SCHEMA, CUBE_SCHEMA, TONE_SCHEMA, GRADING_SCHEMA, SELECTIVE_SCHEMA, PRIMARY_SCHEMA, DETAIL_SCHEMA, GRAIN_SCHEMA, COLOUR_EDITOR_SCHEMA, SCHEMA):
+            if project.get("schema_version") in (MANUAL_SCHEMA, STUDIO_SCHEMA, OPTICS_SCHEMA, SKY_SCHEMA, SEMANTIC_SKY_SCHEMA, SEMANTIC_COLOUR_SCHEMA, BODY_SCHEMA, HAIR_SCHEMA, CUBE_SCHEMA, TONE_SCHEMA, GRADING_SCHEMA, SELECTIVE_SCHEMA, PRIMARY_SCHEMA, DETAIL_SCHEMA, GRAIN_SCHEMA, COLOUR_EDITOR_SCHEMA, IDENTITY_SCHEMA, SCHEMA):
                 _check_manual_liquify_record(recipe.get("_manual_liquify"))
             from .sky_replacement_project import validate_records as validate_sky
-            validate_sky(recipe,required=(project.get("schema_version") in (SKY_SCHEMA, SEMANTIC_SKY_SCHEMA, SEMANTIC_COLOUR_SCHEMA, BODY_SCHEMA, HAIR_SCHEMA, CUBE_SCHEMA, TONE_SCHEMA, GRADING_SCHEMA, SELECTIVE_SCHEMA, PRIMARY_SCHEMA, DETAIL_SCHEMA, GRAIN_SCHEMA, COLOUR_EDITOR_SCHEMA, SCHEMA)),allowed=(project.get("schema_version") in (SKY_SCHEMA, SEMANTIC_SKY_SCHEMA, SEMANTIC_COLOUR_SCHEMA, BODY_SCHEMA, HAIR_SCHEMA, CUBE_SCHEMA, TONE_SCHEMA, GRADING_SCHEMA, SELECTIVE_SCHEMA, PRIMARY_SCHEMA, DETAIL_SCHEMA, GRAIN_SCHEMA, COLOUR_EDITOR_SCHEMA, SCHEMA)),semantic=(project.get("schema_version") in (SEMANTIC_SKY_SCHEMA,SEMANTIC_COLOUR_SCHEMA,BODY_SCHEMA,HAIR_SCHEMA,CUBE_SCHEMA,TONE_SCHEMA,GRADING_SCHEMA,SELECTIVE_SCHEMA,PRIMARY_SCHEMA,DETAIL_SCHEMA,GRAIN_SCHEMA,COLOUR_EDITOR_SCHEMA,SCHEMA)))
+            validate_sky(recipe,required=(project.get("schema_version") in (SKY_SCHEMA, SEMANTIC_SKY_SCHEMA, SEMANTIC_COLOUR_SCHEMA, BODY_SCHEMA, HAIR_SCHEMA, CUBE_SCHEMA, TONE_SCHEMA, GRADING_SCHEMA, SELECTIVE_SCHEMA, PRIMARY_SCHEMA, DETAIL_SCHEMA, GRAIN_SCHEMA, COLOUR_EDITOR_SCHEMA, IDENTITY_SCHEMA, SCHEMA)),allowed=(project.get("schema_version") in (SKY_SCHEMA, SEMANTIC_SKY_SCHEMA, SEMANTIC_COLOUR_SCHEMA, BODY_SCHEMA, HAIR_SCHEMA, CUBE_SCHEMA, TONE_SCHEMA, GRADING_SCHEMA, SELECTIVE_SCHEMA, PRIMARY_SCHEMA, DETAIL_SCHEMA, GRAIN_SCHEMA, COLOUR_EDITOR_SCHEMA, IDENTITY_SCHEMA, SCHEMA)),semantic=(project.get("schema_version") in (SEMANTIC_SKY_SCHEMA,SEMANTIC_COLOUR_SCHEMA,BODY_SCHEMA,HAIR_SCHEMA,CUBE_SCHEMA,TONE_SCHEMA,GRADING_SCHEMA,SELECTIVE_SCHEMA,PRIMARY_SCHEMA,DETAIL_SCHEMA,GRAIN_SCHEMA,COLOUR_EDITOR_SCHEMA,IDENTITY_SCHEMA,SCHEMA)))
             from .brow_shape_project import validate_records as validate_brows
             from .nose_shape_project import validate_records as validate_noses
             from .eye_shape_project import validate_records as validate_eyes
@@ -1130,9 +1150,9 @@ def add_doc(project: dict, path: str, recipe: object, *, fp: dict | None = None,
             from .lip_makeup_project import validate_records as validate_lips
             validate_lips(recipe); validate_brows(recipe); validate_noses(recipe); validate_eyes(recipe); validate_mouth(recipe); validate_reference(recipe); validate_semantic_colour(recipe); validate_body_pose(recipe)
             from .optics_project import validate_records as validate_optics
-            validate_optics(recipe,required=(project.get("schema_version") in (OPTICS_SCHEMA,SKY_SCHEMA,SEMANTIC_SKY_SCHEMA,SEMANTIC_COLOUR_SCHEMA,BODY_SCHEMA,HAIR_SCHEMA,CUBE_SCHEMA,TONE_SCHEMA,GRADING_SCHEMA,SELECTIVE_SCHEMA,PRIMARY_SCHEMA,DETAIL_SCHEMA,GRAIN_SCHEMA,COLOUR_EDITOR_SCHEMA,SCHEMA)),allowed=(project.get("schema_version") in (OPTICS_SCHEMA,SKY_SCHEMA,SEMANTIC_SKY_SCHEMA,SEMANTIC_COLOUR_SCHEMA,BODY_SCHEMA,HAIR_SCHEMA,CUBE_SCHEMA,TONE_SCHEMA,GRADING_SCHEMA,SELECTIVE_SCHEMA,PRIMARY_SCHEMA,DETAIL_SCHEMA,GRAIN_SCHEMA,COLOUR_EDITOR_SCHEMA,SCHEMA)))
+            validate_optics(recipe,required=(project.get("schema_version") in (OPTICS_SCHEMA,SKY_SCHEMA,SEMANTIC_SKY_SCHEMA,SEMANTIC_COLOUR_SCHEMA,BODY_SCHEMA,HAIR_SCHEMA,CUBE_SCHEMA,TONE_SCHEMA,GRADING_SCHEMA,SELECTIVE_SCHEMA,PRIMARY_SCHEMA,DETAIL_SCHEMA,GRAIN_SCHEMA,COLOUR_EDITOR_SCHEMA,IDENTITY_SCHEMA,SCHEMA)),allowed=(project.get("schema_version") in (OPTICS_SCHEMA,SKY_SCHEMA,SEMANTIC_SKY_SCHEMA,SEMANTIC_COLOUR_SCHEMA,BODY_SCHEMA,HAIR_SCHEMA,CUBE_SCHEMA,TONE_SCHEMA,GRADING_SCHEMA,SELECTIVE_SCHEMA,PRIMARY_SCHEMA,DETAIL_SCHEMA,GRAIN_SCHEMA,COLOUR_EDITOR_SCHEMA,IDENTITY_SCHEMA,SCHEMA)))
             from .studio_background_project import validate_records as validate_studio
-            validate_studio(recipe, required=(project.get("schema_version") in (STUDIO_SCHEMA,OPTICS_SCHEMA,SKY_SCHEMA,SEMANTIC_SKY_SCHEMA,SEMANTIC_COLOUR_SCHEMA,BODY_SCHEMA,HAIR_SCHEMA,CUBE_SCHEMA,TONE_SCHEMA,GRADING_SCHEMA,SELECTIVE_SCHEMA,PRIMARY_SCHEMA,DETAIL_SCHEMA,GRAIN_SCHEMA,COLOUR_EDITOR_SCHEMA,SCHEMA)), allowed=(project.get("schema_version") in (STUDIO_SCHEMA,OPTICS_SCHEMA,SKY_SCHEMA,SEMANTIC_SKY_SCHEMA,SEMANTIC_COLOUR_SCHEMA,BODY_SCHEMA,HAIR_SCHEMA,CUBE_SCHEMA,TONE_SCHEMA,GRADING_SCHEMA,SELECTIVE_SCHEMA,PRIMARY_SCHEMA,DETAIL_SCHEMA,GRAIN_SCHEMA,COLOUR_EDITOR_SCHEMA,SCHEMA)))
+            validate_studio(recipe, required=(project.get("schema_version") in (STUDIO_SCHEMA,OPTICS_SCHEMA,SKY_SCHEMA,SEMANTIC_SKY_SCHEMA,SEMANTIC_COLOUR_SCHEMA,BODY_SCHEMA,HAIR_SCHEMA,CUBE_SCHEMA,TONE_SCHEMA,GRADING_SCHEMA,SELECTIVE_SCHEMA,PRIMARY_SCHEMA,DETAIL_SCHEMA,GRAIN_SCHEMA,COLOUR_EDITOR_SCHEMA,IDENTITY_SCHEMA,SCHEMA)), allowed=(project.get("schema_version") in (STUDIO_SCHEMA,OPTICS_SCHEMA,SKY_SCHEMA,SEMANTIC_SKY_SCHEMA,SEMANTIC_COLOUR_SCHEMA,BODY_SCHEMA,HAIR_SCHEMA,CUBE_SCHEMA,TONE_SCHEMA,GRADING_SCHEMA,SELECTIVE_SCHEMA,PRIMARY_SCHEMA,DETAIL_SCHEMA,GRAIN_SCHEMA,COLOUR_EDITOR_SCHEMA,IDENTITY_SCHEMA,SCHEMA)))
             for key in _REPAIR_STACKS.intersection(recipe):
                 validate_repair_ops(recipe[key], shape=recipe.get("_proxy"))
             from .creative_derived_repairs import validate_stacks
@@ -1148,7 +1168,7 @@ def add_doc(project: dict, path: str, recipe: object, *, fp: dict | None = None,
     assets = dict(project.get("assets", {}))
     enc = encode(recipe, assets, dropped, "recipe") if recipe is not None else None
     _validate_encoded_repairs(enc, assets, allow_legacy=False,
-                              require_manual_liquify=(project.get("schema_version") in (MANUAL_SCHEMA, STUDIO_SCHEMA, OPTICS_SCHEMA, SKY_SCHEMA, SEMANTIC_SKY_SCHEMA, SEMANTIC_COLOUR_SCHEMA, BODY_SCHEMA, HAIR_SCHEMA, CUBE_SCHEMA, TONE_SCHEMA, GRADING_SCHEMA, SELECTIVE_SCHEMA, PRIMARY_SCHEMA, DETAIL_SCHEMA, GRAIN_SCHEMA, COLOUR_EDITOR_SCHEMA, SCHEMA)))
+                              require_manual_liquify=(project.get("schema_version") in (MANUAL_SCHEMA, STUDIO_SCHEMA, OPTICS_SCHEMA, SKY_SCHEMA, SEMANTIC_SKY_SCHEMA, SEMANTIC_COLOUR_SCHEMA, BODY_SCHEMA, HAIR_SCHEMA, CUBE_SCHEMA, TONE_SCHEMA, GRADING_SCHEMA, SELECTIVE_SCHEMA, PRIMARY_SCHEMA, DETAIL_SCHEMA, GRAIN_SCHEMA, COLOUR_EDITOR_SCHEMA, IDENTITY_SCHEMA, SCHEMA)))
     original = find_doc(project, want, document_id=document_id)
     row = copy.deepcopy(original) if original is not None else None
     if row is None:
@@ -1222,15 +1242,16 @@ def active_recipe(project: dict, path: str | None = None, dc_types: dict | None 
     for v in row.get("versions", []):
         if v["id"] == vid:
             recipe = v.get("recipe")
-            _validate_fringe_records(recipe, allowed=(project.get("schema_version") == SCHEMA))
+            _validate_flip_records(recipe, allowed=(project.get("schema_version") == SCHEMA))
+            _validate_fringe_records(recipe, allowed=(project.get("schema_version") in (IDENTITY_SCHEMA, SCHEMA)))
             _validate_creative_records(recipe, project.get("assets") or {},
-                                       allowed=(project.get("schema_version") == SCHEMA))
-            if project.get("schema_version") in (MANUAL_SCHEMA, STUDIO_SCHEMA, OPTICS_SCHEMA, SKY_SCHEMA, SEMANTIC_SKY_SCHEMA, SEMANTIC_COLOUR_SCHEMA, BODY_SCHEMA, HAIR_SCHEMA, CUBE_SCHEMA, TONE_SCHEMA, GRADING_SCHEMA, SELECTIVE_SCHEMA, PRIMARY_SCHEMA, DETAIL_SCHEMA, GRAIN_SCHEMA, COLOUR_EDITOR_SCHEMA, SCHEMA) and recipe is not None:
+                                       allowed=(project.get("schema_version") in (IDENTITY_SCHEMA, SCHEMA)))
+            if project.get("schema_version") in (MANUAL_SCHEMA, STUDIO_SCHEMA, OPTICS_SCHEMA, SKY_SCHEMA, SEMANTIC_SKY_SCHEMA, SEMANTIC_COLOUR_SCHEMA, BODY_SCHEMA, HAIR_SCHEMA, CUBE_SCHEMA, TONE_SCHEMA, GRADING_SCHEMA, SELECTIVE_SCHEMA, PRIMARY_SCHEMA, DETAIL_SCHEMA, GRAIN_SCHEMA, COLOUR_EDITOR_SCHEMA, IDENTITY_SCHEMA, SCHEMA) and recipe is not None:
                 if type(recipe) is not dict:
                     raise ProjectError("Project v7 recipe must be an object")
                 _check_manual_liquify_record(recipe.get("_manual_liquify"))
                 from .sky_replacement_project import validate_records as validate_sky
-                validate_sky(recipe,required=(project.get("schema_version") in (SKY_SCHEMA, SEMANTIC_SKY_SCHEMA, SEMANTIC_COLOUR_SCHEMA, BODY_SCHEMA, HAIR_SCHEMA, CUBE_SCHEMA, TONE_SCHEMA, GRADING_SCHEMA, SELECTIVE_SCHEMA, PRIMARY_SCHEMA, DETAIL_SCHEMA, GRAIN_SCHEMA, COLOUR_EDITOR_SCHEMA, SCHEMA)),allowed=(project.get("schema_version") in (SKY_SCHEMA, SEMANTIC_SKY_SCHEMA, SEMANTIC_COLOUR_SCHEMA, BODY_SCHEMA, HAIR_SCHEMA, CUBE_SCHEMA, TONE_SCHEMA, GRADING_SCHEMA, SELECTIVE_SCHEMA, PRIMARY_SCHEMA, DETAIL_SCHEMA, GRAIN_SCHEMA, COLOUR_EDITOR_SCHEMA, SCHEMA)),semantic=(project.get("schema_version") in (SEMANTIC_SKY_SCHEMA,SEMANTIC_COLOUR_SCHEMA,BODY_SCHEMA,HAIR_SCHEMA,CUBE_SCHEMA,TONE_SCHEMA,GRADING_SCHEMA,SELECTIVE_SCHEMA,PRIMARY_SCHEMA,DETAIL_SCHEMA,GRAIN_SCHEMA,COLOUR_EDITOR_SCHEMA,SCHEMA)))
+                validate_sky(recipe,required=(project.get("schema_version") in (SKY_SCHEMA, SEMANTIC_SKY_SCHEMA, SEMANTIC_COLOUR_SCHEMA, BODY_SCHEMA, HAIR_SCHEMA, CUBE_SCHEMA, TONE_SCHEMA, GRADING_SCHEMA, SELECTIVE_SCHEMA, PRIMARY_SCHEMA, DETAIL_SCHEMA, GRAIN_SCHEMA, COLOUR_EDITOR_SCHEMA, IDENTITY_SCHEMA, SCHEMA)),allowed=(project.get("schema_version") in (SKY_SCHEMA, SEMANTIC_SKY_SCHEMA, SEMANTIC_COLOUR_SCHEMA, BODY_SCHEMA, HAIR_SCHEMA, CUBE_SCHEMA, TONE_SCHEMA, GRADING_SCHEMA, SELECTIVE_SCHEMA, PRIMARY_SCHEMA, DETAIL_SCHEMA, GRAIN_SCHEMA, COLOUR_EDITOR_SCHEMA, IDENTITY_SCHEMA, SCHEMA)),semantic=(project.get("schema_version") in (SEMANTIC_SKY_SCHEMA,SEMANTIC_COLOUR_SCHEMA,BODY_SCHEMA,HAIR_SCHEMA,CUBE_SCHEMA,TONE_SCHEMA,GRADING_SCHEMA,SELECTIVE_SCHEMA,PRIMARY_SCHEMA,DETAIL_SCHEMA,GRAIN_SCHEMA,COLOUR_EDITOR_SCHEMA,IDENTITY_SCHEMA,SCHEMA)))
                 from .brow_shape_project import validate_records as validate_brows
                 from .nose_shape_project import validate_records as validate_noses
                 from .eye_shape_project import validate_records as validate_eyes
@@ -1238,9 +1259,9 @@ def active_recipe(project: dict, path: str | None = None, dc_types: dict | None 
                 from .lip_makeup_project import validate_records as validate_lips
                 validate_lips(recipe); validate_brows(recipe); validate_noses(recipe); validate_eyes(recipe); validate_mouth(recipe); validate_reference(recipe); validate_semantic_colour(recipe); validate_body_pose(recipe)
                 from .optics_project import validate_records as validate_optics
-                validate_optics(recipe,required=(project.get("schema_version") in (OPTICS_SCHEMA,SKY_SCHEMA,SEMANTIC_SKY_SCHEMA,SEMANTIC_COLOUR_SCHEMA,BODY_SCHEMA,HAIR_SCHEMA,CUBE_SCHEMA,TONE_SCHEMA,GRADING_SCHEMA,SELECTIVE_SCHEMA,PRIMARY_SCHEMA,DETAIL_SCHEMA,GRAIN_SCHEMA,COLOUR_EDITOR_SCHEMA,SCHEMA)),allowed=(project.get("schema_version") in (OPTICS_SCHEMA,SKY_SCHEMA,SEMANTIC_SKY_SCHEMA,SEMANTIC_COLOUR_SCHEMA,BODY_SCHEMA,HAIR_SCHEMA,CUBE_SCHEMA,TONE_SCHEMA,GRADING_SCHEMA,SELECTIVE_SCHEMA,PRIMARY_SCHEMA,DETAIL_SCHEMA,GRAIN_SCHEMA,COLOUR_EDITOR_SCHEMA,SCHEMA)))
+                validate_optics(recipe,required=(project.get("schema_version") in (OPTICS_SCHEMA,SKY_SCHEMA,SEMANTIC_SKY_SCHEMA,SEMANTIC_COLOUR_SCHEMA,BODY_SCHEMA,HAIR_SCHEMA,CUBE_SCHEMA,TONE_SCHEMA,GRADING_SCHEMA,SELECTIVE_SCHEMA,PRIMARY_SCHEMA,DETAIL_SCHEMA,GRAIN_SCHEMA,COLOUR_EDITOR_SCHEMA,IDENTITY_SCHEMA,SCHEMA)),allowed=(project.get("schema_version") in (OPTICS_SCHEMA,SKY_SCHEMA,SEMANTIC_SKY_SCHEMA,SEMANTIC_COLOUR_SCHEMA,BODY_SCHEMA,HAIR_SCHEMA,CUBE_SCHEMA,TONE_SCHEMA,GRADING_SCHEMA,SELECTIVE_SCHEMA,PRIMARY_SCHEMA,DETAIL_SCHEMA,GRAIN_SCHEMA,COLOUR_EDITOR_SCHEMA,IDENTITY_SCHEMA,SCHEMA)))
                 from .studio_background_project import validate_records as validate_studio
-                validate_studio(recipe, required=(project.get("schema_version") in (STUDIO_SCHEMA,OPTICS_SCHEMA,SKY_SCHEMA,SEMANTIC_SKY_SCHEMA,SEMANTIC_COLOUR_SCHEMA,BODY_SCHEMA,HAIR_SCHEMA,CUBE_SCHEMA,TONE_SCHEMA,GRADING_SCHEMA,SELECTIVE_SCHEMA,PRIMARY_SCHEMA,DETAIL_SCHEMA,GRAIN_SCHEMA,COLOUR_EDITOR_SCHEMA,SCHEMA)), allowed=(project.get("schema_version") in (STUDIO_SCHEMA,OPTICS_SCHEMA,SKY_SCHEMA,SEMANTIC_SKY_SCHEMA,SEMANTIC_COLOUR_SCHEMA,BODY_SCHEMA,HAIR_SCHEMA,CUBE_SCHEMA,TONE_SCHEMA,GRADING_SCHEMA,SELECTIVE_SCHEMA,PRIMARY_SCHEMA,DETAIL_SCHEMA,GRAIN_SCHEMA,COLOUR_EDITOR_SCHEMA,SCHEMA)))
+                validate_studio(recipe, required=(project.get("schema_version") in (STUDIO_SCHEMA,OPTICS_SCHEMA,SKY_SCHEMA,SEMANTIC_SKY_SCHEMA,SEMANTIC_COLOUR_SCHEMA,BODY_SCHEMA,HAIR_SCHEMA,CUBE_SCHEMA,TONE_SCHEMA,GRADING_SCHEMA,SELECTIVE_SCHEMA,PRIMARY_SCHEMA,DETAIL_SCHEMA,GRAIN_SCHEMA,COLOUR_EDITOR_SCHEMA,IDENTITY_SCHEMA,SCHEMA)), allowed=(project.get("schema_version") in (STUDIO_SCHEMA,OPTICS_SCHEMA,SKY_SCHEMA,SEMANTIC_SKY_SCHEMA,SEMANTIC_COLOUR_SCHEMA,BODY_SCHEMA,HAIR_SCHEMA,CUBE_SCHEMA,TONE_SCHEMA,GRADING_SCHEMA,SELECTIVE_SCHEMA,PRIMARY_SCHEMA,DETAIL_SCHEMA,GRAIN_SCHEMA,COLOUR_EDITOR_SCHEMA,IDENTITY_SCHEMA,SCHEMA)))
                 _validate_encoded_repairs(recipe, project.get("assets") or {}, allow_legacy=False,
                                           require_manual_liquify=True)
             dropped: list = []

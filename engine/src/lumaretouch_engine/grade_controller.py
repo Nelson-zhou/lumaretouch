@@ -18,6 +18,9 @@ def handle(self, p: dict, emit):
     brush，并把最终作用域随 grade_done 报出去（UI 的选择框读它，不自己记一份）。
     """
     action = p.get("action", "set")
+    if action == "mask":
+        from .final_canvas_flip_state import require_processing_capture
+        require_processing_capture(self)
     if action not in ("set", "clear", "amount", "scope", "mask", "mask_clear"):
         emit({"event": "error",
               "error": f"未知 grade action: {action}（可用：set/clear/amount/"

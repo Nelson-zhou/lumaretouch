@@ -21,6 +21,9 @@ ROTATION_REASON = ('当前照片已有旋转。现有裁剪先裁后转，非零
 
 
 def rotation_supported(state):
+    from .final_canvas_flip_state import active, from_state
+    if active(from_state(state)):
+        return False
     value = state.get('_crop_rotation')
     # Do not use renderer's half-degree snap as permission to replace the recipe.
     return type(value) in (int, float) and value == 0
@@ -133,6 +136,8 @@ class Capture:
 
 
 def capture_current(engine, *, max_bytes=MAX_WORK_BYTES, cancelled=lambda: False):
+    from .final_canvas_flip_state import require_processing_capture
+    require_processing_capture(engine)
     from .full_candidate_render import identity, render
     from .optics_candidate_identity import fingerprint
     from .portrait_crop_project import non_crop_hash, repair_hash

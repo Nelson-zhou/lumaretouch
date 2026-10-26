@@ -315,6 +315,9 @@ mkdir -p "$stage/lumaretouch_engine/third_party/primary_calibration"
 cp "$here/../core/primary_calibration/lib.rs" "$here/../LICENSE" "$here/../docs/primary-calibration/CONTRACT.md" "$stage/lumaretouch_engine/third_party/primary_calibration/"
 
 # Original non-AI photo detail; explicit package build, never runtime compilation.
+rustc --edition=2021 --crate-type cdylib -C opt-level=3 "$here/../core/final_canvas_flip/final_canvas_flip.rs" -o "$stage/lumaretouch_engine/bin/liblrt_final_canvas_flip.so"
+mkdir -p "$stage/lumaretouch_engine/third_party/final_canvas_flip"
+cp "$here/../core/final_canvas_flip/final_canvas_flip.rs" "$here/../LICENSE" "$stage/lumaretouch_engine/third_party/final_canvas_flip/"
 rustc --edition=2021 --crate-type cdylib -C opt-level=3 "$here/../core/photo_detail/photo_detail.rs" -o "$stage/lumaretouch_engine/bin/liblrt_photo_detail.so"
 mkdir -p "$stage/lumaretouch_engine/third_party/photo_detail"
 cp "$here/../core/photo_detail/photo_detail.rs" "$here/../LICENSE" "$here/../docs/photo-detail/README.md" "$stage/lumaretouch_engine/third_party/photo_detail/"
