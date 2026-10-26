@@ -172,6 +172,15 @@ def require_rebound_snapshot(snapshot):
         actual={'sha256':record['id'][7:],'width':record['width'],'height':record['height']}
         if recipe['source'] != actual or recipe['repair_sha256'] != snapshot.get('limb_vein_repair_sha256'):
             raise ValueError('Creative limb correction has another source/repair binding')
+    if snapshot.get('hand_shape') is not None:
+        raise ValueError('Hand geometry v1 cannot rebind original visible support to a creative-derived source')
+    if snapshot.get('hand_tone') is not None:
+        from .hand_tone_state import check as hand_tone_check
+        recipe=hand_tone_check(snapshot['hand_tone'])
+        record=from_state(snapshot)
+        actual={'sha256':record['id'][7:],'width':record['width'],'height':record['height']}
+        if recipe['source'] != actual or recipe['repair_sha256'] != snapshot.get('hand_tone_repair_sha256'):
+            raise ValueError('Creative hand tone correction has another source/repair binding')
     if float(snapshot.get('fabric_amount', 0)):
         from .creative_derived_fabric import verify_snapshot as verify_fabric
         verify_fabric(snapshot)
@@ -211,7 +220,7 @@ def require_rebound_spec(spec):
     snapshot = {key: getattr(spec, key, None) for key in (
         'creative_base', 'people', 'body_pose', 'body_pose_source_proof', 'channel', 'grade_scope',
         'strength', 'creative_smoothing_context',
-        'limb_vein', 'limb_vein_repair_sha256', 'fabric_sweat', 'fabric_sweat_repair_sha256', 'fabric_amount', 'creative_fabric_context', 'local_masks', 'local_grade_groups', 'creative_mask_context', 'effect_recovery', 'creative_recovery_context', 'manual_liquify',
+        'hand_shape', 'hand_shape_path', 'hand_shape_stamp', 'hand_tone', 'hand_tone_repair_sha256', 'limb_vein', 'limb_vein_repair_sha256', 'fabric_sweat', 'fabric_sweat_repair_sha256', 'fabric_amount', 'creative_fabric_context', 'local_masks', 'local_grade_groups', 'creative_mask_context', 'effect_recovery', 'creative_recovery_context', 'manual_liquify',
         'studio_background', 'creative_studio_context', 'id_background', 'id_background_bundle', 'creative_id_background_context', 'optics', 'sky_replacement', 'creative_sky_context',
         'reference_color', 'semantic_colour', 'lip_makeup', 'brow_shape',
         'nose_shape', 'eye_shape', 'mouth_shape', 'colour_editor', 'fringe_repair')}
@@ -410,10 +419,10 @@ def capture_current_asset(engine, row, state, assets, *, cancelled=lambda: False
         from . import local_grade_source as groups, effect_recovery_runtime as recovery
         from . import manual_liquify_runtime as manual, studio_background_runtime as studio
         from . import id_background_runtime as ident, optics_runtime as optics
-        from . import sky_replacement_runtime as sky, body_pose_render as body
+        from . import sky_replacement_runtime as sky, body_pose_render as body, hand_shape_runtime as hand_shape
         shape = source_shape(snap, source.shape[:2])
         from . import fringe_repair_render as fringe
-        for owner in (LM, groups, recovery, manual, studio, ident, optics, sky, body, fringe):
+        for owner in (LM, groups, recovery, manual, studio, ident, optics, sky, body, hand_shape, fringe):
             owner.check_export_decode(snap, path, before, shape)
         from .reference_color_runtime import verify_export
         verify_export(snap, path, shape)

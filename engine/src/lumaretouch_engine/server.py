@@ -54,6 +54,12 @@ from .ops import levels as LEVELS
 from .levels_controller import LevelsController, LevelsPorts
 from .ops.lut import LutError, check_amount, load_cube_file, parse_cube
 from . import fabric_controller as FABRIC
+from . import hand_shape_state as HSS
+from . import hand_shape_runtime as HSR
+from . import hand_shape_routes as HSH
+from . import hand_tone_state as HTS
+from . import hand_tone_runtime as HTR
+from . import hand_tone_routes as HTH
 from . import limb_vein_state as LVS
 from . import limb_vein_runtime as LVR
 from . import limb_vein_routes as LVH
@@ -334,6 +340,8 @@ class Engine(HVC.HairVolumeHostMixin, PortraitCropEngineMixin, HUC.HairUnificati
         # `_enhance_defer` 是 CORE-001 那一课的直接产物：关键点不随工程文件走，重开那一刻
         # 必然出现"用户有一层美白而场还没画出来"，没有这一格就会像上一版那样整层归零。
         self._enhance = dict(amounts={k: 0.0 for k in ENH.AMOUNT_KEYS}, built=False, box=None)
+        self._hand_shape = None
+        self._hand_tone = None
         self._limb_vein = None
         self._fabric_sweat = None
         self._fabric_amount = 0.0
@@ -475,6 +483,7 @@ class Engine(HVC.HairVolumeHostMixin, PortraitCropEngineMixin, HUC.HairUnificati
         from .face_decoration_state import capability as face_decoration_capability
         from .facial_sculpt_state import capability as facial_sculpt_capability
         from .lens_blur_host import capability as lens_blur_capability
+        from .upscale_restore_stage import capability as upscale_restore_capability
         from .light_glow_native import capability as light_glow_capability
         from .creative_selection_host import capability as selection_capability
         from .expression_replacement_native import capability as expression_capability
@@ -482,13 +491,13 @@ class Engine(HVC.HairVolumeHostMixin, PortraitCropEngineMixin, HUC.HairUnificati
         from .skin_reference_body_state import capability as skin_reference_body_capability
         from .eye_makeup_enhance_state import capability as eye_makeup_enhance_capability
         from .eye_bag_preserve_state import capability as eye_bag_preserve_capability
-        emit({"event": "ready", "protocol": PROTOCOL_VERSION, "command_ack": 1, "inspection_protocol": 1, "color_capture_protocol": 1, "color_scopes_protocol": 1, "batch_preflight_protocol": 1, "preset_result_protocol": 1, "xmp_import_protocol": 1, "preset_organisation_protocol": 1, "source_relocation_protocol": 1, "managed_import_protocol": 1, "project_recovery_protocol": 1, "white_balance_result_protocol": 1, "color_picker_capture_protocol": 1, "color_picker_result_protocol": 1, "white_balance_capture_protocol": 1, "source_patch_capture_protocol": 1, "source_patch_result_protocol": 1, "clone_stamp_protocol": 1, "heal_vector_protocol": 1, "local_masks_result_protocol": 1, "effect_recovery_protocol": 1, "manual_liquify_protocol": 1, "manual_liquify_preview_protocol": 2, "optics_protocol": 1, "sky_replacement_protocol": 1, "sky_semantic_protocol": 1,"lip_makeup_protocol":1,"brow_shape_protocol":2,"nose_shape_protocol":2,"eye_shape_protocol":2,"mouth_shape_protocol":2,"people_protocol":1,"hair_colour_protocol":1,"eyeliner_protocol":int((Path(__file__).resolve().parent/"bin/liblrt_eyeliner.so").is_file()),"iris_makeup_protocol":int((Path(__file__).resolve().parent/"bin/liblrt_iris_makeup.so").is_file()),"eyelash_protocol":int((Path(__file__).resolve().parent/"bin/liblrt_eyelash.so").is_file()),"brow_makeup_protocol":int((Path(__file__).resolve().parent/"bin/liblrt_brow_makeup.so").is_file()),"lipstick_protocol":int((Path(__file__).resolve().parent/"bin/liblrt_lipstick.so").is_file()),"blush_makeup_protocol":int((Path(__file__).resolve().parent/"bin/liblrt_blush_makeup.so").is_file()),"eye_light_protocol":int((Path(__file__).resolve().parent/"bin/liblrt_eye_light.so").is_file()),"ingest_session_protocol":1,"workflow_owner_protocol":1,"reference_color_protocol":1,"sample_library_protocol":1,"semantic_colour_protocol":1,"primary_calibration_protocol":int(self._primary_calibration_service().available()),"colour_editor_protocol":int((Path(__file__).parent/"bin/liblrt_colour_editor.so").is_file()),"selective_colour_protocol":int((Path(__file__).parent/"bin/liblrt_selective_colour.so").is_file()),"photo_grain_protocol":int(PGR.available()),"colour_grading_protocol":int((Path(__file__).parent/"bin/liblrt_colour_grading.so").is_file()),"photo_detail_protocol":int(PDH.available()),"fringe_repair_protocol":int(FRN.available()),"extended_tone_protocol":int((Path(__file__).parent/"bin/liblrt_extended_tone.so").is_file()),"semantic_colour_workflow_protocol":1,"shoulder_shape_protocol":1,"leg_shape_protocol":1,"arm_shape_protocol":1,"waist_shape_protocol":1,"neck_shape_protocol":int((Path(__file__).resolve().parent/"bin/liblrt_neck_shape.so").is_file()),"body_slim_protocol":1,"body_slim_available":body_slim_ready,"body_slim_unavailable_reason":None if body_slim_ready else "整体瘦身 Rust 核心未安装或 ABI 不匹配；不会用局部瘦腰或缩放预览替代","head_size_protocol":1,"head_size_available":head_size_ready,"head_size_unavailable_reason":None if head_size_ready else "头部大小 Rust 核心未安装或 ABI 不匹配；仍可查询、归零或停用，不会以脸框代替完整头发区域","waist_length_protocol":1,"waist_length_available":waist_length_ready,"waist_length_unavailable_reason":None if waist_length_ready else "腰部长度 Rust 核心未安装或 ABI 不匹配；仍可查询、归零或停用，不会替代算法","torso_length_protocol":1,"torso_length_available":torso_length_ready,"torso_length_unavailable_reason":None if torso_length_ready else "上身长度 Rust 核心未安装或 ABI 不匹配；仍可查询、归零或停用，不会替代算法","leg_length_protocol":int((Path(__file__).resolve().parent/"bin/liblrt_leg_length.so").is_file()), "studio_background_protocol": 1, "common_background_protocol": 1, "common_background_readback_protocol": 1, "id_background_protocol": 1, "local_grade_live_protocol": 1, "prompted_masks_protocol": 1, "curve_recipe_versions": [1, 2, 3], "pid": os.getpid(),
+        emit({"event": "ready", "protocol": PROTOCOL_VERSION, "command_ack": 1, "inspection_protocol": 1, "color_capture_protocol": 1, "color_scopes_protocol": 1, "batch_preflight_protocol": 1, "portrait_preset_group_protocol": 1, "portrait_preset_preparation_protocol": 1, "portrait_preset_delivery_protocol": 1, "preset_result_protocol": 1, "xmp_import_protocol": 1, "preset_organisation_protocol": 1, "source_relocation_protocol": 1, "managed_import_protocol": 1, "project_recovery_protocol": 1, "white_balance_result_protocol": 1, "color_picker_capture_protocol": 1, "color_picker_result_protocol": 1, "white_balance_capture_protocol": 1, "source_patch_capture_protocol": 1, "source_patch_result_protocol": 1, "clone_stamp_protocol": 1, "heal_vector_protocol": 1, "local_masks_result_protocol": 1, "effect_recovery_protocol": 1, "manual_liquify_protocol": 1, "manual_liquify_preview_protocol": 2, "optics_protocol": 1, "sky_replacement_protocol": 1, "sky_semantic_protocol": 1,"lip_makeup_protocol":1,"brow_shape_protocol":2,"nose_shape_protocol":2,"eye_shape_protocol":2,"mouth_shape_protocol":2,"people_protocol":1,"hair_colour_protocol":1,"eyeliner_protocol":int((Path(__file__).resolve().parent/"bin/liblrt_eyeliner.so").is_file()),"iris_makeup_protocol":int((Path(__file__).resolve().parent/"bin/liblrt_iris_makeup.so").is_file()),"eyelash_protocol":int((Path(__file__).resolve().parent/"bin/liblrt_eyelash.so").is_file()),"brow_makeup_protocol":int((Path(__file__).resolve().parent/"bin/liblrt_brow_makeup.so").is_file()),"lipstick_protocol":int((Path(__file__).resolve().parent/"bin/liblrt_lipstick.so").is_file()),"blush_makeup_protocol":int((Path(__file__).resolve().parent/"bin/liblrt_blush_makeup.so").is_file()),"eye_light_protocol":int((Path(__file__).resolve().parent/"bin/liblrt_eye_light.so").is_file()),"ingest_session_protocol":1,"workflow_owner_protocol":1,"reference_color_protocol":1,"sample_library_protocol":1,"semantic_colour_protocol":1,"primary_calibration_protocol":int(self._primary_calibration_service().available()),"colour_editor_protocol":int((Path(__file__).parent/"bin/liblrt_colour_editor.so").is_file()),"selective_colour_protocol":int((Path(__file__).parent/"bin/liblrt_selective_colour.so").is_file()),"photo_grain_protocol":int(PGR.available()),"colour_grading_protocol":int((Path(__file__).parent/"bin/liblrt_colour_grading.so").is_file()),"photo_detail_protocol":int(PDH.available()),"fringe_repair_protocol":int(FRN.available()),"extended_tone_protocol":int((Path(__file__).parent/"bin/liblrt_extended_tone.so").is_file()),"semantic_colour_workflow_protocol":1,"shoulder_shape_protocol":1,"leg_shape_protocol":1,"arm_shape_protocol":1,"waist_shape_protocol":1,"neck_shape_protocol":int((Path(__file__).resolve().parent/"bin/liblrt_neck_shape.so").is_file()),"body_slim_protocol":1,"body_slim_available":body_slim_ready,"body_slim_unavailable_reason":None if body_slim_ready else "整体瘦身 Rust 核心未安装或 ABI 不匹配；不会用局部瘦腰或缩放预览替代","head_size_protocol":1,"head_size_available":head_size_ready,"head_size_unavailable_reason":None if head_size_ready else "头部大小 Rust 核心未安装或 ABI 不匹配；仍可查询、归零或停用，不会以脸框代替完整头发区域","waist_length_protocol":1,"waist_length_available":waist_length_ready,"waist_length_unavailable_reason":None if waist_length_ready else "腰部长度 Rust 核心未安装或 ABI 不匹配；仍可查询、归零或停用，不会替代算法","torso_length_protocol":1,"torso_length_available":torso_length_ready,"torso_length_unavailable_reason":None if torso_length_ready else "上身长度 Rust 核心未安装或 ABI 不匹配；仍可查询、归零或停用，不会替代算法","leg_length_protocol":int((Path(__file__).resolve().parent/"bin/liblrt_leg_length.so").is_file()), "studio_background_protocol": 1, "common_background_protocol": 1, "common_background_readback_protocol": 1, "id_background_protocol": 1, "local_grade_live_protocol": 1, "prompted_masks_protocol": 1, "curve_recipe_versions": [1, 2, 3], "pid": os.getpid(),
               # 版本自证（M5-c）：.deb 的 Version 取自 tauri.conf.json，这一份取自
               # packaging/VERSION 同步下来的 __version__。发布校验把两者对起来——分叉时
               # 装机 UI 上显示的版本与真正在跑的引擎版本就是两句话。
               # 协议号不动（加键属兼容扩展，宿主只读不判）。
               "version": __version__, **skin_colour_capability(), **skin_finish_capability(), **skin_gloss_capability(), **skin_texture_capability(), **face_contour_capability(),**face_size_capability(), **lower_face_capability(), **mid_face_capability(), **chin_shape_capability(), **chin_length_capability(), **philtrum_capability(), **eye_symmetry_capability(), **brow_enhance_capability(), **lip_texture_capability(), **skin_evenness_capability(), **body_skin_evenness_capability(), **collarbone_capability(), **neck_capability(), **body_face_match_capability(),
-              "light_glow_protocol": 1, "light_glow_capability": light_glow_capability(), "lens_blur_protocol": 3, "lens_blur_capability": lens_blur_capability(), "expression_replacement_protocol": 1, "expression_replacement_operation_id": "lnx.expression_replacement.v1", "expression_replacement_available": expression_capability()["available"], "eye_bags_protocol": 2, **eye_bag_preserve_capability(), **face_decoration_capability(), **facial_sculpt_capability(), **eye_makeup_enhance_capability(), "skin_reference_match_protocol": 1, **skin_reference_capability(), "skin_reference_body_protocol": 1, "skin_reference_choice_protocol": 1, **skin_reference_body_capability(), "face_decoration_alias_protocol": 1, "face_decoration_support_alias_protocol": 1, "face_decoration_preset_alias_protocol": 1,
+              "upscale_restore_protocol": 1, "upscale_restore_capability": upscale_restore_capability(), "light_glow_protocol": 1, "light_glow_capability": light_glow_capability(), "lens_blur_protocol": 3, "lens_blur_capability": lens_blur_capability(), "expression_replacement_protocol": 1, "expression_replacement_operation_id": "lnx.expression_replacement.v1", "expression_replacement_available": expression_capability()["available"], "eye_bags_protocol": 2, **eye_bag_preserve_capability(), **face_decoration_capability(), **facial_sculpt_capability(), **eye_makeup_enhance_capability(), "skin_reference_match_protocol": 1, **skin_reference_capability(), "skin_reference_body_protocol": 1, "skin_reference_choice_protocol": 1, **skin_reference_body_capability(), "face_decoration_alias_protocol": 1, "face_decoration_support_alias_protocol": 1, "face_decoration_preset_alias_protocol": 1,
               "runtime": runtime_report(),
               "privacy": policy_status(),
               # 内置预设清单（M3-b）：按钮上写什么字、按哪个名提交，全部由引擎说。
@@ -552,7 +561,7 @@ class Engine(HVC.HairVolumeHostMixin, PortraitCropEngineMixin, HUC.HairUnificati
               "history_max": self.HISTORY_MAX,
               "history_group_ms": self.HISTORY_GROUP_MS,
               "history_edit_cmds": list(self.EDIT_CMDS),
-              "limb_vein_protocol": 1, "fabric_sweat_protocol": 1, "portrait_crop": self._portrait_crop_capability(), "hair_volume_protocol": 1, "hair_volume_capability": HVC.capability(), "hair_unification_protocol": 1, "hair_unification_capability": HUC.capability(), "creative_document_protocol": 1, "creative_selection_protocol": 1, "creative_selection_capability": selection_capability(), "background_material_library_protocol": 1,
+              "hand_shape_protocol": 1, "hand_tone_protocol": 1, "limb_vein_protocol": 1, "fabric_sweat_protocol": 1, "portrait_crop": self._portrait_crop_capability(), "hair_volume_protocol": 1, "hair_volume_capability": HVC.capability(), "hair_unification_protocol": 1, "hair_unification_capability": HUC.capability(), "creative_document_protocol": 1, "creative_selection_protocol": 1, "creative_selection_capability": selection_capability(), "background_material_library_protocol": 1,
               "canvas_guides_protocol": 1,
               "canvas_guides_actions": ["state", "set", "undo", "redo"],
               # 项目面的能力名单由引擎报出去（与 export 的格式名单同一条理由）：
@@ -598,6 +607,10 @@ class Engine(HVC.HairVolumeHostMixin, PortraitCropEngineMixin, HUC.HairUnificati
               "device": self.device, "cuda": self._cuda, "reason": msg})
 
     def cmd_bench_start(self, p: dict):
+        from .pick_focus_host import active as focus_active
+        if focus_active(self):
+            self._reject_bench("Original focus review is running; stop or await it", p.get("mode", "copy"))
+            return
         if "w" not in p or "h" not in p:
             # 少参数时原来是裸 int(p["w"]) 抛 KeyError，事件里只有一句 "KeyError: 'w'"，
             # 看不出是协议用错还是引擎坏了；说清缺什么、从哪拿（shm_ready 里的 w/h）
@@ -984,7 +997,7 @@ class Engine(HVC.HairVolumeHostMixin, PortraitCropEngineMixin, HUC.HairUnificati
     # ------------------------------------------------------------ 文档状态（M5-a 底片条）
     # 「一份文档状态到底包含哪些字段」只有这一处名单。新加一层而不进来，切文档就会
     # 静默丢掉那一层 —— 那是本仓最贵的一族坑（「会话迁了、图层没迁」）的新变体。
-    DOC_FIELDS = (*CDH.FIELDS, "_limb_vein", "_fabric_sweat", "_fabric_amount", "_strength", "_params", "_channel", "_repair_ops", "_redo_ops", "_op_seq",
+    DOC_FIELDS = (*CDH.FIELDS, "_hand_shape", "_hand_tone", "_limb_vein", "_fabric_sweat", "_fabric_amount", "_strength", "_params", "_channel", "_repair_ops", "_redo_ops", "_op_seq",
                   "_light_ops", "_light_redo", "_light", "_deform", "_deform_defer",
                   "_deform_default", "_deform_overrides", "_lut",
                   "_lut_amount",
@@ -1026,7 +1039,7 @@ class Engine(HVC.HairVolumeHostMixin, PortraitCropEngineMixin, HUC.HairUnificati
         本身一条没错——旧图的掩膜/笔迹对新图没有任何意义。今天它多了一个身份：底片条
         里「这张图还没被调过」的定义。同一个口径写两处就会漂，所以抽成一份。
         """
-        fresh = {"_limb_vein": None, "_fabric_sweat": None, "_fabric_amount": 0.0, "_strength": _clamp_strength(DEFAULT_STRENGTH),
+        fresh = {"_hand_shape": None, "_hand_tone": None, "_limb_vein": None, "_fabric_sweat": None, "_fabric_amount": 0.0, "_strength": _clamp_strength(DEFAULT_STRENGTH),
                 "_params": dict(radius=DEFAULT_RADIUS, eps=DEFAULT_EPS,
                                 texture_radius=DEFAULT_TEXTURE_RADIUS,
                                 broad_gain=DEFAULT_BROAD_GAIN, mid_gain=DEFAULT_MID_GAIN,
@@ -1074,7 +1087,7 @@ class Engine(HVC.HairVolumeHostMixin, PortraitCropEngineMixin, HUC.HairUnificati
         """把 live 字段抄成一份可存的字典。容器一律新抄：存进去的状态与 live 字段共享
         同一个 list，下一次 append 会同时改掉两个文档的状态——查起来就像「切了一次文档，
         上一张的笔迹自己多了一笔」。"""
-        st = {"_limb_vein": LVS.check(self._limb_vein), "_fabric_sweat": FSW.check(self._fabric_sweat), "_fabric_amount": float(self._fabric_amount), "_strength": float(self._strength), "_channel": self._channel,
+        st = {"_hand_shape": HSS.check(self._hand_shape), "_hand_tone": HTS.check(self._hand_tone), "_limb_vein": LVS.check(self._limb_vein), "_fabric_sweat": FSW.check(self._fabric_sweat), "_fabric_amount": float(self._fabric_amount), "_strength": float(self._strength), "_channel": self._channel,
               "_params": dict(self._params), "_light": dict(self._light),
               "_deform": {"amounts": dict(self._deform["amounts"]),
                           "built": bool(self._deform["built"])},
@@ -1135,7 +1148,7 @@ class Engine(HVC.HairVolumeHostMixin, PortraitCropEngineMixin, HUC.HairUnificati
         from .creative_derived_id_background import validate_state as validate_id
         validate_id(st)
         # Validate WB and compile before changing any live field.
-        st = {**st, "_limb_vein": LVS.check(st.get("_limb_vein")), "_fabric_sweat": FSW.check(st.get("_fabric_sweat")), "_photo_grain": PGS.from_state(st), "_colour_grading": CGS.from_state(st), "_primary_calibration": PCA.admit(PCS.from_state(st)), "_selective_colour": SCSL.from_state(st), "_colour_editor": CES.from_state(st), "_extended_tone": ETS.check(st.get("_extended_tone")), "_photo_detail": PDS.check(st.get("_photo_detail")), "_fringe_repair": FRS.from_state(st), **self._semantic_restore(st), **self._body_fields(st), "_fabric_amount": FABRIC.check_amount(st.get("_fabric_amount", 0.0)), "_local_masks": LM.check(st.get("_local_masks")), "_local_grade_layers": LG.check(st.get("_local_grade_layers")), "_effect_recovery": ERS.check(st.get("_effect_recovery")), "_manual_liquify": MLS.check(st.get("_manual_liquify")), "_studio_background": SBS.check(st.get("_studio_background")), "_id_background": IDS.check(st.get("_id_background")), "_id_background_bundle": st.get("_id_background_bundle"), "_optics": OPS.check(st.get("_optics")), "_sky_replacement": SKS.check(st.get("_sky_replacement")), "_blush_makeup_library": BLUSHLIB.check(st["_blush_makeup_library"]) if "_blush_makeup_library" in st else BLUSHLIB.empty(), "_lipstick_library": LIPSTICKLIB.check(st["_lipstick_library"]) if "_lipstick_library" in st else LIPSTICKLIB.empty(), "_eyeliner_library": EYELINERLIB.check(st["_eyeliner_library"]) if "_eyeliner_library" in st else EYELINERLIB.empty(), "_eyelash_library": EYELASHLIB.check(st["_eyelash_library"]) if "_eyelash_library" in st else EYELASHLIB.empty(), "_brow_makeup_library": BROWMAKEUPLIB.check(st["_brow_makeup_library"]) if "_brow_makeup_library" in st else BROWMAKEUPLIB.empty(), "_lip_makeup": LIPS.check(st.get("_lip_makeup")), "_brow_shape": BROWS.check(st.get("_brow_shape")), "_brow_shape_owner": st.get("_brow_shape_owner"), "_nose_shape": NOSES.check(st.get("_nose_shape")), "_nose_shape_owner": st.get("_nose_shape_owner"), "_eye_shape": EYES.check(st.get("_eye_shape")), "_eye_shape_owner": st.get("_eye_shape_owner"), "_mouth_shape": MOUTHS.check(st.get("_mouth_shape")), "_mouth_shape_owner": st.get("_mouth_shape_owner"), "_reference_color": RCS.check(st.get("_reference_color")), "_reference_color_bundle": st.get("_reference_color_bundle")}
+        st = {**st, "_hand_shape": HSS.check(st.get("_hand_shape")), "_hand_tone": HTS.check(st.get("_hand_tone")), "_limb_vein": LVS.check(st.get("_limb_vein")), "_fabric_sweat": FSW.check(st.get("_fabric_sweat")), "_photo_grain": PGS.from_state(st), "_colour_grading": CGS.from_state(st), "_primary_calibration": PCA.admit(PCS.from_state(st)), "_selective_colour": SCSL.from_state(st), "_colour_editor": CES.from_state(st), "_extended_tone": ETS.check(st.get("_extended_tone")), "_photo_detail": PDS.check(st.get("_photo_detail")), "_fringe_repair": FRS.from_state(st), **self._semantic_restore(st), **self._body_fields(st), "_fabric_amount": FABRIC.check_amount(st.get("_fabric_amount", 0.0)), "_local_masks": LM.check(st.get("_local_masks")), "_local_grade_layers": LG.check(st.get("_local_grade_layers")), "_effect_recovery": ERS.check(st.get("_effect_recovery")), "_manual_liquify": MLS.check(st.get("_manual_liquify")), "_studio_background": SBS.check(st.get("_studio_background")), "_id_background": IDS.check(st.get("_id_background")), "_id_background_bundle": st.get("_id_background_bundle"), "_optics": OPS.check(st.get("_optics")), "_sky_replacement": SKS.check(st.get("_sky_replacement")), "_blush_makeup_library": BLUSHLIB.check(st["_blush_makeup_library"]) if "_blush_makeup_library" in st else BLUSHLIB.empty(), "_lipstick_library": LIPSTICKLIB.check(st["_lipstick_library"]) if "_lipstick_library" in st else LIPSTICKLIB.empty(), "_eyeliner_library": EYELINERLIB.check(st["_eyeliner_library"]) if "_eyeliner_library" in st else EYELINERLIB.empty(), "_eyelash_library": EYELASHLIB.check(st["_eyelash_library"]) if "_eyelash_library" in st else EYELASHLIB.empty(), "_brow_makeup_library": BROWMAKEUPLIB.check(st["_brow_makeup_library"]) if "_brow_makeup_library" in st else BROWMAKEUPLIB.empty(), "_lip_makeup": LIPS.check(st.get("_lip_makeup")), "_brow_shape": BROWS.check(st.get("_brow_shape")), "_brow_shape_owner": st.get("_brow_shape_owner"), "_nose_shape": NOSES.check(st.get("_nose_shape")), "_nose_shape_owner": st.get("_nose_shape_owner"), "_eye_shape": EYES.check(st.get("_eye_shape")), "_eye_shape_owner": st.get("_eye_shape_owner"), "_mouth_shape": MOUTHS.check(st.get("_mouth_shape")), "_mouth_shape_owner": st.get("_mouth_shape_owner"), "_reference_color": RCS.check(st.get("_reference_color")), "_reference_color_bundle": st.get("_reference_color_bundle")}
         st = {**st, **CDH.restore_fields(st)}
         st = WB.normalize_state(st)
         WB.prepare_state(st)
@@ -1424,6 +1437,10 @@ class Engine(HVC.HairVolumeHostMixin, PortraitCropEngineMixin, HUC.HairUnificati
         `_attach_pipeline` 里按引擎侧字段重放一遍（换设备那条路走的也是它），文档切换
         只需要在那之前把字段装对。
         """
+        from .pick_focus_host import active as focus_active
+        if focus_active(self):
+            emit({"event": "error", "error": "Original focus review is running; stop or await it before changing image"})
+            return
         from .decode import PROXY_PIXELS, clamp_budget, is_raw, load_rgb
 
         # 跑靶线程还在写那块双缓冲：此时换图会 close/unlink 它正在写的 shm，
@@ -1574,7 +1591,7 @@ class Engine(HVC.HairVolumeHostMixin, PortraitCropEngineMixin, HUC.HairUnificati
         elif self._channel:
             emit({"event": "engine_warn", "warn": "蒙版尚未恢复：保留编辑参数，暂不应用该范围的磨皮，不回退为全图"})
         effective_strength, effective_channel = self._retouch_render_args()
-        FABRIC.sync(self); FSWR.sync(self); LVR.sync(self)
+        FABRIC.sync(self); FSWR.sync(self); LVR.sync(self); HTR.sync(self)
         LM.sync(self); LGR.sync(self); MLR.sync(self); SBR.sync(self); OPR.sync(self); SKR.sync(self); LIPR.sync(self); BROWR.sync(self); NOSER.sync(self); EYER.sync(self); MOUTHR.sync(self); self._people_sync(); IDR.sync(self); ERR.sync(self); RCR.sync(self); SCR.sync(self); ETH.sync_current(self); PDH.sync_current(self); CGA.sync(self); SCLA.sync(self); CEA.sync(self); PCA.sync(self)
         self._people_render_open(pipe,lambda:CER.render_preview(self) if CER.active(self) else PGR.render_preview(self) if PGR.active(self) else SKR.render_proxy(self,lambda:pipe.render(effective_strength, channel=effective_channel, **self._params)))
         with self._wlock:
@@ -1691,7 +1708,7 @@ class Engine(HVC.HairVolumeHostMixin, PortraitCropEngineMixin, HUC.HairUnificati
                 crop["out_full"] = list(_gsz(int(row["src_w"]), int(row["src_h"]),
                                              tuple(self._crop_rect),
                                              float(self._crop_rotation)))
-        return {"fringe_repair":self._fringe_status(), "document_id": self._load_id, "source_uid": CDH.source_uid(self), "photo_detail": {**PDS.status(self._photo_detail),"available":PDH.available()}, "photo_grain": PGA.report(self), "colour_grading": CGA.report(self), "primary_calibration": PCA.report(self), "selective_colour": SCLA.report(self), "colour_editor": CEA.report(self), "extended_tone": {**ETS.status(self._extended_tone), "available": (Path(__file__).parent/"bin/liblrt_extended_tone.so").is_file()}, "limb_vein": LVR.report(self), "fabric_sweat": FSWR.report(self), "fabric": FABRIC.status(self), "local_masks": LM.state(self), "effect_recovery": ERR.report(self), "manual_liquify": MLR.report(self), "studio_background": SBR.report(self), "id_background": IDR.report(self), "optics": OPR.report(self), "sky_replacement": SKR.report(self), "lip_makeup": LIPR.report(self), "brow_shape": BROWR.report(self), "nose_shape": NOSER.report(self), "eye_shape": EYER.report(self), "mouth_shape": MOUTHR.report(self), "reference_color": RCR.report(self), "semantic_colour": SCR.report(self), **self._body_report(),
+        return {"fringe_repair":self._fringe_status(), "document_id": self._load_id, "source_uid": CDH.source_uid(self), "photo_detail": {**PDS.status(self._photo_detail),"available":PDH.available()}, "photo_grain": PGA.report(self), "colour_grading": CGA.report(self), "primary_calibration": PCA.report(self), "selective_colour": SCLA.report(self), "colour_editor": CEA.report(self), "extended_tone": {**ETS.status(self._extended_tone), "available": (Path(__file__).parent/"bin/liblrt_extended_tone.so").is_file()}, "hand_shape": HSR.report(self), "hand_tone": HTR.report(self), "limb_vein": LVR.report(self), "fabric_sweat": FSWR.report(self), "fabric": FABRIC.status(self), "local_masks": LM.state(self), "effect_recovery": ERR.report(self), "manual_liquify": MLR.report(self), "studio_background": SBR.report(self), "id_background": IDR.report(self), "optics": OPR.report(self), "sky_replacement": SKR.report(self), "lip_makeup": LIPR.report(self), "brow_shape": BROWR.report(self), "nose_shape": NOSER.report(self), "eye_shape": EYER.report(self), "mouth_shape": MOUTHR.report(self), "reference_color": RCR.report(self), "semantic_colour": SCR.report(self), **self._body_report(),
                 "canvas_guides": CGH.report(self),
                 "strength": float(self._strength), "params": dict(self._params),
                 "channel": self._channel,
@@ -1819,6 +1836,8 @@ class Engine(HVC.HairVolumeHostMixin, PortraitCropEngineMixin, HUC.HairUnificati
                 # 挑图那一格（PICK-001）。徽章只能读引擎这份：前端自己按缩略图亮度判断
                 # 「这张糊不糊」就是又造一个不可复算的出处
                 "pick": d.get("pick"), "pick_error": d.get("pick_error")}
+        from .pick_original_focus import visible as focus_visible
+        row["pick_focus"], row["pick_focus_error"] = focus_visible(d)
         from .virtual_copy_host import IDENTITY_KEYS
         row.update({k:d[k] for k in IDENTITY_KEYS})
         return LQ.enrich_row(self, i, d, row, st)
@@ -1839,6 +1858,7 @@ class Engine(HVC.HairVolumeHostMixin, PortraitCropEngineMixin, HUC.HairUnificati
         return self._batch_controller().summary()
 
     def emit_session_state(self, **extra) -> None:
+        from .pick_focus_host import running as pick_running
         rows = [self._doc_row_event(i, d) for i, d in enumerate(self._docs)]
         emit({"event": "session_state", "index": self._doc_index, "count": len(self._docs),
               "current": self._doc_path,
@@ -1848,7 +1868,7 @@ class Engine(HVC.HairVolumeHostMixin, PortraitCropEngineMixin, HUC.HairUnificati
               "doc_state": (self.doc_state()
                             if (self._image_loaded and self._vram is not None) else None),
               "thumbs_running": bool(self._thumbs is not None and self._thumbs.is_alive()),
-              "picks_running": bool(self._picks is not None and self._picks.is_alive()),
+              "picks_running": pick_running(self),
               "project": self._project_state(),
               # 预设清单与批量同步台账：UI 的下拉项与“撤销同步”按钮只能读引擎报的这两份
               #（前端自己扫目录、自己记 batch_id 就是两个会漂的地方）。
@@ -2037,7 +2057,7 @@ class Engine(HVC.HairVolumeHostMixin, PortraitCropEngineMixin, HUC.HairUnificati
         return [d["path"] for d in self._docs]
 
     # ------------------------------------------------------------ 挑图建议（LNX-PICK-001）
-    PICK_ACTIONS = ("analyze", "stop", "state")
+    PICK_ACTIONS = ("analyze", "focus", "stop", "state")
     PICK_KEYS = {"cmd", "action", "indices", "paths", "edge", "model_dir", "force",
                  "duplicate", "blur", "exposure", "eyes"}
     # 度量时的解码尺度：像素类度量自己在 picks 层再降到长边 160，这一档决定的是
@@ -2064,11 +2084,11 @@ class Engine(HVC.HairVolumeHostMixin, PortraitCropEngineMixin, HUC.HairUnificati
             out[name] = got
         return out
 
-    def _pick_targets(self, p: dict) -> list | None:
+    def _pick_targets(self, p: dict, edge: int, sens: dict) -> list | None:
         """要分析哪几格：indices / paths 二选一，都不给就是整条底片条。
 
-        默认**跳过已分析过的格子**（与缩略图同一口径：重跑一次不该把几百毫秒再付一遍），
-        `force=True` 才全部重算——判据指纹换了的时候用户就需要它（数值不可比）。
+        仅跳过算法、源文件、尺度及敏感度仍匹配的读数。
+        `force=True` 可重算全部；换版、换源、换参数会自动重新测量。
         """
         want_idx, want_paths = p.get("indices"), p.get("paths")
         if want_idx is not None and want_paths is not None:
@@ -2114,10 +2134,11 @@ class Engine(HVC.HairVolumeHostMixin, PortraitCropEngineMixin, HUC.HairUnificati
             if i in seen:
                 continue
             seen.add(i)
-            if not p.get("force", False) and rows[i].get("pick") is not None:
+            if not p.get("force", False) and PK.reusable(
+                    rows[i].get("pick"), rows[i]["path"], edge, sens, p.get("model_dir")):
                 skipped += 1
                 continue
-            out.append(i)
+            out.append((i, rows[i]["path"]))
         if skipped:
             emit({"event": "engine_warn", "warn": f"pick：{skipped} 格已有建议，本次跳过"
                                                   "（要重算给 force=true；判据指纹变了也建议重算，"
@@ -2134,6 +2155,7 @@ class Engine(HVC.HairVolumeHostMixin, PortraitCropEngineMixin, HUC.HairUnificati
                   "fingerprint": PK.fingerprint(), "sensitivities": sens})
             return False
         self._pick_stop.clear()
+        # Freeze source identity, not mutable filmstrip positions.
         self._pick_args = (list(idxs), int(edge), model_dir, dict(sens))
         self._picks = threading.Thread(target=self._pick_loop, daemon=True)
         self._picks.start()
@@ -2143,16 +2165,17 @@ class Engine(HVC.HairVolumeHostMixin, PortraitCropEngineMixin, HUC.HairUnificati
         """一张图的全部读数。只读文件，一个字节都不写回去（原片只读）。"""
         from .decode import clamp_budget, load_rgb
 
-        m = PK.Measures(path=str(path))
+        m = PK.Measures(path=str(path), source_stamp=PK.source_stamp(path))
         t0 = monotonic_ns()
         d = load_rgb(path, clamp_budget(int(edge) * int(edge)), allow_preview=True)
         t1 = monotonic_ns()
         rgb = d.rgb
         m.decode_size = (int(rgb.shape[1]), int(rgb.shape[0]))
+        m.source_size = (int(d.src_w), int(d.src_h))
         # RAW 走相机内嵌预览时必须说出来：那张预览是相机自己锐化/降噪过的，
         # 「糊」的读数不再属于母档（与底片条同一个开关、同一个理由）
         m.decoded_from = ("camera_preview"
-                          if (d.raw or {}).get("source") == "libraw_preview" else "pixels")
+                          if (d.raw or {}).get("source") == "libraw_preview" else "decoded_proxy")
         cl = PK.clarity(rgb)
         m.sharpness, m.ratio, m.contrast = cl["lapvar"], cl["ratio"], cl["contrast"]
         m.under, m.over = PK.exposure_shares(rgb)
@@ -2178,6 +2201,8 @@ class Engine(HVC.HairVolumeHostMixin, PortraitCropEngineMixin, HUC.HairUnificati
                 if m.eye_open is None:
                     m.eye_note = (f"画面里探到 {m.faces} 张脸，但没有一份关键点够 478 点契约"
                                   "——这一格不写「睁眼」，也不写「闭眼」")
+        if PK.source_stamp(path) != m.source_stamp:
+            raise ValueError("Source changed during pick measurement; re-analyze the original")
         t3 = monotonic_ns()
         m.ms = {"decode_ms": (t1 - t0) / 1e6, "pixel_ms": (t2 - t1) / 1e6,
                 "face_ms": (t3 - t2) / 1e6}
@@ -2216,13 +2241,9 @@ class Engine(HVC.HairVolumeHostMixin, PortraitCropEngineMixin, HUC.HairUnificati
         order: list = []
         measured: dict = {}
         failed = 0
-        for j, i in enumerate(idxs):
+        for j, (i, path) in enumerate(idxs):
             if self._pick_stop.is_set():
                 break
-            with self._doclock:
-                path = self._docs[i]["path"] if 0 <= i < len(self._docs) else None
-            if path is None:
-                continue
             try:
                 m = self._pick_measure_one(path, edge, fn, eyes_error)
             except Exception as e:                # 一张解不开只坏自己那一格，不带到倒整批
@@ -2240,28 +2261,41 @@ class Engine(HVC.HairVolumeHostMixin, PortraitCropEngineMixin, HUC.HairUnificati
         t_meas = monotonic_ns()
         # 分组池 = 本次量到的 + 本会话此前已经量过的那些格的哈希（存在 row["pick"] 里）。
         # 少了后半截就会出这种错：重跑一张，那张的"组内 3 张"变成"组内 1 张"，徽章自己在动。
-        pool: dict = {p: {"dhash": measured[p].dhash, "ratio": measured[p].ratio,
-                          "under": measured[p].under, "over": measured[p].over}
-                      for p in order}
         with self._doclock:
             stored = [(d["path"], d.get("pick")) for d in self._docs]
         reused = 0
         for p, pk in stored:
-            if p in pool or not pk:
+            if p in measured or not pk:
                 continue
-            mm = pk.get("measures") or {}
+            if not PK.reusable(pk, p, edge, sens, model_dir):
+                self._pick_write(p, pick=None, pick_error="旧建议与源文件/算法/解码参数不匹配，请重新分析")
+                continue
             try:
-                h = int(str(mm.get("dhash")), 16)
-            except (TypeError, ValueError):
-                continue          # 旧版算法没写这一格：不参与分组，不猜
-            pool[p] = {"dhash": h, "ratio": float(mm.get("clarity_ratio") or 0.0),
-                       "under": float(mm.get("under") or 0.0),
-                       "over": float(mm.get("over") or 0.0)}
+                measured[p] = PK.restore_measures(p, pk["measures"])
+            except (KeyError, TypeError, ValueError):
+                self._pick_write(p, pick=None, pick_error="旧建议读数不完整，请重新分析")
+                continue
             reused += 1
+        # Exclude sources removed from the session or changed since measurement
+        # before group construction (not only when their own badge is published).
+        active_paths = {p for p, _ in stored}
+        for p, m in list(measured.items()):
+            try:
+                valid = p in active_paths and PK.source_stamp(p) == m.source_stamp
+            except OSError:
+                valid = False
+            if not valid:
+                measured.pop(p)
+                self._pick_write(p, pick=None, pick_error="原片在分析后变化或移出会话，请重新分析")
+        # Recompute all valid pooled badges together, including cached members.
+        # Otherwise re-analyzing B changes A's group but leaves A's old badge intact.
+        pool = {p: {"dhash": m.dhash, "ratio": m.ratio,
+                    "under": m.under, "over": m.over, "contrast": m.contrast}
+                for p, m in measured.items()}
         items = [(p, v["dhash"]) for p, v in sorted(pool.items())]
         groups = PK.group_duplicates(items, PK.DUPLICATE_SENSITIVITY[sens["duplicate"]])
         # 组内排名的依据：**相对自身对比度**（对整体曝光不敏感那一格），并列时看裁切占比，
-        # 最后按路径稳定收尾——「本组最优」是一个可复算的排序结果，不是印象分
+        # 最后按路径稳定收尾——只排序代理读数，绝不是「本组最优」的质量认证
         info: dict = {}
         for g in groups:
             members = sorted([p for p in g if p in pool],
@@ -2273,17 +2307,24 @@ class Engine(HVC.HairVolumeHostMixin, PortraitCropEngineMixin, HUC.HairUnificati
                            for q in others) if others else None
                 info[p] = {"members": members, "rank": r, "bits": bits}
         # 批内相对线用的是**池**的中位数（对比对象应当是同批全部，而不是只这次跑的那几张）；
-        # 沿用旧哈希的那些格没有可读对比度那一格，但它们当初能进池就说明不是空白图
-        ratios = [v["ratio"] for v in pool.values() if v["ratio"] > 0.0]
-        ratios += [measured[p].ratio for p in order if measured[p].contrast >= PK.CONTRAST_FLOOR]
+        # 每张有效读数只计一次；复用读数也必须保留对比度，不能让平坦图参与基线。
+        ratios = [v["ratio"] for v in pool.values()
+                  if v["ratio"] > 0.0 and v["contrast"] >= PK.CONTRAST_FLOOR]
         med_ratio = float(median(ratios)) if ratios else 0.0
         fp = PK.fingerprint()
         emitted = 0
-        for p in order:
+        for p in sorted(measured):
             if self._pick_stop.is_set():
                 break
             gi = info.get(p)
             m = measured[p]
+            try:
+                unchanged = PK.source_stamp(p) == m.source_stamp
+            except OSError:
+                unchanged = False
+            if not unchanged:
+                self._pick_write(p, pick=None, pick_error="原片在分析后变化，请重新分析")
+                continue
             with self._doclock:
                 row = next((d for d in self._docs if d["path"] == p), None)
             marked = bool(row is not None and ((row.get("tags") or []) or row.get("label")
@@ -2299,6 +2340,7 @@ class Engine(HVC.HairVolumeHostMixin, PortraitCropEngineMixin, HUC.HairUnificati
                              user_marked=marked)
             sug["fingerprint"] = fp
             sug["edge"] = int(edge)
+            sug["model_dir"] = model_dir
             sug["batch_median_ratio"] = round(med_ratio, 4)
             sug["group_leader"] = (gi["members"][0] if gi else None)
             sug["decoded_from"] = m.decoded_from
@@ -2306,10 +2348,28 @@ class Engine(HVC.HairVolumeHostMixin, PortraitCropEngineMixin, HUC.HairUnificati
             idx = self._pick_write(p, pick=sug, pick_error=None)
             emit({"event": "pick_item", "index": idx, **sug})
             emitted += 1
+        # Group membership depends on every source. If one changed while badges
+        # were published, invalidate the entire result rather than leave peers
+        # referring to a now-stale member. Final session state clears early items.
+        with self._doclock:
+            current_paths = {d["path"] for d in self._docs}
+        invalid_pool = False
+        for p, m in measured.items():
+            try:
+                invalid_pool |= p not in current_paths or PK.source_stamp(p) != m.source_stamp
+            except OSError:
+                invalid_pool = True
+        if invalid_pool:
+            for p in measured:
+                self._pick_write(p, pick=None, pick_error="分组来源在发布时变化，请重新分析")
+            failed += len(measured)
+            emitted = 0
+            groups = []
         emit({"event": "pick_done", "count": emitted, "measured": len(order), "failed": failed,
+              "source_changed": invalid_pool,
               "pooled": len(pool), "reused_hashes": reused,
               "stopped": bool(self._pick_stop.is_set()),
-              # 组只报「像」这一件事：成员、组内最优那一张、以及「这是关系闭包不是等价类」
+              # 组只报「像」这一件事：成员、代理排序首张（不是最佳照片）、以及「这是关系闭包不是等价类」
               # 的那句 notes（在每条建议里）。这里绝不出现 delete/建议删除任何一张的说法。
               "groups": [{"size": len(g), "leader": (info[g[0]]["members"][0]
                                                      if g and g[0] in info else
@@ -2332,6 +2392,10 @@ class Engine(HVC.HairVolumeHostMixin, PortraitCropEngineMixin, HUC.HairUnificati
         （这一路只有读文件，没有任何 unlink/move/trash 的代码路径，回收站是工程记录）；
         近似分组与判定原因可见（`groups` 与每条 reason 的 method/value/threshold）。
         """
+        if p.get("action") == "focus":
+            from .pick_focus_host import start
+            start(self, p, emit)
+            return
         unknown = set(p) - self.PICK_KEYS
         if unknown:
             emit({"event": "error", "error": f"pick 收到不认识的参数：{sorted(unknown)}"})
@@ -2342,13 +2406,14 @@ class Engine(HVC.HairVolumeHostMixin, PortraitCropEngineMixin, HUC.HairUnificati
                   f"（可用：{'/'.join(self.PICK_ACTIONS)}，名单在 ready 的 pick_actions 里）"})
             return
         if action == "state":
+            from .pick_focus_host import running as pick_running
             with self._doclock:
                 rows = list(self._docs)
             have = [d for d in rows if d.get("pick")]
             emit({"event": "pick_state",
                   "rows": len(rows), "analyzed": len(have),
                   "failed": len([d for d in rows if d.get("pick_error")]),
-                  "running": bool(self._picks is not None and self._picks.is_alive()),
+                  "running": pick_running(self),
                   "labels": sorted({lb for d in have for lb in (d["pick"].get("labels") or [])}),
                   "fingerprint": PK.fingerprint(), "algo": PK.ALGO_VERSION,
                   "thresholds": PK.thresholds_for_json(),
@@ -2376,7 +2441,7 @@ class Engine(HVC.HairVolumeHostMixin, PortraitCropEngineMixin, HUC.HairUnificati
         if not self._docs:
             emit({"event": "error", "error": "底片条是空的：先 session scan/add"})
             return
-        idxs = self._pick_targets(p)
+        idxs = self._pick_targets(p, edge, sens)
         if idxs is None:
             return
         emit({"event": "pick_start", "targets": len(idxs), "edge": edge,
@@ -2841,6 +2906,10 @@ class Engine(HVC.HairVolumeHostMixin, PortraitCropEngineMixin, HUC.HairUnificati
         if note is not None:
             payload["note"] = note
         emit(payload)
+
+    def cmd_hand_shape(self,p): return HSH.handle(self,p,emit)
+
+    def cmd_hand_tone(self,p): return HTH.handle(self,p,emit)
 
     def cmd_limb_vein(self,p): return LVH.handle(self,p,emit)
 
@@ -3382,7 +3451,7 @@ class Engine(HVC.HairVolumeHostMixin, PortraitCropEngineMixin, HUC.HairUnificati
             self._vram.grading_prefix_cache.invalidate()
         t0 = monotonic_ns()
         # Original viewing bypasses all layers, rather than merely setting skin strength0.
-        if not original: FABRIC.sync(self); FSWR.sync(self); LVR.sync(self); LM.sync(self); LGR.sync(self); MLR.sync(self); SBR.sync(self); OPR.sync(self); SKR.sync(self); LIPR.sync(self); BROWR.sync(self); NOSER.sync(self); EYER.sync(self); MOUTHR.sync(self); self._people_sync(); IDR.sync(self); ERR.sync(self); RCR.sync(self); SCR.sync(self); ETH.sync_current(self); PDH.sync_current(self); CGA.sync(self); SCLA.sync(self); CEA.sync(self); PCA.sync(self)
+        if not original: FABRIC.sync(self); FSWR.sync(self); LVR.sync(self); HTR.sync(self); LM.sync(self); LGR.sync(self); MLR.sync(self); SBR.sync(self); OPR.sync(self); SKR.sync(self); LIPR.sync(self); BROWR.sync(self); NOSER.sync(self); EYER.sync(self); MOUTHR.sync(self); self._people_sync(); IDR.sync(self); ERR.sync(self); RCR.sync(self); SCR.sync(self); ETH.sync_current(self); PDH.sync_current(self); CGA.sync(self); SCLA.sync(self); CEA.sync(self); PCA.sync(self)
         st, channel = (0.0, None) if original else self._retouch_render_args()
         from .grading_prefix_cache import preview_context
         prefix_key = preview_context(self, mode, original)
@@ -5606,7 +5675,7 @@ class Engine(HVC.HairVolumeHostMixin, PortraitCropEngineMixin, HUC.HairUnificati
                 # 通道必须跟着会话一起迁移：不传 channel 的话，报表里 active_channel 还是 skin，
                 # 而给用户补发的是一帧全图渲染——字段与实际执行不一致正是本仓最贵那个坑的形状
                 strength, channel = self._retouch_render_args()
-                FABRIC.sync(self); FSWR.sync(self); LVR.sync(self); LM.sync(self); LGR.sync(self); MLR.sync(self); SBR.sync(self); OPR.sync(self); SKR.sync(self); LIPR.sync(self); BROWR.sync(self); NOSER.sync(self); EYER.sync(self); MOUTHR.sync(self); self._people_sync(); IDR.sync(self); ERR.sync(self); RCR.sync(self); SCR.sync(self); ETH.sync_current(self); PDH.sync_current(self); CGA.sync(self); SCLA.sync(self); CEA.sync(self); PCA.sync(self)
+                FABRIC.sync(self); FSWR.sync(self); LVR.sync(self); HTR.sync(self); LM.sync(self); LGR.sync(self); MLR.sync(self); SBR.sync(self); OPR.sync(self); SKR.sync(self); LIPR.sync(self); BROWR.sync(self); NOSER.sync(self); EYER.sync(self); MOUTHR.sync(self); self._people_sync(); IDR.sync(self); ERR.sync(self); RCR.sync(self); SCR.sync(self); ETH.sync_current(self); PDH.sync_current(self); CGA.sync(self); SCLA.sync(self); CEA.sync(self); PCA.sync(self)
                 CER.render_preview(self) if CER.active(self) else PGR.render_preview(self) if PGR.active(self) else SKR.render_proxy(self,lambda:self._vram.render(strength, channel=channel, **self._params))
                 with self._wlock:
                     seq, t_emit, slot = self.shm.write_frame(self._vram.read_back(), presentation=self._frame_presentation())
@@ -5763,6 +5832,10 @@ class Engine(HVC.HairVolumeHostMixin, PortraitCropEngineMixin, HUC.HairUnificati
         """全尺寸分块导出（批量）。在 worker 线程里跑：满幅一块图就能是几秒。"""
         from .export_command_reply import responder
         respond = responder(p, emit, trusted_result)
+        from .pick_focus_host import active as focus_active
+        if focus_active(self):
+            respond({"event": "error", "error": "Original focus review is running; stop or await it before export"})
+            return
         preview = p.get("action") == "preview"
         unknown = set(p) - self.EXPORT_KEYS
         if unknown:
@@ -6200,6 +6273,9 @@ class Engine(HVC.HairVolumeHostMixin, PortraitCropEngineMixin, HUC.HairUnificati
         拿现在的滑块重跑：TASK-002 写的是“固定输入”，TASK-008 写的是“不自动重跑
         或切换最新配方”，两句加起来只有拒这一个答案。想重跑请先打开那张图。
         """
+        from .pick_focus_host import active as focus_active
+        if focus_active(self):
+            raise T.TaskError("Original focus review is running; stop or await it before retry")
         if not t.get("recipe_persisted", False):
             t["blocked_reason"] = ("配方快照只活在本次会话：重开后请打开这张图再重新导出，"
                                    "本版本不拿“现在的滑块”当那次批次重跑")
@@ -6272,7 +6348,7 @@ class Engine(HVC.HairVolumeHostMixin, PortraitCropEngineMixin, HUC.HairUnificati
                 immutable_stamp = verify_entry(entry, verified_sources)
                 snap_i, for_doc_i = snap_by_path.get(entry_id, (snap, path == doc))
                 from . import body_pose_render as body_render
-                mask_source_stamp = LM.file_stamp(path) if (snap_i.get("_bg") or {}).get("key_recipe") is not None or snap_i.get('body_pose') is not None or snap_i.get("grade_scope") == "objects" or LGS.has_groups(snap_i) or bool(ERS.check(snap_i.get("effect_recovery"))["targets"]) or bool(MLS.check(snap_i.get("manual_liquify"))["strokes"]) or SBS.check(snap_i.get("studio_background"))["source"] is not None or IDS.check(snap_i.get("id_background"))["source"] is not None or OPS.source_bound(OPS.check(snap_i.get("optics"))) or SKS.check(snap_i.get("sky_replacement"))["enabled"] or snap_i.get("creative_sky_context") is not None or snap_i.get("creative_id_background_context") is not None else None
+                mask_source_stamp = LM.file_stamp(path) if (snap_i.get("_bg") or {}).get("key_recipe") is not None or snap_i.get('body_pose') is not None or snap_i.get('hand_shape') is not None or snap_i.get("grade_scope") == "objects" or LGS.has_groups(snap_i) or bool(ERS.check(snap_i.get("effect_recovery"))["targets"]) or bool(MLS.check(snap_i.get("manual_liquify"))["strokes"]) or SBS.check(snap_i.get("studio_background"))["source"] is not None or IDS.check(snap_i.get("id_background"))["source"] is not None or OPS.source_bound(OPS.check(snap_i.get("optics"))) or SKS.check(snap_i.get("sky_replacement"))["enabled"] or snap_i.get("creative_sky_context") is not None or snap_i.get("creative_id_background_context") is not None else None
                 stage = "semantic_analysis"
                 snap_i, for_doc_i = self._prepare_export_snapshot(path, snap_i, for_doc_i)
                 analysis_ms = round((monotonic_ns() - image_started) / 1e6, 2)
@@ -6289,7 +6365,7 @@ class Engine(HVC.HairVolumeHostMixin, PortraitCropEngineMixin, HUC.HairUnificati
                         decode_started = monotonic_ns()
                         d = load_full(path, device=snap_i["device"], want_bits=8 if snap_i.get("creative_base") is not None else 16)
                         verify_decode(path, immutable_stamp)
-                        LM.check_export_decode(snap_i, path, mask_source_stamp, (d.h, d.w)); LGS.check_export_decode(snap_i, path, mask_source_stamp, (d.h, d.w)); ERR.check_export_decode(snap_i, path, mask_source_stamp, (d.h, d.w)); MLR.check_export_decode(snap_i, path, mask_source_stamp, (d.h, d.w)); SBR.check_export_decode(snap_i, path, mask_source_stamp, (d.h, d.w)); IDR.check_export_decode(snap_i,path,mask_source_stamp,(d.h,d.w)); OPR.check_export_decode(snap_i,path,mask_source_stamp,(d.h,d.w)); SKR.check_export_decode(snap_i,path,mask_source_stamp,(d.h,d.w)); RCR.verify_export(snap_i,path,(d.h,d.w)); body_render.check_export_decode(snap_i,path,mask_source_stamp,(d.h,d.w)); FRR.check_export_decode(snap_i,path,mask_source_stamp,(d.h,d.w))
+                        LM.check_export_decode(snap_i, path, mask_source_stamp, (d.h, d.w)); LGS.check_export_decode(snap_i, path, mask_source_stamp, (d.h, d.w)); ERR.check_export_decode(snap_i, path, mask_source_stamp, (d.h, d.w)); MLR.check_export_decode(snap_i, path, mask_source_stamp, (d.h, d.w)); SBR.check_export_decode(snap_i, path, mask_source_stamp, (d.h, d.w)); IDR.check_export_decode(snap_i,path,mask_source_stamp,(d.h,d.w)); OPR.check_export_decode(snap_i,path,mask_source_stamp,(d.h,d.w)); SKR.check_export_decode(snap_i,path,mask_source_stamp,(d.h,d.w)); RCR.verify_export(snap_i,path,(d.h,d.w)); body_render.check_export_decode(snap_i,path,mask_source_stamp,(d.h,d.w)); HSR.check_export_decode(snap_i,path,mask_source_stamp,(d.h,d.w)); FRR.check_export_decode(snap_i,path,mask_source_stamp,(d.h,d.w))
                         decode_ms = (monotonic_ns() - decode_started) / 1e6
                         spec, skipped = self._export_snapshot(snap_i, d.h, d.w, for_document=for_doc_i)
                         stage = "edit16"
@@ -6355,7 +6431,7 @@ class Engine(HVC.HairVolumeHostMixin, PortraitCropEngineMixin, HUC.HairUnificati
                     continue
                 d = decode_for_delivery8(path, device=snap_i["device"], creative_base=snap_i.get("creative_base"))
                 verify_decode(path, immutable_stamp)
-                LM.check_export_decode(snap_i, path, mask_source_stamp, (d.h, d.w)); LGS.check_export_decode(snap_i, path, mask_source_stamp, (d.h, d.w)); ERR.check_export_decode(snap_i, path, mask_source_stamp, (d.h, d.w)); MLR.check_export_decode(snap_i, path, mask_source_stamp, (d.h, d.w)); SBR.check_export_decode(snap_i, path, mask_source_stamp, (d.h, d.w)); IDR.check_export_decode(snap_i,path,mask_source_stamp,(d.h,d.w)); OPR.check_export_decode(snap_i,path,mask_source_stamp,(d.h,d.w)); SKR.check_export_decode(snap_i,path,mask_source_stamp,(d.h,d.w)); RCR.verify_export(snap_i,path,(d.h,d.w)); body_render.check_export_decode(snap_i,path,mask_source_stamp,(d.h,d.w)); FRR.check_export_decode(snap_i,path,mask_source_stamp,(d.h,d.w))
+                LM.check_export_decode(snap_i, path, mask_source_stamp, (d.h, d.w)); LGS.check_export_decode(snap_i, path, mask_source_stamp, (d.h, d.w)); ERR.check_export_decode(snap_i, path, mask_source_stamp, (d.h, d.w)); MLR.check_export_decode(snap_i, path, mask_source_stamp, (d.h, d.w)); SBR.check_export_decode(snap_i, path, mask_source_stamp, (d.h, d.w)); IDR.check_export_decode(snap_i,path,mask_source_stamp,(d.h,d.w)); OPR.check_export_decode(snap_i,path,mask_source_stamp,(d.h,d.w)); SKR.check_export_decode(snap_i,path,mask_source_stamp,(d.h,d.w)); RCR.verify_export(snap_i,path,(d.h,d.w)); body_render.check_export_decode(snap_i,path,mask_source_stamp,(d.h,d.w)); HSR.check_export_decode(snap_i,path,mask_source_stamp,(d.h,d.w)); FRR.check_export_decode(snap_i,path,mask_source_stamp,(d.h,d.w))
                 stage = "render"
                 # P1-1：这一张用它自己那份配方（当前档=现拍 snap；其它档=它存的 state；
                 # 裸文件=共享参数且 for_document=False）。批级 export_done 仍读 snap。
@@ -6522,6 +6598,9 @@ class Engine(HVC.HairVolumeHostMixin, PortraitCropEngineMixin, HUC.HairUnificati
 
     def _guard_editable(self, who: str) -> str | None:
         """编辑类命令的四道公用守卫；不过就给原因，不在各自命令里写四份。"""
+        from .pick_focus_host import active as focus_active
+        if focus_active(self):
+            return "Original focus review is running; stop or await it before editing"
         if self.bench is not None and self.bench.is_alive():
             return f"跑靶进行中，拒绝 {who}：先 bench_stop"
         if self._export is not None and self._export.is_alive():
@@ -6555,12 +6634,13 @@ class Engine(HVC.HairVolumeHostMixin, PortraitCropEngineMixin, HUC.HairUnificati
         return self._doc_path
 
     def _inspection_controller(self):
+        from .pick_focus_host import active as focus_active
         controller = self.__dict__.get("_inspection")
         if controller is None:
             controller = InspectionController(
                 document=self._inspection_document,
                 proxy_dimensions=lambda: (int(self._vram.h), int(self._vram.w)),
-                busy=lambda: ((self.bench is not None and self.bench.is_alive()) or
+                busy=lambda: (focus_active(self) or (self.bench is not None and self.bench.is_alive()) or
                               (self._export is not None and self._export.is_alive())),
                 capture_snapshot=lambda: self._state_to_export_snap(self._capture_state(),
                     device="cpu", scale=1, upscale_backend="lanczos3", sharpen=0),
@@ -6723,7 +6803,7 @@ class Engine(HVC.HairVolumeHostMixin, PortraitCropEngineMixin, HUC.HairUnificati
                           'success': False, 'outcome_unknown': False, 'error': reason})
                     return
                 raise ValueError(reason)
-            if name in ('limb_vein', 'fabric_sweat', 'portrait_crop', 'lens_blur', 'light_glow', 'creative_selection', 'hair_unification', 'hair_volume'):
+            if name in ('hand_shape', 'hand_tone', 'limb_vein', 'fabric_sweat', 'portrait_crop', 'lens_blur', 'light_glow', 'upscale_restore', 'creative_selection', 'hair_unification', 'hair_volume'):
                 fn(msg); return  # The reviewed copy transaction owns source fences and history.
             if name == 'expression_replacement':
                 fn(msg); return  # Dedicated exact source/copy transaction owns its history and receipts.
@@ -6742,6 +6822,9 @@ class Engine(HVC.HairVolumeHostMixin, PortraitCropEngineMixin, HUC.HairUnificati
                 else: fn(msg)
                 return  # View-only: do not fence or revoke any edit/capture owner.
             from .creative_transfer_host import inventory_read_only, face_style_image_read_only, face_style_preflight_read_only, portrait_cohort_image_read_only, portrait_cohort_preflight_read_only
+            from .portrait_preset_batch import read_only as portrait_preset_read_only
+            if portrait_preset_read_only(msg):
+                fn(msg); return  # Parked candidates/catalogue/pages cannot publish recipe or graph edits.
             if inventory_read_only(msg):
                 fn(msg); return  # No edit fence, history or capture invalidation.
             if face_style_image_read_only(msg):

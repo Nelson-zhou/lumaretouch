@@ -1,0 +1,59 @@
+{
+  "version": 1,
+  "base_commit": "54e64f89663fe5f72114888bf62e1553adc89238",
+  "requirement_ids": [
+    "control:PC-32455:3",
+    "PC-32455-C-53da929b74",
+    "LNX-REF-PC-32455-C-53da929b74"
+  ],
+  "operation": "lnx.reference_color.v1",
+  "scope": "reference-only saved intent; own target fit once; full-image group review; canonical batch and explicit delivery",
+  "acceptance": "Source/AST only. All tests/build/typecheck/inference/runtime/image-quality/performance UNRUN.",
+  "manifest_self_excluded": true,
+  "files": [
+    {
+      "path": "engine/src/lumaretouch_engine/portrait_group_reference.py",
+      "sha256": "8755638f23ddda706c8cdaba2b86dbf001d68114a3a62467f4652adb362aa7ed"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/portrait_group_retained.py",
+      "sha256": "08693d6f06601f5806b39fa72af534eff8b57d544e07f5f7aeec27fae8c5c640"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/portrait_preset_batch.py",
+      "sha256": "80cd70281ed05e3df8f2f3693864573692c0b52db7105ec9cd3f87d1bc2b6e76"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/portrait_preset_preparation.py",
+      "sha256": "61457176de2c5dfd157ac46f1e12eb483637e45f050659c88f5d9a261ca85b99"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/batch_sync.py",
+      "sha256": "5eba1091e653e4453dac9737347140ed28c3fb6c0fa58e81a8d37586a472b8d6"
+    },
+    {
+      "path": "engine/tests/test_portrait_group_reference_unrun.py",
+      "sha256": "27a48c6d73a2a84237ffa2a69ee238f7029e20fb018ff709c875103a25e141c9"
+    },
+    {
+      "path": "ui/src-tauri/src/portrait_preset_group_host.rs",
+      "sha256": "e67f9ebaa7918eeabb9d3bdcdc30305cab6ae7a83071a59098e23ea661a166ed"
+    },
+    {
+      "path": "ui/src/portraitPresetGroup/model.ts",
+      "sha256": "0ad38f1682d588ca4fcd623ddd78c531f00fa681e391037d435b6175eea6633d"
+    },
+    {
+      "path": "ui/src/portraitPresetGroup/Panel.tsx",
+      "sha256": "1f7b6c91a1ceca57c7b9a43f35c1dc3e405e7d9a7995b6b8f960de67a5c50b11"
+    },
+    {
+      "path": "ui/src/portraitPresetGroup/model.unrun.test.ts",
+      "sha256": "6a7671641c1b29851c157215636962528e7d06fbd2dc081b545e4d9f6b01d40c"
+    },
+    {
+      "path": "docs/local-workflow/PRESET-GROUP-REFERENCE.md",
+      "sha256": "05e8812e3356197c46c0c25cdc76c6f74907dd10ee72bbd3aeab01a9e453d466"
+    }
+  ]
+}

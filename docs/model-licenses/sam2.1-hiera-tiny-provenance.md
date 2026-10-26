@@ -86,3 +86,15 @@ isolated import path. No Torch/CUDA extension build or variant replacement occur
 Installation, CPU/CUDA/ROCm compatibility, cancellation, integrity-failure cases,
 real portrait segmentation and UI end-to-end behavior remain unexecuted. A source
 commit and matching bytes establish identity, not real-world segmentation quality.
+
+
+## Source-only curated setup revision (2026-10-25)
+
+The newer source now hashes checkpoint bytes during offline status, retains bounded
+partial downloads for SHA256-verified resume, and probes an isolated candidate
+before publishing it. Invalid previous installations are preserved as backup;
+failed rechecks invalidate old readiness. These supersede the older status-length
+and manual-removal descriptions above, not their unexecuted-validation caveat.
+See `docs/development/curated-id-background-extension-setup.md`. A CPU fixture
+readiness receipt is not evidence of real-portrait quality or GPU performance.
+Base runtime provisioning and a fully hash-locked dependency closure remain open.

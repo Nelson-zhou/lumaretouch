@@ -3,7 +3,7 @@ import type {SyntheticEvent} from 'react';
 
 /** UI affordance only. Native/engine exact owners remain authoritative. */
 export interface CreativeWorkGuards {
-  portraitCrop?: boolean; hairVolume?: boolean; hairUnification: boolean; selection: boolean; glow: boolean; lens: boolean; expression: boolean; background: boolean;
+  upscale?: boolean; portraitCrop?: boolean; hairVolume?: boolean; hairUnification: boolean; selection: boolean; glow: boolean; lens: boolean; expression: boolean; background: boolean;
   heal: boolean; layers: boolean; idBackground: boolean; body: boolean;
 }
 export function guardCreativeWork(event: SyntheticEvent, guards: CreativeWorkGuards): void {
@@ -14,6 +14,7 @@ export function guardCreativeWork(event: SyntheticEvent, guards: CreativeWorkGua
     [guards.hairUnification, '[data-hair-unification-workflow],.retouchToolActivity'],
     [guards.selection, '.creative-selection'],
     [guards.glow, '[data-light-glow-workflow]'],
+    [guards.upscale === true, '[data-upscale-restore-workflow]'],
     [guards.lens, '[data-lens-blur-workflow]'],
     [guards.expression, '[data-expression-workflow]'],
     [guards.background, '.commonBackgroundPanel,.commonBackgroundWorkspace,.fringePanel,.fringeWorkspace,.fringeReceipt,.fringeBackdrop,.retouchToolActivity'],

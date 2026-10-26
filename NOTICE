@@ -188,3 +188,7 @@ Fabric sweat correction: core/fabric_sweat is an original dependency-free Rust i
 Limb vein softening (core/limb_vein): original GPL-3.0-or-later reference-assisted
 colour and bounded shading correction, adapted from local fabric_sweat infrastructure.
 No external anatomical model or third-party numerical code; see docs/limb-vein/.
+
+Hand neutral-gray correction (core/hand_tone): original GPL-3.0-or-later
+source-grid local log-luminance band correction, reusing local limb_vein ABI
+infrastructure. No external model or copied numerical code. See docs/hand-tone/.

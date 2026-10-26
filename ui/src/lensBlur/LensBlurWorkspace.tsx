@@ -5,6 +5,7 @@ import {LENS_APERTURES, LENS_APERTURE_LABELS, LENS_LIMITS, LENS_RENDERERS, LENS_
   type LensAperture, type LensPoint, type LensRecipeFields, type LensRenderer, type LensStroke} from './model';
 import {lensDisplayToSource, lensImageUrl, paintLensDepth} from './imagery';
 import type {LensBlurWorkflow} from './workflow';
+import {LensDepthSetup} from './LensDepthSetup';
 import './lensBlur.css';
 
 type PaintMode = 'focus' | 'clear' | 'blur';
@@ -43,9 +44,11 @@ export function LensBlurWorkspace({workflow, onExit, disabled = false}: {
   }, [state.phase, state.terminal_refresh, context?.session_id, onExit]);
   useEffect(() => {if (locked) dropStroke();}, [locked]);
   useEffect(() => {
-    if (visualize && state.depth && recipe && depthCanvas.current
-      && !paintLensDepth(depthCanvas.current, state.depth, recipe.focus.near, recipe.focus.far)) setPaintError('景深图无法显示；不会以示意图替代。');
-  }, [visualize, state.depth, recipe?.focus.near, recipe?.focus.far]);
+    const shown = !!(visualize && state.depth && recipe && depthCanvas.current
+      && paintLensDepth(depthCanvas.current, state.depth, recipe.focus.near, recipe.focus.far));
+    if (visualize && state.depth && !shown) setPaintError('景深图无法显示；不会以示意图替代。');
+    if (state.depth?.asset.provenance.kind === 'model') workflow.depthPresented(state.depth.asset.provenance.inference_id, shown);
+  }, [visualize, state.depth, recipe?.focus.near, recipe?.focus.far, workflow]);
   const edit = (patch: Partial<LensRecipeFields>) => {dropStroke(); if (recipe) workflow.edit({...recipe, ...patch});};
   const pointFromEvent = (event: PointerEvent<SVGSVGElement>): LensPoint | null => {
     if (!source) return null;
@@ -99,9 +102,13 @@ export function LensBlurWorkspace({workflow, onExit, disabled = false}: {
       {canExit ? <button type="button" onClick={onExit}>关闭</button>
         : <button type="button" disabled={disabled || unresolved || state.terminal_refresh === 'refreshing'} onClick={() => {dropStroke(); void workflow.cancel();}}>取消本次编辑</button>}
     </header>
-    <p className="lensBlurBoundary">不代表真实镜头焦距、光圈值或专有算法等效。模型未就绪时不会下载模型，也不会用渐变或人物轮廓冒充景深。</p>
+    <p className="lensBlurBoundary">不代表真实镜头焦距、光圈值或专有算法等效。模型未就绪时不会自动下载，也不会用渐变或人物轮廓冒充景深；安装须在下方明确操作。</p>
     <p className="lensBlurBoundary">确认后仅在当前项目中新建独立照片副本，不覆盖原文档或原片文件；写出图片文件需另行导出。</p>
-    {context && !state.depth && <div className="lensBlurManual"><p>也可明确选择人工散焦：使用恒定编辑基准面，靠清晰/虚化笔画控制效果。这不是照片景深分析。</p>
+    {context && !state.depth && <div className="lensBlurManual">
+      <LensDepthSetup disabled={disabled || !workflow.editable()}/>
+      <p role="status">{context.model_depth.available ? '本地模型能力已核对；仍须生成并复核当前照片深度。' : `AI 深度不可用：${context.model_depth.reason}`}；安装状态变化后请关闭本次会话并重新获取当前来源。</p>
+      <button type="button" disabled={disabled || !workflow.modelDepthAvailable()} onClick={() => void workflow.prepareModelDepth()}>生成 AI 相对深度</button>
+      <p>仅使用已核验的本地 Depth Anything V2 Small；当前来源保留实际能力快照。运行时未获准或模型缺失会显示不可用，不会下载、换模型或生成占位深度。仅直接渲染 v1 接受模型深度。</p><p>也可明确选择人工散焦：使用恒定编辑基准面，靠清晰/虚化笔画控制效果。这不是照片景深分析。</p>
       {renderer && <p>新配方将使用{LENS_RENDERER_LABELS[renderer]}。{renderer === 'cohort-fft-v2' ? '准备基准面不等于接受 v2；预览前还需明确确认新数学版本。' : '已有 v1 配方不会被自动升级为 v2。'}</p>}
       <button type="button" disabled={disabled || !workflow.manualPlaneAvailable()} onClick={() => void workflow.prepareManualPlane()}>人工散焦编辑（不做 AI 景深分析）</button></div>}
     {manualPlane && <p className="lensBlurBoundary">人工散焦模式：下方平面是你选择的恒定编辑基准，不反映照片远近。先调大虚化半径，再用橙色“虚化”笔画添加效果；青色“清晰”笔画保护区域。</p>}
@@ -136,8 +143,11 @@ export function LensBlurWorkspace({workflow, onExit, disabled = false}: {
           </div>
           <p className="lensBlurCaption">完整来源图，不是虚化效果。彩色笔画只表示编辑范围，不模拟羽化或最终效果。</p>
         </> : <p className="lensBlurEmpty">等待校验成功的当前来源图。没有占位效果图。</p>}
-        <label className="lensBlurToggle"><input type="checkbox" checked={visualize} disabled={!state.depth || state.stale} onChange={e => setVisualize(e.target.checked)}/>{manualPlane ? '显示人工编辑基准面（非景深）' : '显示真实景深数据'}</label>
+        <label className="lensBlurToggle"><input type="checkbox" checked={visualize} disabled={!state.depth || state.stale} onChange={e => setVisualize(e.target.checked)}/>{manualPlane ? '显示人工编辑基准面（非景深）' : '显示相对深度数据（非实测距离）'}</label>
         {visualize && state.depth && <p className="lensBlurLegend">{manualPlane ? '均匀色块只表示恒定的人工编辑基准，不表达照片远近。' : '浅黄：相对近景 0 → 深紫：相对远景 1。亮区是当前清晰区间；不是米数或置信度。'}</p>}
+        {state.depth?.asset.provenance.kind === 'model' && <label className="lensBlurToggle"><input type="checkbox" checked={state.depth_reviewed}
+          disabled={disabled || !workflow.editable() || !state.source_presented || !state.depth_presented}
+          onChange={event => workflow.acknowledgeDepth(event.target.checked)}/>已检查 AI 相对深度（非距离 / 置信度）；发丝、遮挡边缘和主体范围仍需在最终效果中复核</label>}
         {paintError && <p role="alert">{paintError}</p>}
       </div>
       <fieldset className="lensBlurControls" disabled={locked}>

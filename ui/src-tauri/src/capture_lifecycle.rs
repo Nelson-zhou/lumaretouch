@@ -28,6 +28,7 @@ impl AppState {
         crate::hair_unification_api::reset(epoch);
         crate::hair_volume_api::reset(epoch);
         crate::light_glow_api::reset(epoch);
+        crate::upscale_restore_api::reset(epoch);
         crate::portrait_crop_api::reset(epoch);
         crate::lens_blur_api::reset(epoch);
         crate::expression_replacement_api::reset(epoch);

@@ -1,0 +1,77 @@
+{
+  "scope": "hand-landmarker explicit setup bridge only; concurrent automatic workflow excluded",
+  "baseline": "b62df7b153fd00a7ce2c1183bfd327f910914052",
+  "status": "SOURCE ONLY / AUTHORED / runtime acceptance UNRUN",
+  "validation": {
+    "python_ast": "parsed without imports",
+    "tests": "UNRUN",
+    "typechecks": "UNRUN",
+    "builds": "UNRUN",
+    "model_download": "NOT PERFORMED",
+    "model_install": "UNRUN",
+    "capability_probe": "AUTHORED, UNRUN",
+    "photo_quality": "UNRUN"
+  },
+  "files": [
+    {
+      "path": "engine/src/lumaretouch_engine/hand_shape_setup.py",
+      "bytes": 10945,
+      "sha256": "0cc303383fa7d712d5a49e61bf31fefc283abfd34469a70aca8031c4774dd3d8"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/hand_shape_manifest.py",
+      "bytes": 2397,
+      "sha256": "d3e71094feb490eda142356bdfb60755fddbd399a22c0a83be9b8d402ea23776"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/hand_shape_model.py",
+      "bytes": 9508,
+      "sha256": "fb5a91b89a89aefa014a6a2e0656ea8e751b79b9d6a00311eaef502fa211cfe5"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/curated_extension_download.py",
+      "bytes": 6340,
+      "sha256": "77aaafa65ae23428f3f1f214425e158c3f68d27dd234e3cb9be088fdf17396d8"
+    },
+    {
+      "path": "engine/tests/test_hand_shape_setup_unrun.py",
+      "bytes": 5343,
+      "sha256": "7bb0f25203b1c91fc0ce518f4233bf87a345a448524bb97812c31cff51e82776"
+    },
+    {
+      "path": "ui/src-tauri/src/prompted_model_api.rs",
+      "bytes": 8678,
+      "sha256": "67b441bdd4e6be6431ea18b133bea717395e010b1a1ee5eae6fa1991133acecb"
+    },
+    {
+      "path": "ui/src/handShape/HandModelSetup.tsx",
+      "bytes": 3709,
+      "sha256": "1f5bd3a1540821dc1c9d792290f339fbb31a8a86b750d01b91a7fade9294580a"
+    },
+    {
+      "path": "ui/src/handShape/HandShapePanel.tsx",
+      "bytes": 9403,
+      "sha256": "1ff93f4a78b4537e90e96f9ef2a3ec3da25ad6c784485866aa000b8250d45cc9"
+    },
+    {
+      "path": "ui/src/handShape/handModelSetup.unrun.test.ts",
+      "bytes": 1056,
+      "sha256": "b2ebd6f6745e77bb0b7e884bc7673e0074432a82c659f0ae244588579d246456"
+    },
+    {
+      "path": "docs/hand-shape/MODEL-PROVENANCE.md",
+      "bytes": 6200,
+      "sha256": "45776845e4d381aa4ce1c46632b0dbd7e268d3c3623d06f5e4119a80c97a74e7"
+    },
+    {
+      "path": "docs/hand-shape/SETUP-UNRUN.md",
+      "bytes": 3528,
+      "sha256": "9bfb36e4beb284be41c3e8af605692245a17edb5444d969ea7f63e3d0d05daa9"
+    },
+    {
+      "path": "ui/src/handShape/handModelSetup.ts",
+      "bytes": 494,
+      "sha256": "0e7123335a950b890dd320d058e90e95aab84f9ad0fb379689b9880270b76b03"
+    }
+  ]
+}

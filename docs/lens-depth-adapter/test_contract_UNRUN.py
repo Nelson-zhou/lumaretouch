@@ -53,34 +53,32 @@ def test_source_bounds(width, height):
         depth.DepthSourceV1("1" * 64, width, height)
 
 
-def test_capability_is_unavailable_without_filesystem_or_optional_imports(monkeypatch):
+def test_capability_reflects_offline_installed_check_without_model_imports(monkeypatch):
+    from lumaretouch_engine import lens_depth_setup as setup
     before = set(sys.modules)
-    def forbidden(*_args, **_kwargs):
-        raise AssertionError("Unavailable capability must not inspect local model files")
-    monkeypatch.setattr(depth, "_open_directory", forbidden)
+    monkeypatch.setattr(setup, "model_status", lambda: {"ready":False,"code":"not-installed","reason":"fixture missing"})
     capability = depth.capability_v1()
-    assert not capability.available
-    assert capability.inference_acceptance == "UNRUN"
+    assert not capability.available and capability.inference_acceptance == "UNRUN"
     assert not capability.downloads_attempted and not capability.installs_attempted
-    assert "upstream-file-pin:config.json" in capability.admission_gaps
-    assert "runtime-artifact-and-installed-code-provenance" in capability.admission_gaps
+    assert capability.admission_gaps == ("not-installed",)
     assert not (set(sys.modules) - before) & {"torch", "transformers", "safetensors"}
 
 
-def test_public_inference_refuses_incomplete_manifest_before_open(monkeypatch, tmp_path):
-    def forbidden(*_args, **_kwargs):
-        raise AssertionError("Incomplete pins must refuse before model access")
-    monkeypatch.setattr(depth, "_open_directory", forbidden)
+def test_public_inference_refuses_missing_readiness_before_child(monkeypatch, tmp_path):
+    from lumaretouch_engine import lens_depth_setup as setup
+    monkeypatch.setattr(setup,"model_status",lambda *_:{"ready":False,"code":"not-installed","reason":"fixture missing"})
     with pytest.raises(depth.DepthUnavailable) as error:
-        depth.estimate_depth_v1(request(), model_root=tmp_path)
-    assert error.value.code == "manifest-incomplete"
+        depth.estimate_depth_v1(request(), model_root=tmp_path/'model')
+    assert error.value.code == "not-installed"
 
 
-def test_runtime_is_not_unlocked_by_metadata_or_manifest_flag(monkeypatch):
+def test_manifest_flag_cannot_replace_runtime_integrity(monkeypatch, tmp_path):
+    from lumaretouch_engine import lens_depth_setup as setup
     monkeypatch.setattr(manifest, "RUNTIME_ADMISSION", "verified")
-    with pytest.raises(depth.DepthUnavailable) as error:
-        depth._admit_runtime_v1()
-    assert error.value.code == "runtime-provenance-unverified"
+    def refuse(*_): raise setup.ModelInstallError("unauthenticated fixture runtime")
+    monkeypatch.setattr(setup,"activate_runtime",refuse)
+    with pytest.raises(setup.ModelInstallError):
+        depth._admit_runtime_v1(tmp_path/'model')
 
 
 def test_cancellation_publishes_no_result(tmp_path):

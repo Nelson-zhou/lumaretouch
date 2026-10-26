@@ -6,6 +6,11 @@ dynamic plugin loader and does not share numerical implementations between tools
 """
 
 class CreativeModuleCommandsMixin:
+    def cmd_upscale_restore(self, request):
+        from .upscale_restore_host import handle
+        from .server import emit
+        return handle(self, request, emit)
+
     def cmd_light_glow(self, request):
         from .light_glow_host import handle
         from .server import emit

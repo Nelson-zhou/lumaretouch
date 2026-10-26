@@ -1,13 +1,16 @@
 """Private tiled float reference computation, authored but entirely UNRUN.
 
-There is no production caller. ``adapter.restore_native_candidate`` refuses
-unconditionally. This reference is for a future authorized acceptance harness
-after checkpoint/runtime review, not a supported way to bypass admission.
+The bounded offline worker calls this only after fixed model/runtime/source
+admission. Source is authored but whole-frame/tile equivalence, photo quality
+and hardware performance remain UNRUN; no acceptance is implied.
 
-Only the native-size result is staged in full. Encoded input, generated scaled
-pixels, antialias scratch and transfers are tile-local. This is an algorithmic
+The native-size result is staged in full. Encoded input, generated scaled
+pixels, antialias scratch and transfers are tile-local; the first admitted Swin
+profile deliberately uses ONE full-frame tile, including full x2 RGB output.
+This is an algorithmic
 working-set structure, NOT proof of a hard allocator/VRAM/RAM bound. Explicit
-runtime workspace envelopes and reservation enforcement remain unimplemented.
+runtime workspace measurements remain unperformed. The CPU child applies OS
+address-space/CPU/file limits; this is not a claim of acceptable latency or quality.
 """
 
 from dataclasses import dataclass
@@ -48,33 +51,21 @@ def _merge_statistics(total: dict, current: dict) -> None:
 
 
 def _extract_linear_model_tile(torch, np, source: CanonicalSource, tile: NativeTile, device):
-    """Copy only this tile's RGB; global right/bottom reflect padding is at most 1.
+    """Tile-local RGB copy with globally anchored reflect-to-window padding.
 
-No independent tile-boundary padding is added. A globally even x2 input origin
-keeps pixel-unshuffle channels in the same phase as full-frame inference.
-"""
+    Swin2SR needs modulo-eight window phase, not per-tile padding. Input starts
+    are globally aligned by geometry; only actual right/bottom image borders
+    reflect. RRDB's previous <=1 mod-padding is a subset of this operation.
+    """
     rect = tile.model_input
-    height, width = rect.y1 - rect.y0, rect.x1 - rect.x0
-    valid_height = min(rect.y1, source.height) - rect.y0
-    valid_width = min(rect.x1, source.width) - rect.x0
-    if height - valid_height not in (0, 1) or width - valid_width not in (0, 1):
-        raise ValueError("unexpected global mod-padding geometry")
+    if rect.x1-source.width >= source.width or rect.y1-source.height >= source.height:
+        raise ValueError("source too small for the global reflection extent")
     view = np.frombuffer(source.rgba_f32le, dtype="<f4").reshape(source.height, source.width, 4)
-    # The immutable whole-image ndarray is a view, not another full raster.
-    rgb = np.empty((1, 3, height, width), dtype=np.float32)
-    rgb[0, :, :valid_height, :valid_width] = view[
-        rect.y0:rect.y0 + valid_height, rect.x0:rect.x0 + valid_width, :3,
-    ].transpose(2, 0, 1)
-    if width > valid_width:
-        rgb[0, :, :valid_height, valid_width] = view[
-            rect.y0:rect.y0 + valid_height, source.width - 2, :3,
-        ].transpose(1, 0)
-    if height > valid_height:
-        rgb[0, :, valid_height, :valid_width] = view[
-            source.height - 2, rect.x0:rect.x0 + valid_width, :3,
-        ].transpose(1, 0)
-    if height > valid_height and width > valid_width:
-        rgb[0, :, valid_height, valid_width] = view[source.height - 2, source.width - 2, :3]
+    xs = np.arange(rect.x0, rect.x1, dtype=np.int64)
+    ys = np.arange(rect.y0, rect.y1, dtype=np.int64)
+    xs = np.where(xs < source.width, xs, 2*source.width-2-xs)
+    ys = np.where(ys < source.height, ys, 2*source.height-2-ys)
+    rgb = np.ascontiguousarray(view[ys[:, None], xs[None, :], :3].transpose(2, 0, 1)[None])
     return torch.from_numpy(rgb).to(device=device, dtype=torch.float32)
 
 
@@ -150,8 +141,9 @@ completion. Any exception aborts without returning a partially filled raster.
         raise ValueError("accelerator index must be explicit")
     if network.training or getattr(network, "scale", None) != plan.scale:
         raise ValueError("network must be an evaluation-mode graph at the declared scale")
-    if any(parameter.dtype != torch.float32 or parameter.device != target_device
-           for parameter in network.parameters()):
+    if any((parameter.is_floating_point() and parameter.dtype != torch.float32)
+           or parameter.device != target_device
+           for parameter in (*network.parameters(), *network.buffers())):
         raise ValueError("network device/dtype does not match the explicit request")
     # Materialize no tile list: iter_native_tiles validates the complete plan
     # when iterated. Validate once before allocating the native result as well.

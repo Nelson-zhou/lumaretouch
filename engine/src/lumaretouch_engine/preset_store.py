@@ -84,17 +84,33 @@ def _path_for(preset_id: str, directory: str | None = None) -> str:
 
 
 def builtin_docs() -> list[dict]:
-    """随包的两个模块预设：一个"人像"、一个"色彩"。
+    """随包的模块预设：旧版人像/色彩与明确待审核的多人 retained 参数。
 
     为什么内置写在代码里而不是 data/*.json：deb 的引擎打包只拷 `data/` 里的**权重**
     （stage-engine.sh 那一段），新加一类数据文件就要同步改打包脚本，漏改的后果是
     "装机后预设列表是空的"——而这在开发机上永远看不出来。参数是代码级事实，写在代码里
     少一条会漂的链路。
 
-    数值都是真的参数（走真的命令、真的改像素），不是占位：人像预设只动磨皮强度那一族，
-    色彩预设只动曝光/白平衡，正是 PRESET-001 要判的两类作用域。
+    数值对应真实参数，不是占位；旧版人像、色彩和 retained 人物保持明确作用域。
+    混合组预设的曝光/白平衡作用全图，finish/texture 只作用各图自己的人脸。
+    内置值仅供审核起点，不是已验收的婚纱画质或普适推荐。
     """
     return [
+        {"schema": PRESET_SCHEMA, "id": "portrait-group-finish", "name": "多人轻美白红润（需逐图审核）",
+         "kind": "portrait", "author": "LumaRetouch",
+         "note": "各图自身检测人脸：美白 0.10、红润 0.05；不等同磨皮，不保证检测到全部人物。源码预设，画质与性能待验收。",
+         "modules": {"lnx.skin_finish.v1": {"recipe": {"version": 1, "whitening": 0.10, "rosiness": 0.05}}}},
+        {"schema": PRESET_SCHEMA, "id": "portrait-group-texture", "name": "多人轻柔质感（非旧磨皮，需逐图审核）",
+         "kind": "portrait", "author": "LumaRetouch",
+         "note": "各图自身检测人脸：中频质感 -0.10、清晰度 0；使用真实质感内核，不替换旧磨皮算法。源码预设，画质与性能待验收。",
+         "modules": {"lnx.skin_texture.v1": {"recipe": {"version": 1, "texture": -0.10, "clarity": 0.0}}}},
+        {"schema": PRESET_SCHEMA, "id": "portrait-group-wedding-start", "name": "婚纱组全图调色＋逐脸质感（审核起点）",
+         "kind": "portrait", "author": "LumaRetouch",
+         "note": "全图曝光 +0.15 EV、色温偏移 +100 K、色调 +0.01；各图自身已验证人脸美白 0.08、红润 0.03、质感 -0.08、清晰度 0。不识别跨图身份、不保证无漏脸；不是自动校色或画质推荐，必须逐图审核，画质与性能待验收。",
+         "modules": {"lnx.exposure.v1": {"ev": 0.15},
+                     "lnx.white_balance.v1": {"temperature_shift": 100.0, "tint_shift": 0.01},
+                     "lnx.skin_finish.v1": {"recipe": {"version": 1, "whitening": 0.08, "rosiness": 0.03}},
+                     "lnx.skin_texture.v1": {"recipe": {"version": 1, "texture": -0.08, "clarity": 0.0}}}},
         {"schema": PRESET_SCHEMA, "id": "portrait-soft", "name": "柔肤（人像）",
          "kind": "portrait", "author": "LumaRetouch",
          "note": "只作用人像模块：磨皮强度 0.45。色彩、裁剪、曝光一律不碰。",

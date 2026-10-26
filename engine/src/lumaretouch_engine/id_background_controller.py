@@ -17,7 +17,7 @@ class Controller:
             return shadow_controller(self.engine,self.emit).handle(p)
         e=self.engine;rid=p.get('request_id');action=p.get('action')
         result={'event':'id_background_result','protocol':1,'request_id':rid,'document_id':p.get('document_id'),'action':action,'success':False,'outcome_unknown':False,'requires_reload':False}
-        before=None;digest=None
+        before=None;digest=None;automatic_masks=None
         try:
             if type(rid) is not str or not 1<=len(rid)<=128:raise ValueError('请求身份无效')
             digest=sha256(json.dumps(p,sort_keys=True,allow_nan=False).encode()).hexdigest()
@@ -34,21 +34,43 @@ class Controller:
                 fields|={'recipe_document_id','recipe_revision'}
                 version=e._document_versions().version(e._docs[e._doc_index])
                 if p.get('recipe_document_id')!=version.document_id or p.get('recipe_revision')!=str(version.revision):raise ValueError('背景配方已变化，请刷新后重新检查')
-            extra={'id_state':set(),'id_clear':set(),'id_import':{'path'},'id_import_material':{'selection'},'id_set':{'recipe'},'id_review':{'category','object_ids','reviewed'}}
+            extra={'id_state':set(),'id_initialize_foreground':set(),'id_clear':set(),'id_import':{'path'},'id_import_material':{'selection'},'id_set':{'recipe'},'id_review':{'category','object_ids','reviewed'}}
             if action not in extra or set(p)!=fields|extra[action]:raise ValueError('证件照换背景请求字段无效')
             if action=='id_state':result.update(success=True,report=R.report(e));return
             reason=e._guard_editable('ID background')
             if reason:raise ValueError(reason)
             value=S.check(getattr(e,'_id_background',None));bundle=getattr(e,'_id_background_bundle',None)
             from .original_shadow_state import active as shadow_active
-            if action in ('id_set','id_import','id_import_material','id_review') and shadow_active(S.original_shadow_of(value)):
+            if action in ('id_set','id_import','id_import_material','id_review','id_initialize_foreground') and shadow_active(S.original_shadow_of(value)):
                 raise ValueError('原图阴影启用时不能未经前后审核更换背景或主体范围；请先通过原图阴影审核关闭，再调整并重新审核。清除背景仍可用')
             derived=D.record(e) is not None
+            if action=='id_initialize_foreground' and derived:
+                raise ValueError('自动前景初始化目前仅支持原照片；创意回流图请使用已有源图手工/提示审核流程')
             source=D.binding(e) if derived else None
             if derived:
                 from .creative_derived_id_background import validate_state
                 validate_state(e)
-            if action=='id_clear':value['enabled']=False;value['background']={**value['background'],'kind':'none','color':None,'asset':None};bundle=None
+            if action=='id_initialize_foreground':
+                from .automatic_foreground import generate
+                grade=getattr(e,'_grade',(0.,0.,0.,1.))
+                if e._grade_scope=='objects' and any(grade[:3]) and grade[3]!=0:
+                    raise ValueError('当前局部范围已用于非零调色；请先解除该调色范围绑定，再初始化前景，避免建议改变现有人脸颜色')
+                source=M.bind_source(e)
+                automatic_masks=M.check(e._local_masks)
+                if automatic_masks['source'] is not None and automatic_masks['source']!=source:
+                    raise ValueError('已有局部蒙版属于其他源图，不能静默重新绑定')
+                if len(automatic_masks['recipe']['objects'])>=M.R.MAX_OBJECTS:
+                    raise ValueError('局部蒙版对象已达上限，请先整理已有对象')
+                selection,_alpha=generate(e._docs[e._doc_index]['path'],source)
+                import uuid
+                obj={'id':'auto_'+uuid.uuid4().hex,'name':'自动人像前景建议（待独立审核）',
+                     'kind':'automatic_foreground','enabled':True,'operation':'add','opacity':1.,'feather':0.,'selection':selection}
+                automatic_masks['source']=source
+                automatic_masks['recipe']['objects'].append(obj)
+                automatic_masks=M.check(automatic_masks)
+                M.R.validate_budget(automatic_masks['recipe'],(source['height'],source['width']))
+                # No background/support/review mutation: this is only source-owned intent.
+            elif action=='id_clear':value['enabled']=False;value['background']={**value['background'],'kind':'none','color':None,'asset':None};bundle=None
             elif action in ('id_import','id_import_material'):
                 if action == 'id_import_material':
                     from .background_material_selection import resolve_for_id_background
@@ -65,7 +87,7 @@ class Controller:
                 if type(proposed) is not dict or set(proposed)!=editable:raise ValueError('只能修改背景参数，不能伪造已审核范围')
                 if proposed['background'].get('asset')!=value['background'].get('asset'):raise ValueError('素材身份只能经导入产生')
                 value.update(deepcopy(proposed))
-            if value['source'] is None:value['source']=source if derived else M.bind_source(e)
+            if value['source'] is None and action!='id_initialize_foreground':value['source']=source if derived else M.bind_source(e)
             value=S.check(value)
             if derived:
                 from .creative_derived_id_background import validate
@@ -78,8 +100,11 @@ class Controller:
             if (p['document_id']!=e._load_id or p['recipe_document_id']!=current.document_id
                     or p['recipe_revision']!=str(current.revision)):
                 raise ValueError('背景配方在准备期间变化，请刷新后重新检查')
-            if derived:D.verify(source,e)
+            if derived or automatic_masks is not None:D.verify(source,e)
             before=e._history_capture();e._fence_current_document();e._cancel_snapshot('ID background edit')
+            if automatic_masks is not None:
+                e._local_masks=automatic_masks
+                M.sync(e,strict=True)
             e._id_background,e._id_background_bundle=value,bundle
             R.sync(e,strict=True)
             frame=e._write_current_frame('id_background');frame['doc_state']=e.doc_state();self.emit(frame)
@@ -89,7 +114,7 @@ class Controller:
             result['error']=str(error)[:2000]
             if before is not None:
                 try:
-                    e._history_apply(before);R.sync(e,strict=True)
+                    e._history_apply(before);M.sync(e,strict=True);R.sync(e,strict=True)
                     frame=e._write_current_frame('id_background_rollback');frame['doc_state']=e.doc_state();self.emit(frame)
                 except Exception:
                     result.update(outcome_unknown=True,requires_reload=True);e._vram=None

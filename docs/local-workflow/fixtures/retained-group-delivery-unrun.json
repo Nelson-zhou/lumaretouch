@@ -1,0 +1,16 @@
+{
+  "schema": "lrt.source-review-fixtures.v1",
+  "status": "AUTHORED_UNRUN",
+  "scope": "retained per-face group delivery and scoped project save",
+  "cases": [
+    {"id": "graph-only-ledger", "given": "Canonical commit_scoped entry with exact approved documents, source proofs, reviewed_face_refs, pre-commit revisions and no target.after", "expect": "Capture delivery from full post-commit identity; verify succeeds without inventing scalar recipe history"},
+    {"id": "missing-face-reference", "given": "Retained ledger target has no reviewed_face_refs", "expect": "Delivery rejected; no save/export authority"},
+    {"id": "changed-ledger", "given": "Any approved ledger graph patch, target reference or membership changes after capture", "expect": "Exact ledger fingerprint rejects delivery"},
+    {"id": "changed-graph", "given": "Retained owner graph, landmark support, face revision, source bytes or document revision changes after capture", "expect": "Full identity and reviewed-reference verification reject delivery"},
+    {"id": "scoped-history-save", "given": "Approved graph-only batch and unrelated unsaved people batch", "expect": "Canonical people_history_persistence serializer saves only approved batch; existing unrelated saved batch histories and document histories remain unchanged; unrelated unsaved batch omitted"},
+    {"id": "history-id-collision", "given": "Saved people_batch_history already contains selected batch_id with different encoded content", "expect": "Reject before persistence replacement"},
+    {"id": "private-original", "given": "Prepared original has a private retained graph with several verified own faces", "expect": "Save own face overrides while preserving all unrelated graph content, association revision and immutable banks"},
+    {"id": "scalar-compatibility", "given": "Legacy scalar group ledger with target.after", "expect": "Original scalar after-state check and scoped save path remain required"},
+    {"id": "restart-history", "given": "Saved retained group reopens using canonical people_history_persistence.prepare/restore", "expect": "Scoped batch history and exact face refs remain available for protected batch undo/redo; session delivery capability is not recreated"}
+  ]
+}

@@ -23,6 +23,8 @@ def check_binding(raw, category):
     if mask['source'] is None or not mask['recipe']['objects'] or mask['semantic_owner'] is not None:
         raise ValueError('需手动源图范围或经确认的提示蒙版，不能自动推断接触关系')
     for obj in mask['recipe']['objects']:
+        if obj['kind'] == 'automatic_foreground' and (category != 'subject' or obj['selection']['source'] != mask['source']):
+            raise ValueError('自动人像类别建议仅供当前源图主体审核，不证明接触物或完整关联范围')
         if obj['kind'] in ('semantic', 'full'):
             raise ValueError('通用语义或全图范围不能充当独立审核的证件照保留范围')
     if raw['recipe_sha256'] != digest(mask): raise ValueError('保留范围审核摘要不匹配')
@@ -42,6 +44,10 @@ def review(engine, category, ids, reviewed):
     from . import prompted_mask_resolver as P
     row = engine._docs[engine._doc_index]
     if D.record(engine) is None:
+        # Disabled selected automatic operands also retain verified provenance.
+        for obj in objects:
+            if obj['kind'] == 'automatic_foreground':
+                P.fields({**mask['recipe'],'objects':[{**obj,'enabled':True}]},source,row['path'],(engine._vram.h,engine._vram.w),force=True)
         P.fields(mask['recipe'],source,row['path'],(engine._vram.h,engine._vram.w))
     else:
         # Review the exact current vectors, not an original-file surrogate or a

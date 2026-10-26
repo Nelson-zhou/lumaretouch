@@ -28,13 +28,25 @@ impl Definition {
     }
 }
 
+/// Ephemeral start intent. Never stored in a reusable graph or definition.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct AutomaticStartAck { pub schema: String, pub graph_sha256: String, pub accepted: bool }
+impl AutomaticStartAck {
+    pub fn matches(&self, digest: &str) -> bool {
+        self.schema == "lrt.automatic-batch-start.v1" && self.accepted && self.graph_sha256 == digest
+    }
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 pub enum Action {
     SaveDefinition { definition: Definition, expected_storage_revision: Option<String> },
     AcquireProjectLease { project_id: String, project_path: String },
     ReleaseProjectLease { lease_id: String },
-    Start { graph: Graph, lease_id: String, preflight_token: String },
+    Start { graph: Graph, lease_id: String, preflight_token: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        automatic_ack: Option<AutomaticStartAck> },
     Stop { run_id: String },
     OpenReview { run_id: String, review_id: String },
     ReviewStep { run_id: String, operation_id: String, step: String, payload: Value },

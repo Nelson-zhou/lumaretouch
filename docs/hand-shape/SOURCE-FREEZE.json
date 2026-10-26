@@ -1,0 +1,351 @@
+{
+  "version": 1,
+  "base_commit": "0f917a664eccf45751c2594b82387ed6ace9f4bb",
+  "status": "SOURCE ONLY / FROZEN LOCAL SNAPSHOT / ALL EXECUTION UNRUN",
+  "ownership_manifest": "docs/hand-shape/SOURCE-OWNERSHIP.txt",
+  "freeze_manifest_self_excluded": true,
+  "verification": {
+    "python_ast_only": 39,
+    "json_parse_only": true,
+    "tests": "UNRUN",
+    "builds": "UNRUN",
+    "typechecks": "UNRUN",
+    "product_imports": "UNRUN",
+    "inference": "UNRUN",
+    "photo_quality": "UNRUN",
+    "performance": "UNRUN",
+    "publication": "NOT PERFORMED"
+  },
+  "files": [
+    {
+      "path": "core/hand_shape/Cargo.toml",
+      "sha256": "1cd67c16d89f5365ec1d33014c52060bff2535aa1614a1706e9edf42f2838c33",
+      "bytes": 169
+    },
+    {
+      "path": "core/hand_shape/README.md",
+      "sha256": "bc889d92db72a14dcb7e75615edd7f5a9b1e26f9b45cd8d9aefff52c17cc098c",
+      "bytes": 4504
+    },
+    {
+      "path": "core/hand_shape/hand_shape.h",
+      "sha256": "436786ed4482bd818bd3d33fb1f46ffb6c3de2d704b7494071ca84acda1eab67",
+      "bytes": 909
+    },
+    {
+      "path": "core/hand_shape/lib.rs",
+      "sha256": "2f7d3d720dbf4a9d2e45731deb112f23e91c9a9c4cc4422cb3355ea016d879e3",
+      "bytes": 6390
+    },
+    {
+      "path": "core/hand_shape/tests.rs",
+      "sha256": "731d46cf6680a407cd49aa4f3665cb3938edb370f922f4898de0ab767020e7ff",
+      "bytes": 5353
+    },
+    {
+      "path": "docs/development/handbook-traceability.json",
+      "sha256": "28b61e7161d5f7ea70b349baa9b6627fd7d9444efbe7f21bbf6d562e144df8cc",
+      "bytes": 498826
+    },
+    {
+      "path": "docs/hand-shape/ACCEPTANCE-UNRUN.md",
+      "sha256": "dc34b0ada309681d8aca06995efa04c8dcbfcf0970bafa3a26fdcd8c877aa66b",
+      "bytes": 5695
+    },
+    {
+      "path": "docs/hand-shape/CONTRACT.md",
+      "sha256": "d0cad8c206e952bb87abdcd4ec96aacbed64a9393a3e167a58a77bea9724090a",
+      "bytes": 6306
+    },
+    {
+      "path": "docs/hand-shape/MODEL-PROVENANCE.md",
+      "sha256": "3705ac68772d74841a829eb07a3f3eb7bff81d61cdddb0c24db73a8446957b72",
+      "bytes": 5758
+    },
+    {
+      "path": "docs/hand-shape/SOURCE-OWNERSHIP.txt",
+      "sha256": "adbd41c5c3d3a00ef5d7bb4dfbbd910c83c1e635fd499b4c1b2d75bc7c64f899",
+      "bytes": 2903
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/body_pose_render.py",
+      "sha256": "4c7defcccca55f20f301737748491cc27e5f649f1b37fb1aefdee6e84518ae51",
+      "bytes": 12248
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/command_registry.py",
+      "sha256": "1c3be3488d5db2a71a2d936cbc1a7816079314cd6010b38986d9c30f6550006f",
+      "bytes": 2838
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/creative_capture_routes.py",
+      "sha256": "d7a33dcf0f015394fe66d382625caad141229a9321bd74aad3da1344c114cc61",
+      "bytes": 4512
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/creative_document_base.py",
+      "sha256": "3354adfd3f1a534731d0c2fc0d5d8f6d23d7f430c85a459340c52f34c44d20b5",
+      "bytes": 25641
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/creative_document_host.py",
+      "sha256": "2cab0b1bd78a543b1a70e7d5b478f67f75bc3d382e8e7a6b35802129da860076",
+      "bytes": 27309
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/creative_edited_capture.py",
+      "sha256": "9cf2759d8d574d251be420c0d848a920dbc26807f36ec63f3aa0522bb7204f84",
+      "bytes": 14402
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/creative_edited_capture_admission.py",
+      "sha256": "2f1fb9f006d2f09f8129909fb9f2a61ec709ef381aff5ab65ffa2cbb56246eae",
+      "bytes": 46828
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/creative_smoothing_host.py",
+      "sha256": "eac0d47f65027736b14bb788a701345a21d43c66137ceb41798dfdb8e4ff71c0",
+      "bytes": 1935
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/export.py",
+      "sha256": "64bd0d3a6b5fdcf6bc321f200aaf8c62ff4e35c13ca3c7ee3edcec87badee4e6",
+      "bytes": 135983
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/export_recipe.py",
+      "sha256": "e5918cbda7ba4daa091598f7182b10e57e49e21dd892a2e248c40963acd9c85d",
+      "bytes": 22121
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/export_snapshot.py",
+      "sha256": "46200fa9b79882b0b4746dd5ae8536f48a619e5b908c0c52da2891910e4983a4",
+      "bytes": 11895
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/full_candidate_render.py",
+      "sha256": "9f9c595db91991f8449d2fc8bd63f2f259b9dff0b8ee1af63dfc7997bfb218d8",
+      "bytes": 10330
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/grading_prefix_context.py",
+      "sha256": "ec5f8738080a879a08c926bed28a11f8c4f65960322fd93ff016539dfb2e6166",
+      "bytes": 6205
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/hand_shape_field.py",
+      "sha256": "235ce12106f916ac7f9762e85c94d534c742749699e1a1c3177eb7db6855f69b",
+      "bytes": 3653
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/hand_shape_geometry.py",
+      "sha256": "7db9e0fe7d5ee008450902ecf28756959fa6a31a4de5caf29d9c20c7ccfb355e",
+      "bytes": 1210
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/hand_shape_host.py",
+      "sha256": "bd4beec5bcc2e1dd963ddb819dd64bea85b351602d0af77c59a79b24fdeb2c81",
+      "bytes": 9048
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/hand_shape_manifest.py",
+      "sha256": "bc19d1200c5428eb990c2c994072aca31cefe3238a20d9819ac15d3d40629f16",
+      "bytes": 2162
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/hand_shape_model.py",
+      "sha256": "d4c7a19ca5c75363d2b815e707bcfffd7b86b9800d3b6942e56687e785af3016",
+      "bytes": 10493
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/hand_shape_native.py",
+      "sha256": "9a75578d2bb69ef7ebbbf8b907ad6a5f2b0832f46c04ff181b6387ac19d69eec",
+      "bytes": 2263
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/hand_shape_provenance.py",
+      "sha256": "9b51de2a3b8782434210bd2606d948ecaaae35ba0918978edcd23ff0e169812e",
+      "bytes": 3651
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/hand_shape_review.py",
+      "sha256": "1446b20c9896abd5d7bda5b91ac2d69dc52d9f8c32caa76771be04e4e3d00c6a",
+      "bytes": 1349
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/hand_shape_routes.py",
+      "sha256": "23a4a4a23bf2a49fb324626c5e060701fa2e91eaa1ddc4ae5c1adfc065d38b1e",
+      "bytes": 6507
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/hand_shape_runtime.py",
+      "sha256": "abae89c32a4dfc01a235dfc997ff92570427daf640033c8bd3f27107c6cff34c",
+      "bytes": 5979
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/hand_shape_state.py",
+      "sha256": "dc641fd0945309b59083a83006da6739bc865455d4209587d4b47e2fb4e16985",
+      "bytes": 7250
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/inspection_worker.py",
+      "sha256": "c3a7b657f7b28f4ab94f2d8c2cab6041d44f46facb4f2105361096c67c5524d2",
+      "bytes": 12059
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/master16_policy.py",
+      "sha256": "c575db57bf88b4e620642e97a4d3690116184074e6f9265caefdc1e37e4332ae",
+      "bytes": 12821
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/optics_transfer_engine.py",
+      "sha256": "9b32b54559d6ec61885ff6a912fc3e210e5c984cfd623c10d6158b7789aa30a8",
+      "bytes": 4347
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_engine_runtime.py",
+      "sha256": "c25ef3415134d451a87a147bf17977a00a6b9b44375487d25ea219a9a9c2b88c",
+      "bytes": 16328
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_export.py",
+      "sha256": "bc022dc5be25da794df80495657ecf75e6123b2aabd8dc3723c2b1e8c9e67aef",
+      "bytes": 9820
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_host.py",
+      "sha256": "4634e9ca478270b492d0f6fe251ebed6c7a189b9ccaa448ba827c11a51e41298",
+      "bytes": 30804
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_owned_inputs.py",
+      "sha256": "c1ce9921c167aa38b0b98ae02646b88c8629b726c4bb5a821ad0c7fbfc99be15",
+      "bytes": 4882
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/people_render_runtime.py",
+      "sha256": "8abc54b17cfe94ca1119e6c4308836b0fc1f8575a100792f70beb06e43ea0886",
+      "bytes": 44480
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/photo_grain_runtime.py",
+      "sha256": "e787d7e30a934dd6e2e951b8ce76889b1a89dc97212d098dd9ba7adcece0a86b",
+      "bytes": 8798
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/project.py",
+      "sha256": "95c566b9061e05f9a78df88ee6a5e579409d9e6fe8d68504f4120aedcb761243",
+      "bytes": 80487
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/reference_color_engine.py",
+      "sha256": "756fef9153cb33620a50eb41d5b6d5b0babb7c7dc655dfd88c400bbd24297ed0",
+      "bytes": 6513
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/semantic_colour_capture.py",
+      "sha256": "b804d5c4907011896a175ef04c888a6512cd4ecb78c09929a71e6c6f1577164e",
+      "bytes": 8212
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/server.py",
+      "sha256": "5b355d6746970ef24d34395b15c09a2cad4f5474b0ce8d9f92a3c60799b93fb4",
+      "bytes": 478941
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/shoulder_shape_runtime.py",
+      "sha256": "26abedbf255bc4a5a4bb0ee4f475b1cb1fedb39081f492a1a9559f44bfda0eb0",
+      "bytes": 14090
+    },
+    {
+      "path": "engine/tests/test_hand_shape_source_unrun.py",
+      "sha256": "07fa94fa7c692dae653d6c9491f54601bc4735c66c02ca6d4677ed6217468aee",
+      "bytes": 7471
+    },
+    {
+      "path": "packaging/build-hand-shape.sh",
+      "sha256": "97ebee4bd4d07c1b968c87fd29031db8fb8f2c7f4b7d9f0a362eb713711be574",
+      "bytes": 425
+    },
+    {
+      "path": "ui/src-tauri/src/body_slim_api.rs",
+      "sha256": "a804474fdb8dc86f188c352762643d1882c7feccc7223fa7c6a34afbf4d1fb43",
+      "bytes": 33373
+    },
+    {
+      "path": "ui/src-tauri/src/engine.rs",
+      "sha256": "11c39258d2eecba7355de24a01f9563f1a77764f74ccf40351e7e635da05bca8",
+      "bytes": 59138
+    },
+    {
+      "path": "ui/src-tauri/src/hand_shape_api.rs",
+      "sha256": "6d499c09993e13f5c3668fd2f1ee871fdc766bbc1866aa8ae39845be98bad3f6",
+      "bytes": 13254
+    },
+    {
+      "path": "ui/src-tauri/src/main.rs",
+      "sha256": "95ebfd43a8967d0b0bb78232f122d2a73e72be7e331ab9b8fbebd8f9a0c8ec10",
+      "bytes": 102367
+    },
+    {
+      "path": "ui/src-tauri/src/native_dispatch.rs",
+      "sha256": "1174c6ac63af0d124eb329821a50b6aa73ab99f84f24a952c7ce5984932d001c",
+      "bytes": 16106
+    },
+    {
+      "path": "ui/src-tauri/src/project_recovery_fence.rs",
+      "sha256": "9356f55cde60494adb17dd647fb3646f3b1d2d444726811213a920741a1d3edd",
+      "bytes": 17136
+    },
+    {
+      "path": "ui/src-tauri/src/receipt_host.rs",
+      "sha256": "62a1e75006896caad464a4d25c73e5c9e9955f47bed3b8c170b01225cd577d2d",
+      "bytes": 56758
+    },
+    {
+      "path": "ui/src/App.tsx",
+      "sha256": "b053f5c8a993e224531937e56206e45b8b17a911d9caa5a84beccaef549aa02f",
+      "bytes": 170662
+    },
+    {
+      "path": "ui/src/components/RetouchPanel.tsx",
+      "sha256": "bce1418198d680c9ae38ee1e2a386f765d698fde2622bfd291d8b94c1de95142",
+      "bytes": 91459
+    },
+    {
+      "path": "ui/src/handShape/ACCEPTANCE-UNRUN.md",
+      "sha256": "6ecd697dd3a09790cffd6a32a15cbfe04937517cf54806591f43d3c57878303c",
+      "bytes": 4106
+    },
+    {
+      "path": "ui/src/handShape/HandShapePanel.tsx",
+      "sha256": "b8729e9000e04016949b853028efaec95ad64cfb1d3d7a8c9de583bdc6c404d7",
+      "bytes": 9293
+    },
+    {
+      "path": "ui/src/handShape/HandShapeSupportEditor.tsx",
+      "sha256": "0cbb306a1855bf618f867c65010877327ee0c6df23d84aa70853f53b77b8fd0c",
+      "bytes": 7527
+    },
+    {
+      "path": "ui/src/handShape/index.ts",
+      "sha256": "90852a6d794f84ff2617abd2844e1e15acbe284136415d174223c0d79f66845d",
+      "bytes": 428
+    },
+    {
+      "path": "ui/src/handShape/model.ts",
+      "sha256": "80f134857880b9b2cd85cd9a942ceb1047d7d03b01db64b78e7cb71d174bb350",
+      "bytes": 4642
+    },
+    {
+      "path": "ui/src/handShape/useHandShapePort.ts",
+      "sha256": "8ed7eafb0522e4fe5c3f22cf4ac10678c103a265deaee34a05874047cfef6c0b",
+      "bytes": 13412
+    },
+    {
+      "path": "ui/src/native.ts",
+      "sha256": "44fdf82f8d04a40eb8673bd7ed1920081da6ef401d01fffbceebfa807f890581",
+      "bytes": 120606
+    }
+  ]
+}

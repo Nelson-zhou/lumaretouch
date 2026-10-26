@@ -151,10 +151,10 @@ class Predictor:
     Owners should run this in a cancellable child process. Calls cannot interrupt
     an in-flight Torch kernel; the job boundary kills the owned process on cancel.
     """
-    def __init__(self, device='cpu'):
+    def __init__(self, device='cpu', *, root=None):
         from . import prompted_model_install as install
         from . import prompted_model_manifest as manifest
-        install.activate_runtime()
+        install.activate_runtime(root=root)
         import torch
         from hydra.utils import instantiate
         from omegaconf import OmegaConf
@@ -163,8 +163,8 @@ class Predictor:
             raise PromptedUnavailable('Select CPU or the engine CUDA/ROCm device explicitly')
         if device == 'cuda' and not torch.cuda.is_available():
             raise PromptedUnavailable('Selected GPU is unavailable; no silent CPU fallback')
-        config = install.verified_config_bytes()
-        checkpoint = install.verified_checkpoint_bytes()
+        config = install.verified_config_bytes(root=root)
+        checkpoint = install.verified_checkpoint_bytes(root=root)
         self.identity = {'id': manifest.MODEL_ID,
                          'checkpoint_sha256': hashlib.sha256(checkpoint).hexdigest(),
                          'config_sha256': hashlib.sha256(config).hexdigest(),

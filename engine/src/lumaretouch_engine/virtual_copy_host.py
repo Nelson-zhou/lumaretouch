@@ -120,6 +120,9 @@ class VirtualCopies:
                         if number > 9007199254740991: raise ValueError("副本编号超出协议整数范围")
                         numbers[root] = number
                         row = deepcopy(source)
+                        # Transient original-review crops belong only to explicit selected rows.
+                        row.pop("pick_focus", None)
+                        row.pop("pick_focus_error", None)
                         row.update(document_id=uuid.uuid4().hex,recipe_version_id=uuid.uuid4().hex,
                                    copy_number=number,document_revision=0,undo=[],redo=[],fingerprint=fp)
                         from .canvas_guides import KEY, copy_record

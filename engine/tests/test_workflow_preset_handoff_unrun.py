@@ -18,7 +18,7 @@ from lumaretouch_engine import preset_store as PS, preset_organisation_store as 
 from lumaretouch_engine import optics_candidate_identity as ID
 
 
-def test_applied_chain_reuses_original_import_revision_not_applied_revision():
+def test_applied_chain_preserves_import_origin_and_checks_current_saved_revision():
     from lumaretouch_engine.workflow_owner_host import WorkflowOwner
     origin = {'receipt_id': 'import', 'document_revision': '1', 'document_id': 'target'}
     applied = {**origin, 'receipt_id': 'applied', 'document_revision': '4'}
@@ -26,10 +26,10 @@ def test_applied_chain_reuses_original_import_revision_not_applied_revision():
     host = WorkflowOwner.__new__(WorkflowOwner)
     host.presets = SimpleNamespace(completed={'applied': {'document': applied, 'import_document': origin,
         'identity': {'input_occurrence_id': 'occurrence'}, 'row_stamp': 'saved-applied-proof'}})
-    host._document = lambda owner, lease, identity, document: (seen.append(document), row)[1]
+    host._document = lambda owner, lease, identity, document, **kwargs: (seen.append((document, kwargs)), row)[1]
     host._row_stamp = lambda actual: 'saved-applied-proof'
     assert WorkflowOwner._document(host, object(), {}, {'input_occurrence_id': 'occurrence'}, applied) is row
-    assert seen == [origin] and seen[0] is not origin
+    assert seen == [(origin, {'expected_current_revision': '4'})] and seen[0][0] is not origin
     host._row_stamp = lambda actual: 'later-edit'
     with pytest.raises(ValueError, match='changed after'):
         WorkflowOwner._document(host, object(), {}, {'input_occurrence_id': 'occurrence'}, applied)

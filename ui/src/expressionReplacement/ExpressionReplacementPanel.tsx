@@ -56,6 +56,19 @@ export function ExpressionReplacementPanel({current,controller,onClose}:{current
         face={target} value={state.fusion} disabled={disabled||!state.target_displayed} onChange={value=>action(()=>controller.setFusion(value))}/>
         :<VerifiedImage image={state.current.photo.image} source={state.current.photo.source} label={`当前来源全图：${state.current.photo.label}`} onReady={ready=>controller.displayed('target',sourceDisplayKey(state.current!.photo),ready)}/>}
     </>}
+    {state.current?.donor_hints&&<section aria-label="已确认人物的原片素材线索">
+      <h4>已确认人物关联 · 原片素材线索</h4>
+      <p>仅对用户已关联的人物，按原片实测眼睑开合比从高到低列出（未知在后），不是最佳表情、睁眼判定或画质排序。姿态、笑容、遮挡和原片眼部细节质量均未知。</p>
+      <p>下列原片人脸编号不等于上方完整修图结果中的新编号；不会自动对应。请核对文件及本人，仍使用下方素材选择和完整前后图审核。</p>
+      {state.current.donor_hints.unavailable&&<p role="status">{state.current.donor_hints.unavailable}</p>}
+      {state.current.donor_hints.cohorts.map(c=><div key={c.association_id}>
+        <p>已确认人物 {c.association_id} · 当前原片人脸 {c.target_ref.face_instance_id}</p>
+        {c.blocked?<p role="status">此关联暂不能排序：{c.blocked}。手动路径仍可用。</p>:<ol>{c.candidates.map(x=><li key={x.document_id}>
+          {x.filename} · 文档 {x.document_id} · 原片人脸 {x.face_ref.face_instance_id} · 眼睑比 {x.eye_aperture===null?'未知':x.eye_aperture.toFixed(4)}
+        </li>)}</ol>}
+      </div>)}
+      <p>这只是本次读取时的线索，不是持续监控或素材选择授权；关联/原片变化后请重新读取。未自动打开、匹配、融合、应用或删除任何照片。</p>
+    </section>}
     <button type="button" disabled={disabled} onClick={()=>action(()=>controller.chooseDonor())}>2. 选择另一张真实表情素材照片</button>
     {state.donor&&<>
       <FaceChoices photo={state.donor} selected={faceKey(state.donor_ref)} label="3. 明确选择素材中的本人" disabled={disabled} onSelect={face=>action(()=>controller.selectDonor(face.face_ref))}/>

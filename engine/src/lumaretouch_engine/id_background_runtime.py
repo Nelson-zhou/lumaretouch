@@ -187,7 +187,11 @@ def _live_input(engine,value):
         if OS.active(value):key=(key,OS.live_source_key(engine,value))
         return key,None,pixels,source,packet
     dependency=P.dependency_stamp() if prompted else None
-    key=(json.dumps(value,sort_keys=True),M.file_stamp(row['path']),id(pipe.src_f32),dependency)
+    automatic=None
+    if S.active(value) and support and any(o['kind']=='automatic_foreground' and o['enabled'] for o in support['mask']['recipe']['objects']):
+        from .automatic_foreground import dependency_stamp
+        automatic=dependency_stamp()
+    key=(json.dumps(value,sort_keys=True),M.file_stamp(row['path']),id(pipe.src_f32),dependency,automatic)
     pixels=pipe.src_f32[0].permute(1,2,0).detach().cpu().numpy() if S.active(value) else None
     from . import spill_removal_render as SP
     if SP.active(value):
@@ -251,6 +255,7 @@ def report(engine):
             'suspended':getattr(stage,'suspended',None),'boundaries':[
                 '三种范围逐类手动审核；不自动判断接触关系，不提供自动发丝抠像',
                 '源图手工矢量按目标尺寸重放，使用现有 8 位覆盖度；提示模型使用其固有低分辨率候选，不宣称发丝或原生全尺寸 alpha',
+                '自动前景由固定六类模型在有界 RGB8 分析副本上产生，仅合并头发、皮肤与衣物，排除 others；全图类别不证明单人、遮挡完整性或证件照合规，原照片仍保留完整精度',
                 '新阴影为线性 sRGB 二维设计投影，不是物理三维光照或原阴影提取',
                 '证件照恢复使用独立目标，只减弱当前换背景、原阴影及祛染色贡献并保留上游编辑',
                 '原阴影为源数据估计的黑色标量图层，不是 AI、三维光照恢复或原地面像素粘贴；需要分别审核同材质明亮地面与阴影范围',

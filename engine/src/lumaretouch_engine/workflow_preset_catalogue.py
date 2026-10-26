@@ -284,7 +284,7 @@ def _snapshot():
     return documents, errors
 
 
-def list_catalogue():
+def list_catalogue(*, group_support=False):
     """Return bounded metadata with explicit partial/invalid-store diagnostics.
 
     No embedded assets or raw recipe parameters are sent in catalogue rows.
@@ -300,6 +300,9 @@ def list_catalogue():
                      'module_ids': module_ids,
                      'modules': [deepcopy(registry[op]) for op in module_ids],
                      'workflow_supported': False, 'support_reason': SUPPORT_REASON})
+        if group_support:
+            from .portrait_group_retained import support
+            rows[-1]['portrait_group_support'] = support(doc)
     result = {'schema': SCHEMA, 'presets': rows, 'errors': errors, 'complete': not errors}
     if len(P.encoded(result, sorted_keys=True)) > MAX_RESPONSE_BYTES:
         result = {'schema': SCHEMA, 'presets': [], 'complete': False,

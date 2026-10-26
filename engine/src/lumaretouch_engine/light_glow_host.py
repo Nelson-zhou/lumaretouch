@@ -35,6 +35,15 @@ def _receipt(command, *, phase='done', outcome=None, message='', **facts):
 
 
 class Service:
+    # Shared immutable-source/copy transaction; numerical stages stay independent.
+    stage = stage
+    jobs = staticmethod(jobs)
+    command_hash = staticmethod(command_hash)
+    command_name = "light_glow"
+    event_name = "light_glow_result"
+    job_seconds = JOB_SECONDS
+    session_seconds = SESSION_SECONDS
+
     def __init__(self, engine, emit):
         self.engine, self.emit = engine, emit
         self.source = self.fence = self.candidate = None
@@ -45,10 +54,10 @@ class Service:
 
     def _guard(self):
         if self.uncertain is not None:
-            raise ValueError('发光新图原请求结果待核对；只能查询，不得重发或假装取消')
+            raise ValueError('处理新图原请求结果待核对；只能查询，不得重发或假装取消')
         from .creative_document_host import CreativeHost
         from .sample_library_capture import capture_reason
-        reason = capture_reason(self.engine) or CreativeHost(self.engine, self.emit).guard('light_glow')
+        reason = capture_reason(self.engine) or CreativeHost(self.engine, self.emit).guard(self.command_name)
         if reason:
             raise ValueError(reason)
         host = self.engine.__dict__.get('_creative_host')
@@ -57,12 +66,12 @@ class Service:
 
     def _budget(self):
         from .creative_document_host import memory_budget
-        return stage.Budget(min(2_000_000_000, memory_budget()) - LEDGER_RESERVE,
-                            timeout_seconds=JOB_SECONDS)
+        return self.stage.Budget(min(2_000_000_000, memory_budget()) - LEDGER_RESERVE,
+                            timeout_seconds=self.job_seconds)
 
     def _drop(self, status='closed'):
         if self.session_id is not None:
-            jobs(self.engine).close_session(self.session_id)
+            self.jobs(self.engine).close_session(self.session_id)
             self.sessions[self.session_id]['status'] = status
         self.source = self.fence = self.candidate = None
         self.session_id = self.session_event = None
@@ -84,7 +93,7 @@ class Service:
     def _require(self, command):
         if (self.source is None or command.get('session_id') != self.session_id
                 or command.get('owner') != self.source.owner):
-            raise ValueError('发光请求不是当前保留的完整编辑来源，请重新读取')
+            raise ValueError('处理请求不是当前保留的完整编辑来源，请重新读取')
         self.fence.verify(self.engine, self._stopped)
 
     def _retained(self, candidate=None):
@@ -96,14 +105,14 @@ class Service:
                 if getattr(candidate, key) is getattr(self.source.pixels, key):
                     total -= len(getattr(candidate, key))
         if total > MAX_RETAINED_BYTES:
-            raise MemoryError('发光完整来源与候选超过保留数据预算；不会缩小最终图像')
+            raise MemoryError('处理完整来源与候选超过保留数据预算；不会缩小最终图像')
 
     def current(self, request):
         self._guard()
         if len(self.sessions) >= MAX_SESSIONS:
-            raise ValueError('Glow session ledger is full; earlier write proof was not evicted')
+            raise ValueError('Reviewed copy session ledger is full; earlier write proof was not evicted')
         self._drop()
-        cap = stage.capability()
+        cap = self.stage.capability()
         if cap['status'] != 'available':
             return {'status': 'rejected', 'message': cap['reason']}
         def work(event):
@@ -111,33 +120,33 @@ class Service:
             deadline = time.monotonic() + JOB_SECONDS
             stopped = lambda: event() or time.monotonic() >= deadline
             source, fence = capture_current(self.engine, budget=self._budget(), cancelled=stopped)
-            stage.admit_source(source, self._budget())
+            self.stage.admit_source(source, self._budget())
             if source.retained_bytes + LEDGER_RESERVE > MAX_RETAINED_BYTES:
-                raise MemoryError('Glow source lease exceeds retained memory budget')
+                raise MemoryError('Reviewed copy source lease exceeds retained memory budget')
             fence.verify(self.engine, stopped)
             return source, fence
-        source, fence = jobs(self.engine).run(request['request_id'], command_hash(request), work)
+        source, fence = self.jobs(self.engine).run(request['request_id'], self.command_hash(request), work)
         ident = uuid.uuid4().hex
         self.sessions[ident] = {'owner': canonical(source.owner), 'tokens': set(), 'status': 'open'}
         self.source, self.fence, self.session_id = source, fence, ident
-        self.session_event = jobs(self.engine).bind_session(ident, source.owner)
-        self.session_deadline = time.monotonic() + SESSION_SECONDS
-        return {'status': 'ready', 'context': stage.context(source, ident, cap)}
+        self.session_event = self.jobs(self.engine).bind_session(ident, source.owner)
+        self.session_deadline = time.monotonic() + self.session_seconds
+        return {'status': 'ready', 'context': self.stage.context(source, ident, cap)}
 
     def preview(self, request):
         self._guard()
         command = request['command']
         self._require(command)
         if len(self.sessions[self.session_id]['tokens']) >= 64:
-            raise ValueError('Glow preview lease limit reached; start a new source session')
+            raise ValueError('Reviewed copy preview lease limit reached; start a new source session')
         self.candidate = None
         def work(event):
-            candidate = stage.prepare(command, self.source, budget=self._budget(),
+            candidate = self.stage.prepare(command, self.source, budget=self._budget(),
                                       cancelled=lambda: self._stopped(event))
             self._require(command)
             self._retained(candidate)
             return candidate
-        candidate = jobs(self.engine).run(request['request_id'], command_hash(request), work)
+        candidate = self.jobs(self.engine).run(request['request_id'], self.command_hash(request), work)
         self.candidate = candidate
         self.candidate_deadline = time.monotonic() + CANDIDATE_SECONDS
         self.sessions[self.session_id]['tokens'].add(candidate.token)
@@ -147,9 +156,9 @@ class Service:
         ident = command['request_id']
         record = {'command': canonical(command), 'receipt': canonical(receipt)}
         if sum(map(len, record.values())) > 16 * 1024:
-            raise ValueError('Glow write receipt exceeds its reserved bound')
+            raise ValueError('Reviewed copy write receipt exceeds its reserved bound')
         if ident not in self.writes and len(self.writes) >= MAX_WRITES:
-            raise ValueError('Glow write ledger is full; no original outcome was evicted')
+            raise ValueError('Reviewed copy write ledger is full; no original outcome was evicted')
         self.writes[ident] = record
         return receipt
 
@@ -158,24 +167,24 @@ class Service:
         if old is None:
             return None
         if old['command'] != canonical(command):
-            raise ValueError('Glow write identity reused with different exact content')
+            raise ValueError('Reviewed copy write identity reused with different exact content')
         return json.loads(old['receipt'])
 
     def _cancel(self, command):
         if self.uncertain is not None:
-            raise ValueError('发光新图提交结果未确认，取消不能撤销或掩盖原请求')
+            raise ValueError('处理新图提交结果未确认，取消不能撤销或掩盖原请求')
         session = self.sessions.get(command['session_id'])
         if session is None or session['owner'] != canonical(command['owner']):
-            raise ValueError('Glow cancel does not identify an issued session')
+            raise ValueError('Reviewed copy cancel does not identify an issued session')
         if session['status'] == 'applied':
-            raise ValueError('发光结果已经另存新图，不能报告为取消')
+            raise ValueError('处理结果已经另存新图，不能报告为取消')
         if command['token'] is not None and command['token'] not in session['tokens']:
-            raise ValueError('Glow cancel token was not issued to this session')
+            raise ValueError('Reviewed copy cancel token was not issued to this session')
         if self.session_id == command['session_id']:
             self._drop('cancelled')
         else:
             session['status'] = 'cancelled'
-        return _receipt(command, outcome='cancelled', message='已释放发光暂存结果，没有创建新图或修改原图。')
+        return _receipt(command, outcome='cancelled', message='已释放处理暂存结果，没有创建新图或修改原图。')
 
     def _readback(self, pending, expected_id=None):
         e, base = self.engine, pending['fence'].base
@@ -201,7 +210,7 @@ class Service:
             return None
         row = matches[0]
         return _receipt(pending['command'], outcome='applied',
-            message='完整发光结果已另存独立新图；原图及其编辑历史保留。',
+            message='完整处理结果已另存独立新图；原图及其编辑历史保留。',
             result_document_id=row['document_id'], copied_original_document_id=base.version.document_id,
             result_revision=str(base.versions.version(row).revision),
             result_source_sha256=pending['asset']['id'][7:], no_change=pending['no_change'])
@@ -211,11 +220,11 @@ class Service:
         self._require(command)
         candidate = self.candidate
         if candidate is None or time.monotonic() >= self.candidate_deadline:
-            raise ValueError('发光候选不存在或已过期，请重新生成完整对比')
+            raise ValueError('处理候选不存在或已过期，请重新生成完整对比')
         candidate.validate_apply(command)
         self._retained(candidate)
         if len(self.engine._docs) > 10_000:
-            raise ValueError('Glow copy readback exceeds bounded document admission')
+            raise ValueError('Reviewed copy copy readback exceeds bounded document admission')
         from .creative_document_host import CreativeHost, require_photo_return
         from .creative_document_state import create
         asset = candidate.output_asset
@@ -227,25 +236,25 @@ class Service:
         pending = {'command': deepcopy(command), 'fence': self.fence, 'asset': asset,
                    'document': document, 'no_change': candidate.no_change,
                    'before_ids': frozenset(row['document_id'] for row in self.engine._docs)}
-        self._save(command, _receipt(command, phase='unknown', message='发光新图提交已进入不可重发阶段；请查询同一原请求。'))
+        self._save(command, _receipt(command, phase='unknown', message='处理新图提交已进入不可重发阶段；请查询同一原请求。'))
         self.uncertain = pending
         result = host.commit_return({'mode': 'new_image', 'rendered_asset': ident, 'creative_document': document})
         receipt = self._readback(pending, result.get('document_id') if type(result) is dict else None)
         if type(result) is not dict or result.get('status') != 'applied' or receipt is None:
-            raise RuntimeError('Glow new-image result lacks matching canonical readback; query only')
+            raise RuntimeError('Reviewed copy new-image result lacks matching canonical readback; query only')
         self._save(command, receipt)
         self.uncertain = None
         self._drop('applied')
         return receipt
 
     def submit(self, command):
-        command = stage.write_command(command)
+        command = self.stage.write_command(command)
         prior = self._known(command)
         if prior is not None:
             return prior
         if command['request_id'] in self.reads:
-            raise ValueError('Glow write request identity collides with an earlier read')
-        self._save(command, _receipt(command, phase='pending', message='原发光请求已登记，查询不会再次执行。'))
+            raise ValueError('Reviewed copy write request identity collides with an earlier read')
+        self._save(command, _receipt(command, phase='pending', message='原处理请求已登记，查询不会再次执行。'))
         try:
             result = self._apply(command) if command['action'] == 'apply' else self._cancel(command)
         except Exception as error:
@@ -258,7 +267,7 @@ class Service:
         return self._save(command, result)
 
     def receipt(self, command):
-        command = stage.write_command(command)
+        command = self.stage.write_command(command)
         prior = self._known(command)
         if prior is None:
             return _receipt(command, phase='unknown', message='当前进程没有原请求证明；不会重提或推断已取消。')
@@ -272,53 +281,53 @@ class Service:
         return prior
 
     def _replay(self, request, prior):
-        if prior['sha'] != command_hash(request):
-            raise ValueError('Glow read identity reused with different content')
+        if prior['sha'] != self.command_hash(request):
+            raise ValueError('Reviewed copy read identity reused with different content')
         if 'failure' in prior:
             return deepcopy(prior['failure'])
         if self.source is None or prior['session_id'] != self.session_id:
-            raise ValueError('Glow read lease released; original read will not execute again')
+            raise ValueError('Reviewed copy read lease released; original read will not execute again')
         self._require({'session_id': self.session_id, 'owner': self.source.owner})
         if request['action'] == 'preview':
             if self.candidate is None or self.candidate.review['request_id'] != request['request_id']:
-                raise ValueError('Glow preview superseded; no blind rerender')
+                raise ValueError('Reviewed copy preview superseded; no blind rerender')
             return {'status': 'ready', 'review': self.candidate.review}
-        cap = stage.capability()
-        return {'status': 'ready', 'context': stage.context(self.source, self.session_id, cap)}
+        cap = self.stage.capability()
+        return {'status': 'ready', 'context': self.stage.context(self.source, self.session_id, cap)}
 
     def handle(self, request):
         ident = request.get('request_id') if type(request) is dict else None
         action = request.get('action') if type(request) is dict else None
         sha = None
         try:
-            if not token(ident) or request.get('cmd') != 'light_glow':
-                raise ValueError('Malformed glow transport identity')
+            if not token(ident) or request.get('cmd') != self.command_name:
+                raise ValueError('Malformed reviewed copy transport identity')
             keys = {'cmd', 'action', 'request_id'}
             if action in ('preview', 'submit', 'receipt'):
                 keys.add('command')
             elif action != 'current':
-                raise ValueError('Unsupported glow action')
+                raise ValueError('Unsupported reviewed copy action')
             if set(request) != keys:
-                raise ValueError('Glow request has missing or unknown fields')
-            sha = command_hash(request)
+                raise ValueError('Reviewed copy request has missing or unknown fields')
+            sha = self.command_hash(request)
             request = json.loads(canonical(request))
             if action != 'current':
                 c = request['command']
                 if type(c) is not dict or action != 'receipt' and c.get('request_id') != ident:
-                    raise ValueError('Glow transport and command identity differ')
+                    raise ValueError('Reviewed copy transport and command identity differ')
                 if action == 'preview' and c.get('action') != 'preview':
-                    raise ValueError('Glow preview action mismatch')
+                    raise ValueError('Reviewed copy preview action mismatch')
             self.maintain()
             if action in ('submit', 'receipt'):
                 result = {'status': 'ready', 'receipt': getattr(self, action)(request['command'])}
             else:
                 if ident in self.writes:
-                    raise ValueError('Glow read identity collides with an earlier write')
+                    raise ValueError('Reviewed copy read identity collides with an earlier write')
                 if ident in self.reads:
                     result = self._replay(request, self.reads[ident])
                 else:
                     if len(self.reads) >= MAX_READS:
-                        raise ValueError('Glow read ledger is full; earlier outcomes were not evicted')
+                        raise ValueError('Reviewed copy read ledger is full; earlier outcomes were not evicted')
                     prior = self.reads[ident] = {'sha': sha, 'session_id': None}
                     try:
                         result = getattr(self, action)(request)
@@ -332,8 +341,8 @@ class Service:
             result = {'status': 'rejected', 'message': _text(error)}
         finally:
             if action in ('current', 'preview') and sha is not None:
-                jobs(self.engine).retire(ident, sha)
-        self.emit({'event': 'light_glow_result', 'request_id': ident, **result})
+                self.jobs(self.engine).retire(ident, sha)
+        self.emit({'event': self.event_name, 'request_id': ident, **result})
 
 
 def service(engine, emit):

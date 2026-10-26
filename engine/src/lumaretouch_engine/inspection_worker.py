@@ -156,6 +156,8 @@ def render(directory):
     sky.check_export_decode(snap,path,manual_source_stamp,(decoded.h,decoded.w))
     from . import body_pose_render as body_render
     body_render.check_export_decode(snap,path,manual_source_stamp,(decoded.h,decoded.w))
+    from .hand_shape_runtime import check_export_decode as hand_shape_decode
+    hand_shape_decode(snap,path,manual_source_stamp,(decoded.h,decoded.w))
     from .reference_color_runtime import verify_export as verify_reference
     verify_reference(snap,path,(decoded.h,decoded.w))
     if snap.get("grade_scope") == "objects":

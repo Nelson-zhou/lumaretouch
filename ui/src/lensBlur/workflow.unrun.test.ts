@@ -22,7 +22,7 @@ function png(red = 20): LensPng {
 function context(): LensContext {
   const raster = Buffer.from([0, 0, 255, 255, 0, 0, 255, 255]);
   const owner = {document_id: 'doc', document_epoch: 'epoch', document_revision: '2', source: {sha256: '1'.repeat(64), width: 2, height: 2, orientation: 'exif_normalized_once' as const}};
-  return {session_id: 'session', owner, source_image: png(), depth_status: 'ready', message: '', depth: {version: 1, token: 'depth', owner,
+  return {model_depth: {available: false, code: 'unverified', reason: 'Fixture only', model_id: 'depth-anything-v2-small-hf'}, session_id: 'session', owner, source_image: png(), depth_status: 'ready', message: '', depth: {version: 1, token: 'depth', owner,
     convention: 'near-zero-far-one', mapping: 'normalized_full_frame_pixel_centres', orientation: 'exif_normalized_once',
     raster: {format: 'u16-le', width: 2, height: 2, sha256: sha(raster), base64: raster.toString('base64')},
     provenance: {kind: 'manual', method: 'user_supplied_depth'}, subject_focus: null}};
@@ -227,4 +227,39 @@ test('session cancel does not depend on the expiring preview-image token', async
   await w.cancel(); assert.equal(sent.length, 1);
   assert.equal(sent[0].action, 'cancel'); assert.equal(sent[0].token, null);
   assert.equal(sent[0].session_id, context().session_id);
+});
+
+// AUTHORED / UNRUN: transport/lifecycle fixtures, not model execution.
+test('AI depth is capability-gated, request-bound and never substituted by a manual plane', async () => {
+  const missing: LensContext = {...context(), depth: null, depth_status: 'missing-model'};
+  const {workflow: w, port} = await setup({}, missing);
+  let calls = 0;
+  port.prepareModelDepth = async () => {calls++; throw Error('Runtime missing');};
+  assert.equal(w.modelDepthAvailable(), false);
+  await w.prepareModelDepth(); assert.equal(calls, 0);
+  const admitted: LensContext = {...missing, model_depth: {...missing.model_depth, available: true, code: 'ready'}};
+  await w.setContext(admitted); w.sourcePresented(admitted.source_image.sha256, 2, 2, true);
+  assert.equal(w.modelDepthAvailable(), true);
+  await w.prepareModelDepth(); assert.equal(calls, 1); assert.equal(w.snapshot().depth, null);
+  assert.equal(w.snapshot().phase, 'failed');
+  port.prepareModelDepth = async command => {
+    calls++;
+    const result = context();
+    result.model_depth = admitted.model_depth;
+    result.depth!.provenance = {kind: 'model', model_id: 'depth-anything-v2-small-hf',
+      model_sha256: '3152477ce0d8d6978d76b995120de97cb5b928701fd0f817769f59e249a16b70',
+      inference_id: 'd'.repeat(64), acknowledgement_id: command.request_id};
+    return result;
+  };
+  await w.prepareModelDepth(); assert.equal(calls, 2);
+  assert.equal(w.snapshot().depth?.asset.provenance.kind, 'model');
+  assert.equal(w.snapshot().recipe?.version, 1);
+  assert.equal(w.renderingAvailable(), false);
+  w.sourcePresented(admitted.source_image.sha256, 2, 2, true);
+  w.depthPresented('other-inference', true); w.acknowledgeDepth(true); assert.equal(w.snapshot().depth_reviewed, false);
+  w.depthPresented('d'.repeat(64), true); w.acknowledgeDepth(true); assert.equal(w.snapshot().depth_reviewed, true);
+  assert.equal(w.renderingAvailable(), true);
+  assert.equal(w.selectRenderer('cohort-fft-v2'), false);
+  w.depthPresented('d'.repeat(64), false); assert.equal(w.snapshot().depth_reviewed, false);
+  assert.equal(w.renderingAvailable(), false);
 });

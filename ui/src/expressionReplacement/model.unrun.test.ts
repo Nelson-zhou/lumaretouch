@@ -38,3 +38,11 @@ test('save-copy receipt must name a distinct result source and must not mutate o
   assert.ok(parseReceipt(receipt,sent));assert.equal(parseReceipt({...receipt,result_document_id:apply.binding.document_id},sent),null);
   assert.equal(parseReceipt({...receipt,result_source_sha256:H('8')},sent),null);assert.equal(parseReceipt({...receipt,candidate_sha256:H('9')},sent),null);
 });
+test('optional original donor clues do not alter legacy current and reject fabricated fields',()=>{
+  const old=current();assert.equal(validCurrent(old),true);
+  const hints={version:1,unavailable:null,cohorts:[{association_id:'reviewed-person',target_ref:old.photo.faces[0].face_ref,blocked:null,
+    candidates:[{document_id:'donor-doc',filename:'donor.jpg',face_ref:{asset_sha256:H('b'),face_instance_id:'original-face',analysis_revision:0},eye_aperture:null}]}]};
+  assert.equal(validCurrent({...old,donor_hints:hints}),true);
+  assert.equal(validCurrent({...old,donor_hints:{...hints,best_donor:'donor-doc'}}),false);
+  assert.equal(validCurrent({...old,donor_hints:{...hints,cohorts:[{...hints.cohorts[0],candidates:[{...hints.cohorts[0].candidates[0],eye_aperture:-1}]}]}}),false);
+});

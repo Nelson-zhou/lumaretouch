@@ -178,6 +178,12 @@ mod scalar_binding_tests {
 struct ReviewBinding { fields: Value, bytes: usize, read_only: bool, strict_failure_identity: bool }
 impl ReviewBinding {
     fn from_command(epoch: [u8;16], value: &Value) -> Result<Option<Self>, String> {
+        if let Some(fields) = crate::batch_host::portrait_preset_group::binding(value)? {
+            let bytes = fields.to_string().len();
+            if bytes > 16 * 1024 { return Err("portrait group identity exceeds receipt budget".into()); }
+            return Ok(Some(Self { fields, bytes,
+                read_only: !crate::batch_host::portrait_preset_group::mutation(value), strict_failure_identity: true }));
+        }
         if let Some(fields)=crate::fabric_sweat_api::binding(value)? {
             let bytes=fields.to_string().len();
             return Ok(Some(Self{fields,bytes,read_only:crate::fabric_sweat_api::read_only(value),strict_failure_identity:true}));
@@ -185,6 +191,14 @@ impl ReviewBinding {
         if let Some(fields)=crate::limb_vein_api::binding(value)? {
             let bytes=fields.to_string().len();
             return Ok(Some(Self{fields,bytes,read_only:crate::limb_vein_api::read_only(value),strict_failure_identity:true}));
+        }
+        if let Some(fields)=crate::hand_shape_api::binding(value)? {
+            let bytes=fields.to_string().len();
+            return Ok(Some(Self{fields,bytes,read_only:crate::hand_shape_api::read_only(value),strict_failure_identity:true}));
+        }
+        if let Some(fields)=crate::hand_tone_api::binding(value)? {
+            let bytes=fields.to_string().len();
+            return Ok(Some(Self{fields,bytes,read_only:crate::hand_tone_api::read_only(value),strict_failure_identity:true}));
         }
 
         if let Some(fields) = crate::people_api::skin_reference_choice::binding(value)? {
@@ -373,7 +387,15 @@ impl ReviewBinding {
             || (value.get("collarbone_review_ack") == self.fields.get("collarbone_review_ack")
                 && value.get("collarbone_cohort") == self.fields.get("collarbone_cohort")));
         (no_write && !self.strict_failure_identity && self.fields.get("face_style_request").is_none()) || (same_families && self.fields.as_object().unwrap().iter().all(|(key, expected)| {
-            if key=="face_decoration_cohort_applies_sha256" || key=="face_decoration_applies_sha256" || key=="eye_bag_cohort_applies_sha256" || key=="eye_bag_applies_sha256" {
+            if key == "portrait_preset_docs" {
+                if value["success"] == false {
+                    value.get(key) == Some(expected) || value["no_write"] == true && value["outcome_unknown"] == false
+                } else {
+                    value["targets"].as_array().is_some_and(|rows|
+                        expected.as_array().is_some_and(|ids| rows.len() == ids.len()
+                            && rows.iter().zip(ids).all(|(row, id)| row["document_id"] == *id)))
+                }
+            } else if key=="face_decoration_cohort_applies_sha256" || key=="face_decoration_applies_sha256" || key=="eye_bag_cohort_applies_sha256" || key=="eye_bag_applies_sha256" {
                 value["applies"].is_object() && expected.as_str()==Some(crate::batch_api::collarbone::request_digest(&value["applies"]).as_str())
             } else if key=="collarbone_applies_sha256" {
                 value["applies"].is_object() && expected.as_str()==Some(crate::batch_api::collarbone::request_digest(&value["applies"]).as_str())
@@ -404,6 +426,8 @@ impl Receipt {
         self.result.as_ref().is_some_and(|result| self.review.is_none() || result["outcome_unknown"] != true
             || self.review.as_ref().is_some_and(|r|r.read_only&&r.fields.get("fabric_sweat_request").is_some())
             || self.review.as_ref().is_some_and(|r|r.read_only&&r.fields.get("limb_vein_request").is_some())
+            || self.review.as_ref().is_some_and(|r|r.read_only&&r.fields.get("hand_shape_request").is_some())
+            || self.review.as_ref().is_some_and(|r|r.read_only&&r.fields.get("hand_tone_request").is_some())
             // Only explicitly classified head/collarbone preflight or paged
             // image reads may expire; an unknown commit remains guarded.
             || (matches!(self.action.as_str(), "skin_reference_choice" | "skin_reference_body_catalog" | "skin_reference_body_preview" | "skin_reference_body_image" | "skin_reference_match_catalog" | "skin_reference_match_preview" | "skin_reference_match_image" | "face_decoration_support_alias_preview" | "face_decoration_support_alias_image" | "face_decoration_alias_preview" | "face_decoration_alias_image" | "face_decoration_cohort_visual" | "preflight" | "face_decoration_visual" | "collarbone_visual" | "eye_bag_visual" | "eye_bag_cohort_visual" | "face_style_visual" | "portrait_cohort_visual" | "face_style_catalog" | "face_style_preview" | "face_style_image" | "eye_bag_source_image" | "eye_bag_reference" | "eye_bag_preview" | "eye_bag_image" | "face_decoration_reference" | "facial_sculpt_reference" | "eye_makeup_enhance_reference") && self.review.as_ref().is_some_and(|review| review.read_only)))
@@ -580,9 +604,27 @@ impl<K: ReceiptKind> ReceiptHost<K> {
                     && record.late_terminal_workspace.as_ref().is_some_and(|workspace|
                         crate::project_recovery_fence::decoration_preset_workspace(epoch, &review.fields).as_ref() == Some(workspace)))
                 && K::valid(value, record.document.as_deref()) && value.to_string().len() <= MAX_RESULT_BYTES;
-            let support_reconciliation = (bound_support_event || bound_support_history_event || bound_decoration_preset_event) && value["outcome_unknown"] == false;
-            let support_engine_unknown = (bound_support_event || bound_support_history_event || bound_decoration_preset_event) && value["outcome_unknown"] == true;
-            if !read_reconciliation && !skin_read_reconciliation && !body_read_reconciliation && !choice_read_reconciliation && !support_reconciliation && !support_engine_unknown { return; }
+            // An admitted group export can finish after an uncertain start
+            // reply. Only its engine-owned task read may reconcile that exact
+            // original start; no new dispatch, generic retry or other mutation.
+            let group_export_reconciliation = K::NAME=="batch" && record.action=="portrait_preset_export_start"
+                && previous["outcome_unknown"]==true && value["event"]=="batch_result"
+                && value["export_reconciled"]==true && value["success"]==true && value["outcome_unknown"]==false
+                && value["export_task_id"].as_str().is_some_and(|id|!id.is_empty() && id.len()<=128)
+                && (record.native_unknown || previous["export_task_id"].as_str().is_some_and(|id|value["export_task_id"]==id))
+                && record.review.as_ref().is_some_and(|review|review.fields["delivery"]==true && review.matches(value))
+                && K::valid(value,record.document.as_deref()) && value.to_string().len()<=MAX_RESULT_BYTES;
+            // Hand-shape only: exact current-epoch transport unknown may settle
+            // from its original engine event while its mutation fence is intact.
+            // Never reopen an engine-issued unknown or a known terminal.
+            let bound_hand_event = K::NAME=="hand_shape" && record.native_unknown
+                && previous["outcome_unknown"]==true
+                && record.review.as_ref().is_some_and(|review|review.matches(value)
+                    && crate::hand_shape_api::late_bound_event(epoch,&review.fields["hand_shape_request"],value))
+                && K::valid(value,record.document.as_deref()) && value.to_string().len()<=MAX_RESULT_BYTES;
+            let support_reconciliation = (bound_support_event || bound_support_history_event || bound_decoration_preset_event || bound_hand_event) && value["outcome_unknown"] == false;
+            let support_engine_unknown = (bound_support_event || bound_support_history_event || bound_decoration_preset_event || bound_hand_event) && value["outcome_unknown"] == true;
+            if !read_reconciliation && !skin_read_reconciliation && !body_read_reconciliation && !choice_read_reconciliation && !support_reconciliation && !support_engine_unknown && !group_export_reconciliation { return; }
             // An exact engine unknown replaces the transport diagnostic, not
             // its authority: it closes late-terminal reconciliation and stays fenced.
             if support_engine_unknown { record.native_unknown = false; }
@@ -623,6 +665,13 @@ impl<K: ReceiptKind> ReceiptHost<K> {
                 if let Some(publication) = crate::effect_recovery_host::alias::retained_publication(&result) {
                     for (key, value) in publication.as_object().unwrap() { compact[key] = value.clone(); }
                 }
+            }
+            // Preserve only a validated original task identity, not arbitrary
+            // task data in an unknown receipt. Later readback must name it.
+            if K::NAME=="batch" && record.action=="portrait_preset_export_start" && !invalid
+                && result["export_task_id"].as_str().is_some_and(|id|!id.is_empty() && id.len()<=128) {
+                compact["export_task_id"]=result["export_task_id"].clone();
+                compact["export_status"]=json!("unknown");
             }
             for key in ["requires_reload", "requires_readback", "publication_invalid", "rolled_back"] {
                 if result[key].is_boolean() { compact[key] = result[key].clone(); }

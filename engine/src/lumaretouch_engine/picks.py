@@ -1,4 +1,7 @@
-"""挑图建议（LNX-PICK-001）：全部是**本地确定性度量**，没有一个像素经过模型判定。
+"""挑图建议（LNX-PICK-001）：代理像素度量与模型眼睑几何，仅供人工复核。
+
+2026-10-25 v3 更正：以下旧标定笔记不是原片焦点/曝光质量验收；哈希已改为
+固定64位，旧阈值仅为未重新标定的候选线。FaceMesh本身是模型，不宣称全路径无AI。
 
 为什么这一份不叫「AI 挑图」：DoD §2 明令「严禁假滑块、假滤镜或伪装 AI」。官网那套挑图
 是训练出来的分类器（10 种场景、正脸偏好、闭眼识别……），我们没有那种权重，也不打算
@@ -29,6 +32,7 @@
 from __future__ import annotations
 
 import hashlib
+import os
 from dataclasses import dataclass, field
 
 import numpy as np
@@ -37,7 +41,7 @@ SCHEMA = "lrt.pick.v1"
 # 度量算到哪一版算法就记哪一版：同一张图在不同算法下数值不可比，台账要能分辨。
 # v2 的分界是 `clarity` 多了「相对自身对比度」这一格（v1 只看绝对高频能量，会把
 # 一张整体压暗的好照片报成糊图——标定台上实测错得很干脆）
-ALGO_VERSION = "dhash9x8+clarity-lapvar-ratio-edge160+facemesh-eye-aperture-v2"
+ALGO_VERSION = "dhash-fixed9x8-area+proxy-clues-edge160+facemesh-eye-aperture-v3"
 
 # 缩略图/预览的公共尺度：所有像素类度量都在**长边固定**的这一档上算。
 # 不换尺度不行：拉普拉斯方差随像素数直接变，一张 4000px 的锐图和一张 160px 的锐图
@@ -107,17 +111,21 @@ class Measures:
     eye_open: float | None = None          # None = 没量到（没脸 / 没装后端）
     eye_note: str = ""
     faces: int = 0
-    decoded_from: str = ""           # "pixels" / "camera_preview"：RAW 那一路必须说清
+    decoded_from: str = ""           # "decoded_proxy" / "camera_preview"：RAW 那一路必须说清
     decode_size: tuple = ()          # 度量时那份像素的尺寸（FaceMesh 就在这份上跑）
+    source_size: tuple = ()
+    source_stamp: list = field(default_factory=list)
     ms: dict = field(default_factory=dict)
 
     def for_json(self) -> dict:
-        return {"dhash": f"{self.dhash:016x}", "sharpness": round(self.sharpness, 6),
-                "clarity_ratio": round(self.ratio, 4), "contrast": round(self.contrast, 5),
-                "under": round(self.under, 5), "over": round(self.over, 5),
-                "eye_open": (None if self.eye_open is None else round(self.eye_open, 5)),
+        return {"dhash": f"{self.dhash:016x}", "sharpness": self.sharpness,
+                "clarity_ratio": self.ratio, "contrast": self.contrast,
+                "under": self.under, "over": self.over,
+                "eye_open": (None if self.eye_open is None else self.eye_open),
                 "eye_note": self.eye_note, "faces": int(self.faces),
                 "decoded_from": self.decoded_from, "decode_size": list(self.decode_size),
+                "source_size": list(self.source_size), "source_stamp": list(self.source_stamp),
+                "quality_scope": "decoded-proxy-edge160-not-original-focus",
                 "measure_edge": MEASURE_EDGE, "algo": ALGO_VERSION,
                 "ms": {k: round(float(v), 2) for k, v in self.ms.items()}}
 
@@ -167,21 +175,66 @@ def _downscale_mean(g: np.ndarray, edge: int) -> np.ndarray:
     return g[ys][:, xs].astype(np.float32)
 
 
-def dhash64(rgb: np.ndarray) -> int:
-    """64 位差值哈希：9×8 灰度上比较相邻两列，左>右置 1。
+def _area_grid(g: np.ndarray, height: int, width: int) -> np.ndarray:
+    """Fixed grid, independent of aspect ratio; exact fractional pixel-area weights.
 
-    旋转/水印/轻微调色不改符号位，所以「同一姿势的两张」距离小；它对**镜像**不敏感
-    （镜像会给出完全不同的哈希）——这正是「近似组」而不是「重复判定」的原因之一，
-    写进 notes 而不是藏在实现里。
+    This is our existing NumPy measurement path, not a vendored ImageHash resize.
+    Separability keeps allocations bounded by the already-small measured image.
     """
-    g = to_gray_measured(rgb)
-    # 缩到 9×8：走同一个面积平均路径（长边 9），不引入第二种缩放器
-    small = _downscale_mean(g, 9)
-    diff = small[:, 1:] > small[:, :-1]
+    def weights(src, dst):
+        left = np.arange(dst, dtype=np.float64)[:, None] * src / dst
+        right = (np.arange(dst, dtype=np.float64)[:, None] + 1) * src / dst
+        pixels = np.arange(src, dtype=np.float64)[None, :]
+        return np.maximum(0, np.minimum(right, pixels + 1) - np.maximum(left, pixels)) / (src / dst)
+    return weights(g.shape[0], height) @ g @ weights(g.shape[1], width).T
+
+
+def dhash64(rgb: np.ndarray) -> int:
+    """Exactly 8 rows × 8 horizontal differences, for every input aspect ratio.
+
+    A low distance is only a composition clue. Tone, crop, rotation, mirrors and
+    low-information frames can collide or diverge; this never proves duplicates.
+    """
+    small = _area_grid(to_gray_measured(rgb), 8, 9)
     bits = 0
-    for v in diff.reshape(-1):
-        bits = (bits << 1) | int(bool(v))
+    for value in (small[:, 1:] > small[:, :-1] + 1e-9).reshape(-1):
+        bits = (bits << 1) | int(bool(value))
     return bits
+
+
+def source_stamp(path: str) -> list[int]:
+    """Best-effort local file identity/change fence, NOT a content digest."""
+    st = os.stat(path)
+    return [int(st.st_dev), int(st.st_ino), int(st.st_size),
+            int(st.st_mtime_ns), int(st.st_ctime_ns)]
+
+
+def reusable(suggestion, path: str, edge: int, sensitivities: dict, model_dir=None) -> bool:
+    """Never combine old hash definitions, decoder scales or replaced sources."""
+    if not isinstance(suggestion, dict):
+        return False
+    mm = suggestion.get("measures") or {}
+    if (suggestion.get("fingerprint") != fingerprint()
+            or suggestion.get("edge") != edge
+            or suggestion.get("sensitivities") != sensitivities
+            or suggestion.get("model_dir") != model_dir
+            or mm.get("algo") != ALGO_VERSION):
+        return False
+    try:
+        return mm.get("source_stamp") == source_stamp(path)
+    except OSError:
+        return False
+
+
+def restore_measures(path: str, value: dict) -> Measures:
+    """Restore only an already-fenced current-version in-memory measurement."""
+    return Measures(path=path, dhash=int(value["dhash"], 16),
+                    sharpness=value["sharpness"], ratio=value["clarity_ratio"],
+                    contrast=value["contrast"], under=value["under"], over=value["over"],
+                    eye_open=value["eye_open"], eye_note=value.get("eye_note", ""),
+                    faces=value["faces"], decoded_from=value["decoded_from"],
+                    decode_size=tuple(value["decode_size"]), source_size=tuple(value["source_size"]),
+                    source_stamp=list(value["source_stamp"]), ms=dict(value.get("ms", {})))
 
 
 def hamming(a: int, b: int) -> int:
@@ -343,11 +396,13 @@ def suggest(m: Measures, *, group: list[str], is_leader: bool, rank_in_group: in
                        "group_size": len(group), "rank": int(rank_in_group), "scope": scope,
                        "text": (f"与组内 {len(group) - 1} 张近似（汉明距离 {dup_bits} 位，"
                                 f"档上限 {DUPLICATE_SENSITIVITY[dup]}）{extra}；"
-                                + ("本组里锐度与曝光最好的一张，建议保留" if is_leader
-                                   else "不是本组最优那一张，建议复核后再决定留哪张"))})
+                                + ("按代理读数排序在前，仅供人工对照，不代表原片或人物表现最佳" if is_leader
+                                   else "按代理读数排序在后，不代表较差；请复核原片再决定"))})
     br = blur_read(m, blur, batch_median_ratio)
-    if br is not None and br["kind"] != "flat":
-        labels.append("blur" if br["kind"] == "blur" else "soft")
+    if br is not None:
+        if br["kind"] != "flat":
+            labels.append("blur" if br["kind"] == "blur" else "soft")
+        br["text"] = "仅为长边160代理图的细节读数，不判定原片失焦/运动模糊：" + br["text"]
         reasons.append(br)
     if m.under > EXPOSURE_SENSITIVITY[exposure]:
         labels.append("underexposed")
@@ -355,14 +410,14 @@ def suggest(m: Measures, *, group: list[str], is_leader: bool, rank_in_group: in
                         "value": round(m.under, 5), "threshold": EXPOSURE_SENSITIVITY[exposure],
                         "text": f"luma≤{DARK_CUTOFF} 的像素占 {m.under * 100:.1f}%"
                                 f"（档上限 {EXPOSURE_SENSITIVITY[exposure] * 100:.0f}%）；"
-                                "量的是死黑裁切，不是「这张偏暗」"})
+                                "仅量代理亮度近黑占比，不证明原始传感器裁切或欠曝"})
     if m.over > EXPOSURE_SENSITIVITY[exposure]:
         labels.append("overexposed")
         reasons.append({"kind": "overexposed", "method": "luma-clipping",
                         "value": round(m.over, 5), "threshold": EXPOSURE_SENSITIVITY[exposure],
                         "text": f"luma≥{BRIGHT_CUTOFF} 的像素占 {m.over * 100:.1f}%"
                                 f"（档上限 {EXPOSURE_SENSITIVITY[exposure] * 100:.0f}%）；"
-                                "量的是死白裁切，不是「这张偏亮」"})
+                                "仅量代理亮度近白占比，不证明原始传感器裁切或过曝"})
     if m.eye_open is None:
         reasons.append({"kind": "eyes_unknown", "method": "facemesh-eye-aperture",
                         "value": None, "threshold": EYE_SENSITIVITY[eyes],
@@ -374,16 +429,16 @@ def suggest(m: Measures, *, group: list[str], is_leader: bool, rank_in_group: in
                         "value": round(m.eye_open, 5), "threshold": EYE_SENSITIVITY[eyes],
                         "text": f"眼裂睁开比 {m.eye_open:.3f} 低于档阈值 {EYE_SENSITIVITY[eyes]:.3f}"
                                 "（量的是上下睑距离/眼裂宽，不是分类器；只当复核标记）"})
-    keep = bool(labels) and is_leader and len(group) > 1 and "blur" not in labels \
-        and "eyes_closed" not in labels
     return {"schema": SCHEMA, "path": m.path, "labels": labels,
-            "suggest": ("keep" if keep else ("review" if labels else "none")),
+            "suggest": ("review" if labels else "none"),
             "overridden_by_user": bool(user_marked),
             "overridable": True, "auto_deleted": False, "auto_trashed": False,
             "sensitivities": {"duplicate": dup, "blur": blur,
                               "exposure": exposure, "eyes": eyes},
             "reasons": reasons, "measures": m.for_json(),
-            "notes": ["本地确定性度量，不是训练模型：每一格都能按 method 名复算",
+            "notes": ["像素度量是确定性旁注；眼睑位置依赖FaceMesh模型，不是闭眼分类器或身份识别",
+                      "只测解码代理及长边160缩图，非原片100%焦点/传感器曝光验收；无标签不代表质量合格",
+                      "哈希现为固定9×8共64位；旧版阈值未对新版真实照片重新标定，距离仅供人工复核",
                       "近似组是「像」的关系闭包，不是绝对重复判定（A像B、B像C 不保证 A像C）",
                       "阈值出处：packaging/pick-calibrate.py 在同一夹具上的实测读数；"
                       "夹具是程序化的脸，只能定方向，不能当真人阈值",

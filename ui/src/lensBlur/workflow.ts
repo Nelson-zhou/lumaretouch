@@ -2,7 +2,7 @@
 import {initialLensRecipe, initialLensRenderer, lensRecipeRenderer, lensRendererSupportsDepth, recipeForLensRenderer,
   lensKey, lensReviewKey, lensRequestFits, validLensContext, validLensRecipe, validLensReview, validLensReceipt, validLensWriteCommand, validLensCapability, sameLensOwner, LENS_OPERATION, LENS_PROTOCOL, LENS_RENDERER_LABELS,
   type LensBlurPort, type LensContext, type LensPoint, type LensPreviewCommand, type LensRecipe, type LensReview,
-  type LensStroke, type LensWriteCommand, type LensReceipt, type LensCapability, type LensManualPlaneCommand, type LensRenderer} from './model';
+  type LensStroke, type LensWriteCommand, type LensReceipt, type LensCapability, type LensManualPlaneCommand, type LensModelDepthCommand, type LensRenderer} from './model';
 import {decodeLensDepth, sampleLensDepth, verifyLensPng, type DecodedLensDepth} from './imagery';
 
 export type LensPhase = 'empty' | 'loading' | 'editing' | 'previewing' | 'review' | 'applying' | 'cancelling' | 'pending' | 'unknown' | 'applied' | 'cancelled' | 'failed';
@@ -11,6 +11,7 @@ export interface LensState {
   phase: LensPhase; context: LensContext | null; depth: DecodedLensDepth | null; recipe: LensRecipe | null;
   review: LensReview | null; source_verified: boolean; source_presented: boolean;
   before_presented: boolean; after_presented: boolean; acknowledged: boolean;
+  depth_presented: boolean; depth_reviewed: boolean;
   /** Separate opt-in to v2 math, never inferred from available capability or an old review. */
   renderer_acknowledged: boolean;
   stale: boolean; request: LensWriteCommand | null; checking: boolean; message: string;
@@ -18,10 +19,10 @@ export interface LensState {
 }
 const empty = (): LensState => ({capability: {version: 2, operation_id: LENS_OPERATION, status: 'unavailable', kernels: [], renderers: [], reason: '尚未取得镜头虚化模块能力。'}, phase: 'empty', context: null, depth: null, recipe: null, review: null,
   source_verified: false, source_presented: false, before_presented: false, after_presented: false,
-  acknowledged: false, renderer_acknowledged: false, stale: false, request: null, checking: false, message: '', terminal_receipt: null, terminal_refresh: 'none'});
+  acknowledged: false, depth_presented: false, depth_reviewed: false, renderer_acknowledged: false, stale: false, request: null, checking: false, message: '', terminal_receipt: null, terminal_refresh: 'none'});
 const errorText = (error: unknown) => error instanceof Error ? error.message : '操作未完成。';
 const contextKey = (v: LensContext) => lensKey([v.session_id, v.owner, v.source_image.sha256,
-  v.depth_status, v.depth?.token, v.depth?.raster.sha256, v.depth?.provenance, v.depth?.subject_focus]);
+  v.model_depth, v.depth_status, v.depth?.token, v.depth?.raster.sha256, v.depth?.provenance, v.depth?.subject_focus]);
 function bounded<T>(promise: Promise<T>, timeout: number): Promise<T> {
   let timer: ReturnType<typeof setTimeout> | undefined;
   return Promise.race([promise, new Promise<T>((_, reject) => {timer = setTimeout(() => reject(Error('等待超时；已发送的修改不会重发。')), timeout);})])
@@ -46,6 +47,7 @@ export function createLensBlurWorkflow(port: LensBlurPort, options: {
     if (port.protocol !== LENS_PROTOCOL) return '镜头接口不是当前协议；不会按旧协议发送或回退。';
     if (state.capability.status !== 'available') return state.capability.reason || '当前镜头模块不可用。';
     if (!state.recipe) return '请先取得当前来源和明确选择的景深或人工基准面。';
+    if (state.recipe.depth.provenance.kind === 'model' && !state.depth_reviewed) return '请显示并明确检查本次 AI 相对深度；深度复核不等于最终虚化效果复核。';
     const renderer = lensRecipeRenderer(state.recipe);
     if (!state.capability.renderers.includes(renderer)) return `${LENS_RENDERER_LABELS[renderer]}当前不可用；配方保留，不会自动改用另一渲染器。`;
     if (!state.capability.kernels.includes(state.recipe.aperture)) return '当前光斑核不可用；请明确选择可用光斑核，不会自动替换。';
@@ -56,6 +58,8 @@ export function createLensBlurWorkflow(port: LensBlurPort, options: {
   const renderingAvailable = () => rendererBlockReason() === '';
   const manualPlaneAvailable = () => port.protocol === LENS_PROTOCOL && !!port.prepareManualPlane && state.capability.status === 'available'
     && editable() && !!state.context && !state.depth && state.source_presented;
+  const modelDepthAvailable = () => port.protocol === LENS_PROTOCOL && !!port.prepareModelDepth && state.capability.status === 'available'
+    && state.context?.model_depth.available === true && state.capability.renderers.includes('direct-v1') && editable() && !!state.context && !state.depth && state.source_presented;
   const invalidate = () => ({review: null, acknowledged: false, before_presented: false, after_presented: false});
   function setCapability(value: unknown): void {
     const capability: LensCapability = validLensCapability(value) ? structuredClone(value)
@@ -103,11 +107,20 @@ export function createLensBlurWorkflow(port: LensBlurPort, options: {
     if (!image || image.sha256 !== sha256 || state.stale || !state.source_verified) return;
     const ready = loaded && width === image.width && height === image.height;
     if (state.source_presented !== ready) publish({source_presented: ready, acknowledged: false,
-      ...(ready ? {} : {message: '来源图没有按声明尺寸成功显示，编辑与保存新副本已锁定。'})});
+      ...(ready ? {} : {depth_reviewed: false, message: '来源图没有按声明尺寸成功显示，编辑与保存新副本已锁定。'})});
   }
   function releasePresentation(): void {
     // A panel disappearing is not a cancel and does not discard any in-flight request.
-    publish({source_presented: false, before_presented: false, after_presented: false, acknowledged: false});
+    publish({source_presented: false, before_presented: false, after_presented: false, acknowledged: false, depth_presented: false, depth_reviewed: false});
+  }
+  function depthPresented(inferenceId: string, shown: boolean): void {
+    const provenance = state.depth?.asset.provenance;
+    if (!provenance || provenance.kind !== 'model' || provenance.inference_id !== inferenceId || state.stale) return;
+    if (state.depth_presented !== shown) publish({depth_presented: shown, ...(!shown ? {depth_reviewed: false, ...invalidate()} : {})});
+  }
+  function acknowledgeDepth(value: boolean): void {
+    if (!editable() || !state.source_presented || !state.depth_presented || state.depth?.asset.provenance.kind !== 'model') return;
+    if (state.depth_reviewed !== value) publish({depth_reviewed: value, ...invalidate()});
   }
   async function prepareManualPlane(): Promise<void> {
     if (!manualPlaneAvailable() || !port.prepareManualPlane || !state.context) return;
@@ -123,6 +136,23 @@ export function createLensBlurWorkflow(port: LensBlurPort, options: {
         || result.depth.provenance.kind !== 'manual' || result.depth.provenance.method !== 'user_defined_plane'
         || result.depth.provenance.depth_value !== command.depth_value || result.depth.provenance.acknowledgement_id !== command.request_id)
         throw Error('人工散焦基准面未与本次明确选择和当前来源对应。');
+      await setContext(result);
+    } catch (error) {if (generation === readGeneration) publish({phase: 'failed', message: errorText(error)});}
+  }
+  async function prepareModelDepth(): Promise<void> {
+    if (!modelDepthAvailable() || !port.prepareModelDepth || !state.context) return;
+    const generation = ++readGeneration, context = state.context;
+    const command: LensModelDepthCommand = {version: LENS_PROTOCOL, action: 'prepare_model_depth', request_id: id(), session_id: context.session_id,
+      owner: structuredClone(context.owner), acknowledged_model: true};
+    publish({phase: 'loading', ...invalidate(), message: '正在核对本地 AI 深度能力并分析完整当前来源；缺少运行时会明确拒绝，不下载模型，不代造深度。'});
+    try {
+      const result = await bounded(port.prepareModelDepth(command), Math.max(timeout, 145000));
+      if (generation !== readGeneration) return;
+      if (!validLensContext(result) || result.session_id !== command.session_id || !sameLensOwner(result.owner, command.owner)
+        || result.source_image.sha256 !== context.source_image.sha256 || !result.depth
+        || result.depth.provenance.kind !== 'model' || result.depth.provenance.acknowledgement_id !== command.request_id
+        || result.depth.subject_focus !== null)
+        throw Error('AI 相对深度未与本次明确请求和完整当前来源对应。');
       await setContext(result);
     } catch (error) {if (generation === readGeneration) publish({phase: 'failed', message: errorText(error)});}
   }
@@ -264,8 +294,8 @@ export function createLensBlurWorkflow(port: LensBlurPort, options: {
     }
   }
   return {snapshot: () => state, subscribe: (listener: () => void) => {listeners.add(listener); return () => {listeners.delete(listener);};},
-    setContext, setCapability, sourcePresented, releasePresentation, prepareManualPlane, edit, selectRenderer, acknowledgeRenderer,
+    setContext, setCapability, sourcePresented, depthPresented, acknowledgeDepth, releasePresentation, prepareManualPlane, prepareModelDepth, edit, selectRenderer, acknowledgeRenderer,
     focusPoint, addStroke, preview, presented, acknowledge, apply, cancel, check, refreshTerminal,
-    unresolved, editable, renderingAvailable, rendererBlockReason, manualPlaneAvailable};
+    unresolved, editable, renderingAvailable, rendererBlockReason, manualPlaneAvailable, modelDepthAvailable};
 }
 export type LensBlurWorkflow = ReturnType<typeof createLensBlurWorkflow>;

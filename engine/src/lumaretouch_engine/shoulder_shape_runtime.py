@@ -31,6 +31,8 @@ class ShoulderGeometry:
     body_refs:tuple
     body_operation_order:dict
     composition_order:str=ORDER
+    document_ids:tuple=()
+    document_facts:tuple=()
     warp=CombinedGeometry.warp
     warp_original=CombinedGeometry.warp_original
 
@@ -97,7 +99,7 @@ def _face_stage(faces,points):
     return delta,owner,overlap
 
 
-def compose(faces,bodies,shape,*,byte_budget,band_pixels=65536,body_operation_order=DEFAULT_BODY_ORDER):
+def compose(faces,bodies,shape,*,byte_budget,band_pixels=65536,body_operation_order=DEFAULT_BODY_ORDER,document_fields=()):
     """Host must pass FaceGeometry evaluators, not a pre-sampled/warped image.
 
     Body ownership is separate metadata. Body IDs never enter face_instance_id.
@@ -107,36 +109,50 @@ def compose(faces,bodies,shape,*,byte_budget,band_pixels=65536,body_operation_or
     if type(h) is not int or type(w) is not int or min(h,w)<2:raise ValueError('Invalid common geometry dimensions')
     if type(band_pixels) is not int or not w<=band_pixels<=1048576:raise ValueError('Common geometry needs a bounded complete-row band')
     faces=tuple(sorted(faces,key=lambda f:f.face_instance_id));bodies=group_subfields(bodies,body_operation_order)
+    document_fields=tuple(document_fields)
+    if len({f.instance_id for f in document_fields})!=len(document_fields):raise ValueError('Duplicate standalone source geometry instance')
     if len({f.face_instance_id for f in faces})!=len(faces):raise ValueError('Duplicate face target would apply strength twice')
-    if any(f.shape!=tuple(shape) for f in (*faces,*bodies)):raise ValueError('Every field must share canonical source coordinates')
-    resident=sum(f.resident_bytes() for f in (*faces,*bodies))
+    if any(f.shape!=tuple(shape) for f in (*faces,*bodies,*document_fields)):raise ValueError('Every field must share canonical source coordinates')
+    resident=sum(f.resident_bytes() for f in (*faces,*bodies,*document_fields))
     # Includes delta/owner plus bounded float64 point, displacement and Jacobian bands.
     if type(byte_budget) is not int or resident+h*w*24+band_pixels*160>byte_budget:raise ValueError('Common body/face geometry exceeds admitted memory budget')
     for i,a in enumerate(bodies):
         for b in bodies[i+1:]:
             if any(np.linalg.norm(c-d)<r+s for c,r in a.supports for d,s in b.supports):raise ValueError('Two active body supports overlap; no silent priority over people')
+    # Document-owned hand supports never borrow body/face identity. Conservative
+    # disjointness refuses uncertain contact instead of silently partitioning it.
+    for i,a in enumerate(document_fields):
+        for b in (*document_fields[i+1:],*bodies):
+            if any(np.linalg.norm(c-d)<=r+t for c,r in a.supports for d,t in b.supports):raise ValueError('Standalone hand support overlaps another hand/body geometry support')
     delta=np.zeros((1,h,w,2),np.float32);owner=np.full((h,w),-1,np.int32);overlap=0;peak=0.
     rows=max(1,band_pixels//w)
     for y in range(0,h,rows):
         end=min(h,y+rows);yy,xx=np.mgrid[y:end,:w];points=np.stack((xx.ravel(),yy.ravel()),axis=1).astype(np.float64)
+        document_delta=np.zeros_like(points);document_owner=np.full(len(points),-1,np.int32)
+        for i,field in enumerate(document_fields):
+            value=field.evaluate(points);active=np.any(value!=0,axis=1)
+            if value.shape!=points.shape or not np.isfinite(value).all() or np.any(active&(document_owner>=0)):raise ValueError('Invalid or overlapping standalone geometry')
+            document_delta[active]=value[active];document_owner[active]=i
+        body_points=points-document_delta
         body_delta=np.zeros_like(points);body_owner=np.full(len(points),-1,np.int32)
         for i,field in enumerate(bodies):
-            value=field.evaluate(points);active=np.any(value!=0,axis=1)
+            value=field.evaluate(body_points);active=np.any(value!=0,axis=1)
             if np.any(active&(body_owner>=0)):raise ValueError('Ambiguous body support at evaluated coordinates')
             body_delta[active]=value[active];body_owner[active]=i
         # Exact off-grid inverse composition: x -> B(x) -> Face(B(x)).
-        face_delta,face_owner,face_overlap=_face_stage(faces,points-body_delta)
+        face_delta,face_owner,face_overlap=_face_stage(faces,body_points-body_delta)
+        if np.any((document_owner>=0)&((face_owner>=0)|(body_owner>=0))):raise ValueError('Hand geometry reaches another active face/body owner')
         for i,field in enumerate(bodies):
             affected=(body_owner==i)&(face_owner>=0)
             if np.any(affected):
                 expected=getattr(field,'associated_face_id',None)
                 if expected is None or any(faces[index].face_instance_id!=expected for index in np.unique(face_owner[affected])):raise ValueError('A shoulder map meets another face owner; explicit ownership correction required')
-        total=body_delta+face_delta
+        total=document_delta+body_delta+face_delta
         if not np.isfinite(total).all():raise ValueError('Nonfinite final body/face field')
         block=total.reshape(end-y,w,2).astype(np.float32)
         delta[0,y:end]=block;peak=max(peak,float(np.max(np.abs(block))))
         # Negative body-owner namespace is distinct from nonnegative face indices.
-        owners=np.where(body_owner>=0,-2-body_owner,face_owner)
+        owners=np.where(document_owner>=0,-1000000-document_owner,np.where(body_owner>=0,-2-body_owner,face_owner))
         owner[y:end]=owners.reshape(end-y,w);overlap+=int(np.count_nonzero(face_overlap))
     # Final map, not just each native lobe, is admitted. The checks include band seams.
     for y in range(0,h-1,rows):
@@ -145,7 +161,31 @@ def compose(faces,bodies,shape,*,byte_budget,band_pixels=65536,body_operation_or
         det=(1-dx[...,0])*(1-dy[...,1])-dy[...,0]*dx[...,1]
         if not np.isfinite(det).all() or np.any(det<.15) or np.any(det>6):raise ValueError('Final composed body/face Jacobian refused; reduce or correct the actual request')
     delta.setflags(write=False);owner.setflags(write=False)
-    return ShoulderGeometry(delta,owner,peak,overlap,tuple(f.face_instance_id for f in faces),tuple(deepcopy(f.body_ref) for f in bodies),body_operation_order.record())
+    return ShoulderGeometry(delta,owner,peak,overlap,tuple(f.face_instance_id for f in faces),tuple(deepcopy(f.body_ref) for f in bodies),body_operation_order.record(),ORDER if not document_fields else 'hand-then-body-then-face-inverse-v1',tuple(f.instance_id for f in document_fields),tuple(deepcopy(f.facts) for f in document_fields))
+
+
+def document_geometry_metadata(geometry):
+    """Actual document prefix, independent of the body/face suffix receipt.
+
+    Absence stays absent for byte-compatible neutral legacy receipts. Facts come
+    from the very fields used to construct this map, never from live selection.
+    """
+    ids=tuple(getattr(geometry,'document_ids',()))
+    facts=tuple(getattr(geometry,'document_facts',()))
+    order=getattr(geometry,'composition_order',ORDER)
+    if not ids:
+        if facts or order!=ORDER:raise ValueError('Unexpected document geometry composition without fields')
+        return {}
+    if order!='hand-then-body-then-face-inverse-v1' or len(ids)!=len(facts) or len(ids)>1 or len(set(ids))!=len(ids):
+        raise ValueError('Invalid actual standalone hand composition receipt')
+    for identity,fact in zip(ids,facts):
+        E.token(identity)
+        if type(fact) is not dict or fact.get('hand_id')!=identity or fact.get('family')!='hand_shape' or fact.get('operation_id')!='lnx.hand_shape.v1':
+            raise ValueError('Hand geometry receipt does not describe its actual field')
+        E.digest(fact.get('recipe_sha256'))
+    return {'document_geometry':{'version':1,'composition_order':order,'hand_ids':list(ids),
+        'fields':[dict(deepcopy(fact),status='rendered',applied=True) for fact in facts],
+        'single_source_sample':True,'runtime_quality_accepted':False}}
 
 
 def outcome(fields,geometry,*,request_id,render_revision,original_dimensions,rendered_pixels,published_frame_id,sampling_passes):
@@ -156,4 +196,4 @@ def outcome(fields,geometry,*,request_id,render_revision,original_dimensions,ren
     if pixels.ndim!=3 or pixels.shape[2]!=3 or pixels.dtype not in (np.uint8,np.uint16,np.float32) or not np.isfinite(pixels).all() or pixels.shape[:2]!=geometry.delta.shape[1:3]:raise ValueError('Outcome needs actual rendered RGB pixels matching the composed field')
     if type(sampling_passes) is not int or sampling_passes!=1:raise ValueError('Actual geometry sampling count was not one')
     render_dimensions=(pixels.shape[1],pixels.shape[0])
-    return {'version':1,'request_id':request_id,'published_frame_id':published_frame_id,'output_pixel_sha256':sha256(memoryview(np.ascontiguousarray(pixels))).hexdigest(),'output_dtype':str(pixels.dtype),'geometry_delta_sha256':sha256(memoryview(geometry.delta)).hexdigest(),'render_revision':render_revision,'composition_order':ORDER,'body_operation_order':deepcopy(geometry.body_operation_order),'original_dimensions':list(original_dimensions),'render_dimensions':list(render_dimensions),'original_resolution':tuple(original_dimensions)==tuple(render_dimensions),'single_source_sample':True,'fields':[dict(f.facts,status='rendered',applied=True) for f in fields],'max_displacement_component':geometry.peak,'face_overlap_pixels':geometry.overlap_pixels,'runtime_quality_accepted':False}
+    return {'version':1,'request_id':request_id,'published_frame_id':published_frame_id,'output_pixel_sha256':sha256(memoryview(np.ascontiguousarray(pixels))).hexdigest(),'output_dtype':str(pixels.dtype),'geometry_delta_sha256':sha256(memoryview(geometry.delta)).hexdigest(),'render_revision':render_revision,'composition_order':geometry.composition_order,**document_geometry_metadata(geometry),'body_operation_order':deepcopy(geometry.body_operation_order),'original_dimensions':list(original_dimensions),'render_dimensions':list(render_dimensions),'original_resolution':tuple(original_dimensions)==tuple(render_dimensions),'single_source_sample':True,'fields':[dict(f.facts,status='rendered',applied=True) for f in fields],'max_displacement_component':geometry.peak,'face_overlap_pixels':geometry.overlap_pixels,'runtime_quality_accepted':False}

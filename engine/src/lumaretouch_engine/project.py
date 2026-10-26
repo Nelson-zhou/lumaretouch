@@ -234,6 +234,12 @@ def validate(p: object) -> None:
     from .limb_vein_runtime import validate_records as validate_vein
     try: validate_vein(p,allowed=(sv == SCHEMA))
     except ValueError as error: raise ProjectError(str(error)) from error
+    from .hand_shape_runtime import validate_records as validate_hand_shape
+    try: validate_hand_shape(p,allowed=(sv == SCHEMA))
+    except ValueError as error: raise ProjectError(str(error)) from error
+    from .hand_tone_runtime import validate_records as validate_hand_tone
+    try: validate_hand_tone(p,allowed=(sv == SCHEMA))
+    except ValueError as error: raise ProjectError(str(error)) from error
     _validate_fringe_records(p, allowed=(sv == SCHEMA))
     from .primary_calibration_adapters import validate_records as validate_primary
     try:validate_primary(p,allowed=sv in (PRIMARY_SCHEMA,DETAIL_SCHEMA,GRAIN_SCHEMA,COLOUR_EDITOR_SCHEMA,SCHEMA))
@@ -748,6 +754,12 @@ def _encode(value: object, assets: dict, dropped: list, at: str) -> object:
         if "_limb_vein" in value:
             from .limb_vein_state import check as vein_check
             vein_check(value["_limb_vein"])
+        if "_hand_shape" in value:
+            from .hand_shape_state import check as hand_shape_check
+            hand_shape_check(value["_hand_shape"])
+        if "_hand_tone" in value:
+            from .hand_tone_state import check as hand_tone_check
+            hand_tone_check(value["_hand_tone"])
         if "_local_masks" in value:
             from .local_mask_state import check
             check(value["_local_masks"])

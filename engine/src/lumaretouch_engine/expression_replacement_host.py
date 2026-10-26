@@ -99,10 +99,13 @@ class Service:
             photo=ST.photograph(target,'当前照片完整编辑结果',max_bytes=remaining,cancelled=event)
             if event():raise InterruptedError('Current expression source acquisition cancelled')
             if SRC.current_fence(self.engine)!=target.document_fence:raise ValueError('Current source changed after analysis')
-            return target,photo
-        target,photo=jobs(self.engine).run(request['request_id'],digest,work)
+            from .expression_donor_hints import safe_collect
+            hints=safe_collect(self.engine,cancelled=event)
+            if SRC.current_fence(self.engine)!=target.document_fence:raise ValueError('Current source changed during donor hints')
+            return target,photo,hints
+        target,photo,hints=jobs(self.engine).run(request['request_id'],digest,work)
         self.target=target;self.hot=SRC.hot_fence(self.engine)
-        self.current={'binding':self._binding(target),'photo':photo,'available':True,'unavailable_reason':None}
+        self.current={'binding':self._binding(target),'photo':photo,'available':True,'unavailable_reason':None,'donor_hints':hints}
         return self._event(request,{'phase':'current_ready','current':deepcopy(self.current)})
 
     def choose(self,request,packet):

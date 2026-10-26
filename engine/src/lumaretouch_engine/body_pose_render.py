@@ -182,10 +182,11 @@ def export_outcome(prepared,pixels,source_dimensions):
     for row in value:
         if not np.isfinite(row).all():raise ValueError('Nonfinite body export output')
         digest.update(memoryview(np.ascontiguousarray(row)))
+    from .shoulder_shape_runtime import document_geometry_metadata
     return {'version':1,'stage':'export-render-buffer-before-container-publication','encoded_file_published':False,
             'render_buffer_sha256':digest.hexdigest(),'render_dtype':str(value.dtype),'render_dimensions':[value.shape[1],value.shape[0]],
             'original_dimensions':[w,h],'geometry_original_resolution':True,'body_operation_order':deepcopy(prepared.body_operation_order),
-            'composition_order':'body-then-face-inverse-v1','common_portrait_sampling_stages':1,
+            'composition_order':prepared.geometry.composition_order,**document_geometry_metadata(prepared.geometry),'common_portrait_sampling_stages':1,
             'geometry_delta_sha256':sha256(memoryview(prepared.geometry.delta)).hexdigest(),
             'fields':[dict(field.facts,status='rendered',applied=True) for field in prepared.body_fields],
             'runtime_quality_accepted':False}

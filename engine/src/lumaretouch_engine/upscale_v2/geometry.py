@@ -9,6 +9,7 @@ from dataclasses import dataclass
 from typing import Iterator
 
 from .architecture import architecture_for, parameter_payload_bytes
+from types import SimpleNamespace
 from .source import validate_dimensions
 
 FILTER_RADIUS_NATIVE = 3
@@ -78,8 +79,16 @@ Caller must choose halo explicitly. An arbitrary halo is NOT evidence that
 Tile lists are generated lazily, avoiding a pixel-count-sized planning object.
 """
     validate_dimensions(width, height)
-    spec = architecture_for(model_id)
-    alignment = spec.input_unshuffle
+    if model_id == "Swin2SR-classical-sr-x2-64":
+        # Window attention phase is not pixel-unshuffle. Keep contracts separate.
+        spec = SimpleNamespace(scale=2)
+        alignment = 8
+        # Exact F32 tensor payload from official safetensors header (724 entries).
+        parameter_bytes = 48_366_284
+    else:
+        spec = architecture_for(model_id)
+        alignment = spec.input_unshuffle
+        parameter_bytes = parameter_payload_bytes(model_id)
     if type(core_size) is not int or not 16 <= core_size <= 1024 or core_size % alignment:
         raise ValueError("core_size must be a phase-aligned integer in [16,1024]")
     if type(halo) is not int or not 1 <= halo <= 2048:
@@ -91,7 +100,6 @@ Tile lists are generated lazily, avoiding a pixel-count-sized planning object.
     extent = core_size + 2 * margin + 2 * (alignment - 1)
     tile_pixels = min(padded_width, extent) * min(padded_height, extent)
     canonical_bytes = width * height * 16
-    parameter_bytes = parameter_payload_bytes(model_id)
     generated_tile_bytes = tile_pixels * spec.scale ** 2 * 3 * 4
     return NativeCandidatePlan(
         model_id=model_id, width=width, height=height, scale=spec.scale,

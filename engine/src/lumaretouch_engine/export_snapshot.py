@@ -46,6 +46,8 @@ def state_to_export_snap(self,st,*,device,scale,upscale_backend,sharpen,source_p
                     deform=dict(st.get("_deform") or {"amounts": {}, "built": False}),
                     deform_defer=bool(st.get("_deform_defer")),
                     fabric_amount=float(st.get("_fabric_amount", 0.0)),
+                    hand_shape=deepcopy(st.get("_hand_shape")),
+                    hand_tone=deepcopy(st.get("_hand_tone")),
                     limb_vein=deepcopy(st.get("_limb_vein")),
                     fabric_sweat=deepcopy(st.get("_fabric_sweat")),
                     enhance=dict(st.get("_enhance") or {"amounts": {}, "built": False}),
@@ -97,10 +99,25 @@ def state_to_export_snap(self,st,*,device,scale,upscale_backend,sharpen,source_p
         snap['limb_vein_repair_sha256'] = stack_digest(st)
         if snap['limb_vein_repair_sha256'] != recipe['repair_sha256']:
             raise ValueError('肢体青筋修复来源已改变，需要重新审核')
+    if snap['hand_tone'] is not None:
+        from .hand_tone_state import check as hand_tone_check
+        from .creative_derived_source import binding as hand_tone_source
+        from .creative_derived_repairs import stack_digest
+        recipe = hand_tone_check(snap['hand_tone'])
+        path = source_path or self._doc_path
+        rows = [r for r in self._docs if r.get('document_id') == document_id and r.get('path') == path]
+        if len(rows) != 1: raise ValueError('手部中性灰导出缺少精确来源文档')
+        current_source = hand_tone_source(st,path,(rows[0].get('src_w'),rows[0].get('src_h')))
+        if current_source != recipe['source']: raise ValueError('手部中性灰禁止跨照片复制参考')
+        snap['hand_tone_repair_sha256'] = stack_digest(st)
+        if snap['hand_tone_repair_sha256'] != recipe['repair_sha256']:
+            raise ValueError('手部中性灰修复来源已改变，需要重新审核')
     from .creative_derived_repairs import validate_stacks
     validate_stacks(st)
-    from .body_pose_render import capture as capture_body
+    from .hand_shape_runtime import capture_export as capture_hand_shape
     from .virtual_copy_people import view
+    snap=capture_hand_shape(view(self,people_context) if people_context is not None else self,snap,st,source_path or self._doc_path)
+    from .body_pose_render import capture as capture_body
     snap=capture_body(view(self,people_context) if people_context is not None else self,snap,st,source_path or self._doc_path,people_graph)
     if creative_base is not None:
         from .creative_derived_id_background import capture as capture_id

@@ -14,7 +14,7 @@ const depth = (): LensDepthAsset => ({version: 1, token: 'depth-1', owner: owner
   mapping: 'normalized_full_frame_pixel_centres', orientation: 'exif_normalized_once',
   raster: {format: 'u16-le', width: 4, height: 2, sha256: 'c'.repeat(64), base64: 'AAAAAAAAAAAAAAAAAAAAAA=='},
   provenance: {kind: 'manual', method: 'user_supplied_depth'}, subject_focus: null});
-const context = (): LensContext => ({session_id: 'session-1', owner: owner(), source_image: image(), depth: depth(), depth_status: 'ready', message: ''});
+const context = (): LensContext => ({model_depth: {available: false, code: 'unverified', reason: 'Fixture only', model_id: 'depth-anything-v2-small-hf'}, session_id: 'session-1', owner: owner(), source_image: image(), depth: depth(), depth_status: 'ready', message: ''});
 const preview = (): LensPreviewCommand => ({version: LENS_PROTOCOL, action: 'preview', request_id: 'preview-1', session_id: 'session-1', owner: owner(), recipe: initialLensRecipe(depth())});
 const review = (c = preview()): LensReview => ({version: LENS_PROTOCOL, request_id: c.request_id, session_id: c.session_id, token: 'review-1', owner: c.owner,
   recipe: c.recipe, recipe_sha256: 'd'.repeat(64), before: image(), after: {...image(), sha256: 'e'.repeat(64)}, notes: [], result_source_sha256: 'f'.repeat(64)});

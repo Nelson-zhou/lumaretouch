@@ -19,6 +19,9 @@ def snapshot(engine, groups):
         source=(*source,live_dependencies(engine,groups))
         semantic=False # Exact measured category bank, never original-file model inference.
     models = []
+    if any(layer['enabled'] and any(o['kind']=='automatic_foreground' and o['enabled'] for o in layer['mask']['recipe']['objects']) for layer in groups['layers']):
+        from .automatic_foreground import dependency_stamp
+        models.append(('automatic_foreground',dependency_stamp()))
     if semantic:
         from .face import model_search_dirs, SELFIE_MULTICLASS_MODEL
         path = next((Path(folder) / SELFIE_MULTICLASS_MODEL for folder in model_search_dirs(None)

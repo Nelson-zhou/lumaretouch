@@ -5,17 +5,17 @@ use tauri::State;
 use crate::AppState;
 
 pub(crate) struct ModelHost {
-    child: Option<Child>, serial: u64, action: String, result: Value,
+    child: Option<Child>, serial: u64, action: String, extension_id: String, result: Value,
     error: Option<String>, cancelled: Option<Instant>,
 }
 impl Default for ModelHost {
-    fn default() -> Self { Self { child: None, serial: 0, action: "idle".into(),
+    fn default() -> Self { Self { child: None, serial: 0, action: "idle".into(), extension_id: "id-background-prompted-v1".into(),
         result: json!({"state":"unknown","model_id":"sam2.1-hiera-tiny","download_bytes":156008466,
             "license":"Apache-2.0","source":"https://github.com/facebookresearch/sam2",
             "runtime_download_separate":true}), error: None, cancelled: None } }
 }
 impl ModelHost {
-    fn status(&self) -> Value { json!({"running":self.child.is_some(),"action":self.action,"result":self.result,"error":self.error}) }
+    fn status(&self) -> Value { json!({"running":self.child.is_some(),"action":self.action,"extension_id":self.extension_id,"result":self.result,"error":self.error}) }
     fn cancel(&mut self) {
         if self.cancelled.is_none() { if let Some(child) = &mut self.child {
             // Give the Python owner time to terminate/reap its pip subprocess and remove staging.
@@ -54,21 +54,33 @@ fn read_output<R: Read + Send + 'static>(pipe: R, host: Arc<Mutex<ModelHost>>, s
 }
 
 #[tauri::command]
-pub(crate) fn prompted_model(state: State<'_, Arc<AppState>>, action: String) -> Result<Value, String> {
-    if !matches!(action.as_str(), "status"|"install"|"cancel") { return Err("invalid optional model action".into()); }
+pub(crate) fn prompted_model(state: State<'_, Arc<AppState>>, action: String, extension_id: Option<String>) -> Result<Value, String> {
+    if !matches!(action.as_str(), "status"|"install"|"cancel"|"check") { return Err("invalid optional model action".into()); }
+    let extension_id = extension_id.unwrap_or_else(|| "id-background-prompted-v1".into());
+    let module = match extension_id.as_str() {
+        "id-background-prompted-v1" => "prompted_model_install",
+        "lens-depth-v1" => "lens_depth_setup",
+        "hand-landmarker-v1" => "hand_shape_setup",
+        "upscale-native-v1" => "upscale_v2.setup",
+        _ => return Err("unknown curated extension".into()),
+    };
     let shared = state.prompted_model.clone();
     let mut host = shared.lock().map_err(|_| "optional model lock poisoned")?;
-    if action == "cancel" { host.cancel(); return Ok(host.status()); }
+    if action == "cancel" {
+        if host.extension_id != extension_id { return Err("another extension owns this operation".into()); }
+        host.cancel(); return Ok(host.status());
+    }
     if host.child.is_some() { return if action == "status" { Ok(host.status()) } else { Err("optional model operation already running".into()) }; }
     let engine = state.engine.lock().map_err(|_| "engine lock poisoned")?.clone().filter(|h| h.is_alive()).ok_or("start the selected engine runtime first")?;
     let runtime = state.engine_runtime.lock().map_err(|_| "runtime lock poisoned")?.clone();
     let py = runtime["python"].as_str().filter(|p| !p.is_empty()).ok_or("selected Python is unavailable")?;
     let src = runtime["engine_src"].as_str().filter(|p| !p.is_empty()).ok_or("selected engine source is unavailable")?;
-    if !std::path::Path::new(src).join("lumaretouch_engine/prompted_model_install.py").is_file() {
+    if !std::path::Path::new(src).join(format!("lumaretouch_engine/{}.py", module.replace('.', "/"))).is_file() {
         return Err("selected engine has no optional-model installer".into());
     }
     let mut command = Command::new(py);
-    command.args(["-m", "lumaretouch_engine.prompted_model_install", if action == "install" { "--install" } else { "--status" }])
+    let helper = format!("lumaretouch_engine.{module}");
+    command.args(["-m", helper.as_str(), if action == "install" { "--install" } else if action == "check" { "--check" } else { "--status" }])
         .env("PYTHONPATH", src).env("PYTHONUNBUFFERED", "1").env("PYTHONDONTWRITEBYTECODE", "1")
         .stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::piped());
     #[cfg(target_os = "linux")]
@@ -87,7 +99,7 @@ pub(crate) fn prompted_model(state: State<'_, Arc<AppState>>, action: String) ->
     let stdout = child.stdout.take().ok_or("installer stdout unavailable")?;
     let stderr = child.stderr.take().ok_or("installer stderr unavailable")?;
     host.serial = host.serial.wrapping_add(1); let serial = host.serial;
-    host.child = Some(child); host.action = action; host.error = None; host.cancelled = None;
+    host.child = Some(child); host.action = action; host.extension_id = extension_id; host.error = None; host.cancelled = None;
     host.result = json!({"state":"running","phase":"starting"});
     let status = host.status(); drop(host);
     let output = read_output(stdout, shared.clone(), serial, true);
@@ -109,7 +121,7 @@ pub(crate) fn prompted_model(state: State<'_, Arc<AppState>>, action: String) ->
         if let Ok(mut h) = shared.lock() { if h.serial == serial {
             if let Some(mut child) = h.child.take() { let _ = child.wait(); }
             match outcome {
-                Ok(true) if matches!(h.result["state"].as_str(), Some("installed"|"not-installed"|"invalid")) => {},
+                Ok(true) if matches!(h.result["state"].as_str(), Some("installed"|"not-installed"|"invalid"|"unsupported")) => {},
                 _ => { if !matches!(h.result["state"].as_str(), Some("error"|"cancelled")) {
                     h.result = json!({"state":if h.cancelled.is_some(){"cancelled"}else{"error"},"error":h.error.clone().unwrap_or_else(|| "Optional model helper failed".into())});
                 } }

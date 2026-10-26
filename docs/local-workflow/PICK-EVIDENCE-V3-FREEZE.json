@@ -1,0 +1,58 @@
+{
+  "version": 1,
+  "base_commit": "736d9ef51de2df990d1371c4e9036f1db1d6958f",
+  "requirement_ids": [
+    "workflow:230984",
+    "LNX-PICK-001",
+    "PICK-001"
+  ],
+  "scope": "Existing picker evidence repair: fixed64 dHash, source/algorithm cache fences, proxy-only review, no automatic flags/deletion",
+  "acceptance": "Source/AST only. Tests/build/typecheck/inference/runtime/image-quality/performance UNRUN.",
+  "manifest_self_excluded": true,
+  "files": [
+    {
+      "path": "docs/adr/0012-pick-suggestions-local-measures.md",
+      "sha256": "8b8114d7507df7e0517ee5be5318fbf0f97f7089cce5e31681d917eea42c80d9"
+    },
+    {
+      "path": "docs/development/handbook-traceability.json",
+      "sha256": "a102e47e05d409386630d4a6e3528e82f4696fff2c4612d474d871774c77bec4"
+    },
+    {
+      "path": "docs/local-workflow/PICK-EVIDENCE-V3.md",
+      "sha256": "01d24ae88e698b90a353893c8f890d06543e435aff8ff0e8a58be6e61d31ba11"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/picks.py",
+      "sha256": "4fad47f367535a6fe6ec2ffcb448806596efa3a0a72eb303b6273fef46d6f221"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/server.py",
+      "sha256": "8d169063065942b220136c601a15d6851d9780c82d5573198798cf37e36ccda7"
+    },
+    {
+      "path": "engine/tests/test_pick.py",
+      "sha256": "851dd2db02a8365f3effaedff0b2cf5951589ddc9f8a6a7e125da571d25a823c"
+    },
+    {
+      "path": "engine/tests/test_pick_evidence_v3_unrun.py",
+      "sha256": "d449ca85199235f3e8eab194f4f53b02caefd83e72f1e34ecfc326d06d55f162"
+    },
+    {
+      "path": "ui/src/App.tsx",
+      "sha256": "dc1eec7a5a8bb8446d86290bc9535067a59456b82af35dd94c38cdd6541ae802"
+    },
+    {
+      "path": "ui/src/locales/en.ts",
+      "sha256": "f67c10f922311303bd6e66ae58bf9637defde4c85d1fdcc0b5e8023c718dd7f8"
+    },
+    {
+      "path": "ui/src/locales/zh.ts",
+      "sha256": "f69c4fde8185e2ed26f2194f2197e8e9da6b226e26f1d6d7d8c61e86041cf44d"
+    },
+    {
+      "path": "ui/src/native.ts",
+      "sha256": "e1de174273e06b2785da094f2eb54eb14084ddd3eca95f99a9a553e821fcdb7d"
+    }
+  ]
+}

@@ -11,13 +11,20 @@ export function PresetHandoffPanel({controller, state}: {controller: WorkflowCon
   useEffect(() => {
     // Read-only fetching is safe on mount; reopening never restores a checkbox
     // or sends an approval. Exact DOM load proof is still required for each side.
-    if (run && handoff?.phase === 'reviewing') {
+    if (run && handoff?.mode !== 'automatic' && handoff?.phase === 'reviewing') {
       const key = reviewKey(run.run_id, handoff);
       void controller.loadReviewImages();
       return () => controller.clearReviewPresentation(key);
     }
   }, [controller, run?.run_id, handoff?.operation_id, handoff?.phase, identity]);
   if (!run || !handoff) return null;
+  if (handoff.mode === 'automatic') return <section className="local-workflow-warning local-workflow-handoff" aria-label="自动批量目标交接">
+    <h4>{handoff.phase === 'unknown' ? '自动任务结果未知，仅查询原操作' : '自动任务正在处理当前目标'}</h4>
+    <p>{handoff.message}</p><p>照片 {handoff.document_id} · 固定预设 {handoff.preset_id}</p>
+    <small>配方 SHA-256：{handoff.preset_sha256}</small>
+    <p>此任务依据本次启动的明确自动授权执行，不代表任何人查看或批准了逐图对比。真实配方、历史、目标保存与导出仍由原有 owner 处理。</p>
+    <p>当前交接结清前保留工程租约；结果未知时只查询，不重复应用、保存、导出或释放。</p>
+  </section>;
   const report = handoff.review, images = state.review_images;
   const ready = !!images && !images.loading && !images.error && images.displayed.before && images.displayed.after;
   const preApply = handoff.phase === 'awaiting_open' || handoff.phase === 'awaiting_preparation' || handoff.phase === 'reviewing';

@@ -1,0 +1,28 @@
+Swin2SR inference adaptation — LumaRetouch, 2026
+
+This fixed-configuration, inference-only implementation is adapted from:
+Hugging Face Transformers modeling_swin2sr.py
+Copyright 2022 Microsoft Research and The HuggingFace Inc. team.
+Apache License, Version 2.0 (see swin2sr_LICENSE.txt).
+Commit: 9417c924af539be5f941c8a709a96b60dfe29eb3
+Git blob: cd58b70650586582458ee03e2254df58b85c9ade
+https://github.com/huggingface/transformers/blob/9417c924af539be5f941c8a709a96b60dfe29eb3/src/transformers/models/swin2sr/modeling_swin2sr.py
+
+Changes: removed training/download/configuration framework, optional model
+families, all Transformers imports and randomized initialization; expressed
+fixed learned operations functionally over frozen HF-named tensors; added
+strict immutable artifact/data-only reader and CPU/input resource gates.
+Window8 and shifted-window masks, cosine attention, continuous position bias,
+post-residual layer normalization, learned 1x1 patch projections, six residual
+stages and pixelshuffle x2 retain the pinned HF source structure.
+
+Underlying Swin2SR research implementation:
+https://github.com/mv-lab/swin2sr/tree/6f25d7689813f7dd12c5a212b638066fa71bc9e6
+Apache-2.0; its LICENSE includes Copyright [2021] [SwinIR Authors].
+No source from this repository is separately vendored here.
+
+Separately downloaded model (not included):
+caidas/swin2SR-classical-sr-x2-64
+Revision cee1c923c6a37361c6e5650b65dcf4be821e5d52
+Official model-card YAML explicitly declares license: apache-2.0.
+See docs/upscale-v2/SWIN2SR.md for artifact identity and evidence limits.

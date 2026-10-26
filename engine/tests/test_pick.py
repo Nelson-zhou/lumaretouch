@@ -159,7 +159,8 @@ def test_flat_image_reports_inapplicable_instead_of_blurry():
     assert br["kind"] == "flat"
     sug = PK.suggest(m, group=[m.path], is_leader=True, rank_in_group=0, dup_bits=None)
     assert "blur" not in sug["labels"] and "soft" not in sug["labels"]
-    assert not any(r["kind"] == "flat" for r in sug["reasons"])   # 「不适用」不进建议
+    # v3 source-only update, UNRUN: inapplicability must be visible, not a clean bill.
+    assert any(r["kind"] == "flat" for r in sug["reasons"])
 
 
 def test_batch_relative_line_catches_what_absolute_line_misses():

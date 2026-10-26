@@ -138,12 +138,15 @@ class PresetHandoff:
                 raise ValueError('Loaded preset target no longer matches its retained owner')
         return lease, row
 
+    def _support_reason(self, preset):
+        return support_reason(preset)
+
     def start(self, record, row):
         if self.active is not None:
             raise ValueError('An earlier preset handoff remains unresolved')
         operation = record['command']['operation']
         preset = resolve(operation['preset_id'], operation['preset_sha256'])
-        reason = support_reason(preset)
+        reason = self._support_reason(preset)
         if reason:
             raise ValueError(reason)
         engine = self.engine
@@ -340,6 +343,16 @@ class PresetHandoff:
             raise ValueError('Actual applied state, source, people or render differs from the reviewed candidate')
         self._check(target_loaded=True)
 
+    def _stage_save(self):
+        entry = self.active
+        return _scoped_project(entry['saved_project'], entry['row'], engine=self.engine,
+            people_baseline=entry.get('people_save_baseline'), expected_context=entry.get('applied_people_context'))
+
+    def _cancel_result(self, entry, row):
+        return {'status': 'failed', 'code': 'user_declined_preset',
+            'message': 'User returned without applying this preset',
+            'retained_document': {**entry['initial_document'], 'document_revision': self._version(row)}}
+
     def _save(self):
         entry = self.active
         if entry['phase'] != 'awaiting_save':
@@ -351,8 +364,7 @@ class PresetHandoff:
             if self.owner._encoded_recipe(row) != entry['applied_recipe']:
                 raise ValueError('Applied target recipe changed before the explicit save')
         self.engine._remember_current()
-        project = _scoped_project(entry['saved_project'], row, engine=self.engine,
-            people_baseline=entry.get('people_save_baseline'), expected_context=entry.get('applied_people_context'))
+        project = self._stage_save()
         from .workflow_preset_save import persist
         outcome = persist(project, entry['binding']['path'], entry['binding']['disk_sha256'], check)
         if outcome['status'] != 'succeeded':
@@ -405,9 +417,7 @@ class PresetHandoff:
         self.engine._ingest_session_host._exact(lease)
         record = entry['preflight'] if cancelled else entry['apply']
         if cancelled:
-            record['receipt'] = self.owner._receipt(record['command'], {'status': 'failed',
-                'code': 'user_declined_preset', 'message': 'User returned without applying this preset',
-                'retained_document': {**entry['initial_document'], 'document_revision': self._version(row)}})
+            record['receipt'] = self.owner._receipt(record['command'], self._cancel_result(entry, row))
         else:
             document = {**entry['initial_document'], 'document_revision': self._version(row),
                         'receipt_id': record['command']['identity']['operation_id']}

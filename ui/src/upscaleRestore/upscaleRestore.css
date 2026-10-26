@@ -1,0 +1,16 @@
+/* SPDX-License-Identifier: GPL-3.0-or-later */
+.upscaleRestoreHost { position:fixed; inset:3vh 4vw; z-index:90; overflow:auto; border:1px solid #53616c; border-radius:12px; background:#161c22; color:#e4e9ef; padding:20px; box-shadow:0 22px 70px #0009; }
+.upscaleRestoreHeader { display:flex; justify-content:space-between; align-items:start; gap:16px; }
+.upscaleRestoreHeader h3 { margin:0; }
+.upscaleRestoreHeader p, .upscaleRestoreHost small { color:#b3beca; }
+.upscaleRestoreWorkspace { font-size:13px; line-height:1.55; }
+.upscaleRestoreHost button { padding:7px 12px; border:1px solid #52616d; border-radius:6px; background:#27323c; color:inherit; cursor:pointer; }
+.upscaleRestoreHost button:disabled { cursor:not-allowed; opacity:.45; }
+.upscaleRestoreHost :focus-visible { outline:2px solid #ffd48e; outline-offset:3px; }
+.upscaleRestoreWorkspace figure { margin:0; min-width:0; }
+.upscaleRestoreWorkspace img { display:block; max-width:100%; height:auto; object-fit:contain; background:#0c1014; }
+.upscaleRestoreWorkspace figcaption { color:#bac5d1; font-size:12px; margin-top:6px; }
+.upscaleRestoreActions { display:flex; flex-wrap:wrap; gap:8px; margin:8px 0; }
+.upscaleRestorePair { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); align-items:start; gap:16px; margin:14px 0; }
+.upscaleRestoreWorkspace footer { border-top:1px solid #3c4852; margin-top:20px; padding-top:10px; }
+@media(max-width:840px) { .upscaleRestoreHost { inset:1vh 1vw; padding:14px; } .upscaleRestorePair { grid-template-columns:minmax(0,1fr); } }

@@ -82,6 +82,9 @@ pub fn receive(epoch: [u8; 16], event: &Value) -> bool {
         if matches!(command.operation, lrt_local_workflow::ports::CommandKind::PreflightPreset { .. } | lrt_local_workflow::ports::CommandKind::ApplyPreset { .. }) {
             let Some(handoff) = event.get("handoff") else { return false; };
             if !handoff.is_null() && !super::review::handoff(handoff, &command) { return false; }
+            if let lrt_local_workflow::ports::ReceiptResult::PresetPreflight { assessment } = &receipt.result {
+                if handoff.is_null() || (handoff["mode"] == "automatic") == assessment.requires_review { return false; }
+            }
         }
         if let Some(prior) = original.result.as_ref().filter(|value| value["receipt"].is_object()) {
             let Ok(prior) = serde_json::from_value::<lrt_local_workflow::ports::Receipt>(prior["receipt"].clone()) else { return false; };

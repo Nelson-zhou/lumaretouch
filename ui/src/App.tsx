@@ -1,3 +1,7 @@
+import {HandShapePanel,useHandShapePort} from './handShape';
+import {handShapeRequest,handShapeStatus} from './native';
+import {HandTonePanel,useHandTonePort} from './handTone';
+import {handToneRequest,handToneStatus} from './native';
 import {LimbVeinPanel,useLimbVeinPort} from './limbVein';
 import {limbVeinRequest,limbVeinStatus} from './native';
 import {FabricSweatPanel,useFabricSweatPort} from './fabricSweat';
@@ -9,6 +13,9 @@ import {SkinReferenceBodyPanel} from './skinReferenceBody/SkinReferenceBodyPanel
 import {useGlowWorkspaceBinding} from './lightGlow/useGlowWorkspaceBinding';
 import {LightGlowWorkspaceHost} from './lightGlow/LightGlowWorkspaceHost';
 import {GLOW_PROTOCOL, validGlowCapability} from './lightGlow/model';
+import {useUpscaleWorkspaceBinding} from './upscaleRestore/useUpscaleWorkspaceBinding';
+import {UpscaleRestoreWorkspaceHost} from './upscaleRestore/UpscaleRestoreWorkspaceHost';
+import {UPSCALE_PROTOCOL, validUpscaleCapability} from './upscaleRestore/model';
 import {guardCreativeWork} from './workspaces/guardCreativeWork';
 import {useLensBlur} from './lensBlur/useLensBlur';
 import {LensWorkspaceHost} from './lensBlur/LensWorkspaceHost';
@@ -27,12 +34,15 @@ import {exportDestinationApi, INSPECTION_EDIT_INTENT} from './native';
 import {settleCurveEdit} from './curveEditBarrier';
 import {VirtualCopyControls} from './virtualCopies/VirtualCopyControls';
 import {FilmstripGallery} from './libraryQuery/Gallery';
+import {OriginalFocusReview} from './originalFocus/OriginalFocusReview';
 import {LibraryWorkspace} from './libraryQuery/LibraryWorkspace';
 import {LibraryQueryControls} from './libraryQuery/Controls';
 import {useLibraryQuery} from './libraryQuery/useLibraryQuery';
 import {ratingOf,flagOf} from './libraryQuery/model';
 import {useBackgroundMaterialHost, BackgroundMaterialHost} from './backgroundMaterials';
 import {IdBackgroundPanel} from './idBackground/IdBackgroundPanel';
+import {CuratedIdBackgroundSetup} from './promptedMasks/CuratedIdBackgroundSetup';
+import {PromptedMaskDialog} from './promptedMasks/PromptedMaskDialog';
 import {ExportColorSpace} from './components/ExportColorSpace';
 import {ExportMetadataOptions} from './components/ExportMetadataOptions';
 import {useNeckWorkflow} from './neckShape/useNeckWorkflow';
@@ -88,6 +98,8 @@ import {PresetPanel} from "./presets/PresetPanel";
 import {presetLabel as modulePresetLabel} from "./presets/presetModel";
 import {batchScopeOptions, resolveBatchScope} from "./batch/batchScopeOptions";
 import {BatchActions} from './batch/BatchActions';
+import {PortraitPresetGroupPanel} from './portraitPresetGroup/Panel';
+import {useGroupDelivery,GroupDeliveryPanel} from './portraitPresetGroup/Delivery';
 import {useBatchWorkflow} from './batch/useBatchWorkflow';
 import {BatchReview} from './batch/BatchReview';
 import {useColorSampler} from './useColorSampler';
@@ -213,7 +225,9 @@ export default function App() {
     hudRef.current = v;
     setHudState(v);
   }, []);
-  const [busy, setBusy] = useState(false);
+  const [engineBusy, setBusy] = useState(false);
+  const [portraitGroupPreparing,setPortraitGroupPreparing]=useState(false);
+  const busy=engineBusy||portraitGroupPreparing;
   const [portraitCropBusy, setPortraitCropBusy] = useState(false);
   const [skipDraw, setSkipDraw] = useState(false);
   const [upload, setUpload] = useState<"raw" | "bitmap" | "pingpong">("raw");
@@ -222,6 +236,7 @@ export default function App() {
   const [tierLabel, setTierLabel] = useState("tier2");
   const poll = useRef<number | null>(null);
   const [glowOpen,setGlowOpen]=useState(false);
+  const [upscaleOpen,setUpscaleOpen]=useState(false);
   const [lensOpen,setLensOpen]=useState(false);
   const [expressionOpen,setExpressionOpen]=useState(false);
   const armBusyRef=useRef(false);
@@ -323,6 +338,7 @@ export default function App() {
   }, [invalidateDestination]);
   const [exportFormat, setExportFormat] = useState("jpg");
   const [idBackgroundBusy,setIdBackgroundBusy]=useState(false);
+  const [promptedMaskOpen,setPromptedMaskOpen]=useState(false);
   const [exportQuality, setExportQuality] = useState(95);
   const [exportTargetSize, setExportTargetSize] = useState({...initialTargetSize});
   // 放大（M7）：倍率与出片锐量。1 / 0.0 就是"不上这一层"——默认必须是原样出片，
@@ -997,11 +1013,15 @@ export default function App() {
     if(previous?.session!==result.session_id||!result.document_ids.includes(selAnchor.current??''))selAnchor.current=null;
     selectionSnapshot.current={session:result.session_id,ids:result.source_ids,trash};
   },[strip]);
-  const libraryControls=<LibraryQueryControls query={library.query} onChange={library.change}
+  const libraryControls=<><LibraryQueryControls query={library.query} onChange={library.change}
     pending={library.pending||!library.supported} error={library.error} total={strip?.count??0}
     visible={library.docs.length} selected={sel.size}
     onSelectVisible={()=>setSel(prev=>new Set([...prev,...library.docs.map(d=>d.document_id)]))}
-    onClearSelection={()=>{setSel(new Set());selAnchor.current=null;}}/>;
+    onClearSelection={()=>{setSel(new Set());selAnchor.current=null;}}/>
+    <OriginalFocusReview docs={library.docs} selected={sel} sessionId={library.result?.session_id??''}
+      blocked={library.pending||!!library.error||busy||!!status?.export_progress} available={!!status?.ready_caps?.pick_actions?.includes('focus')}
+      running={!!strip?.picks_running||status?.pick?.running===true||status?.pick?.event==='pick_start'||status?.pick?.event==='pick_progress'}
+      run={status?.pick??null} lastError={status?.last_error??null} refresh={refreshStatus}/></>;
   async function cyclePick(d:SessionDoc){
     const next=flagOf(d)==='unflagged'?'accepted':flagOf(d)==='accepted'?'rejected':'unflagged';
     const tags=d.tags.filter(t=>!t.startsWith('flag:'));if(next!=='unflagged')tags.push(`flag:${next}`);
@@ -1302,6 +1322,7 @@ export default function App() {
       metadata_include_gps:exportGpsForDepth(exportBits16, exportGps), conflict_policy:exportConflict, watermark, layout:layoutModel.layout};
   }
   async function onPreviewDestination() {
+    if(groupExportMode&&(!groupDelivery.available||groupDelivery.blocked||groupDelivery.exportClaimed)){setExportErr('此组交付不可重新预览；请先核对原请求或任务。');return;}
     if (destinationPreviewRunning.current || destinationSubmitting.current) return;
     destinationPreviewRunning.current = true;
     setExportErr(''); setDestinationBusy(true); setDestinationPreview(null);
@@ -1309,13 +1330,16 @@ export default function App() {
       await settleCurveEdit();
       const revision = ++destinationGeneration.current;
       const input = destinationInput.current;
-      const result = await exportDestinationApi.preview({...destinationPolicy, chosen_root:exportDir},
-        [...exportTargets], revision, destinationOptions());
+      const result = groupExportMode
+        ? await groupDelivery.preview({...destinationPolicy, chosen_root:exportDir},destinationOptions(),revision)
+        : await exportDestinationApi.preview({...destinationPolicy, chosen_root:exportDir},
+          [...exportTargets], revision, destinationOptions());
       if (revision === destinationGeneration.current && input === destinationInput.current) setDestinationPreview(result);
     } catch (error) { setExportErr(String(error)); }
     finally { destinationPreviewRunning.current = false; setDestinationBusy(false); }
   }
   async function onExport() {
+    if(groupExportMode&&(!groupDelivery.available||groupDelivery.blocked||groupDelivery.exportClaimed)){setExportErr('此组已有原请求或任务；不会重复启动。');return;}
     if (destinationSubmitting.current || destinationPreviewRunning.current) return;
     const plan = destinationPreview;
     if (!plan || plan.intent_revision !== destinationGeneration.current) { setExportErr('请先预览导出位置'); return; }
@@ -1324,6 +1348,7 @@ export default function App() {
     try {
       await settleCurveEdit();
       if (plan.intent_revision !== destinationGeneration.current) throw new Error('编辑已变化，请重新预览导出位置');
+      if(groupExportMode){await groupDelivery.start(plan);await refreshStatus();return;}
       const before = (await engineStatus())?.last_error ?? null;
       const combo = reconcileExportCombo(exportBits16, exportFormat, exportTiffComp);
       await runExport(exportDir, {
@@ -1465,6 +1490,8 @@ export default function App() {
     if (p.measures.decoded_from === "camera_preview") {
       lines.push(`· ${t("strip.previewTip")}`);
     }
+    lines.push(...(p.notes ?? []).map(note => `· ${note}`));
+    lines.push(`· ${t("pick.sourceScope", { source: (p.measures.source_size ?? []).join("×") || "?", decoded: (p.measures.decode_size ?? []).join("×") || "?", edge: p.measures.measure_edge })}`);
     lines.push(`· ${t("pick.noDelete")}`);
     return lines.join("\n");
   }
@@ -1509,7 +1536,9 @@ export default function App() {
   const projSuffix = caps?.project_suffix ?? ".lrproject.json";
   /** 底片条上被选中的那几张（没选就只导当前这张） */
   const selPaths = (library.pending||library.error?[]:library.docs).filter(d=>sel.has(d.document_id)).map(d=>d.document_id);
-  const exportTargets = sel.size ? selPaths : (hasImage ? (strip?.docs.filter(d=>d.loaded).map(d=>d.document_id)??[]) : []);
+  const groupDelivery = useGroupDelivery(JSON.stringify([pid,status?.project?.project_id,status?.project?.open]));
+  const groupExportMode = groupDelivery.state.exportMode;
+  const exportTargets = groupExportMode ? (groupDelivery.state.group?.delivery_targets.map(t=>t.document_id)??[]) : sel.size ? selPaths : (hasImage ? (strip?.docs.filter(d=>d.loaded).map(d=>d.document_id)??[]) : []);
   const destinationSignature = JSON.stringify([destinationPolicy, exportDir, exportFormat, exportQuality, exportTargetSize,
     exportScale, exportSharpen, exportBits16, exportTiffComp, exportGps, exportConflict,
     exportProfile, exportTile, watermark, layoutModel.layout, exportTargets, status?.doc_rev, status?.engine_alive, workspace]);
@@ -1843,29 +1872,43 @@ export default function App() {
   const selection=useSelectionBinding(creative,JSON.stringify([pid,doc?.document_id]),workspace==='creative',caps?.creative_selection_protocol===1&&caps?.creative_selection_capability?.available===true,imageToolBusy||idBackgroundBusy);
   const expression=useExpressionReplacement({sourceUid:doc?.source_uid??'',loadId:doc?.document_id??'',engineKey:String(pid??''),hostRevision:status?.doc_rev??-1,
     available:!!status?.engine_alive&&caps?.expression_replacement_protocol===1&&hasImage&&status.image?.load_id===doc?.document_id,
-    busy:hairToolBusy||idBackgroundBusy||creative.pending||colorSampler.active||sampleLibrary.open,queueBusy:!!status?.edit_queue?.in_flight||!!status?.edit_queue?.pending},refreshFromEngine);
+    busy:upscaleOpen||hairToolBusy||idBackgroundBusy||creative.pending||colorSampler.active||sampleLibrary.open,queueBusy:!!status?.edit_queue?.in_flight||!!status?.edit_queue?.pending},refreshFromEngine);
   const lens=useLensBlur({sourceUid:doc?.source_uid??'',loadId:doc?.document_id??'',engineKey:String(pid??''),hostRevision:status?.doc_rev??-1,
     active:workspace==='creative',available:!!status?.engine_alive&&caps?.lens_blur_protocol===3&&hasImage&&status.image?.load_id===doc?.document_id,
-    externalBusy:imageToolBusy||idBackgroundBusy||creative.pending||expression.busy||expressionOpen||colorSampler.active||sampleLibrary.open,queueBusy:!!status?.edit_queue?.in_flight||!!status?.edit_queue?.pending},refreshFromEngine);
+    externalBusy:upscaleOpen||imageToolBusy||idBackgroundBusy||creative.pending||expression.busy||expressionOpen||colorSampler.active||sampleLibrary.open,queueBusy:!!status?.edit_queue?.in_flight||!!status?.edit_queue?.pending},refreshFromEngine);
   const glowCapability=caps?.light_glow_capability;
   const glow=useGlowWorkspaceBinding({sourceUid:doc?.source_uid??'',loadId:doc?.document_id??'',engineKey:String(pid??''),hostRevision:status?.doc_rev??-1,active:workspace==='creative',
     available:!!status?.engine_alive&&hasImage&&status.image?.load_id===doc?.document_id&&caps?.light_glow_protocol===GLOW_PROTOCOL&&validGlowCapability(glowCapability)&&glowCapability.status==='available',
-    externalBusy:imageToolBusy||idBackgroundBusy||creative.pending||expression.busy||expressionOpen||lens.busy||lensOpen||colorSampler.active||sampleLibrary.open,queueBusy:!!status?.edit_queue?.in_flight||!!status?.edit_queue?.pending},refreshFromEngine);
+    externalBusy:upscaleOpen||imageToolBusy||idBackgroundBusy||creative.pending||expression.busy||expressionOpen||lens.busy||lensOpen||colorSampler.active||sampleLibrary.open,queueBusy:!!status?.edit_queue?.in_flight||!!status?.edit_queue?.pending},refreshFromEngine);
+  const upscaleCapability=caps?.upscale_restore_capability;
+  const upscale=useUpscaleWorkspaceBinding({sourceUid:doc?.source_uid??'',loadId:doc?.document_id??'',engineKey:String(pid??''),hostRevision:status?.doc_rev??-1,active:workspace==='creative',
+    available:!!status?.engine_alive&&hasImage&&status.image?.load_id===doc?.document_id&&caps?.upscale_restore_protocol===UPSCALE_PROTOCOL&&validUpscaleCapability(upscaleCapability),
+    externalBusy:glow.busy||glowOpen||imageToolBusy||idBackgroundBusy||creative.pending||expression.busy||expressionOpen||lens.busy||lensOpen||colorSampler.active||sampleLibrary.open,queueBusy:!!status?.edit_queue?.in_flight||!!status?.edit_queue?.pending},refreshFromEngine);
   const hairFamily=useHairFamily({status,doc,peopleEnabled:peopleWorkflow.enabled,refresh:refreshFromEngine,engineAlive,onStartEngine,
-    externalBusy:hairToolBusy||portraitCropBusy||idBackgroundBusy||creative.pending||expression.busy||expressionOpen||lens.busy||lensOpen||glow.busy||glowOpen||colorSampler.active||sampleLibrary.open});
+    externalBusy:hairToolBusy||portraitCropBusy||idBackgroundBusy||creative.pending||expression.busy||expressionOpen||lens.busy||lensOpen||glow.busy||glowOpen||upscale.busy||upscaleOpen||colorSampler.active||sampleLibrary.open});
   const neckWrinklePort=useNeckWrinklePort({people:peopleWorkflow,capability:{protocol:caps?.neck_wrinkle_protocol,available:caps?.neck_wrinkle_available,reason:caps?.neck_wrinkle_reason},
-    blocked:hairBusy||portraitCropBusy||hairFamily.workflowBusy||idBackgroundBusy||creative.pending||expression.busy||expressionOpen||lens.busy||lensOpen||glow.busy||glowOpen||colorSampler.active||sampleLibrary.open||!!status?.edit_queue?.closed});
+    blocked:hairBusy||portraitCropBusy||hairFamily.workflowBusy||idBackgroundBusy||creative.pending||expression.busy||expressionOpen||lens.busy||lensOpen||glow.busy||glowOpen||upscale.busy||upscaleOpen||colorSampler.active||sampleLibrary.open||!!status?.edit_queue?.closed});
   const fabricSweatPort=useFabricSweatPort({bindingKey:hasImage?JSON.stringify([pid,doc?.document_id,doc?.fabric_sweat?.revision]):null,
     documentId:doc?.document_id??null,revision:doc?.fabric_sweat?.revision??'',
     enabled:!!status?.engine_alive&&caps?.fabric_sweat_protocol===1&&hasImage&&status.image?.load_id===doc?.document_id,
-    blocked:hairBusy||portraitCropBusy||hairFamily.workflowBusy||idBackgroundBusy||creative.pending||expression.busy||expressionOpen||lens.busy||lensOpen||glow.busy||glowOpen||colorSampler.active||sampleLibrary.open||!!status?.edit_queue?.closed},refreshFromEngine);
+    blocked:hairBusy||portraitCropBusy||hairFamily.workflowBusy||idBackgroundBusy||creative.pending||expression.busy||expressionOpen||lens.busy||lensOpen||glow.busy||glowOpen||upscale.busy||upscaleOpen||colorSampler.active||sampleLibrary.open||!!status?.edit_queue?.closed},refreshFromEngine);
   const limbVeinPort=useLimbVeinPort({bindingKey:hasImage?JSON.stringify([pid,doc?.document_id,doc?.limb_vein?.revision]):null,
     documentId:doc?.document_id??null,revision:doc?.limb_vein?.revision??'',
     enabled:!!status?.engine_alive&&caps?.limb_vein_protocol===1&&hasImage&&status.image?.load_id===doc?.document_id,
-    blocked:fabricSweatPort.snapshot.pending||fabricSweatPort.snapshot.uncertain||fabricSweatPort.snapshot.refreshRequired||hairBusy||portraitCropBusy||hairFamily.workflowBusy||idBackgroundBusy||creative.pending||expression.busy||expressionOpen||lens.busy||lensOpen||glow.busy||glowOpen||colorSampler.active||sampleLibrary.open||!!status?.edit_queue?.closed},refreshFromEngine,{request:limbVeinRequest,status:limbVeinStatus});
-  armBusyRef.current=armBusyRef.current||portraitCropBusy||expression.busy||lens.busy||glow.busy||hairFamily.workflowBusy;
+    blocked:fabricSweatPort.snapshot.pending||fabricSweatPort.snapshot.uncertain||fabricSweatPort.snapshot.refreshRequired||hairBusy||portraitCropBusy||hairFamily.workflowBusy||idBackgroundBusy||creative.pending||expression.busy||expressionOpen||lens.busy||lensOpen||glow.busy||glowOpen||upscale.busy||upscaleOpen||colorSampler.active||sampleLibrary.open||!!status?.edit_queue?.closed},refreshFromEngine,{request:limbVeinRequest,status:limbVeinStatus});
+  const handTonePort=useHandTonePort({bindingKey:hasImage?JSON.stringify([pid,doc?.document_id,doc?.hand_tone?.revision]):null,
+    documentId:doc?.document_id??null,revision:doc?.hand_tone?.revision??'',
+    enabled:!!status?.engine_alive&&caps?.hand_tone_protocol===1&&hasImage&&status.image?.load_id===doc?.document_id,
+    blocked:limbVeinPort.snapshot.pending||limbVeinPort.snapshot.uncertain||limbVeinPort.snapshot.refreshRequired||fabricSweatPort.snapshot.pending||fabricSweatPort.snapshot.uncertain||fabricSweatPort.snapshot.refreshRequired||hairBusy||portraitCropBusy||hairFamily.workflowBusy||idBackgroundBusy||creative.pending||expression.busy||expressionOpen||lens.busy||lensOpen||glow.busy||glowOpen||upscale.busy||upscaleOpen||colorSampler.active||sampleLibrary.open||!!status?.edit_queue?.closed},refreshFromEngine,{request:handToneRequest,status:handToneStatus});
+  const handShapePort=useHandShapePort({bindingKey:hasImage?JSON.stringify([pid,doc?.document_id,doc?.hand_shape?.revision]):null,
+    documentId:doc?.document_id??null,revision:doc?.hand_shape?.revision??'',
+    enabled:!!status?.engine_alive&&caps?.hand_shape_protocol===1&&hasImage&&status.image?.load_id===doc?.document_id,
+    blocked:handTonePort.snapshot.pending||handTonePort.snapshot.uncertain||handTonePort.snapshot.refreshRequired||limbVeinPort.snapshot.pending||limbVeinPort.snapshot.uncertain||limbVeinPort.snapshot.refreshRequired||fabricSweatPort.snapshot.pending||fabricSweatPort.snapshot.uncertain||fabricSweatPort.snapshot.refreshRequired||hairBusy||portraitCropBusy||hairFamily.workflowBusy||idBackgroundBusy||creative.pending||expression.busy||expressionOpen||lens.busy||lensOpen||glow.busy||glowOpen||upscale.busy||upscaleOpen||colorSampler.active||sampleLibrary.open||!!status?.edit_queue?.closed},refreshFromEngine,{request:handShapeRequest,status:handShapeStatus});
+  armBusyRef.current=armBusyRef.current||portraitCropBusy||expression.busy||lens.busy||glow.busy||upscale.busy||hairFamily.workflowBusy;
   armBusyRef.current=armBusyRef.current||fabricSweatPort.snapshot.pending||fabricSweatPort.snapshot.uncertain||fabricSweatPort.snapshot.refreshRequired;
   armBusyRef.current=armBusyRef.current||limbVeinPort.snapshot.pending||limbVeinPort.snapshot.uncertain||limbVeinPort.snapshot.refreshRequired;
+  armBusyRef.current=armBusyRef.current||handTonePort.snapshot.pending||handTonePort.snapshot.uncertain||handTonePort.snapshot.refreshRequired;
+  armBusyRef.current=armBusyRef.current||handShapePort.snapshot.pending||handShapePort.snapshot.uncertain||handShapePort.snapshot.refreshRequired;
   creativeRoute.current={active:workspace==='creative',pending:creative.pending,importPaths:creative.importPaths,history:creative.history};
   const guides=useCanvasGuides({loadId:doc?.document_id??'',report:doc?.canvas_guides,center:doc?.crop?[(doc.crop.rect[0]+doc.crop.rect[2])/2,(doc.crop.rect[1]+doc.crop.rect[3])/2]:undefined,
     contextKey:JSON.stringify([pid,doc?.document_id,doc?.crop,view,workspace]),modes:{
@@ -1881,21 +1924,32 @@ export default function App() {
     sourcePatch.workflow.cancel();cloneStamp.workflow.cancel();wbPicker.workflow.cancel();localMasks.workflow.cancel();colorPicker.workflow.cancel();recovery.workflow.cancel();manual.workflow.cancel();
     void healBrush.workflow.start();
   };
+  const startLocalMasks=(...args:Parameters<typeof localMasks.workflow.start>)=>{
+    if(promptedMaskOpen||idBackgroundBusy||hairFamily.workflowBusy||localMasks.active||localMasks.pending||!localMasks.context.enabled||localMasks.context.canStart===false)return false;
+    if(sky.active||sky.pending||optics.active||optics.pending||fringe.active||fringe.pending||commonBackground.active||commonBackground.pending||studio.active||studio.pending||colorPicker.pending||manual.pending||recovery.pending||liveGrade.busy)return false;colorPicker.workflow.cancel();recovery.workflow.cancel();manual.workflow.cancel();setBrushOn(false);setPickFace(false);colorSampler.cancel();blushPicker.cancel();lipstickPicker.cancel();eyelinerPicker.cancel();browMakeupPicker.cancel();eyelashPicker.cancel();healBrush.workflow.cancel();cloneStamp.workflow.cancel();sourcePatch.workflow.cancel();wbPicker.workflow.cancel();void localMasks.workflow.start(...args);return true;
+  };
+  const startPromptedMasks=()=>{if(startLocalMasks(null))setPromptedMaskOpen(true);};
   // Keep uncertain arm/waist mutations and proposal cancellation from racing other UI edits.
   // Original-receipt checks, popup Close and the activity locator remain accessible.
-  const guardArmWork=(event:import('react').SyntheticEvent)=>guardCreativeWork(event,{portraitCrop:portraitCropBusy,hairUnification:hairFamily.unificationLocked,hairVolume:hairFamily.volumeLocked,glow:glow.busy||glowOpen,lens:lens.busy||lensOpen,expression:expression.busy||expressionOpen,background:fringe.active||fringe.pending||commonBackground.active||commonBackground.pending,heal:healBrush.pending,layers:creative.pending,selection:selection.busy,
+  const guardArmWork=(event:import('react').SyntheticEvent)=>guardCreativeWork(event,{portraitCrop:portraitCropBusy,hairUnification:hairFamily.unificationLocked,hairVolume:hairFamily.volumeLocked,glow:glow.busy||glowOpen,upscale:upscale.busy||upscaleOpen,lens:lens.busy||lensOpen,expression:expression.busy||expressionOpen,background:fringe.active||fringe.pending||commonBackground.active||commonBackground.pending,heal:healBrush.pending,layers:creative.pending,selection:selection.busy,
     idBackground:idBackgroundBusy,body:arms.busy||waist.busy||length.busy||neck.busy||torso.busy||waistLength.busy||headSize.busy||bodySlim.busy});
+  const guardGroupPreparation=(event:import('react').SyntheticEvent)=>{
+    if(portraitGroupPreparing && (!(event.target instanceof Element)||!event.target.closest('[data-portrait-preparation-owner]'))){event.preventDefault();event.stopPropagation();return;}
+    guardArmWork(event);
+  };
   return (
-    <div className={"app ws-" + workspace} onClickCapture={guardArmWork} onPointerDownCapture={guardArmWork} onKeyDownCapture={guardArmWork}>
+    <div className={"app ws-" + workspace} onClickCapture={guardGroupPreparation} onPointerDownCapture={guardGroupPreparation} onKeyDownCapture={guardGroupPreparation}>
       <WorkspaceTopbar workspace={workspace} onWorkspace={setWorkspace} busy={busy||arms.busy||waist.busy||length.busy||neck.busy||torso.busy||waistLength.busy||headSize.busy||bodySlim.busy||creative.pending||hairFamily.workflowBusy} hasImage={hasImage}
         currentPath={strip?.current} onOpenPhoto={() => { setWorkspace("retouch"); void openAndImport(); }}
         libraryEnabled={sampleLibrary.enabled} onLibrary={() => sampleLibrary.show('manage')}/>
       <LightGlowWorkspaceHost owner={glow} unavailableReason={validGlowCapability(glowCapability)?(glowCapability.status==='available'?undefined:glowCapability.reason||'发光原生模块不可用'): '缺少匹配的发光原生模块；不会降级为占位效果或自动安装'} open={glowOpen} onOpen={()=>setGlowOpen(true)} onClose={()=>setGlowOpen(false)}/>
+      <UpscaleRestoreWorkspaceHost owner={upscale} unavailableReason={validUpscaleCapability(upscaleCapability)?(upscaleCapability.status==='available'?undefined:upscaleCapability.reason||'AI 超清原生模块不可用'): '缺少匹配的AI 超清原生模块；不会降级为占位效果或自动安装'} open={upscaleOpen} onOpen={()=>setUpscaleOpen(true)} onClose={()=>setUpscaleOpen(false)}/>
       <LensWorkspaceHost owner={lens} open={lensOpen} onOpen={()=>setLensOpen(true)} onClose={()=>setLensOpen(false)}/>
       <ExpressionWorkspaceHost owner={expression} open={expressionOpen} onOpen={()=>setExpressionOpen(true)} onClose={()=>setExpressionOpen(false)}/>
       <PortraitCropWorkspaceHost contextKey={doc?.document_id?JSON.stringify([pid,doc.document_id,status?.doc_rev,status?.image?.load_id,doc.source_uid,workspace]):null} enabled={!!status?.engine_alive&&hasImage&&status.image?.load_id===doc?.document_id&&workspace==='retouch'&&!imageToolBusy&&!idBackgroundBusy&&!creative.pending&&!expression.busy&&!expressionOpen&&!lens.busy&&!lensOpen&&!glow.busy&&!glowOpen&&!hairFamily.workflowBusy&&!sampleLibrary.open&&!colorSampler.active&&!status?.edit_queue?.in_flight&&!status?.edit_queue?.pending} onChanged={refreshFromEngine} onBusy={setPortraitCropBusy} onReopenProject={()=>projectFlow.perform('open')}/>
       <SampleLibraryHost owner={sampleLibrary}/>
       <BackgroundMaterialHost owner={materials}/>
+      {promptedMaskOpen&&<PromptedMaskDialog owner={localMasks} onClose={()=>setPromptedMaskOpen(false)}/>}
 
 
       {doc?.sky_replacement?.suspended&&<div className="skySuspendedNotice" role="alert">换天空已暂停：{doc.sky_replacement.suspended}。当前代理仅显示其他效果，不是完整出片结果。请进入“换天空”重新选择素材或关闭该效果；全质量检查和导出保持阻止。</div>}
@@ -1906,12 +1960,12 @@ export default function App() {
                 if(target instanceof HTMLSelectElement || (target instanceof HTMLInputElement
                   && ['range','number','color','checkbox'].includes(target.type)))notifyInspectionEditIntent();
               }}>
-          <IdBackgroundPanel materials={materials} materialTargetKey={materialTargetKey} pickerDisabled={busy||exporting||peopleWorkflow.state.pending||peopleWorkflow.state.uncertain||!!status?.edit_queue?.in_flight||!!status?.edit_queue?.pending||brushOn||pickFace||whiteBalanceWorkflow.workflow.busy()||sky.active||sky.pending||optics.active||optics.pending||fringe.active||fringe.pending||commonBackground.active||commonBackground.pending||studio.active||studio.pending||manual.active||manual.pending||recovery.active||recovery.pending||liveGrade.busy||colorPicker.active||colorPicker.pending||localMasks.active||localMasks.pending||healBrush.active||healBrush.pending||cloneStamp.active||cloneStamp.pending||sourcePatch.active||sourcePatch.pending||wbPicker.active||wbPicker.pending||shoulders.busy||legs.busy||arms.busy||waist.busy||length.busy||neck.busy||torso.busy||waistLength.busy||headSize.busy||bodySlim.busy||eyelashPicker.active||browMakeupPicker.active||eyelinerPicker.active||lipstickPicker.active||blushPicker.active||workspace!=='retouch'||inspectionEnabled||cropOpen||!(batchWorkflow.ui.phase==='closed'||batchWorkflow.ui.hidden===true)} selectedReference={sampleLibrary.selectedReference} onSelectReference={()=>sampleLibrary.show('reference')} onBusy={setIdBackgroundBusy} documentId={doc?.document_id??''} hostRevision={status?.doc_rev??-1} disabled={hairBusy||hairFamily.workflowBusy||!hasImage} available={status?.ready_caps?.id_background_protocol===1} masks={doc?.local_masks} onChanged={()=>{void refreshFromEngine();}}/>
+          <IdBackgroundPanel foregroundSetup={<CuratedIdBackgroundSetup owner={localMasks} blocked={status?.ready_caps?.id_background_protocol!==1||promptedMaskOpen||idBackgroundBusy||hairBusy||hairFamily.workflowBusy||liveGrade.busy} onStart={startPromptedMasks}/>} materials={materials} materialTargetKey={materialTargetKey} pickerDisabled={busy||exporting||peopleWorkflow.state.pending||peopleWorkflow.state.uncertain||!!status?.edit_queue?.in_flight||!!status?.edit_queue?.pending||brushOn||pickFace||whiteBalanceWorkflow.workflow.busy()||sky.active||sky.pending||optics.active||optics.pending||fringe.active||fringe.pending||commonBackground.active||commonBackground.pending||studio.active||studio.pending||manual.active||manual.pending||recovery.active||recovery.pending||liveGrade.busy||colorPicker.active||colorPicker.pending||localMasks.active||localMasks.pending||healBrush.active||healBrush.pending||cloneStamp.active||cloneStamp.pending||sourcePatch.active||sourcePatch.pending||wbPicker.active||wbPicker.pending||shoulders.busy||legs.busy||arms.busy||waist.busy||length.busy||neck.busy||torso.busy||waistLength.busy||headSize.busy||bodySlim.busy||eyelashPicker.active||browMakeupPicker.active||eyelinerPicker.active||lipstickPicker.active||blushPicker.active||workspace!=='retouch'||inspectionEnabled||cropOpen||!(batchWorkflow.ui.phase==='closed'||batchWorkflow.ui.hidden===true)} selectedReference={sampleLibrary.selectedReference} onSelectReference={()=>sampleLibrary.show('reference')} onBusy={setIdBackgroundBusy} documentId={doc?.document_id??''} hostRevision={status?.doc_rev??-1} disabled={hairBusy||hairFamily.workflowBusy||!hasImage} available={status?.ready_caps?.id_background_protocol===1} masks={doc?.local_masks} onChanged={()=>{void refreshFromEngine();}}/>
           <RetouchPanel expressionPanel={<button type="button" disabled={!hasImage||hairBusy||creative.pending||hairFamily.workflowBusy} onClick={()=>setExpressionOpen(true)}>同场次表情替换 · 获取真实素材并审核</button>} fringeRepairOwner={fringe} commonBackgroundOwner={commonBackground} irisMakeupPanel={<IrisMakeupPanel people={peopleWorkflow} report={doc?.people?.iris_makeup??null} blocked={busy||exporting||!captureAllowed||eyelashPicker.active||browMakeupPicker.active||eyelinerPicker.active||lipstickPicker.active||blushPicker.active||!!status?.edit_queue?.in_flight||!!status?.edit_queue?.pending}/>} eyelashPanel={<EyelashPanel people={peopleWorkflow} picker={eyelashPicker} blocked={busy||exporting||!captureAllowed||!!status?.edit_queue?.in_flight||!!status?.edit_queue?.pending} onArm={armEyelashPicker}/>} browMakeupPanel={<BrowMakeupPanel people={peopleWorkflow} picker={browMakeupPicker} blocked={busy||exporting||!captureAllowed||!!status?.edit_queue?.in_flight||!!status?.edit_queue?.pending} onArm={armBrowMakeupPicker}/>} eyelinerPanel={<EyelinerPanel people={peopleWorkflow} picker={eyelinerPicker} blocked={busy||exporting||!captureAllowed||!!status?.edit_queue?.in_flight||!!status?.edit_queue?.pending} onArm={armEyelinerPicker}/>} lipstickPanel={<LipstickPanel people={peopleWorkflow} picker={lipstickPicker} blocked={busy||exporting||!captureAllowed||!!status?.edit_queue?.in_flight||!!status?.edit_queue?.pending} onArm={armLipstickPicker}/>} blushMakeupPanel={<BlushMakeupPanel people={peopleWorkflow} picker={blushPicker} blocked={busy||exporting||!captureAllowed||!!status?.edit_queue?.in_flight||!!status?.edit_queue?.pending} onArm={armBlushPicker}/>} shoulderPanel={<BodyShapeTools shoulders={shoulders} legs={legs} arms={arms} waist={waist} length={length} neck={neck} torso={torso} waistLength={waistLength} headSize={headSize} bodySlim={bodySlim} blocked={bodyToolsBlocked}/>} sampleLibraryPanel={<SampleLibraryLaunch owner={sampleLibrary}/>} toolLocation={toolLocation} {...createRetouchToolSlots({guides,guideSourceSize:[status?.image?.src_w??0,status?.image?.src_h??0],guideCrop:doc?.crop,sky,skyReport:doc?.sky_replacement,optics,opticsReport:doc?.optics,manual,recovery,studio,manualReport:doc?.manual_liquify,recoveryReport,studioReport:doc?.studio_background,busy:liveGrade.busy})} colorActions={{owner:colorPicker,blocked:sky.active||sky.pending||manual.pending||recovery.pending||liveGrade.busy||sourcePatch.pending||wbPicker.pending||healBrush.pending||cloneStamp.pending||localMasks.pending,onStart:(action,channel)=>{if(sky.active||sky.pending||manual.pending||recovery.pending||liveGrade.busy||sourcePatch.pending||wbPicker.pending||healBrush.pending||cloneStamp.pending||localMasks.pending)return;setBrushOn(false);setPickFace(false);colorSampler.cancel();blushPicker.cancel();lipstickPicker.cancel();eyelinerPicker.cancel();browMakeupPicker.cancel();eyelashPicker.cancel();sourcePatch.workflow.cancel();wbPicker.workflow.cancel();healBrush.workflow.cancel();cloneStamp.workflow.cancel();localMasks.workflow.cancel();recovery.workflow.cancel();manual.workflow.cancel();void colorPicker.workflow.start(action,channel);}}} whiteBalanceBusy={optics.active||optics.pending||fringe.active||fringe.pending||commonBackground.active||commonBackground.pending||studio.active||studio.pending||sourcePatch.active||sourcePatch.pending||healBrush.active||healBrush.pending||cloneStamp.active||cloneStamp.pending||sky.active||sky.pending||manual.active||recovery.active||manual.pending||recovery.pending||liveGrade.busy||colorPicker.active||colorPicker.pending||whiteBalanceWorkflow.workflow.busy()||wbPicker.active||wbPicker.pending||localMasks.active||localMasks.pending} whiteBalancePanel={<WhiteBalanceControls owner={whiteBalanceWorkflow} value={doc?.exposure} pickerBusy={sky.active||sky.pending||manual.active||recovery.active||manual.pending||recovery.pending||liveGrade.busy||colorPicker.active||colorPicker.pending||localMasks.active||localMasks.pending||wbPicker.active||wbPicker.pending||sourcePatch.active||sourcePatch.pending||healBrush.active||healBrush.pending||cloneStamp.active||cloneStamp.pending} picker={<WhiteBalancePickerControls owner={{...wbPicker,context:{...wbPicker.context,canStart:wbPicker.context.canStart!==false&&!manual.active&&!manual.pending&&!colorPicker.pending&&!recovery.pending&&!liveGrade.busy}}} onStart={()=>{if(sky.active||sky.pending||optics.active||optics.pending||fringe.active||fringe.pending||commonBackground.active||commonBackground.pending||studio.active||studio.pending||colorPicker.pending||manual.pending||recovery.pending||liveGrade.busy)return;colorPicker.workflow.cancel();recovery.workflow.cancel();manual.workflow.cancel();setBrushOn(false);setPickFace(false);colorSampler.cancel();blushPicker.cancel();lipstickPicker.cancel();eyelinerPicker.cancel();browMakeupPicker.cancel();eyelashPicker.cancel();localMasks.workflow.cancel();healBrush.workflow.cancel();cloneStamp.workflow.cancel();void wbPicker.workflow.start();}}/>}/>} presetPanel={<PresetPanel workflow={presetWorkflow}/>} status={status} doc={doc} hasImage={hasImage}
                         healBrushPanel={<HealBrushPanel owner={healBrush} onStart={startReviewedHeal} blocked={bodyToolsBlocked&&!healBrush.active&&!healBrush.pending}/>}
                         sourcePatchPanel={<SourcePatchPanel owner={sourcePatch} blocked={sky.active||sky.pending||manual.pending||recovery.pending||liveGrade.busy||colorPicker.pending||localMasks.pending||wbPicker.active||wbPicker.pending||healBrush.pending||cloneStamp.pending} onStart={()=>{if(sky.active||sky.pending||manual.pending||recovery.pending||liveGrade.busy||colorPicker.pending||localMasks.pending||wbPicker.active||wbPicker.pending||healBrush.pending||cloneStamp.pending)return;colorPicker.workflow.cancel();recovery.workflow.cancel();manual.workflow.cancel();localMasks.workflow.cancel();healBrush.workflow.cancel();cloneStamp.workflow.cancel();setBrushOn(false);setPickFace(false);colorSampler.cancel();blushPicker.cancel();lipstickPicker.cancel();eyelinerPicker.cancel();browMakeupPicker.cancel();eyelashPicker.cancel();void sourcePatch.workflow.start();}}/>}
                         cloneStampPanel={<CloneStampPanel owner={cloneStamp} blocked={sky.active||sky.pending||manual.pending||recovery.pending||liveGrade.busy||colorPicker.pending||localMasks.pending||sourcePatch.active||sourcePatch.pending||wbPicker.active||wbPicker.pending} onStart={()=>{if(sky.active||sky.pending||optics.active||optics.pending||fringe.active||fringe.pending||commonBackground.active||commonBackground.pending||studio.active||studio.pending||colorPicker.pending||manual.pending||recovery.pending||liveGrade.busy)return;colorPicker.workflow.cancel();recovery.workflow.cancel();manual.workflow.cancel();setBrushOn(false);setPickFace(false);colorSampler.cancel();blushPicker.cancel();lipstickPicker.cancel();eyelinerPicker.cancel();browMakeupPicker.cancel();eyelashPicker.cancel();localMasks.workflow.cancel();void cloneStamp.workflow.start();}}/>}
-                        localMasksPanel={<LocalMaskPanel liveGrade={liveGrade} owner={localMasks} report={doc?.local_masks} blocked={sky.active||sky.pending||optics.active||optics.pending||fringe.active||fringe.pending||commonBackground.active||commonBackground.pending||studio.active||studio.pending||manual.active||manual.pending||recovery.pending||colorPicker.pending||sourcePatch.active||sourcePatch.pending||wbPicker.active||wbPicker.pending||healBrush.active||healBrush.pending||cloneStamp.active||cloneStamp.pending} onStart={(mutation,draw,groupId)=>{if(sky.active||sky.pending||optics.active||optics.pending||fringe.active||fringe.pending||commonBackground.active||commonBackground.pending||studio.active||studio.pending||colorPicker.pending||manual.pending||recovery.pending||liveGrade.busy)return;colorPicker.workflow.cancel();recovery.workflow.cancel();manual.workflow.cancel();setBrushOn(false);setPickFace(false);colorSampler.cancel();blushPicker.cancel();lipstickPicker.cancel();eyelinerPicker.cancel();browMakeupPicker.cancel();eyelashPicker.cancel();healBrush.workflow.cancel();cloneStamp.workflow.cancel();sourcePatch.workflow.cancel();wbPicker.workflow.cancel();void localMasks.workflow.start(mutation,draw,groupId);}}/>}
+                        localMasksPanel={<LocalMaskPanel liveGrade={liveGrade} owner={localMasks} report={doc?.local_masks} blocked={sky.active||sky.pending||optics.active||optics.pending||fringe.active||fringe.pending||commonBackground.active||commonBackground.pending||studio.active||studio.pending||manual.active||manual.pending||recovery.pending||colorPicker.pending||sourcePatch.active||sourcePatch.pending||wbPicker.active||wbPicker.pending||healBrush.active||healBrush.pending||cloneStamp.active||cloneStamp.pending} onPromptedStart={startPromptedMasks} onStart={startLocalMasks}/>}
                         colorSamplePanel={<ColorSamplePanel sampler={colorSampler} reason={captureReason}
                           canArm={captureAllowed&&!status?.edit_queue?.in_flight&&!status?.edit_queue?.pending}
                           onArm={()=>{if(sky.active||sky.pending||optics.active||optics.pending||fringe.active||fringe.pending||commonBackground.active||commonBackground.pending||studio.active||studio.pending||colorPicker.pending||manual.pending||recovery.pending||liveGrade.busy)return;colorPicker.workflow.cancel();recovery.workflow.cancel();manual.workflow.cancel();setBrushOn(false);setPickFace(false);blushPicker.cancel();lipstickPicker.cancel();eyelinerPicker.cancel();browMakeupPicker.cancel();eyelashPicker.cancel();colorSampler.arm();}}/>}
@@ -1921,8 +1975,10 @@ export default function App() {
                         people={peopleWorkflow}
                         skinReferencePanel={<SkinReferenceMatchPanel choiceAvailable={status?.ready_caps?.skin_reference_choice_protocol===1} people={peopleWorkflow} available={status?.ready_caps?.skin_reference_match_protocol===1} blocked={hairBusy||hairFamily.workflowBusy||!!status?.edit_queue?.in_flight||!!status?.edit_queue?.pending||!!status?.edit_queue?.closed}/> }
                         neckWrinklePanel={<NeckWrinkleControl port={neckWrinklePort}/>}
-                        fabricSweatPanel={<FabricSweatPanel port={fabricSweatPort} disabled={limbVeinPort.snapshot.pending||limbVeinPort.snapshot.uncertain||limbVeinPort.snapshot.refreshRequired}/>}
-                        limbVeinPanel={<LimbVeinPanel port={limbVeinPort}/>}
+                        fabricSweatPanel={<FabricSweatPanel port={fabricSweatPort} disabled={handShapePort.snapshot.pending||handShapePort.snapshot.uncertain||handShapePort.snapshot.refreshRequired||handTonePort.snapshot.pending||handTonePort.snapshot.uncertain||handTonePort.snapshot.refreshRequired||limbVeinPort.snapshot.pending||limbVeinPort.snapshot.uncertain||limbVeinPort.snapshot.refreshRequired}/>}
+                        limbVeinPanel={<LimbVeinPanel port={limbVeinPort} disabled={handShapePort.snapshot.pending||handShapePort.snapshot.uncertain||handShapePort.snapshot.refreshRequired||handTonePort.snapshot.pending||handTonePort.snapshot.uncertain||handTonePort.snapshot.refreshRequired}/>}
+                        handTonePanel={<HandTonePanel port={handTonePort} disabled={handShapePort.snapshot.pending||handShapePort.snapshot.uncertain||handShapePort.snapshot.refreshRequired}/>}
+                        handShapePanel={<HandShapePanel port={handShapePort}/>}
                         skinReferenceBodyPanel={<SkinReferenceBodyPanel choiceAvailable={status?.ready_caps?.skin_reference_choice_protocol===1} people={peopleWorkflow} available={status?.ready_caps?.skin_reference_body_protocol===1} blocked={hairBusy||hairFamily.workflowBusy||!!status?.edit_queue?.in_flight||!!status?.edit_queue?.pending||!!status?.edit_queue?.closed}/> }
                         {...hairFamily.slots}
                         brush={{ on: brushOn, mode: brushMode, radius: brushRadius }}
@@ -2066,6 +2122,8 @@ export default function App() {
               )}
             </div>
 
+            <PortraitPresetGroupPanel deliveryContextKey={JSON.stringify([pid,status?.project?.project_id,status?.project?.open])} preparationEnabled={status?.ready_caps?.portrait_preset_preparation_protocol===1} engineKey={String(pid??'')} onPreparationLock={setPortraitGroupPreparing} docs={selPaths} currentDocument={strip?.docs.find(d=>d.loaded)?.document_id??''} contextKey={JSON.stringify([pid,status?.doc_rev,status?.image?.load_id])} enabled={!groupDelivery.blocked&&hasImage&&!busy&&!exporting&&!status?.edit_queue?.in_flight&&!status?.edit_queue?.pending&&status?.ready_caps?.portrait_preset_group_protocol===1} onApplied={receipt=>{if(status?.ready_caps?.portrait_preset_delivery_protocol!==1)throw Error('当前引擎不支持整组交付');groupDelivery.accept(receipt);}} onComplete={()=>{void refreshFromEngine().catch(e=>setDragNote(String(e)));}}/>
+            <GroupDeliveryPanel owner={groupDelivery} onOpen={()=>{groupDelivery.open();invalidateDestination();setWorkspace('export');}}/>
             <ConfirmedPeopleTransfer owner={peopleWorkflow} targets={selPaths} currentPath={strip?.current??''} enabled={hasImage&&!exporting&&status?.ready_caps?.people_protocol===1&&status?.ready_caps?.batch_preflight_protocol===1} onComplete={()=>{void refreshFromEngine().catch(e=>setDragNote(String(e)));}}/>
             {strip && strip.count > 0 && (
               <>
@@ -2088,12 +2146,15 @@ export default function App() {
           importFolder={folder=>runSession('add',{paths:[folder],thumbs:true})} refresh={refreshStatus} onError={setDragNote}
           docs={library.docs} total={strip?.count??0} sel={sel} thumbs={thumbs} controls={libraryControls} facts={library.result?.facts} onPickDoc={onPickDoc} onCellClick={onCellClick} openAndImport={openAndImport} onRetouch={()=>setWorkspace("retouch")} setRating={setRating} cycleFlag={cycleFlag} cyclePick={cyclePick}/>}
 
+        {workspace === 'creative' && <button type="button" disabled={hairFamily.workflowBusy||imageToolBusy||idBackgroundBusy||expression.busy||lens.busy||glow.busy||glowOpen||!!status?.edit_queue?.in_flight||!!status?.edit_queue?.pending} onClick={()=>setUpscaleOpen(true)}>AI 超清 · 原尺寸恢复</button>}
         {workspace === "creative" && <CreativeWorkspace owner={creative} selection={selection} engineAlive={engineAlive} onStartEngine={onStartEngine} selectionUnavailableReason={caps?.creative_selection_capability?.reason??undefined} hasImage={hasImage} onGlow={()=>setGlowOpen(true)} glowBlocked={hairFamily.workflowBusy||imageToolBusy||idBackgroundBusy||expression.busy||lens.busy||!!status?.edit_queue?.in_flight||!!status?.edit_queue?.pending} onLens={()=>setLensOpen(true)} lensBlocked={hairFamily.workflowBusy||imageToolBusy||idBackgroundBusy||expression.busy||!!status?.edit_queue?.in_flight||!!status?.edit_queue?.pending} available={caps?.creative_document_protocol===1}
           onBack={()=>setWorkspace('retouch')} healBlocked={sky.active||sky.pending||colorPicker.pending||manual.pending||recovery.pending||liveGrade.busy}
           onHeal={()=>{if(healBrush.pending)return;colorPicker.workflow.cancel();recovery.workflow.cancel();manual.workflow.cancel();setBrushOn(false);locateTool('PC-32482','污点修复画笔');setDragNote('已打开审核式修复画笔，请点击开始后在冻结输入画面涂抹');}}/>}
 
         {workspace === "export" && (
           <section className="exportView">
+            <GroupDeliveryPanel owner={groupDelivery} onOpen={()=>{groupDelivery.open();invalidateDestination();}}/>
+            {groupExportMode&&<p>当前导出绑定上方成功组，不跟随图库选择。<button disabled={groupDelivery.blocked} onClick={()=>{groupDelivery.leave();invalidateDestination();}}>退出整组交付，恢复普通导出</button></p>}
             <ExportQueuePanel exportTargets={exportTargets} exporting={exporting} status={status} strip={strip} exportBits16={exportBits16} exportFormat={exportFormat}/>
 
             <div className="exportCard">
@@ -2136,7 +2197,7 @@ export default function App() {
               <LayoutControls model={layoutModel} disabled={exporting} selected={exportTargets.length || (hasImage ? 1 : 0)} receipt={status?.export?.layout_result}/>
               <WatermarkControls value={watermark} onChange={setWatermark} disabled={exporting} storageError={watermarkStorageError}/>
               <ExportDestinationPanel policy={{...destinationPolicy, chosen_root:exportDir}}
-                preview={destinationPreview} busy={destinationBusy||exporting}
+                preview={destinationPreview} busy={destinationBusy||exporting||(groupExportMode&&(groupDelivery.blocked||groupDelivery.exportClaimed||!groupDelivery.available))}
                 available={status?.ready_caps?.export_destination_protocol===1}
                 onChange={policy=>{invalidateDestination();setDestinationPolicy(policy);setExportDir(policy.chosen_root??'');setExportConflict(policy.conflict==='rename'?'recheck':'skip_and_report');}}
                 onPreview={()=>void onPreviewDestination()} error={exportErr}/>
@@ -2145,7 +2206,7 @@ export default function App() {
                   ? `本批 ${exportTargets.length} 张 · 按底片条记账`
                   : "单张导出 · 原片只读"}</span>
                 <button className="tb primary" onClick={onExport}
-                        disabled={!exportTargets.length || exporting || destinationBusy || !destinationPreview || destinationPreview.entries.some(e=>e.disposition==='needs_confirmation')}>
+                        disabled={!exportTargets.length || exporting || destinationBusy || (groupExportMode&&(!groupDelivery.available||groupDelivery.blocked||groupDelivery.exportClaimed)) || !destinationPreview || destinationPreview.entries.some(e=>e.disposition==='needs_confirmation')}>
                   {exporting ? "导出中…" : "开始导出"}
                 </button>
               </div>

@@ -384,6 +384,18 @@ def guard_command(engine, name, request):
         from .creative_derived_source import binding,verify
         verify(binding(engine),engine)
         return  # Source-bound manual limb review uses canonical derived pixels, never original analysis.
+    if name == 'hand_shape':
+        from .hand_shape_routes import check
+        check(request)
+        if request.get('action') not in ('clear', 'status'):
+            raise ValueError('手部美型 v1 仅支持原始来源，请返回原图后重新审核；不沿用合成前的手部支撑。')
+        return  # Clearing/querying retained intent never fabricates a derived-source review.
+    if name == 'hand_tone':
+        from .hand_tone_routes import check
+        check(request)
+        from .creative_derived_source import binding,verify
+        verify(binding(engine),engine)
+        return  # Source-bound manual limb review uses canonical derived pixels, never original analysis.
     if name == 'fabric':
         from .creative_derived_fabric import require_command as require_fabric
         require_fabric(engine,request)

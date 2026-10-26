@@ -46,6 +46,16 @@ pub fn handoff(value: &Value, command: &Command) -> bool {
         CommandKind::ApplyPreset { document, preset_id, assessment } => (document, preset_id, &assessment.preset_sha256),
         _ => return false,
     };
+    if let CommandKind::ApplyPreset { assessment, .. } = &command.operation {
+        if (value["mode"] == "automatic") == assessment.requires_review { return false; }
+    }
+    if value["mode"] == "automatic" {
+        return exact(value, &["version", "operation_id", "document_id", "preset_id", "preset_sha256", "phase", "review", "message", "mode"])
+            && value["version"] == 1 && value["operation_id"] == command.identity.operation_id
+            && value["document_id"] == document.document_id && value["preset_id"] == *preset_id && value["preset_sha256"] == *preset_sha256
+            && matches!(value["phase"].as_str(), Some("authorized" | "unknown"))
+            && value["review"].is_null() && bounded(&value["message"], 8192);
+    }
     exact(value, &["version", "operation_id", "document_id", "preset_id", "preset_sha256", "phase", "review", "message"])
         && value["version"] == 1 && value["operation_id"] == command.identity.operation_id
         && value["document_id"] == document.document_id && value["preset_id"] == *preset_id && value["preset_sha256"] == *preset_sha256
@@ -56,6 +66,7 @@ pub fn handoff(value: &Value, command: &Command) -> bool {
         && (value["phase"] != "reviewing" || !value["review"].is_null())
 }
 pub fn step_allowed(handoff: &Value, step: &str, payload: &Value) -> bool {
+    if handoff["mode"] == "automatic" { return false; }
     match step {
         "open_target" => handoff["phase"] == "awaiting_open" && exact(payload, &[]),
         "prepare_skin" => handoff["phase"] == "awaiting_preparation" && exact(payload, &[]),

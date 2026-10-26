@@ -32,7 +32,7 @@ export function transferGroupsFromParams(value:unknown):TransferGroupChoice[]{
     const layer=value as {id?:unknown;name?:unknown;mask?:{recipe?:{objects?:{kind?:string;channel?:string}[]}}};
     if(typeof layer?.id!=='string'||typeof layer.name!=='string'||!Array.isArray(layer.mask?.recipe?.objects))return [];
     const objects=layer.mask.recipe.objects,types=[...new Set(objects.map(o=>o.kind==='semantic'?(o.channel==='background'?'background':'subject'):'custom'))];
-    const reason=objects.some(o=>o.kind==='brush')?'包含画笔，不可迁移':objects.some(o=>o.kind==='prompted')?'AI 提示选区绑定原图，不可迁移':null;
+    const reason=objects.some(o=>o.kind==='brush')?'包含画笔，不可迁移':objects.some(o=>o.kind==='prompted')?'AI 提示选区绑定原图，不可迁移':objects.some(o=>o.kind==='automatic_foreground')?'自动前景建议绑定原图，不可迁移':null;
     return [{id:layer.id,name:layer.name,types:types.length?types:['custom'],portable:!reason,reason}];
   });
 }

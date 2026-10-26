@@ -8,11 +8,12 @@ import os
 from . import workflow_owner_protocol as P
 
 
-def export_command(document_id, root, revision, *, action, request_id):
+def export_command(document_id, root, revision, *, action, request_id, recipe_sha256=P.RECIPE_SHA256):
+    profile = P.resolve_export_profile(recipe_sha256, automatic=True)
     return {'cmd': 'export', 'action': action, 'request_id': request_id,
-            **deepcopy(P.RECIPE_PROFILE['export_options']),
+            **deepcopy(profile['export_options']),
             'document_ids': [document_id], 'intent_revision': revision,
-            'destination_policy': {**deepcopy(P.RECIPE_PROFILE['destination']), 'chosen_root': root}}
+            'destination_policy': {**deepcopy(profile['destination']), 'chosen_root': root}}
 
 
 def preview(engine, command, destination_roots):
@@ -28,8 +29,8 @@ def preview(engine, command, destination_roots):
     return restore(matches[0]['value']).payload()
 
 
-def freeze(engine, row, document, root, revision, request_id, destination_roots):
-    command = export_command(row['document_id'], root, revision, action='preview', request_id=request_id)
+def freeze(engine, row, document, root, revision, request_id, destination_roots, recipe_sha256=P.RECIPE_SHA256):
+    command = export_command(row['document_id'], root, revision, action='preview', request_id=request_id, recipe_sha256=recipe_sha256)
     if set(destination_roots) != {root}:
         raise ValueError('Output root lacks its exact preflight descriptor binding')
     payload = preview(engine, command, destination_roots)
@@ -41,7 +42,7 @@ def freeze(engine, row, document, root, revision, request_id, destination_roots)
         raise ValueError('Export planner target escaped the pinned output root')
     plan = {'plan_id': payload['plan_id'], 'plan_sha256': P.digest(payload),
             'document_revision': document['document_revision'], 'output_root': root,
-            'recipe_sha256': P.RECIPE_SHA256, 'targets': targets}
+            'recipe_sha256': recipe_sha256, 'targets': targets}
     return {'plan': plan, 'destination': payload, 'command': command,
             'destination_roots': deepcopy(destination_roots)}
 

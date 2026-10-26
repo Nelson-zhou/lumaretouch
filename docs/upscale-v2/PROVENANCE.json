@@ -1,7 +1,7 @@
 {
   "schema": "lrt.upscale-v2.source-provenance.v1",
   "checked_on": "2026-10-25",
-  "status": "isolated_source_authored_unavailable_unrun",
+  "status": "rrdb_research_retained_product_profile_swin2sr_separate",
   "reference_contract": "lrt.upscale-v2.native-candidate.v1",
   "sources": [
     {
@@ -60,10 +60,12 @@
       "features": 64,
       "blocks": 23,
       "growth": 32,
-      "checkpoint_sha256": null,
+      "checkpoint_sha256": "49fafd45f8fd7aa8d31ab2a22d14d91b536c34494a5cfe31eb5d89c2fa266abb",
       "runtime_distribution_hashes": null,
-      "checkpoint_license_review": "pending",
-      "production_admitted": false
+      "checkpoint_license_review": "pending-explicit-weight-license",
+      "production_admitted": false,
+      "checkpoint_bytes": 67061725,
+      "digest_provenance": "Observed once from exact official HTTPS release asset42011922; not an upstream-published or signed digest. Streamed only, not saved/deserialized."
     },
     {
       "model_id": "RealESRGAN_x4plus",
@@ -108,7 +110,7 @@
   ],
   "restrictions": "Static source/AST/JSON/hash review only. Public primary text/metadata reads did not download code files or model bytes into the workspace.",
   "remaining_gates": [
-    "authenticated checkpoint digest and license",
+    "RRDB checkpoint-specific license; observed official byte digest is not upstream signature",
     "authenticated reviewed runtime distributions",
     "installed source/config integrity",
     "bounded safe local checkpoint loader",
@@ -117,5 +119,7 @@
     "whole-frame versus tiled numeric and phase validation",
     "photographic quality and hallucination review",
     "parent source/region/layer/history/protocol/UI integration"
-  ]
+  ],
+  "current_product_provenance": "SWIN2SR.md",
+  "historical_scope_note": "Prior isolated RRDB source evidence retained. Current product file manifest is PRODUCT-FREEZE.json; no runtime acceptance inferred."
 }

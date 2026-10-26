@@ -352,3 +352,172 @@ fn a_pinned_source_descriptor_refuses_a_replacement_tree() {
     assert!(source.poll(300).is_err());
     assert!(source.checkpoint().is_err());
 }
+
+// Automatic mode fixtures are authored only. They exercise no real owner.
+fn automatic_graph() -> Graph {
+    let mut value = graph("/fixture", Some(ErrorPolicy::Skip));
+    if let NodeKind::DirectorySource { include_existing, .. } = &mut value.nodes[0].operation { *include_existing = true; }
+    value.nodes[2].operation = NodeKind::AutomaticPreset {
+        preset_id: "preset-one".into(), preset_sha256: "a".repeat(64), when_all_labels: vec![],
+        intent: AutomaticBatchIntent { schema: "lrt.automatic-batch-intent.v1".into(), mode: "automatic".into(),
+            scope: "directory_originals".into(), source_mode: "captured_file_list".into(), originals: "managed_copy_only".into(), save: "target_recipe".into(),
+            collision: "fail_no_overwrite".into(), unattended: true, portrait_scope: None, reference_scope: None, reference_source_policy: None },
+    };
+    value
+}
+#[test]
+fn automatic_intent_is_exact_and_cannot_authorize_unsupported_scope() {
+    assert!(automatic_graph().validate().unwrap().automatic());
+    let mut watched = automatic_graph();
+    if let NodeKind::DirectorySource { include_existing, .. } = &mut watched.nodes[0].operation { *include_existing = false; }
+    assert!(watched.validate().is_err());
+    let mut bad = automatic_graph();
+    if let NodeKind::AutomaticPreset { intent, .. } = &mut bad.nodes[2].operation { intent.scope = "selected_people".into(); }
+    assert!(bad.validate().is_err());
+    let mut bad = automatic_graph(); bad.nodes[2].error_policy = ErrorPolicy::KeepContinue;
+    assert!(bad.validate().is_err());
+    let mut bad = automatic_graph(); bad.nodes.insert(3, graph("/fixture",Some(ErrorPolicy::Stop)).nodes[2].clone());
+    assert!(bad.validate().is_err());
+}
+#[test]
+fn automatic_and_reviewed_assessments_are_not_interchangeable() {
+    let mut auto = Scheduler::new(automatic_graph().validate().unwrap(), "run-auto".into()).unwrap();
+    auto.reduce(&Event::Admit { input: input("/fixture", "a.jpg") }).unwrap();
+    imported(&mut auto); let command = issue(&mut auto);
+    assert!(respond(&mut auto, &command, ReceiptResult::PresetPreflight { assessment: assessment() }).is_err());
+    let mut unattended = assessment(); unattended.requires_review = false;
+    respond(&mut auto, &command, ReceiptResult::PresetPreflight { assessment: unattended.clone() }).unwrap();
+    assert!(matches!(auto.next_command().unwrap().unwrap().operation, CommandKind::ApplyPreset { .. }));
+    let mut reviewed = scheduler(Some(ErrorPolicy::Stop)); imported(&mut reviewed); let command = issue(&mut reviewed);
+    assert!(respond(&mut reviewed, &command, ReceiptResult::PresetPreflight { assessment: unattended }).is_err());
+    assert!(matches!(reviewed.pending().unwrap().operation, CommandKind::PreflightPreset { .. }));
+}
+#[test]
+fn automatic_unknown_application_queries_original_intent_only() {
+    let mut run = Scheduler::new(automatic_graph().validate().unwrap(), "run-auto".into()).unwrap();
+    run.reduce(&Event::Admit { input: input("/fixture", "a.jpg") }).unwrap(); imported(&mut run);
+    let command = issue(&mut run); let mut ready = assessment(); ready.requires_review = false;
+    respond(&mut run, &command, ReceiptResult::PresetPreflight { assessment: ready }).unwrap();
+    let apply = issue(&mut run);
+    respond(&mut run, &apply, ReceiptResult::Unknown { reason: "lost owner receipt".into() }).unwrap();
+    let query = run.next_command().unwrap().unwrap();
+    assert_eq!(query.identity, apply.identity);
+    assert!(matches!(query.operation, CommandKind::QueryPreset { .. }));
+    assert!(matches!(run.jobs()[0].stage, Stage::ApplyPreset));
+}
+
+#[cfg(unix)]
+fn captured_graph(layout: &Layout) -> ValidatedGraph {
+    let mut value = graph(layout.0.to_str().unwrap(),Some(ErrorPolicy::Stop));
+    value.nodes[2].operation = automatic_graph().nodes[2].operation.clone();
+    if let NodeKind::DirectorySource { include_existing, .. } = &mut value.nodes[0].operation { *include_existing = true; }
+    value.validate().unwrap()
+}
+#[cfg(unix)]
+#[test]
+fn captured_list_excludes_later_arrivals_and_seals_after_admission() {
+    let layout = Layout::new();
+    std::fs::write(layout.0.join("source/a.jpg"),b"captured fixture").unwrap();
+    let mut run = DurableRunner::create(&layout.0.join("journal"),captured_graph(&layout),"captured".into()).unwrap();
+    let mut source = run.source().unwrap();
+    assert_eq!(run.poll_source_bounded(&mut source,0,64).unwrap(),0);
+    assert_eq!(source.captured_count(),Some(1));
+    assert_eq!(run.state().captured_input_count(),Some(1));
+    assert_eq!(run.state().jobs().len(),0);
+    assert!(!run.state().is_sealed());
+    std::fs::write(layout.0.join("source/later.jpg"),b"not captured").unwrap();
+    assert_eq!(run.poll_source_bounded(&mut source,300,64).unwrap(),1);
+    assert!(run.state().is_sealed());
+    assert_eq!(run.state().jobs()[0].input.relative_path,"a.jpg");
+    assert!(!matches!(run.state().status(),RunStatus::Complete)); // Owner work still required.
+}
+#[cfg(unix)]
+#[test]
+fn captured_capacity_refusal_precedes_every_import_and_retains_exact_list() {
+    let layout = Layout::new();
+    for name in ["a.jpg","b.jpg"] { std::fs::write(layout.0.join("source").join(name),b"fixture").unwrap(); }
+    let journal = layout.0.join("journal");
+    let mut run = DurableRunner::create(&journal,captured_graph(&layout),"capacity".into()).unwrap();
+    let mut source = run.source().unwrap();
+    assert!(run.poll_source_bounded(&mut source,0,1).unwrap_err().to_string().contains("no truncation"));
+    assert!(run.state().jobs().is_empty()); assert!(run.state().pending().is_none());
+    assert_eq!(run.state().status(),RunStatus::Stopped); drop(run);
+    let reopened = DurableRunner::open(&journal).unwrap();
+    assert_eq!(reopened.source().unwrap().captured_count(),Some(2));
+    assert_eq!(reopened.state().captured_input_count(),Some(2));
+    assert!(reopened.state().jobs().is_empty());
+}
+#[cfg(unix)]
+#[test]
+fn captured_checkpoint_restart_does_not_adopt_new_paths_or_changed_originals() {
+    let layout = Layout::new(); let journal = layout.0.join("journal");
+    std::fs::write(layout.0.join("source/a.jpg"),b"first").unwrap();
+    let mut run = DurableRunner::create(&journal,captured_graph(&layout),"restore-capture".into()).unwrap();
+    let mut source = run.source().unwrap(); run.poll_source_bounded(&mut source,0,64).unwrap(); drop(run);
+    std::fs::write(layout.0.join("source/new.jpg"),b"later").unwrap();
+    std::fs::write(layout.0.join("source/a.jpg"),b"changed original bytes").unwrap();
+    let mut reopened = DurableRunner::open(&journal).unwrap(); let mut source = reopened.source().unwrap();
+    assert_eq!(source.captured_count(),Some(1));
+    assert!(reopened.poll_source_bounded(&mut source,0,64).unwrap_err().to_string().contains("captured source changed"));
+    assert!(reopened.state().jobs().is_empty());
+}
+#[cfg(unix)]
+#[test]
+fn captured_empty_list_seals_and_empty_file_is_explicit_refusal() {
+    let layout = Layout::new();
+    let mut run = DurableRunner::create(&layout.0.join("journal"),captured_graph(&layout),"empty-capture".into()).unwrap();
+    let mut source = run.source().unwrap(); run.poll_source_bounded(&mut source,0,64).unwrap();
+    assert!(run.state().is_sealed()); assert_eq!(run.state().status(),RunStatus::Complete);
+    let other = Layout::new(); std::fs::write(other.0.join("source/empty.jpg"),b"").unwrap();
+    let mut run = DurableRunner::create(&other.0.join("journal"),captured_graph(&other),"empty-file".into()).unwrap();
+    let mut source = run.source().unwrap();
+    assert!(run.poll_source_bounded(&mut source,0,64).unwrap_err().to_string().contains("empty/incomplete"));
+    assert!(run.state().jobs().is_empty());
+}
+
+// UNRUN: optional portrait intent is explicit, finite and never identity matching.
+#[test]
+fn automatic_portrait_scope_is_exact_and_hash_bound() {
+    let scalar = automatic_graph();
+    let mut portrait = scalar.clone();
+    if let NodeKind::AutomaticPreset { intent, .. } = &mut portrait.nodes[2].operation {
+        intent.portrait_scope = Some("all_verified_detected_faces".into());
+    }
+    assert!(portrait.validate().is_ok());
+    assert_ne!(fingerprint(&scalar).unwrap(), fingerprint(&portrait).unwrap());
+    if let NodeKind::AutomaticPreset { intent, .. } = &mut portrait.nodes[2].operation {
+        intent.portrait_scope = Some("same_person_across_photos".into());
+    }
+    assert!(portrait.validate().is_err());
+    let encoded = serde_json::to_value(&scalar).unwrap();
+    assert!(encoded["nodes"][2]["operation"]["intent"].get("portrait_scope").is_none());
+    let mut explicit_null = encoded;
+    explicit_null["nodes"][2]["operation"]["intent"]["portrait_scope"] = serde_json::Value::Null;
+    assert!(serde_json::from_value::<Graph>(explicit_null).is_err());
+}
+
+// AUTHORED / UNRUN: reference-only scope pins policy, excludes mixed ownership.
+#[test]
+fn automatic_reference_scope_is_exact_and_hash_bound() {
+    let scalar = automatic_graph();
+    let mut reference = scalar.clone();
+    if let NodeKind::AutomaticPreset { intent, .. } = &mut reference.nodes[2].operation {
+        intent.reference_scope = Some("stored_reference_per_target_fit".into());
+        intent.reference_source_policy = Some("reject_same_source".into());
+    }
+    assert!(reference.validate().is_ok());
+    assert_ne!(fingerprint(&scalar).unwrap(), fingerprint(&reference).unwrap());
+    let encoded = serde_json::to_value(&reference).unwrap();
+    for field in ["reference_scope", "reference_source_policy"] {
+        let mut missing = encoded.clone();
+        missing["nodes"][2]["operation"]["intent"].as_object_mut().unwrap().remove(field);
+        assert!(serde_json::from_value::<Graph>(missing).unwrap().validate().is_err());
+        let mut null = encoded.clone();
+        null["nodes"][2]["operation"]["intent"][field] = serde_json::Value::Null;
+        assert!(serde_json::from_value::<Graph>(null).is_err());
+    }
+    if let NodeKind::AutomaticPreset { intent, .. } = &mut reference.nodes[2].operation {
+        intent.portrait_scope = Some("all_verified_detected_faces".into());
+    }
+    assert!(reference.validate().is_err());
+}

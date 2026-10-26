@@ -31,13 +31,25 @@ pub struct DirectoryPoller {
     root_identity: [String;2],
     recursive: bool,
     include_existing: bool,
+    /// Old watched checkpoints deserialize unchanged. New automatic jobs freeze
+    /// the first bounded path/stat scan; this is not an atomic FS snapshot.
+    #[serde(default, skip_serializing_if = "is_false")]
+    captured_file_list: bool,
     extensions: BTreeSet<String>,
     settle_ms: u64,
     previous_tick: Option<u64>,
     baseline_initialized: bool,
     observations: BTreeMap<PathBuf,Observation>,
 }
+fn is_false(value: &bool) -> bool { !*value }
+
 impl DirectoryPoller {
+    pub fn captured_count(&self) -> Option<usize> {
+        (self.captured_file_list && self.baseline_initialized).then_some(self.observations.len())
+    }
+    pub fn capture_admitted(&self) -> bool {
+        self.captured_count().is_some() && self.observations.values().all(|item| item.acknowledged)
+    }
     pub fn graph_digest(&self) -> &str { &self.graph_sha256 }
     pub fn new(graph: &ValidatedGraph) -> Result<Self> {
         graph.preflight_filesystem()?;
@@ -46,7 +58,7 @@ impl DirectoryPoller {
         let root_stat = source_stat(&fs::symlink_metadata(&root)?)?;
         Ok(Self { schema_version: 1, graph_sha256: graph.digest().into(), root,
             root_identity: [root_stat[0].clone(),root_stat[1].clone()], recursive: *recursive,
-            include_existing: *include_existing, extensions: extensions.iter().cloned().collect(),
+            include_existing: *include_existing, captured_file_list: graph.automatic(), extensions: extensions.iter().cloned().collect(),
             settle_ms: *settle_ms, previous_tick: None, baseline_initialized: false, observations: BTreeMap::new() })
     }
     /// Persist alongside admissions. Monotonic clock samples are deliberately
@@ -67,7 +79,7 @@ impl DirectoryPoller {
         let fresh = Self::new(graph)?;
         require(saved.schema_version == 1 && saved.graph_sha256 == fresh.graph_sha256 && saved.root == fresh.root
             && saved.root_identity == fresh.root_identity && saved.recursive == fresh.recursive
-            && saved.include_existing == fresh.include_existing && saved.extensions == fresh.extensions
+            && saved.include_existing == fresh.include_existing && saved.captured_file_list == fresh.captured_file_list && saved.extensions == fresh.extensions
             && saved.settle_ms == fresh.settle_ms && saved.observations.len() <= MAX_OBSERVATIONS,
             "poll checkpoint has stale graph/root identity or unsupported configuration")?;
         for (path,observation) in saved.observations.iter_mut() {
@@ -95,10 +107,23 @@ impl DirectoryPoller {
         // path-based scan alone could otherwise hash a replacement tree.
         let pinned_root = self.pin_root()?;
         let started = Instant::now();
-        let files = self.scan(started)?;
-        self.verify_root(&pinned_root)?;
         let first_scan = !self.baseline_initialized;
-        self.observations.retain(|path,_| files.contains_key(path));
+        let files = if self.captured_file_list && !first_scan {
+            // Never rescan the tree or adopt a later arrival/replacement. Each
+            // queued original retains the first captured full stat identity.
+            let mut captured = BTreeMap::new();
+            for (path, observation) in &self.observations {
+                if observation.acknowledged { continue; }
+                require(started.elapsed() < MAX_POLL_TIME, "captured source verification exceeded its time budget")?;
+                let current = checked_regular_file(path).and_then(|_| source_stat(&fs::symlink_metadata(path)?))
+                    .map_err(|error| WorkflowError(format!("captured source unavailable: {}: {error}", path.display())))?;
+                require(current == observation.stat, &format!("captured source changed: {}; no replacement is adopted", path.display()))?;
+                captured.insert(path.clone(), current);
+            }
+            captured
+        } else { self.scan(started)? };
+        self.verify_root(&pinned_root)?;
+        if !self.captured_file_list { self.observations.retain(|path,_| files.contains_key(path)); }
         let mut candidates = Vec::new();
         let mut hash_budget = MAX_HASH_BYTES_PER_POLL;
         for (path,stat) in files {
@@ -190,7 +215,10 @@ impl DirectoryPoller {
                 require(metadata.is_file() && metadata.len() <= MAX_FILE_BYTES, "source is not a bounded regular file")?;
                 // Empty/in-progress files are observed but not offered until
                 // they change and then complete a stable full read.
-                if metadata.len() == 0 { continue; }
+                if metadata.len() == 0 {
+                    require(!self.captured_file_list, &format!("captured source is empty/incomplete: {}", path.display()))?;
+                    continue;
+                }
                 files.insert(path,source_stat(&metadata)?);
             }
         }

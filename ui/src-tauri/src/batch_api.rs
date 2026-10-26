@@ -20,7 +20,11 @@ pub(crate) mod eye_bag;
 #[path="batch_history_protocol.rs"]
 pub(crate) mod history;
 
+#[path="portrait_preset_group_protocol.rs"]
+pub(crate) mod portrait_preset_group;
+
 pub(crate) fn read_only(command:&Value)->bool {
+    if portrait_preset_group::routed(command) {return portrait_preset_group::read_only(command);}
     if decoration_cohort::read_only(command) {return true;}
     if eye_cohort::routed(command) { return eye_cohort::read_only(command); }
     if command["cmd"]=="batch" && (command["action"]=="eye_bag_visual"
@@ -39,6 +43,7 @@ pub(crate) fn read_only(command:&Value)->bool {
 }
 
 pub(crate) fn enqueue(state:&AppState,handle:&EngineHandle,command:Value)->Result<(),String>{
+    portrait_preset_group::command(&command)?;
     decoration_cohort::command(&command)?;
     face_decoration::command(&command)?;
     history::command(&command)?;
@@ -62,12 +67,26 @@ pub(crate) fn enqueue(state:&AppState,handle:&EngineHandle,command:Value)->Resul
 #[tauri::command]
 pub(crate) fn batch(state:State<'_,Arc<AppState>>,action:String,docs:Option<Vec<String>>,
     module_scope:Option<Vec<String>>,conflict_policy:Option<String>,batch_id:Option<String>,
-    preflight_token:Option<String>,request_id:Option<String>,local_mask_transfer:Option<Value>,reference_color:Option<Value>,people_transfer:Option<Value>,spill_review_ack:Option<Value>,shadow_review_ack:Option<Value>,torso_review_ack:Option<Value>,waist_review_ack:Option<Value>,head_review_ack:Option<Value>,collarbone_review_ack:Option<Value>,face_style_review_ack:Option<Value>,portrait_cohort_ack:Option<Value>,face_decoration_cohort_ack:Option<Value>,face_decoration_review_ack:Option<Value>,eye_bag_review_ack:Option<Value>,eye_bag_cohort_ack:Option<Value>,document_id:Option<String>,revision:Option<String>,side:Option<String>,sha256:Option<String>)->Result<Value,String>{
-    if !["preflight","commit","undo","redo","state","people_targets","collarbone_visual","face_style_visual","portrait_cohort_visual","eye_bag_visual","eye_bag_cohort_visual","face_decoration_visual","face_decoration_cohort_visual"].contains(&action.as_str()){return Err("unknown batch action".into());}
+    preflight_token:Option<String>,request_id:Option<String>,local_mask_transfer:Option<Value>,reference_color:Option<Value>,people_transfer:Option<Value>,spill_review_ack:Option<Value>,shadow_review_ack:Option<Value>,torso_review_ack:Option<Value>,waist_review_ack:Option<Value>,head_review_ack:Option<Value>,collarbone_review_ack:Option<Value>,face_style_review_ack:Option<Value>,portrait_cohort_ack:Option<Value>,face_decoration_cohort_ack:Option<Value>,face_decoration_review_ack:Option<Value>,eye_bag_review_ack:Option<Value>,eye_bag_cohort_ack:Option<Value>,document_id:Option<String>,revision:Option<String>,side:Option<String>,sha256:Option<String>,preset_id:Option<String>,preset_sha256:Option<String>,portrait_preset_ack:Option<Value>,accepted:Option<bool>,page:Option<u64>,export_options:Option<Value>,policy:Option<Value>,intent_revision:Option<u64>,plan_id:Option<String>,task_id:Option<String>)->Result<Value,String>{
+    if !["portrait_preset_save","portrait_preset_export_preview","portrait_preset_export_start","portrait_preset_export_status","portrait_preset_export_cancel","portrait_preset_catalogue","portrait_preset_preflight", "portrait_preset_prepare","portrait_preset_image","portrait_preset_commit","preflight","commit","undo","redo","state","people_targets","collarbone_visual","face_style_visual","portrait_cohort_visual","eye_bag_visual","eye_bag_cohort_visual","face_decoration_visual","face_decoration_cohort_visual"].contains(&action.as_str()){return Err("unknown batch action".into());}
     if request_id.is_some() && state.ready_caps.lock().map_err(|_|"capability lock poisoned")?["batch_preflight_protocol"]!=1 {
         return Err("current engine does not support reviewed batch receipts".into());
     }
+    if ["portrait_preset_save","portrait_preset_export_preview","portrait_preset_export_start","portrait_preset_export_status","portrait_preset_export_cancel"].contains(&action.as_str())
+        && state.ready_caps.lock().map_err(|_|"capability lock poisoned")?["portrait_preset_delivery_protocol"]!=1 {return Err("current engine does not support exact portrait group delivery".into());}
+    if action=="portrait_preset_prepare" && state.ready_caps.lock().map_err(|_|"capability lock poisoned")?["portrait_preset_preparation_protocol"]!=1 {return Err("current engine does not support explicit portrait group preparation".into());}
+    if action.starts_with("portrait_preset_") && state.ready_caps.lock().map_err(|_|"capability lock poisoned")?["portrait_preset_group_protocol"]!=1 {return Err("current engine does not support portrait preset groups".into());}
     let mut cmd=json!({"cmd":"batch","action":action});
+    if let Some(v)=preset_id{cmd["preset_id"]=json!(v);}
+    if let Some(v)=preset_sha256{cmd["preset_sha256"]=json!(v);}
+    if let Some(v)=portrait_preset_ack{cmd["portrait_preset_ack"]=v;}
+    if let Some(v)=accepted{cmd["accepted"]=json!(v);}
+    if let Some(v)=page{cmd["page"]=json!(v);}
+    if let Some(v)=export_options{cmd["export_options"]=v;}
+    if let Some(v)=policy{cmd["policy"]=v;}
+    if let Some(v)=intent_revision{cmd["intent_revision"]=json!(v);}
+    if let Some(v)=plan_id{cmd["plan_id"]=json!(v);}
+    if let Some(v)=task_id{cmd["task_id"]=json!(v);}
     if let Some(v)=docs{cmd["docs"]=json!(v);}
     if let Some(v)=module_scope{cmd["module_scope"]=json!(v);}
     if let Some(v)=conflict_policy{cmd["conflict_policy"]=json!(v);}
@@ -92,6 +111,7 @@ pub(crate) fn batch(state:State<'_,Arc<AppState>>,action:String,docs:Option<Vec<
     for (key,value) in [("document_id",document_id),("revision",revision),("side",side),("sha256",sha256)] {
         if let Some(v)=value{cmd[key]=json!(v);}
     }
+    portrait_preset_group::command(&cmd)?;
     decoration_cohort::command(&cmd)?;
     face_decoration::command(&cmd)?;
     history::command(&cmd)?;

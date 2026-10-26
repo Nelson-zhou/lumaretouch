@@ -7,11 +7,15 @@ single-selected-face image and claim it rendered the people bank.
 import numpy as np
 from .people_render_runtime import prepare, retained_bytes
 from . import people_pipeline as PIPE
+_MISSING_HAND=object()
 
 
-def prepare_preview(pipe,state,asset_sha256,analyses,*,byte_budget,document_id=None,recovery_assets=None,body_bank=None,body_source=None,body_source_path=None,body_source_pixels=None,creative_source=None,creative_proxy=None,
+def prepare_preview(pipe,state,asset_sha256,analyses,*,byte_budget,document_id=None,recovery_assets=None,body_bank=None,body_source=None,body_source_path=None,body_source_pixels=None,hand_shape=_MISSING_HAND,creative_source=None,creative_proxy=None,
                     skin_reference_match_assets=None,skin_reference_match_source=None,hair_assets=None,hair_volume_assets=None,hair_unification_assets=None,hair_unification_source=None,hair_evidence=None,hair_source_path=None,eye_light_assets=None,blush_makeup_assets=None,face_decoration_assets=None,facial_sculpt_assets=None,eye_makeup_enhance_assets=None,lipstick_assets=None,eyeliner_assets=None,eyelash_assets=None,brow_makeup_assets=None,iris_makeup_assets=None,skin_colour_body_assets=None,skin_finish_body_assets=None,body_skin_evenness_assets=None,body_face_match_assets=None,collarbone_assets=None,neck_wrinkle_assets=None,neck_wrinkle_source=None,eye_bag_preserve_assets=None):
     import torch
+    if hand_shape is _MISSING_HAND:
+        if getattr(getattr(pipe,'people_prepared',None),'document_fields',()):raise ValueError('Preview omitted retained standalone hand geometry')
+        hand_shape=None
     if body_bank is None and getattr(getattr(pipe,'people_prepared',None),'body_fields',()):
         raise ValueError('Preview omitted independently retained body inputs')
     source=pipe.src_f32
@@ -48,12 +52,14 @@ def prepare_preview(pipe,state,asset_sha256,analyses,*,byte_budget,document_id=N
     if body_bank is not None:
         from .body_pose_render import prepare as prepare_body
         prepared=prepare_body(prepared,body_bank,state,body_source,byte_budget=body_budget(prepared,byte_budget),source_path=body_source_path,source_pixels=body_source_pixels)
+    from .hand_shape_geometry import attach as attach_hand
+    prepared=attach_hand(prepared,hand_shape,body_source or creative_source or {'sha256':asset_sha256,'width':pipe.w,'height':pipe.h},state,byte_budget=body_budget(prepared,byte_budget))
     return prepared
 
 
-def synchronize(pipe,state,asset_sha256,analyses,*,byte_budget,document_id=None,recovery_assets=None,body_bank=None,body_source=None,body_source_path=None,body_source_pixels=None,creative_source=None,creative_proxy=None,
+def synchronize(pipe,state,asset_sha256,analyses,*,byte_budget,document_id=None,recovery_assets=None,body_bank=None,body_source=None,body_source_path=None,body_source_pixels=None,hand_shape=_MISSING_HAND,creative_source=None,creative_proxy=None,
                     skin_reference_match_assets=None,skin_reference_match_source=None,hair_assets=None,hair_volume_assets=None,hair_unification_assets=None,hair_unification_source=None,hair_evidence=None,hair_source_path=None,eye_light_assets=None,blush_makeup_assets=None,face_decoration_assets=None,facial_sculpt_assets=None,eye_makeup_enhance_assets=None,lipstick_assets=None,eyeliner_assets=None,eyelash_assets=None,brow_makeup_assets=None,iris_makeup_assets=None,skin_colour_body_assets=None,skin_finish_body_assets=None,body_skin_evenness_assets=None,body_face_match_assets=None,collarbone_assets=None,neck_wrinkle_assets=None,neck_wrinkle_source=None,eye_bag_preserve_assets=None):
-    prepared=prepare_preview(pipe,state,asset_sha256,analyses,byte_budget=byte_budget,document_id=document_id,recovery_assets=recovery_assets,body_bank=body_bank,body_source=body_source,body_source_path=body_source_path,body_source_pixels=body_source_pixels,creative_source=creative_source,creative_proxy=creative_proxy,
+    prepared=prepare_preview(pipe,state,asset_sha256,analyses,byte_budget=byte_budget,document_id=document_id,recovery_assets=recovery_assets,body_bank=body_bank,body_source=body_source,body_source_path=body_source_path,body_source_pixels=body_source_pixels,hand_shape=hand_shape,creative_source=creative_source,creative_proxy=creative_proxy,
         skin_reference_match_assets=skin_reference_match_assets,skin_reference_match_source=skin_reference_match_source,hair_assets=hair_assets,hair_volume_assets=hair_volume_assets,hair_unification_assets=hair_unification_assets,hair_unification_source=hair_unification_source,hair_evidence=hair_evidence,hair_source_path=hair_source_path,eye_light_assets=eye_light_assets,blush_makeup_assets=blush_makeup_assets,face_decoration_assets=face_decoration_assets,facial_sculpt_assets=facial_sculpt_assets,eye_makeup_enhance_assets=eye_makeup_enhance_assets,lipstick_assets=lipstick_assets,eyeliner_assets=eyeliner_assets,eyelash_assets=eyelash_assets,brow_makeup_assets=brow_makeup_assets,iris_makeup_assets=iris_makeup_assets,skin_colour_body_assets=skin_colour_body_assets,skin_finish_body_assets=skin_finish_body_assets,body_skin_evenness_assets=body_skin_evenness_assets,body_face_match_assets=body_face_match_assets,collarbone_assets=collarbone_assets,neck_wrinkle_assets=neck_wrinkle_assets,neck_wrinkle_source=neck_wrinkle_source,eye_bag_preserve_assets=eye_bag_preserve_assets)
     PIPE.install(pipe,prepared);pipe.people_suspended=None
     return prepared
@@ -69,7 +75,7 @@ def require_ready(pipe):
     if reason:raise ValueError('Retained people edits are unresolved: '+reason)
 
 
-def prepare_export(snapshot,source,repaired,*,byte_budget,document_id=None,recovery_assets=None,body_pose=None,body_source_path=None,creative_repair_evidence=None,source_materialization_version=0,neck_wrinkle_source=None):
+def prepare_export(snapshot,source,repaired,*,byte_budget,document_id=None,recovery_assets=None,body_pose=None,body_source_path=None,hand_shape=None,creative_repair_evidence=None,source_materialization_version=0,neck_wrinkle_source=None):
     """Original RGB8/16 enters once; all face solvers run before tile slicing."""
     if type(source_materialization_version) is not int or source_materialization_version not in (0,1):
         raise ValueError('Unsupported portrait source materialization strategy')
@@ -154,6 +160,8 @@ def prepare_export(snapshot,source,repaired,*,byte_budget,document_id=None,recov
         # when the requested output is RGB8 from RAW/high-bit-depth TIFF.
         # Output pixels retain their independent existing export decode path.
         prepared=prepare_body(prepared,bank,state,frame,byte_budget=body_budget(prepared,byte_budget),source_path=body_source_path,source_pixels=source if creative is not None else None)
+    from .hand_shape_geometry import attach as attach_hand
+    prepared=attach_hand(prepared,hand_shape,{'sha256':asset,'width':source.shape[1],'height':source.shape[0]},state,byte_budget=body_budget(prepared,byte_budget))
     return prepared
 
 

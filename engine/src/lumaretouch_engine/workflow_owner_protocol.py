@@ -22,8 +22,30 @@ NODE_FIELDS = {
     'managed_import': ('project_id', 'project_path', 'managed_root'),
     'path_labels': ('rules',),
     'compatible_preset': ('preset_id', 'preset_sha256', 'when_all_labels'),
+    'automatic_preset': ('preset_id', 'preset_sha256', 'when_all_labels', 'intent'),
     'export': ('output_root', 'recipe_sha256'),
 }
+AUTOMATIC_INTENT = {'schema': 'lrt.automatic-batch-intent.v1', 'mode': 'automatic',
+                    'scope': 'directory_originals', 'source_mode': 'captured_file_list', 'originals': 'managed_copy_only',
+                    'save': 'target_recipe', 'collision': 'fail_no_overwrite', 'unattended': True}
+AUTOMATIC_PORTRAIT_INTENT = {**AUTOMATIC_INTENT,
+    'portrait_scope': 'all_verified_detected_faces'}
+
+AUTOMATIC_REFERENCE_INTENT = {**AUTOMATIC_INTENT,
+    'reference_scope': 'stored_reference_per_target_fit',
+    'reference_source_policy': 'reject_same_source'}
+
+def automatic_intent(value):
+    """Three exact declarations; neither substitutes for fresh job-start consent."""
+    expected = (AUTOMATIC_REFERENCE_INTENT if type(value) is dict and 'reference_scope' in value
+                else AUTOMATIC_PORTRAIT_INTENT if type(value) is dict and
+                'portrait_scope' in value else AUTOMATIC_INTENT)
+    intent = record(value, tuple(expected))
+    if intent != expected or intent['unattended'] is not True:
+        raise ValueError('Unsupported explicit automatic job intent')
+    return intent
+
+
 FIELDS = {
     'profile': set(),
     'preflight': {'graph', 'graph_sha256'},
@@ -57,6 +79,35 @@ def digest(value):
 
 
 RECIPE_SHA256 = digest(RECIPE_PROFILE)
+
+
+def export_profiles():
+    """Finite immutable choices; legacy profile identity and digest never change.
+
+    This catalogue is not codec availability evidence. cmd_export still performs
+    canonical validation and full-source/native16 checks for every document.
+    """
+    profiles = [deepcopy(RECIPE_PROFILE)]
+    for name, fmt, quality, bits, compression in (
+            ('jpeg80', 'jpg', 80, 8, 'deflate'),
+            ('jpeg100', 'jpg', 100, 8, 'deflate'),
+            ('png8', 'png', 95, 8, 'deflate'),
+            ('tiff16', 'tif', 95, 16, 'none')):
+        profile = deepcopy(RECIPE_PROFILE)
+        profile['profile'] = 'lrt.workflow-export.' + name + '-srgb.v1'
+        profile['export_options'].update(format=fmt, quality=quality,
+                                         bit_depth=bits, tiff_compression=compression)
+        profiles.append(profile)
+    return [{'recipe_sha256': digest(profile), 'recipe_profile': profile} for profile in profiles]
+
+
+def resolve_export_profile(recipe_sha256, *, automatic=False):
+    for entry in export_profiles() if automatic else export_profiles()[:1]:
+        if entry['recipe_sha256'] == recipe_sha256:
+            return entry['recipe_profile']
+    raise ValueError('Unsupported export profile/settings; select a returned immutable profile '
+                     '(expanded formats require an automatic job). No format fallback is permitted')
+
 
 
 def record(value, keys):
@@ -147,12 +198,14 @@ def graph(value, expected_sha256):
                 if rule['target'] not in ('filename', 'relative_path'): raise ValueError('Invalid label target')
                 text(rule['contains'], 256); text(rule['label'], 128); rules.append(rule)
             operation['rules'] = rules
-        elif kind == 'compatible_preset':
+        elif kind in ('compatible_preset', 'automatic_preset'):
             token(operation['preset_id']); I.digest(operation['preset_sha256'])
             labels = operation['when_all_labels']
             if type(labels) is not list or len(labels) > 64: raise ValueError('Invalid preset labels')
             for label in labels: text(label, 128)
             if len(set(labels)) != len(labels): raise ValueError('Repeated preset label')
+            if kind == 'automatic_preset':
+                operation['intent'] = automatic_intent(operation['intent'])
         else:
             I.path(operation['output_root']); I.digest(operation['recipe_sha256'])
         node['operation'] = operation
@@ -177,8 +230,11 @@ def graph(value, expected_sha256):
         seen.add(cursor); ordered.append(nodes[cursor]); cursor = outgoing.get(cursor)
     kinds = [node['operation']['kind'] for node in ordered]
     if (len(ordered) != len(nodes) or kinds[:2] != ['directory_source', 'managed_import']
-            or kinds[-1] != 'export' or kinds[2:-1] not in ([], ['path_labels'], ['compatible_preset'], ['path_labels', 'compatible_preset'])):
+            or kinds[-1] != 'export' or kinds[2:-1] not in ([], ['path_labels'], ['compatible_preset'], ['path_labels', 'compatible_preset'],
+                                                         ['automatic_preset'], ['path_labels', 'automatic_preset'])):
         raise ValueError('Unsupported workflow order')
+    if 'automatic_preset' in kinds and ordered[0]['operation']['include_existing'] is not True:
+        raise ValueError('Automatic captured-file-list jobs require include_existing:true')
     if len(encoded(graph)) > 256 * 1024 or hashlib.sha256(encoded(graph)).hexdigest() != expected_sha256:
         raise ValueError('Graph SHA-256 differs from the exact Rust DTO')
     return graph, ordered
@@ -233,11 +289,18 @@ def command(value):
         assessment = record(operation['assessment'], ('report_id', 'report_sha256', 'document_revision', 'preset_sha256', 'requires_review', 'review'))
         text(assessment['report_id'], 256); text(assessment['document_revision'], 256)
         I.digest(assessment['report_sha256']); I.digest(assessment['preset_sha256'])
-        if assessment['requires_review'] is not True: raise ValueError('Workflow preset requires actual image review')
-        review = record(assessment['review'], ('receipt_id', 'report_sha256', 'document_id', 'document_revision', 'preset_sha256'))
-        text(review['receipt_id'], 256); token(review['document_id']); text(review['document_revision'], 256)
-        I.digest(review['report_sha256']); I.digest(review['preset_sha256'])
-        assessment['review'] = review; operation['assessment'] = assessment
+        if type(assessment['requires_review']) is not bool:
+            raise ValueError('Preset assessment mode must be explicit')
+        if assessment['requires_review']:
+            review = record(assessment['review'], ('receipt_id', 'report_sha256', 'document_id', 'document_revision', 'preset_sha256'))
+            text(review['receipt_id'], 256); token(review['document_id']); text(review['document_revision'], 256)
+            I.digest(review['report_sha256']); I.digest(review['preset_sha256'])
+            assessment['review'] = review
+        elif assessment['review'] is not None:
+            raise ValueError('Automatic assessments cannot claim a human review')
+        # Structural decoding is not authority: _bound checks this against the
+        # actual preflight graph and the retained owner assessment before apply.
+        operation['assessment'] = assessment
     else:
         raise ValueError('Unsupported workflow owner port; imports remain ingestion-owned')
     operation['document'] = document(operation['document'])

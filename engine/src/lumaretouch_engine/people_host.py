@@ -90,9 +90,13 @@ class PeopleHostMixin:
     def _people_sync(self,*,strict=False):
         if self._vram is None or not self._docs or self._doc_index<0:return
         body_bank=self._body_bank()
-        if self._precompute is None and '_people_graph_owner' not in self.__dict__ and not body_bank['bodies']:return
+        from .hand_shape_state import active as hand_active
+        hand_active_now=hand_active(getattr(self,'_hand_shape',None))
+        if not hand_active_now and self._precompute is None and '_people_graph_owner' not in self.__dict__ and not body_bank['bodies'] and not getattr(self._vram,'people_suspended',None):return
         from . import people_engine_runtime as R
         try:
+            from .hand_shape_runtime import checked_live as check_hand_live
+            check_hand_live(self)
             source,state,analyses=self._people_bind();asset=source['sha256']
             from .people_cross_owner import validate_owner
             document_id=self._people_binding()['document_id']
@@ -102,10 +106,11 @@ class PeopleHostMixin:
                 from .creative_derived_repair_runtime import verify_pipeline
                 verify_pipeline(self._vram,source) # Verify actual replay before any cache hit.
             self._people_render_enabled=True;self._people_path=self._doc_path
-            if not body_bank['bodies'] and not any(f['asset_sha256']==asset for f in state['faces'].values()) and not any(r['asset_sha256']==asset and r['status']=='unresolved' for r in state['unresolved_legacy']) and not any(r['scope']=='all_people' and r['target_id']==asset for r in state['overrides']):
+            if not hand_active_now and not body_bank['bodies'] and not any(f['asset_sha256']==asset for f in state['faces'].values()) and not any(r['asset_sha256']==asset and r['status']=='unresolved' for r in state['unresolved_legacy']) and not any(r['scope']=='all_people' and r['target_id']==asset for r in state['overrides']):
                 from .people_pipeline import clear
                 clear(self._vram);self._vram.people_suspended=None;return
-            key=(document_id,asset,self._people_owner().fence,id(self._precompute),id(self._vram.src_f32),id(self._vram.repair_base),self._body_identity())
+            from .optics_candidate_identity import fingerprint as hand_fingerprint
+            key=(document_id,asset,self._people_owner().fence,id(self._precompute),id(self._vram.src_f32),id(self._vram.repair_base),self._body_identity(),hand_fingerprint(getattr(self,'_hand_shape',None)))
             if getattr(self._vram,'people_key',None)!=key:
                 from .cpu_memory_budget import available_estimate
                 owned_inputs=OWNED.preview(self,state,body_bank=body_bank,body_source=source)
@@ -114,7 +119,10 @@ class PeopleHostMixin:
                 self._vram.people_key=key
             self._people_mirror()
         except (ValueError,RuntimeError,OSError,MemoryError) as error:
-            if self._people_managed():R.suspend(self._vram,str(error))
+            if hand_active_now:
+                self._people_render_enabled=True;self._people_path=self._doc_path
+                R.suspend(self._vram,str(error))
+            elif self._people_managed():R.suspend(self._vram,str(error))
             if strict:raise
 
     def _people_mirror(self):

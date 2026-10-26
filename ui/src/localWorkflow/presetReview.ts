@@ -13,6 +13,7 @@ export interface WorkflowPresetReview {
   page_bytes: 65536; ttl_seconds: 900; approval_only: true; runtime_verified: false;
 }
 export interface WorkflowPresetHandoff {
+  mode?: 'automatic';
   version: 1; operation_id: string; document_id: string; preset_id: string; preset_sha256: string;
   phase: 'awaiting_open' | 'awaiting_preparation' | 'reviewing' | 'authorized' | 'awaiting_save' | 'awaiting_return' | 'unknown';
   review: WorkflowPresetReview | null; message: string;
@@ -63,10 +64,12 @@ export function checkedReview(value: unknown): WorkflowPresetReview | null {
   return structuredClone(value) as unknown as WorkflowPresetReview;
 }
 export function checkedHandoff(value: unknown): WorkflowPresetHandoff | null {
-  if (!exact(value, ['version', 'operation_id', 'document_id', 'preset_id', 'preset_sha256', 'phase', 'review', 'message']) ||
+  const automatic = object(value) && value.mode === 'automatic';
+  if (!exact(value, ['version', 'operation_id', 'document_id', 'preset_id', 'preset_sha256', 'phase', 'review', 'message', ...(automatic ? ['mode'] : [])]) ||
     value.version !== 1 || !hash(value.operation_id) || !token(value.document_id) || !token(value.preset_id) || !hash(value.preset_sha256) ||
     !['awaiting_open', 'awaiting_preparation', 'reviewing', 'authorized', 'awaiting_save', 'awaiting_return', 'unknown'].includes(String(value.phase)) ||
     typeof value.message !== 'string' || value.message.length > 8192 || /[\u0000-\u001f\u007f]/.test(value.message)) return null;
+  if (automatic && (value.review !== null || !['authorized', 'unknown'].includes(String(value.phase)))) return null;
   const review = value.review === null ? null : checkedReview(value.review);
   if ((value.review !== null && !review) || (value.phase === 'reviewing' && !review) ||
     (review && (review.target.document_id !== value.document_id || review.preset_id !== value.preset_id || review.preset_sha256 !== value.preset_sha256))) return null;

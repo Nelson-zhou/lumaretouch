@@ -1,0 +1,273 @@
+{
+  "schema": "lrt.upscale-native-product.static-freeze.v1",
+  "baseline_commit": "5b89f2bbd1541e5c29ecc833e987e9ddea26db9f",
+  "status": "SOURCE_CONNECTED_UNRUN_NOT_PRODUCT_ACCEPTED",
+  "model_id": "Swin2SR-classical-sr-x2-64",
+  "profile": {
+    "model_revision": "cee1c923c6a37361c6e5650b65dcf4be821e5d52",
+    "checkpoint_sha256": "a515955815ab6dba3a9331d8c75db13a5166a5ffbcebf1a95ab676a5656ac4fb",
+    "model_license": "Apache-2.0 official model card",
+    "mode": "single_full_frame_native_dimensions",
+    "min_side": 16,
+    "max_side": 1024,
+    "max_pixels": 1048576,
+    "opaque_sdr_only": true,
+    "cpu_only": true,
+    "source_resize_fallback": false,
+    "large_photo_tiling_available": false
+  },
+  "source_checks": {
+    "python_ast_files": 22,
+    "product_imports": false,
+    "tests": false,
+    "build": false,
+    "typecheck": false,
+    "installation": false,
+    "inference": false,
+    "photo_acceptance": false,
+    "performance_acceptance": false
+  },
+  "research": {
+    "swin_weights": "Official header metadata only; no weight payload downloaded or loaded",
+    "rrdb_weights": "One authorized exact official HTTPS asset hash-only read, 67061725 bytes, not persisted/deserialized/installed; license remains pending",
+    "runtime": "Uses trusted installed app CPython3.12 Linux x86_64 Torch2.7.1+cpu NumPy2.x; no new optional wheels or base installer"
+  },
+  "remaining": [
+    "Large original-photo AI processing: finite shifted-mask boundary dependence prevents enabling independent border tiles",
+    "Exact graph/reference/output numeric parity and real model probe UNRUN",
+    "Portrait/wedding detail hallucination, image quality and performance acceptance UNRUN",
+    "Clean-machine base runtime wheel hash closure and installer not implemented by this profile",
+    "Shared glow lifecycle, UI/Rust transport, new-copy persistence and export regression UNRUN",
+    "Build/typecheck/tests not run; source integration alone is not completion"
+  ],
+  "files": {
+    "docs/upscale-v2/PRODUCT-OWNER-FREEZE.json": {
+      "bytes": 2200,
+      "sha256": "4d9df0df9522054a44a9482f4634ea8175f1493f7372d2dce53e905262ccc944"
+    },
+    "docs/upscale-v2/PRODUCT-PATH-UNRUN.md": {
+      "bytes": 3411,
+      "sha256": "3410bf8f97bbe3e884f0d21c5a60197fac076e0f866aebb3b57a7abb2417710f"
+    },
+    "docs/upscale-v2/PROVENANCE.json": {
+      "bytes": 5236,
+      "sha256": "c27e008bea7de9dadb698ab401d4ad85affeff9e515ac87d4122ebc4e6ed76d0"
+    },
+    "docs/upscale-v2/README.md": {
+      "bytes": 3610,
+      "sha256": "206ec2595b84b1cf561d8d0b8a3e3f5039cde6c5a3d0cc644bdcc6978d05193d"
+    },
+    "docs/upscale-v2/SWIN2SR.md": {
+      "bytes": 7325,
+      "sha256": "6424a131600c4384587682cbde3e39c4c625dd253950f37aa32507853f35b85d"
+    },
+    "engine/src/lumaretouch_engine/command_registry.py": {
+      "bytes": 2811,
+      "sha256": "b9a0d09dd18db742ee6c5b17b605eb24527afb9a7ebba94bfa1cf3dff4ed15b2"
+    },
+    "engine/src/lumaretouch_engine/creative_capture_routes.py": {
+      "bytes": 3662,
+      "sha256": "1b5982bfeee5e6ac1e5aefcde379d1ad6992d3ca4deea8b37792b3aee56a0cbd"
+    },
+    "engine/src/lumaretouch_engine/creative_module_commands.py": {
+      "bytes": 1348,
+      "sha256": "443773b602b0a0b2edc346932e6286e678dbf1d192ef1941e999df1a22bb00fe"
+    },
+    "engine/src/lumaretouch_engine/light_glow_host.py": {
+      "bytes": 20454,
+      "sha256": "8c6e9665bd7ff753517edbb83b9b2727ae549db3c6df9440a6f26371eabb2f7c"
+    },
+    "engine/src/lumaretouch_engine/light_glow_jobs.py": {
+      "bytes": 3876,
+      "sha256": "79b63550dc8c90699e166978c27a329ad293bc89e70eb1eb0d911ac9e0e4fda2"
+    },
+    "engine/src/lumaretouch_engine/project_recovery_runtime.py": {
+      "bytes": 13866,
+      "sha256": "216ead6474d52abe5a96c270072d92735b6bc307327c916eaab26213773b97d3"
+    },
+    "engine/src/lumaretouch_engine/read_job_ingress.py": {
+      "bytes": 3186,
+      "sha256": "ffbd3eb3e72c910eb5520eb9ed249c2bfcba3b82d20d639e792a45f740722c3a"
+    },
+    "engine/src/lumaretouch_engine/server.py": {
+      "bytes": 474274,
+      "sha256": "bca4ccf41ad08fb6a86f4b7ee0af81df896d81de38d47ae078e680bb06d64735"
+    },
+    "engine/src/lumaretouch_engine/upscale_restore_host.py": {
+      "bytes": 3137,
+      "sha256": "dbfc01e1fb3ab619038b5994b38a5b146e42ca179b8feedfe97295766a8544f9"
+    },
+    "engine/src/lumaretouch_engine/upscale_restore_jobs.py": {
+      "bytes": 744,
+      "sha256": "c70a2a6daea770b71bff2dfee3cf01a79b1dc17c24574708058f398f470da77f"
+    },
+    "engine/src/lumaretouch_engine/upscale_restore_stage.py": {
+      "bytes": 9622,
+      "sha256": "3362e0a893ac1f9243b64ff1fcd3d72747f1ece7105a68cef8931ff33931374a"
+    },
+    "engine/src/lumaretouch_engine/upscale_v2/__init__.py": {
+      "bytes": 690,
+      "sha256": "7109ac4b1decd39437c855b0938b8da9e2ae283e086055a67c67618e864f4684"
+    },
+    "engine/src/lumaretouch_engine/upscale_v2/_stream.py": {
+      "bytes": 10766,
+      "sha256": "ceca4e335accca6b8e816f427dc1504d37ca246d33ceac1d5fc55085e21ebb1c"
+    },
+    "engine/src/lumaretouch_engine/upscale_v2/adapter.py": {
+      "bytes": 5763,
+      "sha256": "4c738a342b395ae3ec0fe4fa6c7add974b91c9a247451625f4f5857d11c5d98b"
+    },
+    "engine/src/lumaretouch_engine/upscale_v2/geometry.py": {
+      "bytes": 5775,
+      "sha256": "99538ae4c2b9fa9cbdbd8a1073387b589205fc0a54b0b3354f86a062a26eda74"
+    },
+    "engine/src/lumaretouch_engine/upscale_v2/setup.py": {
+      "bytes": 9793,
+      "sha256": "7c6f536952e2ebd72bdb479dfbfffe2bf41f61eb69d3e6a9211e6d6a13ab3b3e"
+    },
+    "engine/src/lumaretouch_engine/upscale_v2/swin2sr_LICENSE.txt": {
+      "bytes": 11418,
+      "sha256": "77fd4710def9ec3c0f6225800e0235f15a425abd4a8b03559127fcd782612049"
+    },
+    "engine/src/lumaretouch_engine/upscale_v2/swin2sr_NOTICE.txt": {
+      "bytes": 1577,
+      "sha256": "02f50b9f63541b4cfab1a6c4408618f347d634b2421b60633bd7e56c39d512af"
+    },
+    "engine/src/lumaretouch_engine/upscale_v2/swin2sr_loader.py": {
+      "bytes": 3305,
+      "sha256": "450e5963745d7be980e4824134720b7a615908e4488266395e3b9512fc0ae549"
+    },
+    "engine/src/lumaretouch_engine/upscale_v2/swin2sr_manifest.py": {
+      "bytes": 2396,
+      "sha256": "bce1e6112869bae3866c4fb689843879d36c8579803698e9b420bca0c9e312bc"
+    },
+    "engine/src/lumaretouch_engine/upscale_v2/swin2sr_network.py": {
+      "bytes": 8050,
+      "sha256": "feece0683a4216b60dbd37ed716dcdefe400233e5e9b45c1ff3ad63e22a9f8aa"
+    },
+    "engine/src/lumaretouch_engine/upscale_v2/worker.py": {
+      "bytes": 4173,
+      "sha256": "4a4fa06986c61c518c4dea9face5fbd26caa0896798f82a8ede207b08a628fd3"
+    },
+    "engine/tests/test_upscale_native_setup_unrun.py": {
+      "bytes": 3654,
+      "sha256": "c290244c58df7116ea48396313c5b31765a57cd8b9b40b1e795be5f7dfe0a4f1"
+    },
+    "engine/tests/test_upscale_restore_host_unrun.py": {
+      "bytes": 5335,
+      "sha256": "d985cd06aecafbd6dfb1ac224bc1ae157f298b46bc1fa7533a347306fc8d0356"
+    },
+    "ui/src-tauri/src/capture_lifecycle.rs": {
+      "bytes": 4088,
+      "sha256": "e8f17e999f6591e71405cf7efdc8a30cae667a6db3120794e936902ce6dc8b30"
+    },
+    "ui/src-tauri/src/engine.rs": {
+      "bytes": 57803,
+      "sha256": "1ce7ddb0cd831e72ce4d0c99a049d7513d73aba341e3207467a5a1da260b881f"
+    },
+    "ui/src-tauri/src/main.rs": {
+      "bytes": 101373,
+      "sha256": "bba55478c515cf1686828304987eb0e81fa6c3534c8f47eea011367bfedcbfab"
+    },
+    "ui/src-tauri/src/native_dispatch.rs": {
+      "bytes": 15202,
+      "sha256": "851aa290b6f77c7c83440b6bfa3c08b73b290849e9ca4912b8c3c24ba9f87127"
+    },
+    "ui/src-tauri/src/prompted_model_api.rs": {
+      "bytes": 8626,
+      "sha256": "a03783fe2b5a9d845345dc97e6b663ea041294175282f6cdcd3502a06f64694f"
+    },
+    "ui/src-tauri/src/upscale_restore_api/imagery.rs": {
+      "bytes": 3542,
+      "sha256": "598641d77568d73634204b6b102fcecb9f0e7a1f7e3c4813e4de06d4d70c0acf"
+    },
+    "ui/src-tauri/src/upscale_restore_api/json.rs": {
+      "bytes": 5231,
+      "sha256": "a4a2ea3c23ed27c32397b63454c97f2ac8c434e93b87497939c9d5109fd95d59"
+    },
+    "ui/src-tauri/src/upscale_restore_api/mailbox.rs": {
+      "bytes": 20427,
+      "sha256": "bbc8fbdb562b8776fa4c384fd444662284667467994e6787ed848a4879232bb1"
+    },
+    "ui/src-tauri/src/upscale_restore_api/mod.rs": {
+      "bytes": 1855,
+      "sha256": "4b36866e817bc97917f50a5781cfb5a5950092da6f2efe71f1c4b5ba02b15f07"
+    },
+    "ui/src-tauri/src/upscale_restore_api/tests_unrun.rs": {
+      "bytes": 4782,
+      "sha256": "6c8a86ddd1289f2f1ff3c5b4f27118d10c915de7149ee4e3eded6c3455e4f6d2"
+    },
+    "ui/src-tauri/src/upscale_restore_api/transport.rs": {
+      "bytes": 5265,
+      "sha256": "48d17378bdd380de1729c4d3cbc7615cfc22ace8cb108d540c28d636aca63aff"
+    },
+    "ui/src-tauri/src/upscale_restore_api/wire.rs": {
+      "bytes": 10876,
+      "sha256": "f5acf215959b17682f962b9d002662a5d8a6866d40e5df098d4172c5de7c921d"
+    },
+    "ui/src/App.tsx": {
+      "bytes": 166737,
+      "sha256": "393701afc3430b637d2e342dd639871f86cd90fa2f3f4c9f74b7304a581dc8a8"
+    },
+    "ui/src/native.ts": {
+      "bytes": 118518,
+      "sha256": "613e748acad7739d8739a6980e06be90efd17e5cb73b66c4759f47eb944a9ab7"
+    },
+    "ui/src/upscaleRestore/ACCEPTANCE-UNRUN.md": {
+      "bytes": 3459,
+      "sha256": "1a0560ca95afb8be93fe2746711b680ed205912a999a9ab65d6e257f3aa60978"
+    },
+    "ui/src/upscaleRestore/UpscaleModelSetup.tsx": {
+      "bytes": 4518,
+      "sha256": "b828888473415b02c76e7d2bc1620eb41a7ab8c0437c911578088a34e24f9823"
+    },
+    "ui/src/upscaleRestore/UpscaleRestoreWorkspace.tsx": {
+      "bytes": 4340,
+      "sha256": "82dac6223fedef0d7340c77a687889cd19115816517a689f6cdd1e430ffdc7c0"
+    },
+    "ui/src/upscaleRestore/UpscaleRestoreWorkspaceHost.tsx": {
+      "bytes": 2112,
+      "sha256": "d17a12dd53be2bda154ba946a3ec07153f9681f16d2b29e5b8af531a1998399f"
+    },
+    "ui/src/upscaleRestore/controller.ts": {
+      "bytes": 15075,
+      "sha256": "2b1a4645a15ddfb82d98f73e94a2747957007ce6248279e9d654a61b5c774365"
+    },
+    "ui/src/upscaleRestore/imagery.ts": {
+      "bytes": 2690,
+      "sha256": "98c1891ec146bedb6f17a55137e3d25362231e531d37b539f3a77f2b6748da6a"
+    },
+    "ui/src/upscaleRestore/index.ts": {
+      "bytes": 462,
+      "sha256": "b42d0b75ac9618b83fe86bd5c7efcbcd0d07dbcd18055b7fdd42c4af10800083"
+    },
+    "ui/src/upscaleRestore/model.ts": {
+      "bytes": 15557,
+      "sha256": "d1e4cfc266dbadcc1113a87daa9513204ef375a9d5eaf5b92560bc2cad43407e"
+    },
+    "ui/src/upscaleRestore/model.unrun.test.ts": {
+      "bytes": 1696,
+      "sha256": "534db43dc7d7b39a8581785205dfb781965aadf5a6182621799bf80dce791ee3"
+    },
+    "ui/src/upscaleRestore/nativePort.ts": {
+      "bytes": 21100,
+      "sha256": "3c5b55b5ba5eda3bae9dda861f93beacec52742f354c3fa036fdd70b46f307fd"
+    },
+    "ui/src/upscaleRestore/upscaleRestore.css": {
+      "bytes": 1550,
+      "sha256": "e377251fafe3fae6498a0c9202d42279241af09bb3d0e42ef09e59609885b438"
+    },
+    "ui/src/upscaleRestore/useUpscaleRestore.ts": {
+      "bytes": 12464,
+      "sha256": "17f34c71f7918b64adb0a6193945fcbdb8dc47c0743a6f23c18ef1d63c03e56c"
+    },
+    "ui/src/upscaleRestore/useUpscaleWorkspaceBinding.ts": {
+      "bytes": 7219,
+      "sha256": "208b8a0b82acc2cb8ee53493c87291b53b5aa6e950b1471551a9146a57b64ee0"
+    },
+    "ui/src/workspaces/guardCreativeWork.ts": {
+      "bytes": 1952,
+      "sha256": "49b1d08cf7d584eb9afeea57e6d3c2f2c87141bd24f756447e857633f5f8c0bf"
+    }
+  }
+}

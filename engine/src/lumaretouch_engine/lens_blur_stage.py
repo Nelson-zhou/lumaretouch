@@ -4,8 +4,8 @@
 AUTHORED / UNRUN. This source is not application registration or acceptance.
 Only real canonical RGBA assets enter; only the Rust aperture bridge renders.
 A stage owns private immutable source/depth/recipe/output bytes, not an AssetStore.
-Model-derived depth is unavailable until the optional adapter's provenance gates
-are implemented and reviewed. A manual plane requires the exact explicit UI
+Model-derived depth is admitted only through the optional verified adapter;
+missing model/runtime readiness never produces substitute depth. A manual plane requires the exact explicit UI
 acknowledgement command; it is never represented as measured scene depth.
 """
 from __future__ import annotations
@@ -202,6 +202,10 @@ class CapturedDepth:
     raster_bytes: bytes = field(repr=False)
     session_id: str | None
     _seal: object = field(repr=False, compare=False)
+    full_depth_le_f32: bytes | None = field(default=None, repr=False)
+    full_depth_sha256: str | None = None
+    model_provenance_json: str | None = field(default=None, repr=False)
+    analysis_provenance_json: str | None = field(default=None, repr=False)
 
     @property
     def asset(self):
@@ -209,7 +213,9 @@ class CapturedDepth:
 
     @property
     def retained_bytes(self):
-        return len(self.wire_json) + len(self.raster_bytes)
+        return (len(self.wire_json) + len(self.raster_bytes) + len(self.full_depth_le_f32 or b'')
+                + len((self.model_provenance_json or '').encode('utf-8'))
+                + len((self.analysis_provenance_json or '').encode('utf-8')))
 
 
 def _require_source(source):
@@ -387,16 +393,127 @@ def prepare_manual_plane(command, source, *, budget, cancelled=lambda: False):
         return CapturedDepth(_json(asset), raw, command['session_id'], _SEAL)
 
 
+def prepare_model_depth(command, source, *, model_root, budget, cancelled=lambda: False):
+    """Explicit whole-frame AI analysis; only genuine adapter output is sealed.
+
+    RGB8 is analysis-only. The full native source and full-grid float depth are
+    retained independently from the u16 UI visualization. AUTHORED / UNRUN.
+    """
+    _require_source(source)
+    required = ('version', 'action', 'request_id', 'session_id', 'owner', 'acknowledged_model')
+    command = json.loads(_json(command))
+    if (not _exact(command, required) or type(command['version']) is not int
+            or command['version'] != WIRE_PROTOCOL or command['action'] != 'prepare_model_depth'
+            or command['acknowledged_model'] is not True or not _token(command['request_id'])
+            or not _token(command['session_id']) or command['owner'] != source.owner):
+        raise ValueError('Exact source-owned explicit AI-depth analysis acknowledgement required')
+    from . import lens_depth_adapter as adapter, lens_depth_manifest as manifest
+    s = source.owner['source']
+    owner = adapter.DepthOwnerV1(command['owner']['document_id'], command['owner']['document_epoch'],
+        command['owner']['document_revision'], adapter.DepthSourceV1(**s))
+    pw, ph = adapter.proxy_extent_v1(owner.source)
+    with _job(budget, cancelled) as poll:
+        # Admission reserve, NOT a measured peak or an allocator/RSS guarantee.
+        # Model worker/runtime retains its own stricter limits and deadline.
+        _admit(source.retained_bytes + s['width'] * s['height'] * 24
+               + DISPLAY_RESERVE + 768 * 1024 * 1024, budget)
+        import numpy as np
+        from .creative_layer_native import display_rgba
+        pixels = np.frombuffer(source.content, dtype='<f4').reshape(s['height'], s['width'], 4)
+        for row in pixels:
+            poll()
+            if (not np.isfinite(row).all() or not (row[:, 3] == 1).all()
+                    or (row[:, :3] < 0).any() or (row[:, :3] > 1).any()):
+                raise ValueError('AI analysis requires genuine opaque SDR source; no hidden alpha flattening or HDR clipping')
+        sample = np.empty((ph, pw, 4), dtype=np.float32)
+        xs = (2 * np.arange(pw, dtype=np.int64) + 1) * s['width'] // (2 * pw)
+        for y in range(ph):
+            poll()
+            sample[y] = pixels[(2 * y + 1) * s['height'] // (2 * ph), xs]
+        rgb = display_rgba(sample, matte=(0., 0., 0.), cancelled=poll).tobytes(order='C')
+        transform_record = {'version': 1, 'source_encoding': 'linear-srgb-d65',
+            'source_alpha': 'opaque-exact-one', 'source_range': 'finite-unit-SDR',
+            'sampling': 'nearest-full-frame-pixel-centres-floor', 'extent': [pw, ph],
+            'transfer': 'creative-layer-native-display-rgba-srgb-rgb8',
+            'matte': [0, 0, 0], 'clipping': 'none-source-validated-unit',
+            'orientation': ORIENTATION, 'original_modified': False}
+        transform = _hash(_json(transform_record))
+        request = adapter.DepthRequestV1(owner, pw, ph, rgb, transform)
+        result = adapter.estimate_depth_v1(request, model_root=model_root, cancelled=poll)
+        poll()
+        if (type(result) is not adapter.DepthResultV1 or result.owner != owner
+                or result.request_identity != request.identity or result.version != 1
+                or result.convention != CONVENTION or result.mapping != MAPPING
+                or result.subject_focus is not None or type(result.depth_le_f32) is not bytes
+                or len(result.depth_le_f32) != s['width'] * s['height'] * 4
+                or _hash(result.depth_le_f32) != result.depth_sha256
+                or not _sha(result.inference_id) or type(result.provenance_json) is not str
+                or len(result.provenance_json.encode('utf-8')) > 65536):
+            raise ValueError('AI depth result does not authenticate the exact requested whole source')
+        proof = json.loads(result.provenance_json)
+        if (proof.get('model_id') != manifest.MODEL_ID or proof.get('request_identity') != request.identity
+                or proof.get('depth_sha256') != result.depth_sha256
+                or proof.get('owner') != source.owner
+                or proof.get('proxy_sha256') != request.proxy_sha256
+                or proof.get('analysis_transform_sha256') != transform
+                or proof.get('output_extent') != [s['width'], s['height']]
+                or proof.get('output_dtype') != 'little-endian-float32'
+                or proof.get('mapping') != MAPPING or proof.get('convention') != CONVENTION
+                or proof.get('device') != 'cpu' or proof.get('precision') != 'float32'
+                or proof.get('source_colour_pixels_modified') is not False
+                or proof.get('subject_focus') is not None
+                or proof.get('model_files') != {pin.filename: pin.sha256 for pin in manifest.MODEL_FILES}
+                or _hash(b'lrt-lens-depth-result-v1\0' + adapter._canonical(proof)) != result.inference_id):
+            raise ValueError('AI inference provenance does not match its immutable result')
+        full = np.frombuffer(result.depth_le_f32, dtype='<f4').reshape(s['height'], s['width'])
+        low, high = 1., 0.
+        for row in full:
+            poll()
+            if not np.isfinite(row).all() or (row < 0).any() or (row > 1).any():
+                raise ValueError('AI depth contains invalid full-grid values')
+            low, high = min(low, float(row.min())), max(high, float(row.max()))
+        if high <= low:
+            raise ValueError('Constant AI depth is not a scene-depth estimate')
+        visual = np.empty((ph, pw), dtype='<u2')
+        for y in range(ph):
+            poll()
+            row = full[(2*y+1)*s['height']//(2*ph), xs].astype(np.float64)
+            visual[y] = np.floor(row * 65535 + .5).astype('<u2')
+        raw = visual.tobytes(order='C')
+        asset = {'version': 1, 'token': uuid.uuid4().hex, 'owner': source.owner,
+            'convention': CONVENTION, 'mapping': MAPPING, 'orientation': ORIENTATION,
+            'raster': {'format': 'u16-le', 'width': pw, 'height': ph, 'sha256': _hash(raw),
+                       'base64': base64.b64encode(raw).decode('ascii')},
+            'provenance': {'kind': 'model', 'model_id': manifest.MODEL_ID,
+                'model_sha256': manifest.MODEL_FILES[0].sha256, 'inference_id': result.inference_id,
+                'acknowledgement_id': command['request_id']}, 'subject_focus': None}
+        poll()
+        return CapturedDepth(_json(asset), raw, command['session_id'], _SEAL,
+            result.depth_le_f32, result.depth_sha256, result.provenance_json,
+            _json({'analysis': transform_record, 'analysis_sha256': transform,
+                'visualization': {'sampling': 'nearest-full-frame-pixel-centres-floor',
+                    'extent': [pw, ph], 'quantization': 'floor(value*65535+0.5)-u16-le',
+                    'sha256': _hash(raw), 'native_uses_full_f32': True}}).decode('ascii'))
+
+
 def context(source, session_id, depth=None):
     """Exact UI LensContext; no automatic model, plane, or document mutation."""
     _require_source(source)
     if not _token(session_id):
         raise ValueError('Lens context needs its session token')
     asset = None if depth is None else _require_depth(depth, source, session_id)
+    from . import lens_depth_setup
+    status = lens_depth_setup.model_status()
+    readiness = {'available': status.get('ready') is True,
+        'code': str(status.get('code', 'unavailable'))[:128],
+        'reason': str(status.get('reason', 'Verified AI depth unavailable'))[:4096],
+        'model_id': 'depth-anything-v2-small-hf'}
     return {'session_id': session_id, 'owner': source.owner, 'source_image': source.source_image,
-            'depth': asset, 'depth_status': 'ready' if asset is not None else 'manual-required',
-            'message': ('人工景深输入，不是 AI 分析。' if asset is not None and asset['provenance']['method'] == 'user_supplied_depth'
+            'model_depth': readiness, 'depth': asset, 'depth_status': 'ready' if asset is not None else 'manual-required',
+            'message': ('AI 全画面相对景深；不是距离或置信度，请检查深度图和边缘后预览。' if asset is not None and asset['provenance']['kind'] == 'model'
+                        else '人工景深输入，不是 AI 分析。' if asset is not None and asset['provenance'].get('method') == 'user_supplied_depth'
                         else '人工恒定编辑基准面，不是测量或 AI 景深。' if asset is not None
+                        else '已具备本地模型分析条件；请明确开始 AI 景深分析，或选择人工散焦编辑。' if readiness['available']
                         else 'AI 景深来源验证尚未就绪。可显式选择人工散焦编辑；不会自动生成景深。')}
 
 
@@ -471,7 +588,9 @@ def _recipe(value, source, depth, raster_bytes):
 
 
 def _full_depth(depth, width, height, poll):
-    """UI's exact edge/centre bilinear map, no naive u*(depthWidth-1).
+    """Model depth uses its independent immutable full-grid f32 directly.
+
+    Manual depth uses UI's exact edge/centre bilinear map, not naive u*(depthWidth-1).
 
     Source centre (x,y) maps to ((x+.5)*dw/W-.5,(y+.5)*dh/H-.5).
     Only actual raster borders clamp. u16 values divide by 65535 in f64 and
@@ -479,6 +598,15 @@ def _full_depth(depth, width, height, poll):
     """
     import numpy as np
     asset = depth.asset
+    if asset['provenance']['kind'] == 'model':
+        poll()
+        raw = depth.full_depth_le_f32
+        if (type(raw) is not bytes or len(raw) != width * height * 4
+                or _hash(raw) != depth.full_depth_sha256 or depth.model_provenance_json is None):
+            raise ValueError('Sealed model depth lost its independent full-grid float asset')
+        # Read-only immutable bytes; no UI quantization/upscale enters native render.
+        out = np.frombuffer(raw, dtype='<f4').reshape(height, width)
+        return out if out.dtype.isnative else out.astype(np.float32)
     dw, dh = asset['raster']['width'], asset['raster']['height']
     raster = np.frombuffer(depth.raster_bytes, dtype='<u2').reshape(dh, dw)
     out = np.empty((height, width), dtype=np.float32)
@@ -632,6 +760,7 @@ def prepare(command, source, depth, *, budget, cancelled=lambda: False):
             'before': before, 'after': after, 'notes': [
                 '使用真实完整源图和原生光圈渲染；未修改文档或历史。',
                 '对比图为完整画面的 SDR 显示采样；完整输出保留线性浮点、透明度及有符号 HDR，不以显示图替换。',
+                'AI 相对景深完整浮点栅格；UI 深度图为独立量化显示，不是距离或置信度。' if depth.asset['provenance']['kind'] == 'model' else
                 '人工恒定编辑基准面，不是测量或 AI 景深。' if depth.session_id is not None else '人工提供的景深栅格，不是 AI 分析。']}
         header, content, original, icc = _asset_parts(asset)
         poll()

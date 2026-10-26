@@ -158,3 +158,28 @@ fn native_review_accepts_exact_skin_color_scope_but_no_duplicates_or_extra_modul
     review["runtime_verified"] = json!(true);
     assert!(!super::review::report(&review));
 }
+
+#[test]
+fn automatic_start_ack_is_not_reusable_definition_authority() {
+    let digest = "a".repeat(64);
+    let mut ack = wire::AutomaticStartAck { schema: "lrt.automatic-batch-start.v1".into(), graph_sha256: digest.clone(), accepted: true };
+    assert!(ack.matches(&digest));
+    assert!(!ack.matches(&"b".repeat(64)));
+    ack.accepted = false; assert!(!ack.matches(&digest));
+    assert!(serde_json::from_value::<wire::AutomaticStartAck>(json!({"schema":"lrt.automatic-batch-start.v1",
+        "graph_sha256":digest,"accepted":true,"viewed_images":true})).is_err());
+}
+#[test]
+fn automatic_handoff_never_accepts_review_steps_or_image_ack() {
+    let command = Command { schema_version:1, identity:identity(), operation:CommandKind::PreflightPreset {
+        document:document(), preset_id:"preset-one".into(), preset_sha256:"a".repeat(64), labels:vec![] } };
+    let mut handoff = json!({"version":1,"mode":"automatic","operation_id":command.identity.operation_id,
+        "document_id":"document-fixture","preset_id":"preset-one","preset_sha256":"a".repeat(64),
+        "phase":"authorized","review":null,"message":"Frozen automatic intent, no human review"});
+    assert!(super::review::handoff(&handoff, &command));
+    for step in ["open_target","prepare_skin","approve","save_project","return_target"] {
+        assert!(!super::review::step_allowed(&handoff, step, &json!({})));
+    }
+    handoff["review"] = json!({"accepted":true});
+    assert!(!super::review::handoff(&handoff, &command));
+}

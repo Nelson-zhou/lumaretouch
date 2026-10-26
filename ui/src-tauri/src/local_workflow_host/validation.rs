@@ -43,7 +43,8 @@ pub fn valid(command: &Command, receipt: &Receipt) -> bool {
         ReceiptResult::PresetPreflight { assessment } => {
             let CommandKind::PreflightPreset { document, preset_sha256, .. } = &command.operation else { return false; };
             text(&assessment.report_id, 256) && digest(&assessment.report_sha256) && &assessment.preset_sha256 == preset_sha256
-                && assessment.document_revision == document.document_revision && assessment.review.as_ref().map_or(true, |review|
+                && assessment.document_revision == document.document_revision && (assessment.requires_review || assessment.review.is_none())
+                && assessment.review.as_ref().map_or(true, |review|
                     text(&review.receipt_id, 256) && review.report_sha256 == assessment.report_sha256
                         && review.document_id == document.document_id && review.document_revision == document.document_revision
                         && review.preset_sha256 == assessment.preset_sha256)

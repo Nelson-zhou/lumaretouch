@@ -1,0 +1,88 @@
+{
+  "version": 1,
+  "base_commit": "4981a22f5f19656311600042de9922db0ea0b27e",
+  "requirement_ids": [
+    "workflow:230984",
+    "LNX-PICK-001",
+    "PICK-001"
+  ],
+  "scope": "Explicit selected original-pixel bounded crop review via canonical full-source owner; not sensor focus, face detector, full-image quality or completed AI culling",
+  "acceptance": "Source and AST only; tests/build/typecheck/runtime/inference/quality/performance UNRUN",
+  "manifest_self_excluded": true,
+  "files": [
+    {
+      "path": "docs/development/handbook-traceability.json",
+      "sha256": "1c45ea00e75af6342b75b247386025e4c0373fbf7df0f486b084d9aeb2c05d1f"
+    },
+    {
+      "path": "docs/local-workflow/PICK-ORIGINAL-FOCUS-V1.md",
+      "sha256": "958bee3c37f5ac1177ef84421df59ad5afbfc372f68942a81e9b8872daf551b5"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/pick_original_focus.py",
+      "sha256": "04eadf27c395b67678cd4ccbce922dc8601b3c7940419a7051b9899889e7e471"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/pick_focus_host.py",
+      "sha256": "33ef8a13907fd957f7ce50615bf73053da273563a695b9797484a6883424e292"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/server.py",
+      "sha256": "54996733d0145ee1084216b67954031b3dc09e1aed58bca4ce06c698a30c6376"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/virtual_copy_host.py",
+      "sha256": "0b5dd6331e38490ee94c3fa3adcb85efb795ef4661d66f4da5bdca8e747997e0"
+    },
+    {
+      "path": "engine/tests/test_pick_original_focus_unrun.py",
+      "sha256": "4527ab2cff2f9f5d2607628ee10a6a2df201f53f226d4f469421068e52617d4d"
+    },
+    {
+      "path": "ui/src/App.tsx",
+      "sha256": "03515da3b434639ef40bb6543839d53f1d19ac0498a2cd38ff88f74a0ca9c44b"
+    },
+    {
+      "path": "ui/src/native.ts",
+      "sha256": "3f449fe0b1ac465b9b04a7cf3ad0b542722d23d29360bd1ac59e5de992ab9dcc"
+    },
+    {
+      "path": "ui/src-tauri/src/main.rs",
+      "sha256": "ae46e01844e16ad6658b990d4281c27f8b26abda891a71bce3f1a43fd8008f5a"
+    },
+    {
+      "path": "ui/src/originalFocus/OriginalFocusReview.tsx",
+      "sha256": "3d8a4d3fe2bc95aecf026560b57d33ac55e0c2b803e52ff31169ab6e09f190c3"
+    },
+    {
+      "path": "ui/src/originalFocus/originalFocus.css",
+      "sha256": "438693298de7ec0caacd80b618f665e6cd6c7af5b6a58f5ce8d8865b6bef3e2a"
+    },
+    {
+      "path": "ui/src/originalFocus/SCENARIOS-UNRUN.md",
+      "sha256": "b0e9ccfa5f44f9e4a1b0d3fc07509233af1dde77cfbe1626ca2f3d4d523123c4"
+    }
+  ],
+  "reused_owners": [
+    {
+      "path": "engine/src/lumaretouch_engine/portrait_fit_source.py",
+      "sha256": "5e72a989285587225ea508c2c1b4b1d4eb232ccdf777d599a9c563f8863a4de9"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/full_source_working.py",
+      "sha256": "b4d9f7c290e742e75624c642a6d47c2829bc6285d4e55f99bc815b58e88c595a"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/local_mask_state.py",
+      "sha256": "b3ba75676ec58170827248013b6d94ca8f709a71d496f8a3bb5d051abd7321a1"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/cpu_memory_budget.py",
+      "sha256": "4c7de0e213a9be433ae348fa56555bd2cbe358f5d4101dfb37983769a47cdd2b"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/decode.py",
+      "sha256": "4e3631b19a39e64edc34585def4605bb66b87347b4924f3a88c99816326af371"
+    }
+  ]
+}

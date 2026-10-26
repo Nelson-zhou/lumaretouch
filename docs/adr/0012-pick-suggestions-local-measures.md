@@ -169,3 +169,12 @@ strong 0.240}`：强档刚好把"画出来的闭眼替身"标出来，而**不�
 不判人脸朝向/主体/构图美感/美学评分；不做跨图同一人（PORTRAIT-005）；不自动删除、不自动标记、不自动进回收站；
 不学习用户偏好；`eyes_closed` 只在探得到脸时给出，多人图把所有脸一起量取最小值而不逐人报告。
 手册里那"10 种场景分类"没有对应实现，因此 UI 上也就不出现对应承诺。
+
+## 2026-10-25 source-only correction (v3; UNRUN)
+
+The historical numerical claims above are not revalidated evidence for v3.
+The old dHash did **not** actually use a fixed 9×8 grid; it retained aspect ratio.
+`docs/local-workflow/PICK-EVIDENCE-V3.md` records its repair, cache/source fencing,
+proxy-only evidence boundaries and unresolved real-photo calibration. A proxy
+ranking is not “best photo”; no automatic keep/delete verdict is now produced.
+FaceMesh is model inference even though the final eye-aperture ratio is geometry.

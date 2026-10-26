@@ -1,0 +1,152 @@
+{
+  "schema": "lrt.automatic-batch-source-freeze.v1",
+  "status": "SOURCE_AUTHORED_UNRUN",
+  "scope": "finite captured-file-list automatic fixed exposure/WB; separate reviewed watched mode preserved",
+  "validation": {
+    "python_ast_files": 5,
+    "source_whitespace": "inspected",
+    "tests": "UNRUN",
+    "build": "UNRUN",
+    "typecheck": "UNRUN",
+    "product_runtime": "UNRUN",
+    "inference": "UNRUN"
+  },
+  "files": [
+    {
+      "path": "core/local_workflow/schema.rs",
+      "bytes": 16113,
+      "sha256": "81ab882fe6572e1e38b7c5b67068bb622e73e7db823014694cd0dc0a7e349085"
+    },
+    {
+      "path": "core/local_workflow/scheduler.rs",
+      "bytes": 20979,
+      "sha256": "8c64020be151edaf6de772fa277f92d9184eab0bb50756a6d2751d0f84114350"
+    },
+    {
+      "path": "core/local_workflow/poll.rs",
+      "bytes": 16074,
+      "sha256": "292917bd33ac752e0584d00bbe6455560bba162235b8cd13844b515895f3f13d"
+    },
+    {
+      "path": "core/local_workflow/ledger.rs",
+      "bytes": 17824,
+      "sha256": "5fe8c8a7641d11079d51ec1b9259c5b512210a62a936ed4c1b8f958daabb4a4b"
+    },
+    {
+      "path": "core/local_workflow/tests.rs",
+      "bytes": 28588,
+      "sha256": "402978f6350449e2d7f5d3787d5452eb664daabdbcd0ca3dc43a06be2bd53144"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/workflow_auto_preset.py",
+      "bytes": 9739,
+      "sha256": "8677383e3244ac3290d5762ce3fd539fc46282f1827de39252e99040b1f37e94"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/workflow_owner_host.py",
+      "bytes": 34494,
+      "sha256": "185b442e51adf657258dce023517381a090c8df3bae688344492263266037a84"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/workflow_owner_protocol.py",
+      "bytes": 15226,
+      "sha256": "4250d722652e021fac485cd78103ea5287183a472dd46ef46871fb2de86eccd6"
+    },
+    {
+      "path": "engine/tests/test_workflow_automatic_preset_unrun.py",
+      "bytes": 6902,
+      "sha256": "1e42c9622c27ff1e38134e786acd8ad952fb4d8cad7aedfb787dcd8e2a965992"
+    },
+    {
+      "path": "engine/tests/test_workflow_preset_handoff_unrun.py",
+      "bytes": 16567,
+      "sha256": "48acbefc0e176416337d07ef98a1dae0f6563cda5770769514653a1b8a5777b5"
+    },
+    {
+      "path": "ui/src-tauri/src/local_workflow_host/wire.rs",
+      "bytes": 4446,
+      "sha256": "64e46f6094ee051c76b981572d183ba39bcacbc650e429994a3334630d96ccf2"
+    },
+    {
+      "path": "ui/src-tauri/src/local_workflow_host/runtime.rs",
+      "bytes": 52539,
+      "sha256": "12a8613b5a3ac8211820604d2c69623112c34a6a0decad26a8f657d60256075a"
+    },
+    {
+      "path": "ui/src-tauri/src/local_workflow_host/review.rs",
+      "bytes": 8978,
+      "sha256": "fc0ca3823f21fc954e07391e1075da497bf80a53c718452b7492fd82cc35e6f2"
+    },
+    {
+      "path": "ui/src-tauri/src/local_workflow_host/validation.rs",
+      "bytes": 4400,
+      "sha256": "e3cc691661af00e3490bacd184c88fe8f653505ffcd0d718d63a05626e568cfd"
+    },
+    {
+      "path": "ui/src-tauri/src/local_workflow_host/transport.rs",
+      "bytes": 8901,
+      "sha256": "c26e4abc14a3f49d8ca5157293f57935815b257fb84c7487e8d804c9e1216f1e"
+    },
+    {
+      "path": "ui/src-tauri/src/local_workflow_host/view.rs",
+      "bytes": 7594,
+      "sha256": "e7da26d11fe2fdf6e6269c883b63b2e4050ab58aeaa9d661364f59d3e3222824"
+    },
+    {
+      "path": "ui/src-tauri/src/local_workflow_host/tests_unrun.rs",
+      "bytes": 11482,
+      "sha256": "28ba53390824337d9699f7d6115fab9afabc01e851a4e5f25584b0bb781f0f21"
+    },
+    {
+      "path": "ui/src/localWorkflow/contracts.ts",
+      "bytes": 8666,
+      "sha256": "6ecc41064108dbda07decc46beb788af0a07c2cf372879f1264066e807d52ed7"
+    },
+    {
+      "path": "ui/src/localWorkflow/model.ts",
+      "bytes": 14111,
+      "sha256": "31b145a58700e0e9da3e077a8132ee8cdf394ecbe5d556c37c29f80383a844d1"
+    },
+    {
+      "path": "ui/src/localWorkflow/controller.ts",
+      "bytes": 32863,
+      "sha256": "85d09d29beeeb1a1d8587a53dff0dbf257893dd9e4db387f72cca761b8877ce7"
+    },
+    {
+      "path": "ui/src/localWorkflow/presetCatalogue.tsx",
+      "bytes": 5076,
+      "sha256": "f9049d66bacbda07a98f1f333a1030bce0969a6b112322973d15391abf2e9293"
+    },
+    {
+      "path": "ui/src/localWorkflow/presetReview.ts",
+      "bytes": 10727,
+      "sha256": "8003508b8a2f078282e194c792d3a1c77d62be1b938c72fd46e4a91065afd17c"
+    },
+    {
+      "path": "ui/src/localWorkflow/LocalWorkflowPanel.tsx",
+      "bytes": 28063,
+      "sha256": "08738ea4dc264dc8932b6591f1d15ac2837462fe7bcc2b96fabda48b989dcc64"
+    },
+    {
+      "path": "ui/src/localWorkflow/PresetHandoffPanel.tsx",
+      "bytes": 7974,
+      "sha256": "43000cb87bdc61fe2c77d3e4a0e8c9fc669d565f28d0504e2f49586b64b9eb8f"
+    },
+    {
+      "path": "ui/src/localWorkflow/automaticBatch.unrun.test.ts",
+      "bytes": 7675,
+      "sha256": "31429868558d5fa0cfadc13c8d2021e387280b5167caf2f70aa49bf4258c2afb"
+    },
+    {
+      "path": "docs/local-workflow/AUTOMATIC-BATCH.md",
+      "bytes": 7831,
+      "sha256": "b6e04b0a9d45e76d560ebbd2845717d4b175fafe353233ad47bdf8a22c144ad2"
+    },
+    {
+      "path": "docs/local-workflow/AUTOMATIC-SOURCE-OWNERSHIP.txt",
+      "bytes": 1210,
+      "sha256": "2c4cba2a7e1210dde2aff6db0297d8fc22f90d573332ab54f8e73db3e77835d5"
+    }
+  ],
+  "excluded": "Concurrent hand-model setup and unrelated working-tree changes are not owned or included. Freeze cannot hash itself."
+}

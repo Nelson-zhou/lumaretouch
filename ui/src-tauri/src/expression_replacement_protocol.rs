@@ -260,7 +260,9 @@ pub(crate) fn photograph(v: &Value) -> bool {
         && !faces[..index].iter().any(|old| same(&old["face_ref"],&f["face_ref"]))) && image(&v["image"],&v["source"])
 }
 pub(crate) fn current(v: &Value) -> bool {
-    fields(v, &["binding","photo","available","unavailable_reason"]) && binding(&v["binding"]) && photograph(&v["photo"])
+    (if v.get("donor_hints").is_some() {
+        fields(v, &["binding","photo","available","unavailable_reason","donor_hints"]) && donor_hints(&v["donor_hints"])
+    } else { fields(v, &["binding","photo","available","unavailable_reason"]) }) && binding(&v["binding"]) && photograph(&v["photo"])
         && same(&v["binding"]["source"],&v["photo"]["source"]) && v["available"].is_boolean()
         && (v["unavailable_reason"].is_null() || message(&v["unavailable_reason"],false))
 }
@@ -335,3 +337,20 @@ pub(crate) fn apply_matches(apply: &Request, preview: &Request, result: &Value) 
 #[cfg(test)]
 #[path = "expression_replacement_protocol_unrun.rs"]
 mod tests;
+
+// Optional read-only hints never participate in candidate/apply authorization.
+fn donor_hints(v: &Value) -> bool {
+    fn note(v: &Value) -> bool { v.is_null() || v.as_str().is_some_and(|s| s.chars().count() <= 512) }
+    fn reference(v: &Value) -> bool {
+        fields(v, &["asset_sha256","face_instance_id","analysis_revision"]) && hash(&v["asset_sha256"])
+            && id(&v["face_instance_id"]) && integer(&v["analysis_revision"],0,SAFE_INTEGER)
+    }
+    fields(v, &["version","cohorts","unavailable"]) && n(&v["version"]) == 1.0 && note(&v["unavailable"])
+        && v["cohorts"].as_array().is_some_and(|rows| rows.len() <= 8 && rows.iter().all(|c|
+            fields(c, &["association_id","target_ref","candidates","blocked"]) && id(&c["association_id"])
+            && reference(&c["target_ref"]) && note(&c["blocked"])
+            && c["candidates"].as_array().is_some_and(|items| items.len() <= 15 && items.iter().all(|x|
+                fields(x, &["document_id","filename","face_ref","eye_aperture"]) && id(&x["document_id"])
+                && id(&x["filename"]) && reference(&x["face_ref"])
+                && (x["eye_aperture"].is_null() || x["eye_aperture"].as_f64().is_some_and(|n| n.is_finite() && n >= 0.0))))))
+}

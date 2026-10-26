@@ -146,8 +146,15 @@ pub(crate) fn image(v:&Value,src:&Value)->bool {
         at=end;
     } false
 }
+const DEPTH_MODEL:&str="depth-anything-v2-small-hf";
+const DEPTH_MODEL_SHA256:&str="3152477ce0d8d6978d76b995120de97cb5b928701fd0f817769f59e249a16b70";
 fn provenance(v:&Value)->bool {
-    // This host has no verified AI depth backend or supplied-depth entry point.
+    // A transport proof is not model/runtime readiness; Python retains and verifies the native f32 asset.
+    if v["kind"]=="model" {
+        return fields(v,&["kind","model_id","model_sha256","inference_id","acknowledgement_id"])
+            && v["model_id"]==DEPTH_MODEL && v["model_sha256"]==DEPTH_MODEL_SHA256
+            && hash(&v["inference_id"]) && token(&v["acknowledgement_id"]);
+    }
     fields(v,&["kind","method","depth_value","acknowledgement_id"]) && v["kind"]=="manual"
         && v["method"]=="user_defined_plane" && unit(&v["depth_value"]) && token(&v["acknowledgement_id"])
 }
@@ -162,12 +169,17 @@ pub(crate) fn depth(v:&Value,own:&Value)->bool {
     let length=(r["width"].as_u64().unwrap()*r["height"].as_u64().unwrap()*2) as usize;
     let Some(encoded)=r["base64"].as_str().filter(|s|s.len()==((length+2)/3)*4) else{return false;};
     let Ok(bytes)=STANDARD.decode(encoded) else{return false;};
+    if bytes.len()!=length || STANDARD.encode(&bytes)!=encoded || digest(&bytes)!=r["sha256"].as_str().unwrap() {return false;}
+    if v["provenance"]["kind"]=="model" {return true;}
     let expected=(n(&v["provenance"]["depth_value"])*65535.0+0.5).floor() as u16;
-    bytes.len()==length && STANDARD.encode(&bytes)==encoded && digest(&bytes)==r["sha256"].as_str().unwrap()
-        && bytes.chunks_exact(2).all(|p|u16::from_le_bytes([p[0],p[1]])==expected)
+    bytes.chunks_exact(2).all(|p|u16::from_le_bytes([p[0],p[1]])==expected)
+}
+fn model_depth_capability(v:&Value)->bool {
+    fields(v,&["available","code","reason","model_id"]) && v["available"].is_boolean()
+        && token(&v["code"]) && message(&v["reason"]) && v["model_id"]==DEPTH_MODEL
 }
 pub(crate) fn context(v:&Value)->bool {
-    fields(v,&["session_id","owner","source_image","depth","depth_status","message"]) && token(&v["session_id"])
+    fields(v,&["session_id","owner","source_image","depth","depth_status","message","model_depth"]) && model_depth_capability(&v["model_depth"]) && token(&v["session_id"])
         && owner(&v["owner"]) && image(&v["source_image"],&v["owner"]["source"]) && message(&v["message"])
         && if v["depth_status"]=="ready" {depth(&v["depth"],&v["owner"])} else {
             matches!(v["depth_status"].as_str(),Some("pending"|"missing-model"|"manual-required"|"failed")) && v["depth"].is_null()
@@ -204,6 +216,7 @@ pub(crate) fn command(v:&Value)->bool {
     match v["action"].as_str() {
         Some("prepare_manual_plane") => fields(v,&["version","action","request_id","session_id","owner","depth_value","acknowledged_manual"])
             && unit(&v["depth_value"]) && v["acknowledged_manual"]==true,
+        Some("prepare_model_depth") => fields(v,&["version","action","request_id","session_id","owner","acknowledged_model"]) && v["acknowledged_model"]==true,
         Some("preview") => fields(v,&["version","action","request_id","session_id","owner","recipe"])
             && recipe(&v["recipe"]) && same(&v["recipe"]["source"],&v["owner"]["source"]),
         Some("apply") => fields(v,&["version","action","request_id","session_id","owner","token","recipe_sha256","before_sha256","after_sha256","reviewed","return_mode","result_source_sha256"])
@@ -218,7 +231,7 @@ pub(crate) struct Request {pub envelope:Value,pub id:String,pub action:String,pu
 impl Request {
     pub(crate) fn write(&self)->bool {self.action=="submit"}
     pub(crate) fn apply(&self)->bool {self.write() && self.envelope["command"]["action"]=="apply"}
-    pub(crate) fn read(&self)->bool {matches!(self.action.as_str(),"current"|"prepare_manual_plane"|"preview")}
+    pub(crate) fn read(&self)->bool {matches!(self.action.as_str(),"current"|"prepare_manual_plane"|"prepare_model_depth"|"preview")}
     pub(crate) fn inner(&self)->&Value {&self.envelope["command"]}
 }
 pub(crate) fn parse_request(v:&Value)->Result<Request,String> {
@@ -231,7 +244,7 @@ pub(crate) fn parse_request(v:&Value)->Result<Request,String> {
         if !fields(v,&["cmd","action","request_id","command"]) || !command(&v["command"])
             || (action!="receipt" && v["request_id"]!=v["command"]["request_id"]) {return Err("镜头完整命令身份、字段或版本无效".into());}
         let inner=v["command"]["action"].as_str().unwrap_or("");
-        if !match action {"prepare_manual_plane"|"preview"=>inner==action,"submit"|"receipt"=>matches!(inner,"apply"|"cancel"),_=>false} {
+        if !match action {"prepare_manual_plane"|"prepare_model_depth"|"preview"=>inner==action,"submit"|"receipt"=>matches!(inner,"apply"|"cancel"),_=>false} {
             return Err("镜头传输动作不匹配原命令".into());
         }
         if action=="receipt" && v["request_id"]==v["command"]["request_id"] {return Err("核对必须使用独立查询身份，不得重发原写入".into());}
@@ -281,6 +294,10 @@ pub(crate) fn valid_result(v:&Value,req:&Request)->bool {
                 && ["session_id","owner"].iter().all(|k|same(&v["context"][*k],&req.inner()[*k])) && v["context"]["depth_status"]=="ready"
                 && v["context"]["depth"]["provenance"]["acknowledgement_id"]==req.id
                 && same(&v["context"]["depth"]["provenance"]["depth_value"],&req.inner()["depth_value"]),
+            "prepare_model_depth"=>fields(v,&["event","request_id","status","context"]) && context(&v["context"])
+                && ["session_id","owner"].iter().all(|k|same(&v["context"][*k],&req.inner()[*k])) && v["context"]["depth_status"]=="ready"
+                && v["context"]["depth"]["provenance"]["kind"]=="model"
+                && v["context"]["depth"]["provenance"]["acknowledgement_id"]==req.id,
             "preview"=>fields(v,&["event","request_id","status","review"]) && review(&v["review"],req.inner()),
             _=>false,
         },

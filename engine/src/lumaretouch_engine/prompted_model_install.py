@@ -142,22 +142,99 @@ def activate_runtime(*, root: Path | None = None) -> dict:
     return identity
 
 
+def _base_identity() -> dict:
+    _base_dependencies()
+    executable = Path(sys.executable).resolve()
+    info = executable.stat()
+    return {"python":str(executable), "prefix":sys.prefix, "version":sys.version,
+            "executable_stamp":[info.st_dev,info.st_ino,info.st_size,info.st_mtime_ns],
+            "packages":{name:{"version":importlib.metadata.version(name),
+                              "location":str(importlib.metadata.distribution(name).locate_file("")),
+                              "record_sha256":_digest((importlib.metadata.distribution(name).read_text("RECORD") or "").encode())}
+                        for name in ("torch","torchvision","numpy","Pillow")}}
+
+
+def _disclosure() -> dict:
+    return {"extension_id":"id-background-prompted-v1", "model_id":MODEL_ID,
+            "download_bytes":CHECKPOINT_SIZE_BYTES, "runtime_download_separate":True,
+            "disk_free_floor_bytes":1024**3, "cpu_probe_address_space_limit_bytes":8*1024**3,
+            "cpu_probe_available_memory_floor_bytes":4*1024**3,
+            "license":"Apache-2.0", "code_revision":SOURCE_REVISION,
+            "checkpoint_sha256":CHECKPOINT_SHA256, "ready":False,
+            "readiness":"unchecked", "checkpoint_verified":False,
+            "automatic_base_runtime_setup":False, "tested_devices":[],
+            "readiness_scope":"bounded CPU fixture only; not portrait quality, performance or GPU acceptance"}
+
+
 def model_status(*, root: Path | None = None) -> dict:
+    """Offline status: hash actual bytes, never download, import SAM, or infer."""
+    from .curated_extension_download import partial_size
+    from .curated_extension_probe import PROBE
     base = model_root(root=root)
-    status = {"model_id": MODEL_ID, "installed": False, "state": "not-installed",
-              "download_bytes": CHECKPOINT_SIZE_BYTES, "license": "Apache-2.0",
-              "code_revision": SOURCE_REVISION, "checkpoint_sha256": CHECKPOINT_SHA256}
+    status = {**_disclosure(), "installed":False, "state":"not-installed"}
+    try:
+        status["resume_bytes"] = partial_size(base)
+        base_identity = _base_identity()
+    except (OSError, ValueError, ModelInstallError) as error:
+        status.update(state="unsupported", error=str(error))
+        return status
     if not base.exists():
         return status
     try:
         identity = installed_runtime_identity(root=root)
-        # Status does not allocate/hash 156 MB. Inference always verifies bytes.
-        if (base / CHECKPOINT_FILENAME).stat().st_size != CHECKPOINT_SIZE_BYTES:
-            raise ModelInstallError("Checkpoint missing or truncated")
-        status.update(identity, installed=True, state="installed")
+        verified_checkpoint_bytes(root=root)
+        status.update(identity, installed=True, state="installed", checkpoint_verified=True)
+        proof_path = base / "readiness.json"
+        if proof_path.exists():
+            with proof_path.open("rb") as stream:
+                raw = stream.read(65537)
+            if len(raw)>65536:
+                raise ModelInstallError("Readiness receipt exceeds its budget")
+            proof = json.loads(raw)
+            if proof == {"probe":PROBE,"runtime":identity,"base":base_identity}:
+                status.update(ready=True, readiness="cpu-probe-passed")
+            else:
+                status.update(readiness="stale", error="Runtime changed; explicitly recheck CPU readiness")
     except (OSError, ValueError, ModelInstallError) as error:
-        status.update(state="invalid", error=str(error))
+        status.update(state="invalid", ready=False, error=str(error))
     return status
+
+
+def check_readiness(*, root: Path | None = None, cancelled=None, progress=None, _owner_held=False) -> dict:
+    """Explicit bounded CPU self-check. No user photo, GPU fallback, or downloads."""
+    from .curated_extension_probe import PROBE
+    base = model_root(root=root)
+    if not _owner_held:
+        _base_dependencies()
+        lock = _lock_model(base)
+        try:
+            return check_readiness(root=root,cancelled=cancelled,progress=progress,_owner_held=True)
+        finally:
+            lock.close()
+    identity = installed_runtime_identity(root=root)
+    base_identity = _base_identity()
+    verified_checkpoint_bytes(root=root)
+    _cancel(cancelled)
+    # A failed recheck must not leave an older passing receipt advertised.
+    (base/"readiness.json").unlink(missing_ok=True)
+    _emit(progress,"readiness",installed=True,ready=False,readiness="checking-cpu")
+    with tempfile.TemporaryDirectory(prefix=".sam-readiness-", dir=base.parent) as directory:
+        output = Path(directory)/"result.json"
+        _run([sys.executable,"-m","lumaretouch_engine.curated_extension_probe",
+              "--root",str(base.resolve()),"--output",str(output),"--parent-pid",str(os.getpid())],
+             cancelled,Path(directory)/"probe.log",timeout=240)
+        with output.open("rb") as stream:
+            raw = stream.read(65537)
+        if len(raw)>65536 or json.loads(raw) != {"probe":PROBE,"runtime":identity}:
+            raise ModelInstallError("CPU readiness result does not match the verified runtime")
+        _cancel(cancelled)
+        if installed_runtime_identity(root=root) != identity or _base_identity()!=base_identity:
+            raise ModelInstallError("Runtime changed during CPU readiness check")
+        verified_checkpoint_bytes(root=root)
+        receipt = Path(directory)/"readiness.json"
+        receipt.write_text(json.dumps({"probe":PROBE,"runtime":identity,"base":base_identity},sort_keys=True))
+        os.replace(receipt,base/"readiness.json")
+    return model_status(root=root)
 
 
 def _cancel(cancelled: Cancel | None) -> None:
@@ -171,7 +248,7 @@ def _emit(progress: Progress | None, phase: str, **values) -> None:
 
 
 def _run(command: list[str], cancelled: Cancel | None, log: Path,
-         build_site: Path | None = None) -> None:
+         build_site: Path | None = None, *, timeout=1800) -> None:
     environment = os.environ.copy()
     environment.update(SAM2_BUILD_CUDA="0", PIP_DISABLE_PIP_VERSION_CHECK="1",
                        PIP_NO_INPUT="1", PYTHONNOUSERSITE="1")
@@ -199,7 +276,7 @@ def _run(command: list[str], cancelled: Cancel | None, log: Path,
                 pipe_open = True
                 while True:
                     _cancel(cancelled)
-                    if time.monotonic() - started > 1800:
+                    if time.monotonic() - started > timeout:
                         raise ModelInstallError("Optional runtime installer timed out")
                     exited = process.poll() is not None
                     events = selector.select(0 if exited else 0.2) if pipe_open else ()
@@ -224,7 +301,10 @@ def _run(command: list[str], cancelled: Cancel | None, log: Path,
                     elif not pipe_open:
                         time.sleep(0.2)
                 if process.returncode:
-                    raise ModelInstallError("Optional runtime installation failed (exit %s); check Python/pip and network" % process.returncode)
+                    output.flush()
+                    output.seek(max(0,retained-2000))
+                    detail = output.read(2000).decode("utf-8",errors="replace")
+                    raise ModelInstallError("Optional runtime operation failed (exit %s): %s" % (process.returncode,detail))
                 completed = True
         finally:
             if not completed or process.poll() is None:
@@ -245,32 +325,48 @@ def _run(command: list[str], cancelled: Cancel | None, log: Path,
 
 
 def _base_dependencies() -> None:
+    if sys.platform != "linux" or sys.version_info < (3,10):
+        raise ModelInstallError("Curated setup currently supports Linux Python 3.10+ only; no base runtime auto-install")
     for name, minimum in (("torch", (2, 5, 1)), ("torchvision", (0, 20, 1)),
                           ("numpy", (1, 24, 4)), ("Pillow", (9, 4, 0))):
         try:
             version = importlib.metadata.version(name)
         except importlib.metadata.PackageNotFoundError as error:
             raise ModelInstallError("Install the explicitly chosen engine variant first; missing " + name) from error
-        digits = tuple(int(part) for part in re.match(r"\d+(?:\.\d+)*", version).group().split("."))
+        match = re.match(r"\d+(?:\.\d+)*", version)
+        if not match:
+            raise ModelInstallError("Unrecognized engine dependency version: "+name)
+        digits = tuple(int(part) for part in match.group().split("."))
         if digits < minimum:
             raise ModelInstallError("Existing engine dependency is too old: " + name + "; this installer never replaces it")
 
 
-class _HTTPSRedirect(urllib.request.HTTPRedirectHandler):
-    def redirect_request(self, req, fp, code, msg, headers, newurl):
-        if not newurl.startswith("https://"):
-            raise ModelInstallError("Refusing non-HTTPS model redirect")
-        return super().redirect_request(req, fp, code, msg, headers, newurl)
+def _lock_model(base):
+    """Shared by explicit install and check; status remains read-only."""
+    import fcntl
+    base.parent.mkdir(parents=True,exist_ok=True)
+    if (base.parent/(base.name+".install-lock")).exists():
+        raise ModelInstallError("Legacy installer lock exists; verify the older installer has exited before removing its lock")
+    fd = os.open(base.parent/(base.name+".install-owner"),
+                 os.O_CREAT|os.O_RDWR|getattr(os,"O_NOFOLLOW",0),0o600)
+    lock = os.fdopen(fd,"a+b")
+    try:
+        fcntl.flock(lock.fileno(),fcntl.LOCK_EX|fcntl.LOCK_NB)
+    except Exception as error:
+        lock.close()
+        raise ModelInstallError("Another optional-model operation owns this version") from error
+    return lock
 
 
 def install_model(*, root: Path | None = None, cancelled: Cancel | None = None,
                   progress: Progress | None = None) -> dict:
-    """Network/install side effects occur ONLY on an explicit call to this function.
+    """Explicit install/retry, preserving old bytes until candidate CPU readiness.
 
-    Call from a dedicated native-shell process, not the seccomp-offline engine.
-    Existing good installation is immutable. Invalid installs need explicit user
-    removal before retry; never delete someone else's runtime automatically.
+    The single reviewed checkpoint is shared with the existing prompted runtime;
+    partial transfers survive cancellation. Runtime staging is discarded on error.
+    An invalid old version is retained as a backup, never recursively removed.
     """
+    from .curated_extension_download import acquire
     if not _INSTALL_LOCK.acquire(blocking=False):
         raise ModelInstallError("Another optional-model install is in progress")
     staging = None
@@ -278,24 +374,24 @@ def install_model(*, root: Path | None = None, cancelled: Cancel | None = None,
     try:
         _cancel(cancelled)
         base = model_root(root=root)
+        _base_dependencies()
+        lock = _lock_model(base)
+        if base.is_symlink():
+            raise ModelInstallError("Optional model destination cannot be a symlink")
         if base.exists():
             status = model_status(root=root)
-            if not status["installed"]:
-                raise ModelInstallError("Existing optional model is invalid; remove it explicitly before reinstalling")
-            verified_checkpoint_bytes(root=root)
-            return status
-        _base_dependencies()
-        base.parent.mkdir(parents=True, exist_ok=True)
-        lock_path = base.parent / (base.name + ".install-lock")
-        try:
-            lock_path.mkdir()
-        except FileExistsError as error:
-            raise ModelInstallError("Install already running or stale install lock; no changes made") from error
-        lock = lock_path
+            if status["installed"] and status["state"]=="installed":
+                return check_readiness(root=root,cancelled=cancelled,progress=progress,_owner_held=True)
+        if shutil.disk_usage(base.parent).free < 1024**3:
+            raise ModelInstallError("Curated setup needs at least 1 GiB free staging space; existing models retained")
+        checkpoint = acquire(base,emit=lambda phase,**values:_emit(progress,phase,**values),
+                             cancelled=lambda:_cancel(cancelled))
+        _cancel(cancelled)
         staging = Path(tempfile.mkdtemp(prefix=".sam2-install-", dir=base.parent))
         site = staging / "site-packages"
         log = staging / "install.log"
-        _emit(progress, "runtime", message="Installing isolated SAM runtime; preserving engine Torch variant")
+        _emit(progress, "runtime", checkpoint_verified=True,
+              message="Preparing isolated SAM components; existing engine Torch variant is unchanged")
         pip = [sys.executable, "-m", "pip", "--isolated", "install", "--no-deps",
                "--no-compile", "--target", str(site), "--index-url", "https://pypi.org/simple"]
         _run(pip + ["--only-binary=:all:"] + list(BUILD_REQUIREMENTS), cancelled, log)
@@ -305,55 +401,40 @@ def install_model(*, root: Path | None = None, cancelled: Cancel | None = None,
              cancelled, log, build_site=site)
         _check_source(site)
         _verified_file(site / CONFIG_RELATIVE_PATH, CONFIG_SIZE_BYTES, CONFIG_SHA256)
-        _cancel(cancelled)
-        _emit(progress, "checkpoint", downloaded_bytes=0, total_bytes=CHECKPOINT_SIZE_BYTES)
-        digest = hashlib.sha256()
-        count = 0
-        target = staging / CHECKPOINT_FILENAME
-        opener = urllib.request.build_opener(_HTTPSRedirect())
-        with opener.open(CHECKPOINT_URL, timeout=30) as response, target.open("xb") as output:
-            length = response.headers.get("Content-Length")
-            if length is not None and int(length) != CHECKPOINT_SIZE_BYTES:
-                raise ModelInstallError("Checkpoint response length differs from reviewed metadata")
-            download_started = time.monotonic()
-            while True:
-                if time.monotonic() - download_started > 3600:
-                    raise ModelInstallError("Checkpoint download timed out")
-                _cancel(cancelled)
-                chunk = response.read(min(1024 * 1024, CHECKPOINT_SIZE_BYTES - count + 1))
-                if not chunk:
-                    break
-                count += len(chunk)
-                if count > CHECKPOINT_SIZE_BYTES:
-                    raise ModelInstallError("Checkpoint exceeds reviewed byte limit")
-                output.write(chunk)
-                digest.update(chunk)
-                _emit(progress, "checkpoint", downloaded_bytes=count, total_bytes=CHECKPOINT_SIZE_BYTES)
-            output.flush()
-            os.fsync(output.fileno())
-        if count != CHECKPOINT_SIZE_BYTES or digest.hexdigest() != CHECKPOINT_SHA256:
-            raise ModelInstallError("Downloaded checkpoint failed size/SHA-256 verification")
-        inventory = _inventory(site)
+        shutil.copyfile(checkpoint,staging/CHECKPOINT_FILENAME)
+        _verified_file(staging/CHECKPOINT_FILENAME,CHECKPOINT_SIZE_BYTES,CHECKPOINT_SHA256)
         receipt = {"model_id": MODEL_ID, "code_revision": SOURCE_REVISION,
                    "checkpoint_revision": CHECKPOINT_REVISION,
                    "checkpoint_sha256": CHECKPOINT_SHA256,
-                   "runtime_files": inventory, "config_sha256": CONFIG_SHA256}
+                   "runtime_files": _inventory(site), "config_sha256": CONFIG_SHA256}
         (staging / "receipt.json").write_text(json.dumps(receipt, sort_keys=True), encoding="utf-8")
+        # Probe the candidate in its own process BEFORE publishing any replacement.
+        candidate = check_readiness(root=staging,cancelled=cancelled,progress=progress,_owner_held=True)
+        if not candidate.get("ready"):
+            raise ModelInstallError("Candidate runtime did not pass bounded CPU readiness")
         _cancel(cancelled)
+        backup = None
         if base.exists():
-            raise ModelInstallError("Optional model destination appeared during install")
-        staging.rename(base)  # same filesystem; never publish a partial install
+            backup = base.parent/(base.name+".retained-"+str(time.time_ns()))
+            base.rename(backup)
+        try:
+            staging.rename(base)
+        except Exception:
+            if backup is not None and not base.exists():
+                backup.rename(base)
+            raise
         staging = None
-        _emit(progress, "complete", installed=True)
-        return model_status(root=root)
+        result = model_status(root=root)
+        if backup is not None:
+            result["retained_previous_version"] = str(backup)
+        _emit(progress,"complete",installed=True,ready=result.get("ready",False))
+        return result
     finally:
         if staging is not None:
             shutil.rmtree(staging, ignore_errors=True)
-        try:
-            if lock is not None:
-                lock.rmdir()
-        finally:
-            _INSTALL_LOCK.release()
+        if lock is not None:
+            lock.close()
+        _INSTALL_LOCK.release()
 
 
 def main() -> int:
@@ -361,6 +442,7 @@ def main() -> int:
     choice = parser.add_mutually_exclusive_group(required=True)
     choice.add_argument("--install", action="store_true")
     choice.add_argument("--status", action="store_true")
+    choice.add_argument("--check", action="store_true")
     args = parser.parse_args()
     stopped = threading.Event()
     for signum in (signal.SIGINT, signal.SIGTERM):
@@ -368,7 +450,13 @@ def main() -> int:
     def emit(value: dict) -> None:
         print(json.dumps(value, ensure_ascii=False), flush=True)
     try:
-        emit(install_model(cancelled=stopped.is_set, progress=emit) if args.install else model_status())
+        if args.install:
+            result = install_model(cancelled=stopped.is_set, progress=emit)
+        elif args.check:
+            result = check_readiness(cancelled=stopped.is_set, progress=emit)
+        else:
+            result = model_status()
+        emit(result)
         return 0
     except Exception as error:
         emit({"model_id": MODEL_ID, "state": "cancelled" if isinstance(error, InstallCancelled) else "error", "error": str(error)})

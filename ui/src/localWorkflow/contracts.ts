@@ -3,11 +3,14 @@ import type {PresetReviewAck, ReviewImageInput, ReviewImagePage, ReviewStep, Wor
 /** Local-only v1 contract. The application supplies the port; this module never invokes native APIs. */
 export const WORKFLOW_PORT_VERSION = 1 as const;
 export type ErrorPolicy = 'stop' | 'skip' | 'keep_continue';
+export interface AutomaticBatchIntent {schema: 'lrt.automatic-batch-intent.v1'; mode: 'automatic'; scope: 'directory_originals'; source_mode: 'captured_file_list'; originals: 'managed_copy_only'; save: 'target_recipe'; collision: 'fail_no_overwrite'; unattended: true; portrait_scope?: 'all_verified_detected_faces'; reference_scope?: 'stored_reference_per_target_fit'; reference_source_policy?: 'reject_same_source'}
+export interface AutomaticStartAck {schema: 'lrt.automatic-batch-start.v1'; graph_sha256: string; accepted: true}
 export type WorkflowOperation =
   | {kind: 'directory_source'; root: string; recursive: boolean; include_existing: boolean; extensions: string[]; settle_ms: number}
   | {kind: 'managed_import'; project_id: string; project_path: string; managed_root: string}
   | {kind: 'path_labels'; rules: {target: 'filename' | 'relative_path'; contains: string; label: string}[]}
   | {kind: 'compatible_preset'; preset_id: string; preset_sha256: string; when_all_labels: string[]}
+  | {kind: 'automatic_preset'; preset_id: string; preset_sha256: string; when_all_labels: string[]; intent: AutomaticBatchIntent}
   | {kind: 'export'; output_root: string; recipe_sha256: string};
 export type NodeKind = WorkflowOperation['kind'];
 export interface WorkflowNode {id: string; error_policy: ErrorPolicy; operation: WorkflowOperation}
@@ -46,13 +49,13 @@ export interface ProjectLease {
   dedicated: true;
   expires_at: string;
 }
-/** Exact bounded v1 shape from workflow_owner_protocol.RECIPE_PROFILE, not editable settings. */
+/** Exact bounded engine export_profiles catalogue shape; not arbitrary editable settings. */
 export interface WorkflowExportProfile {
-  profile: 'lrt.workflow-export.jpeg-srgb.v1';
+  profile: 'lrt.workflow-export.jpeg-srgb.v1' | 'lrt.workflow-export.jpeg80-srgb.v1' | 'lrt.workflow-export.jpeg100-srgb.v1' | 'lrt.workflow-export.png8-srgb.v1' | 'lrt.workflow-export.tiff16-srgb.v1';
   export_options: {
-    format: 'jpg'; quality: 95; tile: 1024; bit_depth: 8; scale: 1; upscale_backend: 'lanczos3';
+    format: 'jpg' | 'png' | 'tif'; quality: 80 | 95 | 100; tile: 1024; bit_depth: 8 | 16; scale: 1; upscale_backend: 'lanczos3';
     sharpen: 0; output_profile: 'srgb'; metadata_include_gps: false;
-    conflict_policy: 'skip_and_report'; tiff_compression: 'deflate';
+    conflict_policy: 'skip_and_report'; tiff_compression: 'deflate' | 'none';
   };
   destination: {mode: 'chosen_root'; retain_hierarchy: false; conflict: 'ask'; create_missing: false};
   watermark: null;
@@ -60,6 +63,8 @@ export interface WorkflowExportProfile {
 }
 export interface ReturnedExportProfile {recipe_sha256: string; recipe_profile: WorkflowExportProfile}
 export interface PreflightReport {
+  /** Canonical host graph hash; never reconstructed from renderer JSON ordering. */
+  graph_sha256?: string;
   workflow_id: string;
   graph_revision: number;
   lease_id: string;
@@ -92,6 +97,8 @@ export interface ReviewRequirement {
   reason: string;
 }
 export interface RunSummary {
+  /** Host-derived from retained graph; absence is a legacy unknown mode. */
+  execution_mode?: 'automatic' | 'reviewed';
   run_id: string;
   workflow_id: string;
   graph_revision: number;
@@ -117,7 +124,7 @@ export type WorkflowCommand =
   | {kind: 'save_definition'; definition: WorkflowDefinition; expected_storage_revision: string | null}
   | {kind: 'acquire_project_lease'; project_id: string; project_path: string}
   | {kind: 'release_project_lease'; lease_id: string}
-  | {kind: 'start'; graph: WorkflowGraph; lease_id: string; preflight_token: string}
+  | {kind: 'start'; graph: WorkflowGraph; lease_id: string; preflight_token: string; automatic_ack?: AutomaticStartAck}
   | {kind: 'stop'; run_id: string}
   | {kind: 'open_review'; run_id: string; review_id: string}
   | {kind: 'review_step'; run_id: string; operation_id: string; step: ReviewStep; payload: PresetReviewAck | Record<string, never>};
@@ -149,6 +156,7 @@ export interface WorkflowWorkspace {
   recipe_sha256?: string;
   recipe_profile?: WorkflowExportProfile;
   preset_catalogue?: unknown;
+  export_profiles?: ReturnedExportProfile[];
   /** True only while the host's real read-only engine profile request is outstanding. */
   recipe_profile_pending?: boolean;
   /** Includes indeterminate writes from earlier UI lifetimes. An unknown receipt must remain here. */

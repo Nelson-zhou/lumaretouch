@@ -95,6 +95,8 @@ def build_export_spec(snap: dict, eh: int, ew: int, *, for_document: bool):
     validate_people_owner(spec.people,spec.people_document_id)
     from .body_pose_render import configure_export as configure_body
     configure_body(spec,snap,(eh,ew),for_document=for_document)
+    from .hand_shape_runtime import configure_export as configure_hand_shape
+    configure_hand_shape(spec,snap,(eh,ew),for_document=for_document)
     # Source-bound final shaping must be checked before the generic-export return.
     # A nonempty manual recipe cannot be copied OR silently omitted across photos.
     from .manual_liquify_runtime import configure_export as configure_manual_liquify
@@ -143,6 +145,11 @@ def build_export_spec(snap: dict, eh: int, ew: int, *, for_document: bool):
     spec.limb_vein_repair_sha256 = snap.get("limb_vein_repair_sha256")
     if spec.limb_vein is not None and not for_document:
         raise ValueError("肢体青筋必须逐图审核同件肢体参考，不可直接批量复制")
+    from .hand_tone_state import check as hand_tone_check
+    spec.hand_tone = hand_tone_check(snap.get("hand_tone"))
+    spec.hand_tone_repair_sha256 = snap.get("hand_tone_repair_sha256")
+    if spec.hand_tone is not None and not for_document:
+        raise ValueError("手部中性灰必须逐图审核同一手部参考，不可直接批量复制")
     from .fabric_export import configure_export
     if for_document:
         configure_export(spec, snap, eh, ew)

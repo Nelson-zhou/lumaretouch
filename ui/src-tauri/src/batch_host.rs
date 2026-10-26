@@ -7,6 +7,8 @@ use crate::torso_transfer_protocol as torso;
 #[cfg(test)] use crate::torso_transfer_protocol::TORSO_OP;
 #[cfg(test)] use crate::waist_transfer_protocol::WAIST_OP;
 use crate::preset_host::{BodyReviewFamily, BODY_REVIEW_FAMILIES};
+#[path="portrait_preset_group_host.rs"]
+pub(crate) mod portrait_preset_group;
 pub(crate) struct BatchKind;
 fn spill_preflight(value: &Value) -> bool {
     let (Some(ops), Some(applies), Some(targets)) = (value["module_scope"].as_array(),
@@ -183,8 +185,9 @@ fn head_commit(value: &Value) -> bool {
 }
 impl ReceiptKind for BatchKind {
     const NAME: &'static str = "batch";
-    const ACTIONS: &'static [&'static str] = &["preflight", "commit", "undo", "redo", "people_targets", "collarbone_visual", "face_style_visual", "portrait_cohort_visual", "eye_bag_visual", "eye_bag_cohort_visual", "face_decoration_visual", "face_decoration_cohort_visual"];
+    const ACTIONS: &'static [&'static str] = &["portrait_preset_save", "portrait_preset_export_preview", "portrait_preset_export_start", "portrait_preset_export_status", "portrait_preset_export_cancel", "portrait_preset_catalogue", "portrait_preset_preflight", "portrait_preset_prepare", "portrait_preset_image", "portrait_preset_commit", "preflight", "commit", "undo", "redo", "people_targets", "collarbone_visual", "face_style_visual", "portrait_cohort_visual", "eye_bag_visual", "eye_bag_cohort_visual", "face_decoration_visual", "face_decoration_cohort_visual"];
     fn valid(value: &Value, _: Option<&str>) -> bool {
+        if portrait_preset_group::selected(value) { return portrait_preset_group::receipt(value); }
         if crate::batch_api::decoration_cohort::evidence(value) {return crate::batch_api::decoration_cohort::receipt(value);}
         if !crate::batch_api::face_decoration::receipt(value) {return false;}
         if !crate::batch_api::history::receipt(value) { return false; }

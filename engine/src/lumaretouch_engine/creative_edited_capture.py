@@ -233,8 +233,8 @@ def _verify_inputs(snapshot, path, stamp, shape):
     from . import effect_recovery_runtime as recovery, manual_liquify_runtime as manual
     from . import studio_background_runtime as studio, id_background_runtime as ident
     from . import optics_runtime as optics, sky_replacement_runtime as sky
-    from . import body_pose_render as body, fringe_repair_render as fringe
-    for owner in (masks, groups, recovery, manual, studio, ident, optics, sky, body, fringe):
+    from . import body_pose_render as body, hand_shape_runtime as hand_shape, fringe_repair_render as fringe
+    for owner in (masks, groups, recovery, manual, studio, ident, optics, sky, body, hand_shape, fringe):
         owner.check_export_decode(snapshot, path, stamp, shape)
     from .reference_color_runtime import verify_export
     verify_export(snapshot, path, shape)

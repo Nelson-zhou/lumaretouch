@@ -179,6 +179,8 @@ export interface DocState {
   extended_tone?: {spec:import('./extendedTone/model').Spec;active:boolean;monochrome:boolean;available:boolean};
   fabric_sweat?: {revision:string;amount:number;available:boolean;reason?:string|null;candidate_sha256?:string;recipe_sha256?:string};
   limb_vein?: {revision:string;amount:number;available:boolean;reason?:string|null;candidate_sha256?:string;recipe_sha256?:string};
+  hand_shape?: {protocol:1;revision:string;recipe_sha256:string;active:boolean};
+  hand_tone?: {revision:string;amount:number;available:boolean;reason?:string|null;candidate_sha256?:string;recipe_sha256?:string};
   people?: PeopleView;
   shoulder_shape?: import('./shoulderShape/model').ShoulderView;
   leg_shape?: import('./legShape/model').LegView;
@@ -314,6 +316,26 @@ export interface SessionDoc {
    *  徽章与原因只从这一份读：前端自己按缩略图亮度判"这张糊不糊"就是第二个不可复算的出处。 */
   pick?: PickSuggestion | null;
   pick_error?: string | null;
+  pick_focus?: OriginalFocusReview | null;
+  pick_focus_error?: string | null;
+}
+
+/** Original-source pixels, never the edited proxy or embedded camera preview. */
+export interface OriginalFocusReview {
+  version: 1;
+  scope: 'original-source-crop';
+  source: {sha256: string; width: number; height: number};
+  source_bits: number;
+  rect: [number, number, number, number];
+  point: [number, number];
+  source_stamp: number[];
+  contrast: number;
+  gradient_energy: number;
+  laplacian_variance: number;
+  detail_to_contrast: number | null;
+  low_contrast: boolean;
+  preview_png: string;
+  notes: string[];
 }
 
 /** 预设面（LNX-P0-PRESET）：清单与“哪些模块能作用”全部由引擎报，前端不扫目录。 */
@@ -410,9 +432,12 @@ export interface PickMeasures {
   eye_open: number | null;
   eye_note?: string;
   faces: number;
-  /** "pixels" / "camera_preview"：RAW 那一族的读数来自相机内嵌预览时必须看得见 */
+  /** "decoded_proxy" / "camera_preview": neither is an original-focus verdict. */
   decoded_from?: string;
   decode_size?: number[];
+  source_size?: number[];
+  source_stamp?: number[];
+  quality_scope?: string;
   measure_edge: number;
   algo: string;
   ms?: Record<string, number>;
@@ -443,6 +468,10 @@ export interface PickSuggestion {
 /** pick_start / pick_progress / pick_done / pick_state 共用的一格播报（按事件名分形）。 */
 export interface PickRun {
   event: string;
+  host_sequence?: number;
+  action?: string;
+  running?: boolean;
+  error?: string;
   targets?: number;
   done?: number;
   total?: number;
@@ -1008,6 +1037,8 @@ export interface EngineStatus {
    *  这些“引擎说什么能力”的清单都从这一份读。老宿主没报时为 undefined——那时那一排
    *  控件按“引擎没说”处理（不画/禁用），而不是前端自己猜一份。 */
   ready_caps?: {
+    upscale_restore_protocol?: number;
+    upscale_restore_capability?: unknown;
     light_glow_protocol?: number;
     light_glow_capability?: unknown;
     skin_colour_available?: boolean;
@@ -1059,6 +1090,8 @@ export interface EngineStatus {
     photo_grain_protocol?: number;
     fabric_sweat_protocol?: number;
     limb_vein_protocol?: number;
+    hand_tone_protocol?: number;
+    hand_shape_protocol?: number;
     photo_detail_protocol?: number;
     extended_tone_protocol?: number;
     lip_makeup_protocol?: number;
@@ -1136,6 +1169,9 @@ export interface EngineStatus {
     color_picker_result_protocol?: number;
     color_capture_protocol?: number;
     batch_preflight_protocol?: number;
+    portrait_preset_group_protocol?: number;
+    portrait_preset_preparation_protocol?: number;
+    portrait_preset_delivery_protocol?: number;
     preset_result_protocol?: number;
     curve_recipe_versions?:number[];
     color_scopes_protocol?: number;
@@ -1821,11 +1857,17 @@ export const runSession = (
  *  都不抄一份：抄了就是双出处，加一档时先漂的那一处永远是抄的那一份。
  *  参数一律"给了才附"，默认档位由引擎说。 */
 export const runPick = (
-  action: "analyze" | "stop" | "state",
+  action: "analyze" | "focus" | "stop" | "state",
   opts: { indices?: number[]; paths?: string[]; edge?: number; model_dir?: string;
           duplicate?: string; blur?: string; exposure?: string; eyes?: string;
-          force?: boolean } = {},
-) => invoke<{ requested: boolean }>("pick", { action, ...opts });
+          force?: boolean; focus_x?: number; focus_y?: number; focus_documents?: string[] } = {},
+) => {
+  const {focus_x, focus_y, focus_documents, ...rest} = opts;
+  return invoke<{ requested: boolean }>("pick", {action, ...rest,
+    ...(focus_x === undefined ? {} : {focusX: focus_x}),
+    ...(focus_y === undefined ? {} : {focusY: focus_y}),
+    ...(focus_documents === undefined ? {} : {focusDocuments: focus_documents})});
+};
 
 /** 撤销/重做（M5-b）：四个动作一条命令，宿主只做把手。步数上限、手势合并窗口、
  *  哪几层进历史全在引擎里——在这里刻一份就会漂一份。 */
@@ -2091,3 +2133,21 @@ export const limbVeinRequest=(request:unknown):Promise<unknown>=> {
   return invoke('limb_vein_request',{request});
 };
 export const limbVeinStatus=(requestId:string):Promise<unknown>=>invoke('limb_vein_status',{requestId});
+
+export const handToneRequest=(request:unknown):Promise<unknown>=> {
+  const action=(request as {action?:string}|null)?.action;
+  if(action==='confirm'||action==='clear')notifyInspectionEditIntent();
+  return invoke('hand_tone_request',{request});
+};
+export const handToneStatus=(requestId:string):Promise<unknown>=>invoke('hand_tone_status',{requestId});
+
+export const handShapeRequest=(request:unknown):Promise<unknown>=> {
+  const action=(request as {action?:string}|null)?.action;
+  if(action==='confirm'||action==='clear')notifyInspectionEditIntent();
+  return invoke('hand_shape_request',{request});
+};
+export const handShapeStatus=(requestId:string):Promise<unknown>=>invoke('hand_shape_status',{requestId});
+
+// Exact frozen-group actions share the canonical batch mailbox, never the generic edit channel.
+export const requestPortraitPresetGroup=(action:string,options:Record<string,unknown>)=>invoke<{requested:boolean}>("batch",{action,...options});
+export const readPortraitPresetGroup=(requestId:string)=>invoke<{phase:string;request_id:string;result?:Record<string,unknown>;error?:string}>("batch_result",{requestId});

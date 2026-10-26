@@ -55,6 +55,11 @@ def active(stack):
 def lower(stack):
     result = deepcopy(stack)
     for obj in result['objects']:
+        if obj['kind'] == 'automatic_foreground':
+            from .automatic_foreground import channel as automatic_channel
+            name = automatic_channel(obj)
+            obj.pop('selection')
+            obj.update(kind='semantic', channel=name)
         if obj['kind'] == 'prompted':
             obj.pop('selection')
             obj.update(kind='semantic', channel=channel(obj))
@@ -86,8 +91,11 @@ def fields(stack, source_binding, path, shape, *, device='cpu', force=False, can
     Only reduced model fields are cached. Explicit export/inspection calls use
     force=True and regenerate every enabled operand before delivering pixels.
     """
+    from .automatic_foreground import fields as automatic_fields
+    automatic = automatic_fields(stack,source_binding,path,shape,force=force,cancelled=cancelled,
+                                 source_input=source_input,source_pixels=source_pixels)
     objects = active(stack)
-    if not objects: return {}
+    if not objects: return automatic
     if source_input is not None and source_pixels is not None:raise ValueError('Choose one owned prompted input')
     if source_pixels is not None:
         if path is not None:raise ValueError('Derived float prompted replay cannot read original path')
@@ -135,7 +143,7 @@ def fields(stack, source_binding, path, shape, *, device='cpu', force=False, can
                     job.cancel()
                 _CACHE[keys[i]] = mask
                 _CACHE.move_to_end(keys[i])
-        result = {}
+        result = dict(automatic)
         for obj, key in zip(objects, keys):
             mask = _CACHE[key]
             result[channel(obj)] = np.asarray(Image.fromarray(mask*255).resize((w, h), Image.Resampling.BILINEAR), np.float32)/255.

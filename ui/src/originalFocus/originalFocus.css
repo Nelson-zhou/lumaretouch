@@ -1,0 +1,13 @@
+.original-focus {border: 1px solid var(--line, #39404c); border-radius: 8px; padding: 10px; margin-top: 8px; font-size: 12px; min-width: 0;}
+.original-focus h3, .original-focus h4 {margin: 4px 0 8px;}
+.original-focus p {line-height: 1.5; max-width: 90ch;}
+.original-focus fieldset {display: flex; flex-wrap: wrap; align-items: center; gap: 8px;}
+.original-focus input {width: 6em;}
+.original-focus button {margin: 4px;}
+.original-focus__results {display: flex; gap: 12px; overflow-x: auto; align-items: flex-start;}
+.original-focus__results article {flex: 0 0 290px; min-width: 0; padding: 8px; border: 1px solid var(--line, #39404c);}
+.original-focus__pixels {overflow: auto; max-width: 100%;}
+.original-focus__pixels img {display: block; flex: none; transform: none;}
+.original-focus dl {display: grid; grid-template-columns: 1fr 1fr;}
+.original-focus dd {margin: 0;}
+.original-focus code {overflow-wrap: anywhere;}

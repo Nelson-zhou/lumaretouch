@@ -1,9 +1,9 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 """Bundled v1 depth admission evidence, not an installer or a ready-model claim.
 
-Only the official Small Transformers checkpoint is in scope. Missing hashes are
-deliberate: rendered JSON, a version string, or an installer receipt is not an
-authentication of upstream bytes. Do not populate these from a local receipt.
+Only the official Small Transformers checkpoint is in scope. Exact raw revision
+config bytes were researched on 2026-10-25. A version or mutable receipt alone
+does not authenticate optional runtime code; see lens_depth_setup.
 """
 from dataclasses import dataclass
 
@@ -34,10 +34,10 @@ MODEL_FILES = (
     FilePin("model.safetensors", 99_173_660,
             "3152477ce0d8d6978d76b995120de97cb5b928701fd0f817769f59e249a16b70",
             True, MODEL_CARD_URL + "/blob/" + MODEL_REVISION + "/model.safetensors"),
-    FilePin("config.json", 950, None, False,
-            MODEL_CARD_URL + "/blob/main/config.json"),
-    FilePin("preprocessor_config.json", 775, None, False,
-            MODEL_CARD_URL + "/blob/main/preprocessor_config.json"),
+    FilePin("config.json", 950, "c56698d3643dde1f83ea2212759e6b31a22b8f827246a36dd007ee8a22b3ff75", True,
+            MODEL_CARD_URL + "/resolve/" + MODEL_REVISION + "/config.json"),
+    FilePin("preprocessor_config.json", 775, "d41175c0d889477ca8fc67191e540faef14baf6275157b3fdecf78469e6bbf84", True,
+            MODEL_CARD_URL + "/resolve/" + MODEL_REVISION + "/preprocessor_config.json"),
 )
 
 # Historical source-review evidence ONLY. These are NOT install requirements,
@@ -56,13 +56,12 @@ RESEARCH_SOURCE_BASE = (
 ARCHITECTURE_SOURCE_URL = RESEARCH_SOURCE_BASE + "models/depth_anything/modeling_depth_anything.py"
 PREPROCESSOR_SOURCE_URL = RESEARCH_SOURCE_BASE + "models/dpt/image_processing_dpt.py"
 
-# No exact runtime graph, platform artifacts, installed-code inventories, or
-# compatibility acceptance has been reviewed. The adapter has an independent
-# unconditional runtime admission refusal, not a user-overridable ready flag.
-RUNTIME_ADMISSION = "unverified"
+# Conditional installed optional-wheel verification and actual CPU readiness.
+# The chosen base app runtime is trusted, not auto-installed or authenticated by us.
+RUNTIME_ADMISSION = "pinned-optional-wheels-and-bounded-cpu-readiness"
 INFERENCE_ACCEPTANCE = "UNRUN"
 
-# Reviewed semantic constraints do not replace the missing byte hashes above.
+# Reviewed semantic constraints supplement exact model byte hashes above.
 # The adapter uses the upstream classes, not an architecture reconstructed here.
 ARCHITECTURE = "DepthAnythingForDepthEstimation"
 BACKBONE = "dinov2"
@@ -88,7 +87,6 @@ def admission_gaps_v1() -> tuple[str, ...]:
             gaps.append("upstream-file-pin:" + pin.filename)
         if not pin.revision_membership_verified:
             gaps.append("revision-membership:" + pin.filename)
-    gaps.extend(("runtime-artifact-and-installed-code-provenance",
-                 "runtime-compatibility-and-security-review",
-                 "real-model-and-native-integration-acceptance"))
+    gaps.extend(("installed-optional-runtime-and-cpu-readiness-must-be-checked",
+                 "real-photo-and-native-integration-acceptance-UNRUN"))
     return tuple(gaps)

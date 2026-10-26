@@ -44,7 +44,7 @@ fn mailbox()->&'static Mutex<Mailbox> {
 }
 fn unavailable(id:&str)->Value {json!({"event":wire::EVENT,"request_id":id,"status":"unknown","message":"原请求未保留或身份不存在；不能认定未执行，也不会重新提交"})}
 fn unavailable_capability()->Value {json!({"version":2,"operation_id":wire::OPERATION,"status":"unavailable","kernels":[],"renderers":[],"reason":"配套引擎尚未声明镜头协议 3 与可用原生光圈；不提供 AI 景深或占位效果"})}
-fn reservation(action:&str)->usize {match action {"current"|"prepare_manual_plane"=>wire::CONTEXT_BYTES,"preview"=>wire::RESULT_BYTES,_=>wire::SMALL_BYTES}}
+fn reservation(action:&str)->usize {match action {"current"|"prepare_manual_plane"|"prepare_model_depth"=>wire::CONTEXT_BYTES,"preview"=>wire::RESULT_BYTES,_=>wire::SMALL_BYTES}}
 fn image_proof(image:&Value)->Value {json!({"sha256":image["sha256"],"width":image["width"],"height":image["height"]})}
 fn depth_proof(depth:&Value)->Value {json!({"token":depth["token"],"sha256":depth["raster"]["sha256"],"provenance":depth["provenance"]})}
 fn same_session(session:&Session,request:&wire::Request)->bool {
@@ -107,13 +107,16 @@ impl Mailbox {
         }
         if req.action=="current" {return Ok(None);}
         let session=self.session.as_ref().filter(|s|s.epoch==epoch && same_session(s,req)).ok_or("缺少完全匹配的当前照片、原文档身份及有效会话租约")?;
+        if req.action=="prepare_model_depth" && !self.capability["renderers"].as_array().is_some_and(|rs|rs.iter().any(|r|r.as_str()==Some("direct-v1"))) {
+            return Err("当前没有接受模型深度的直接渲染 v1；不会降级成人工基准面或分组 FFT".into());
+        }
         if req.action=="preview" {
             let renderer=if req.inner()["recipe"]["version"]==2 {"cohort-fft-v2"} else {"direct-v1"};
             if !self.capability["renderers"].as_array().is_some_and(|rs|rs.iter().any(|r|r.as_str()==Some(renderer))) {
                 return Err("原生宿主未声明所选数值版本；不会切换到另一种渲染器".into());
             }
             if !session.depth.as_ref().is_some_and(|d|wire::same(d,&req.inner()["recipe"]["depth"])) {
-                return Err("配方未绑定本会话明确确认的人工散焦基准面；不会使用 AI 或占位景深".into());
+                return Err("配方未绑定本会话保留的景深或人工基准面；不会采用外来或占位数据".into());
             }
             if !self.capability["kernels"].as_array().is_some_and(|ks|ks.contains(&req.inner()["recipe"]["aperture"])) {
                 return Err("原生宿主未声明该光圈核，不会替换成另一种效果".into());
@@ -155,7 +158,7 @@ impl Mailbox {
         // Only one engine current/depth/candidate lease exists. Admission of a
         // new current/plane/preview revokes old local apply authority immediately.
         if dispatch && req.action=="current" {self.session=None;}
-        if dispatch && matches!(req.action.as_str(),"current"|"prepare_manual_plane"|"preview") {
+        if dispatch && matches!(req.action.as_str(),"current"|"prepare_manual_plane"|"prepare_model_depth"|"preview") {
             for row in self.rows.iter_mut().filter(|r|r.epoch==epoch && r.request.action=="preview") {row.redeemed=true;}
         }
         self.identity_bytes+=identity_bytes;
@@ -187,7 +190,7 @@ impl Mailbox {
         let index=self.rows.iter().position(|r|r.epoch==epoch && r.request.id==id)?;
         let row=&self.rows[index];
         if row.terminal || !row.dispatched {return None;}
-        let before=if row.request.action=="prepare_manual_plane" {v.get("context").map(|c|&c["source_image"])}
+        let before=if matches!(row.request.action.as_str(),"prepare_manual_plane"|"prepare_model_depth") {v.get("context").map(|c|&c["source_image"])}
             else if row.request.action=="preview" {v.get("review").map(|r|&r["before"])} else {None};
         let same_before=before.map_or(true,|image|row.before.as_ref().is_some_and(|proof|wire::same(proof,&image_proof(image))));
         let consistent_terminal=row.request.action!="receipt" || self.rows.iter().find(|r|r.epoch==epoch && r.request.write()
@@ -205,7 +208,7 @@ impl Mailbox {
         // Update small session proof only after exact raw receipt validation.
         if terminal && v["context"].is_object() && epoch==self.epoch && !self.ended {
             let context=&v["context"];
-            let expires=if action=="prepare_manual_plane" {self.session.as_ref().map(|s|s.expires).unwrap_or(Instant::now())} else {Instant::now()+SESSION_TTL};
+            let expires=if matches!(action.as_str(),"prepare_manual_plane"|"prepare_model_depth") {self.session.as_ref().map(|s|s.expires).unwrap_or(Instant::now())} else {Instant::now()+SESSION_TTL};
             self.session=Some(Session{epoch,id:context["session_id"].clone(),owner:context["owner"].clone(),before:image_proof(&context["source_image"]),
                 depth:context["depth"].is_object().then(||depth_proof(&context["depth"])),expires});
         }
@@ -260,7 +263,7 @@ pub(crate) fn guards_result(epoch:[u8;16],id:&str)->bool {
     mailbox().lock().map(|h|h.seen.get(id).is_some_and(|s|s.epoch==epoch)).unwrap_or(true)
 }
 pub(crate) fn read_only(command:&Value)->bool {
-    command["cmd"]=="lens_blur" && (matches!(command["action"].as_str(),Some("current"|"prepare_manual_plane"|"preview"|"receipt"))
+    command["cmd"]=="lens_blur" && (matches!(command["action"].as_str(),Some("current"|"prepare_manual_plane"|"prepare_model_depth"|"preview"|"receipt"))
         || command["action"]=="submit" && command["command"]["action"]=="cancel")
 }
 /// Consult on ordinary AND interactive ingress, including direct API sends.

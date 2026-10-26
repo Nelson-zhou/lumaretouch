@@ -279,4 +279,15 @@ class WorkflowPortsMixin:
 
 
     def cmd_batch(self, p: dict):
-        return self._batch_controller().handle_command(p)
+        batch = self._batch_controller()
+        owner = self.__dict__.get('_portrait_preset_batch')
+        from .portrait_preset_batch import ACTIONS as portrait_actions
+        if p.get('action') in portrait_actions:
+            if owner is None or owner.batch is not batch:
+                from .portrait_preset_batch import PortraitPresetBatch
+                owner = self._portrait_preset_batch = PortraitPresetBatch(self, batch)
+            return owner.handle(p)
+        if (p.get('action') == 'commit' and owner is not None
+                and owner.owns(p.get('preflight_token'))):
+            return batch._reject(p, 'Prepared portrait group requires its exact whole-group approval', no_write=True)
+        return batch.handle_command(p)

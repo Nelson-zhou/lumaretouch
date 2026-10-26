@@ -8,7 +8,7 @@ import {PromptedMaskDialog} from '../promptedMasks/PromptedMaskDialog';
 import {LocalGradePanel} from './LocalGradePanel';
 import {objectMutation} from './model';
 import type {LiveGradeOwner} from './useLiveGradeWorkflow';
-export function LocalMaskPanel({owner,report,onStart,blocked=false,liveGrade}:{owner:LocalMaskOwner;report?:LocalMaskReport;onStart:(mutation:MaskMutation|null,draw?:boolean,groupId?:string|null)=>void;blocked?:boolean;liveGrade?:LiveGradeOwner}){
+export function LocalMaskPanel({owner,report,onStart,blocked=false,liveGrade,onPromptedStart}:{owner:LocalMaskOwner;report?:LocalMaskReport;onStart:(mutation:MaskMutation|null,draw?:boolean,groupId?:string|null)=>void;blocked?:boolean;liveGrade?:LiveGradeOwner;onPromptedStart?:()=>void}){
   const {state,workflow,context,active,pending}=owner;
   const [selected,setSelected]=useState<string|null>(null),[draft,setDraft]=useState<MaskObject>(()=>newMask('brush'));
   const [aiOpen,setAiOpen]=useState(false);
@@ -23,7 +23,7 @@ export function LocalMaskPanel({owner,report,onStart,blocked=false,liveGrade}:{o
     const mutation=request.mutation;if(mutation.action!=='upsert')return;
     const saved=objects.find(o=>o.id===mutation.object.id);
     if(saved){setSelected(saved.id);setDraft(structuredClone(saved));}
-    else{setSelected(null);setDraft(newMask(mutation.object.kind==='prompted'?'brush':mutation.object.kind,channels[0]??''));}
+    else{setSelected(null);setDraft(newMask((mutation.object.kind==='prompted'||mutation.object.kind==='automatic_foreground')?'brush':mutation.object.kind,channels[0]??''));}
   },[state.phase,state.request?.request_id]);
   const baseLocked=blocked||active||pending||!context.enabled;
   const locked=baseLocked||context.canStart===false||!!liveGrade?.busy;
@@ -46,7 +46,7 @@ export function LocalMaskPanel({owner,report,onStart,blocked=false,liveGrade}:{o
     <strong>组合蒙版</strong>
     <small>只限制上方色相、饱和、明度与混入比例，不限制全局 LUT。几何与范围基于原始源图，不是形变后的最终画面。</small>
     <div className="localMaskToolbar">
-      <button disabled={locked||objects.length>=64} onClick={()=>{setAiOpen(true);onStart(null);}}>AI 提示选区</button>
+      <button disabled={locked||objects.length>=64} onClick={()=>{if(onPromptedStart)onPromptedStart();else{setAiOpen(true);onStart(null);}}}>AI 提示选区</button>
       <button disabled={locked} onClick={()=>onStart(null)}>查看已保存范围</button>
       <button disabled={locked||!objects.length||report?.bound} onClick={()=>onStart({action:'bind',enabled:true})}>用于本组调色</button>
       <button disabled={locked||!report?.bound} onClick={()=>onStart({action:'bind',enabled:false})}>恢复全图作用</button>
@@ -68,10 +68,10 @@ export function LocalMaskPanel({owner,report,onStart,blocked=false,liveGrade}:{o
     <fieldset disabled={locked}>
       <legend>{selected?'编辑选中对象':'新建对象'}</legend>
       <label>对象类型<select value={draft.kind} onChange={e=>create(e.target.value as MaskKind)} disabled={!!selected}>
-        {(Object.keys(MASK_LABELS) as MaskKind[]).filter(kind=>kind!=='prompted'||selected).map(kind=><option key={kind} value={kind} disabled={kind==='semantic'&&!channels.length}>{MASK_LABELS[kind]}</option>)}
+        {(Object.keys(MASK_LABELS) as MaskKind[]).filter(kind=>(kind!=='prompted'&&kind!=='automatic_foreground')||selected).map(kind=><option key={kind} value={kind} disabled={kind==='semantic'&&!channels.length}>{MASK_LABELS[kind]}</option>)}
       </select></label>
-      {selected&&draft.kind==='prompted'&&<button onClick={()=>create('brush')}>新建普通对象</button>}
-      {selected&&draft.kind!=='prompted'&&<button onClick={()=>create(draft.kind)}>新建同类对象</button>}
+      {selected&&(draft.kind==='prompted'||draft.kind==='automatic_foreground')&&<button onClick={()=>create('brush')}>新建普通对象</button>}
+      {selected&&draft.kind!=='prompted'&&draft.kind!=='automatic_foreground'&&<button onClick={()=>create(draft.kind)}>新建同类对象</button>}
       <label>名称<input value={draft.name} maxLength={80} disabled={full&&!!selected} onChange={e=>patch({name:e.target.value})}/></label>
       <label><input type="checkbox" checked={draft.enabled} disabled={full} onChange={e=>patch({enabled:e.target.checked})}/>启用对象</label>
       <label>组合方式<select value={draft.operation} disabled={full} onChange={e=>patch({operation:e.target.value as MaskOperation})}>{(Object.keys(OPERATION_LABELS) as MaskOperation[]).map(op=><option key={op} value={op}>{OPERATION_LABELS[op]}</option>)}</select></label>
@@ -85,6 +85,7 @@ export function LocalMaskPanel({owner,report,onStart,blocked=false,liveGrade}:{o
         {channels.map(channel=><option key={channel} value={channel}>{report?.channel_labels?.[channel]??channel}</option>)}
       </select><small>区域覆盖整张照片内该人像类别，不是单个人物、通用主体或宠物分割。仅显示模型实际可用区域；模型不匹配会暂停相关蒙版。</small></label>}
       {selected&&<small>{geometryDescription(draft)}</small>}
+      {selected&&draft.kind==='automatic_foreground'&&<><p>模型仅提出头发、皮肤、衣物的软覆盖，其他类别未纳入。请先“查看已保存范围”，再新建画笔以添加或减去；在证件照面板中选择建议及修正对象并独立审核主体范围。更改这里的参数不会确认审核。</p><details><summary>自动来源证据（只读）</summary><p>来源：{draft.selection.origin} · 分析范围 {draft.selection.width}×{draft.selection.height} · MediaPipe {draft.selection.runtime}</p><p>模型 SHA-256：<code>{draft.selection.model_sha256}</code></p><p>输入 SHA-256：<code>{draft.selection.input_sha256}</code></p><p>建议覆盖 SHA-256：<code>{draft.selection.alpha_sha256}</code></p></details></>}
       {full&&<small>全图对象加入后不可隐藏、修改或删除；误加可撤销。</small>}
       <div className="localMaskToolbar">
         {drawingKind(draft.kind)&&<button disabled={(!selected&&!canAdd)||!draft.name.trim()} onClick={()=>stage(true)}>{selected?'重绘并替换几何':'在源图绘制'}</button>}

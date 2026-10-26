@@ -73,6 +73,14 @@ impl Scheduler {
     pub fn jobs(&self) -> &[Job] { &self.jobs }
     pub fn pending(&self) -> Option<&Command> { self.pending.as_ref() }
     pub fn is_sealed(&self) -> bool { self.sealed }
+    /// Reporting only: count the durable frozen path list, not just admitted
+    /// jobs. Missing capture evidence stays None rather than claiming zero.
+    pub fn captured_input_count(&self) -> Option<usize> {
+        if !self.graph.automatic() { return None; }
+        let source: crate::poll::DirectoryPoller = serde_json::from_str(self.source_checkpoint.as_deref()?).ok()?;
+        if source.graph_digest() != self.graph.digest() { return None; }
+        source.captured_count()
+    }
     pub fn status(&self) -> RunStatus {
         if self.stopped { RunStatus::Stopped }
         else if let Some(detail) = &self.pause { RunStatus::Paused { detail: detail.clone() } }
@@ -103,13 +111,13 @@ impl Scheduler {
                 input: job.input.clone(), preparation: job.import_preparation.clone().expect("validated stage") }),
             Stage::PreflightPreset => {
                 let node = self.graph.preset().expect("selected preset");
-                let NodeKind::CompatiblePreset { preset_id,preset_sha256,.. } = &node.operation else { unreachable!() };
+                let (NodeKind::CompatiblePreset { preset_id,preset_sha256,.. } | NodeKind::AutomaticPreset { preset_id,preset_sha256,.. }) = &node.operation else { unreachable!() };
                 (node, CommandKind::PreflightPreset { document: job.document.clone().expect("imported document"),
                     preset_id: preset_id.clone(), preset_sha256: preset_sha256.clone(), labels: job.labels.clone() })
             }
             Stage::ApplyPreset => {
                 let node = self.graph.preset().expect("selected preset");
-                let NodeKind::CompatiblePreset { preset_id,.. } = &node.operation else { unreachable!() };
+                let (NodeKind::CompatiblePreset { preset_id,.. } | NodeKind::AutomaticPreset { preset_id,.. }) = &node.operation else { unreachable!() };
                 (node, CommandKind::ApplyPreset { document: job.document.clone().expect("imported document"),
                     preset_id: preset_id.clone(), assessment: job.preset_assessment.clone().expect("preflight assessment") })
             }
@@ -148,7 +156,7 @@ impl Scheduler {
                 require(Path::new(root).join(&input.relative_path) == Path::new(&input.source_path), "source path is outside the pinned root/relative occurrence")?;
                 let labels = self.graph.labels_for(&input.relative_path);
                 let preset_condition_matched = self.graph.preset().map(|node| {
-                    let NodeKind::CompatiblePreset { when_all_labels, .. } = &node.operation else { unreachable!() };
+                    let (NodeKind::CompatiblePreset { when_all_labels, .. } | NodeKind::AutomaticPreset { when_all_labels, .. }) = &node.operation else { unreachable!() };
                     when_all_labels.iter().all(|label| labels.contains(label))
                 }).unwrap_or(false);
                 self.jobs.push(Job { input: input.clone(), stage: Stage::PrepareImport, labels, document: None,
@@ -216,6 +224,9 @@ impl Scheduler {
                 require(bounded(&assessment.report_id,256) && digest(&assessment.report_sha256)
                     && &assessment.preset_sha256 == preset_sha256 && assessment.document_revision == document.document_revision,
                     "preset preflight is not bound to the exact preset/document revision")?;
+                require(if self.graph.automatic() { !assessment.requires_review && assessment.review.is_none() }
+                    else { assessment.requires_review },
+                    "preset assessment mode differs from frozen graph; automatic intent is not image review")?;
                 if let Some(prior) = &self.jobs[index].preset_assessment {
                     require(prior.report_id == assessment.report_id && prior.report_sha256 == assessment.report_sha256
                         && prior.requires_review == assessment.requires_review, "review report changed while awaiting owner review")?;

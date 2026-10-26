@@ -194,6 +194,9 @@ class ExportSpec:
     enhance: dict = field(default_factory=dict)
     people: dict | None = None
     people_document_id: str | None = None
+    hand_shape: dict | None = None
+    hand_shape_path: str | None = None
+    hand_shape_stamp: list | None = None
     body_pose: dict | None = None
     body_pose_source_path: str | None = None
     body_pose_source_stamp: list | None = None
@@ -256,6 +259,8 @@ class ExportSpec:
     creative_base: dict | None = None
     fabric_sweat: dict | None = None
     fabric_sweat_repair_sha256: str | None = None
+    hand_tone: dict | None = None
+    hand_tone_repair_sha256: str | None = None
     limb_vein: dict | None = None
     limb_vein_repair_sha256: str | None = None
 
@@ -377,6 +382,12 @@ class ExportSpec:
         self.limb_vein = vein_check(self.limb_vein)
         if self.limb_vein is not None and self.limb_vein_repair_sha256 != self.limb_vein["repair_sha256"]:
             raise ExportError("肢体青筋缺少匹配的修复来源")
+        from .hand_shape_state import check as hand_shape_check
+        self.hand_shape = hand_shape_check(self.hand_shape)
+        from .hand_tone_state import check as hand_tone_check
+        self.hand_tone = hand_tone_check(self.hand_tone)
+        if self.hand_tone is not None and self.hand_tone_repair_sha256 != self.hand_tone["repair_sha256"]:
+            raise ExportError("手部中性灰缺少匹配的修复来源")
         from .fabric_stage import check_amount
         self.fabric_amount = check_amount(self.fabric_amount)
         if self.fabric_amount and self.fabric_mask is None: raise ExportError("衣物细褶缺少衣物语义蒙版")
@@ -541,6 +552,8 @@ def _admit_manual_tile(spec, h, w, tile, margin, bits, device, manual_peak):
     full_bytes += h*w*(12 if spec.repair else 0)
     full_bytes += h*w*(4 if spec.fabric_amount else 0)
     full_bytes += h*w*(196 if spec.fabric_sweat else 0)
+    from .hand_tone_measure import preparation_bytes as hand_tone_bytes
+    full_bytes += hand_tone_bytes(spec.hand_tone)
     full_bytes += h*w*(196 if spec.limb_vein else 0)
     from .studio_background_export import resident_bytes as studio_bytes
     full_bytes += studio_bytes(spec)
@@ -921,9 +934,10 @@ def _export_image_impl(src_u8: np.ndarray, spec: ExportSpec, *, device: str,
     from .semantic_colour_stage import SemanticColourStage
     from .semantic_colour_runtime import verify_render_source as verify_semantic_source
     from .body_pose_render import verify_render_source as verify_body_source
+    from .hand_shape_runtime import verify_render_source as verify_hand_shape_source
     from .hair_colour_project import verify_render_source as verify_hair_source
     verify_semantic_source(spec)
-    verify_body_source(spec)
+    verify_body_source(spec);verify_hand_shape_source(spec)
     verify_hair_source(spec)
     semantic_stage=SemanticColourStage(spec.semantic_colour,binding=spec.semantic_colour_binding)
     floating=creative_source or detail_active(detail_recipe) or bits==16 or optical or reference_stage.active or semantic_stage.active or spec.float_output or tone_active(tone_recipe) or tone_prepass or colour_grading_stage.active or selective_colour_stage.active or primary_calibration_stage.active or grain_active(grain_recipe) or editor_needed or fringe_needed
@@ -1037,6 +1051,8 @@ def _export_image_impl(src_u8: np.ndarray, spec: ExportSpec, *, device: str,
     sweat_field = prepare_sweat(spec, src_u8, base_f, divisor)
     from .limb_vein_runtime import export_prepare as prepare_vein
     vein_field = prepare_vein(spec, src_u8, base_f, divisor)
+    from .hand_tone_runtime import export_prepare as prepare_hand_tone
+    hand_tone_field = prepare_hand_tone(spec, src_u8, base_f, divisor)
     wrinkle_layer = WRUNTIME.prepare_export(spec, src_u8, base_f, divisor)
     lip_layer = LIPR.prepare_export(spec, src_u8, base_f, divisor)
     enh_reg = None
@@ -1116,6 +1132,8 @@ def _export_image_impl(src_u8: np.ndarray, spec: ExportSpec, *, device: str,
                 pipe.set_light_params(spec.light_exposure, spec.light_radius)
         if sweat_field is not None:
             pipe.fabric_sweat.install(sweat_field.field[cy0:cy1,cx0:cx1],spec.fabric_sweat["amount"])
+        if hand_tone_field is not None:
+            pipe.hand_tone.install(hand_tone_field.field[cy0:cy1,cx0:cx1],spec.hand_tone["amount"])
         if vein_field is not None:
             pipe.limb_vein.install(vein_field.field[cy0:cy1,cx0:cx1],spec.limb_vein["amount"])
         if fabric_field is not None:
@@ -1253,7 +1271,7 @@ def _export_image_impl(src_u8: np.ndarray, spec: ExportSpec, *, device: str,
         finish_common(spec)
         from .common_background_recovery import verify_export as verify_common_recovery
         verify_common_recovery(spec)
-        verify_body_source(spec);verify_hair_source(spec);verify_semantic_source(spec)
+        verify_body_source(spec);verify_hand_shape_source(spec);verify_hair_source(spec);verify_semantic_source(spec)
         return out, {'extended_tone_boundary':'exposure-output','prepass':True}
     del tone_field
     ms = (time.perf_counter() - t_all) * 1000.0
@@ -1342,7 +1360,7 @@ def _export_image_impl(src_u8: np.ndarray, spec: ExportSpec, *, device: str,
             out=apply_canvas(np.ascontiguousarray(out,dtype=np.float32),grain_recipe,source_size=(w,h),geometry=geometry,cancelled=tone_cancelled)
         out=ExtendedToneStage(tone_recipe,cancelled=tone_cancelled).finish_np(out)
     verify_semantic_source(spec)
-    verify_body_source(spec)
+    verify_body_source(spec);verify_hand_shape_source(spec)
     verify_hair_source(spec)
     fringe_render.verify_export(spec,(h,w))
     if support is not None: spec.provenance_result=np.all(support>=.999999,axis=2)
@@ -1367,8 +1385,11 @@ def _export_image_impl(src_u8: np.ndarray, spec: ExportSpec, *, device: str,
     peak_bytes = int(delta.numel() * 4) if delta is not None else 0
     from .body_pose_render import export_outcome
     body_outcome=export_outcome(people_prepared,out,(w,h))
+    from .hand_shape_runtime import export_outcome as hand_export_outcome
+    hand_outcome=hand_export_outcome(people_prepared,spec.hand_shape,(h,w))
     return out, {
         "body_pose":body_outcome,
+        "hand_shape":hand_outcome,
         "fringe_repair": {"active":bool(fringe_needed and fringe_active),
             "algorithm":fringe_recipe['algorithm'],"source_resolution":bool(fringe_needed),
             "guide":"repaired-effective-source-through-real-geometry" if fringe_needed and fringe_active else None,

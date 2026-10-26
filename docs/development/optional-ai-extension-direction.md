@@ -69,3 +69,11 @@ Proposed acceptance criteria:
 
 These criteria need implementation and end-to-end evidence before completion.
 The existing handbook feature backlog remains in scope.
+
+## First supported-profile source slice (2026-10-25)
+
+The ID-background panel now has source wiring for curated SAM2 setup/verified
+resume/CPU readiness and the existing prompted-selection → independent subject
+review path. See [scope and unrun evidence](curated-id-background-extension-setup.md).
+This is not empty-machine environment provisioning, universal extension support,
+or installation/real-device acceptance; the original broader requirement remains open.

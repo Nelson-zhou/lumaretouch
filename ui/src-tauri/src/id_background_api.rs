@@ -101,7 +101,7 @@ fn request_inner(state:&AppState,request:Value,attempted:&mut bool,admitted:&mut
  if request.to_string().len()>65536{return Err("证件照背景请求超过 64 KiB".into());}
  let id=request["request_id"].as_str().filter(|s|!s.is_empty()&&s.len()<=128).ok_or("缺少背景请求身份")?.to_owned();
  let document=request["document_id"].as_str().filter(|s|!s.is_empty()&&s.len()<=256).ok_or("缺少照片身份")?;
- if request["cmd"]!="background"||!matches!(request["action"].as_str(),Some("id_state"|"id_set"|"id_review"|"id_import"|"id_import_material"|"id_clear"|"id_sample"|"id_spill_preview"|"id_spill_apply"|"id_spill_paint_source"|"id_original_shadow_preview"|"id_original_shadow_apply"|"id_original_shadow_paint_source")){return Err("未知证件照背景命令".into());}
+ if request["cmd"]!="background"||!matches!(request["action"].as_str(),Some("id_state"|"id_set"|"id_review"|"id_initialize_foreground"|"id_import"|"id_import_material"|"id_clear"|"id_sample"|"id_spill_preview"|"id_spill_apply"|"id_spill_paint_source"|"id_original_shadow_preview"|"id_original_shadow_apply"|"id_original_shadow_paint_source")){return Err("未知证件照背景命令".into());}
  if direct_reviewed_field(&request){return Err("祛染与原阴影状态只能通过独立前后审核应用，不能从背景配方直接修改".into());}
  spill::command(&request)?;
  shadow::command(&request)?;

@@ -1,91 +1,49 @@
-# Isolated AI超清 v2 source candidate, not an available feature
+# AI 超清：首个受限 CPU 产品路径（源码已接通，验收 UNRUN）
 
-Date: 2026-10-25. Scope: new `engine/src/lumaretouch_engine/upscale_v2/` and
-this documentation directory only. Legacy network, registry, dependencies,
-server, UI, export, build/packaging scripts and acceptance ledgers are untouched.
-No production inference path is enabled. No product imports, tests, compiler,
-build, typecheck, installation, code/model download or inference were run.
+2026-10-25 更新。此前隔离 RRDB 源码快照见 `FREEZE.json`；该旧快照不是
+当前功能状态。当前产品快照见 `PRODUCT-FREEZE.json`，不代表构建或实机验收。
 
-This work implements an isolated, upstream-compatible architecture target and
-a genuine private native-size float tiled reference computation in source.
-It does not close LNX-REF-WF-158251-a4c9a2ccc1 or claim official checkpoint,
-photographic, regional, performance, UI, persistence or end-to-end acceptance.
-Parent integration remains separate. See the prior
-[research requirements](../upscale-research/README.md) and
-[full acceptance map](../upscale-research/IMPLEMENTATION-MAP.md).
+## 首档与实际路径
 
-## What exists
+首档固定为官方 CAIDAS **Swin2SR-classical-sr-x2-64**：classical SR，不是
+RealESRGAN 盲退化修复、人脸重建或忠实恢复丢失细节的保证。官方模型卡明确
+Apache-2.0；固定 safetensors 及纯 Torch 推理图的证据见 `SWIN2SR.md`。
+不依赖 Transformers、timm 或外部 safetensors 包，不重新安装应用基础运行时。
 
-- `architecture.py`: exact two-candidate general-image RRDBNet shape/key
-  contract. x2 means global 2-pixel input unshuffle, not removing an upsampling
-  stage. x4 uses unshuffle=1. No scale=1, anime, compact x4v3 or face enhancer.
-- `_network.py`: licensed inference-only adaptation of pinned BasicSR. Correct
-  dense/outer residual 0.2, no extra RRDB convolution, upstream parameter names,
-  two nearest-neighbor + convolution + LeakyReLU stages and strict state loading.
-  It accepts already deserialized, externally admitted tensors, not a file.
-  It is private and no current public production path calls it.
-- `source.py`: immutable canonical RGBA-f32le dimensions/digest verification and
-  complete bounded scans for finite, opaque, [0,1] linear RGB. No source clipping,
-  flattening, ICC guessing, integer staging or proxy-source substitution.
-- `geometry.py`: lazy globally phase-aligned model windows, disjoint native
-  cores, filter support plus explicit neural halo, and honest payload accounting.
-  It intentionally returns null peak memory and false admission/quality flags.
-- `numeric.py`: float sRGB transfer/clamp primitives and explicitly anchored
-  Lanczos-3 downsample taps, without invoking an integer-image convenience API.
-- `_stream.py`: private source reference for actual tile model forward, generated
-  clamp statistics, globally anchored float downsample, native result packing
-  and cancellation/error atomicity. This is authored UNRUN. It allocates no
-  full scaled output or full encoded source. Runtime resource reservation and
-  independent numeric/photographic verification are missing, so no active path
-  can use it. See [the working-set design](STREAMING-CONTRACT.md).
-- `adapter.py`: dependency-free capability and unconditional unavailable entry.
-  Paths, caller booleans, environment hashes and edited JSON cannot enable it.
-  Missing evidence is not converted to sharpening, identity or a fake AI result.
+显式安装/检查 → 官方固定权重 SHA256/长度 → 有界离线 CPU 实际探针 →
+现场 capability → 完整当前编辑 canonical 浮点源 → 真正神经网络完整单帧 →
+原尺寸浮点候选 → 前后审阅 → 原有 CreativeHost 新图事务 → 原有保存/导出。
+源/历史不会被覆盖；不会自动保存或导出。参见 `PRODUCT-PATH-UNRUN.md`。
 
-## Narrow parent-facing interface
+- 输入仅不透明 SDR 线性 sRGB RGBA-f32le，宽高分别16至1024，最多1,048,576源像素。
+  完整源包括原有编辑；不以缩略图、8位代理、原路径重新解码或降采样替代。
+- 模型内部 x2，输出通过全局 Lanczos3 回到原尺寸；不是2倍尺寸导出。
+- 首档要求现有 CPython3.12 Linux x86_64、Torch2.7.1+cpu、NumPy2.x。
+  这些是信任的应用基础依赖，不声称其 wheel 完整哈希供应链或空机安装已完成。
+- 模型窗口全局对齐8；真正图像右/下边界反射补齐，内部块不单独反射。
+  core1024使首档恰好只有一个完整模型窗口。halo272仅为研究规划保留：
+  内部依赖半径263可由结构推导，但有限attention mask在真正图像边界
+  仍可能产生远端卷绕依赖。因此独立多块并不能据此证明等价，首档不开放
+  大图分块或偷偷降采样；大于1024任一边的完整照片明确拒绝。
+- 子进程应用离线策略、8GiB地址空间、600秒CPU、610秒墙钟、文件上限；
+  主事务600秒先行取消。模型与输入只在受限子进程中加载/处理，取消或异常
+  不暴露半成品。限额不是实测RAM峰值，也不保证上限尺寸照片及时完成。
+- 安装仅获取固定官方 safetensors，分块续传、最终完整hash核验、staging探针
+  后切换，保留旧版本。status/import/inference不联网；没有pip或自动装基础环境。
 
-Importing `upscale_v2` performs no filesystem/network operation and imports
-neither Torch nor NumPy/BasicSR. It only exposes stdlib-backed contracts:
+## 原 RRDB 候选
 
-1. `capability(model_id="RealESRGAN_x2plus")`: immutable status with
-   `available=false`, `state=source_contract_only_unavailable` and exact blockers.
-2. `plan_native_candidate(width, height, model_id=..., core_size=..., halo=...)`:
-   planning only. Both tile parameters are explicit. No default halo is claimed
-   adequate for the 23-block model. No resource admission is returned.
-3. `iter_native_tiles(plan)`: lazy native/core and aligned-input rectangles.
-4. `CanonicalSource` and `validate_source(..., check_cancelled=...)`: caller-owned
-   immutable full current-source bytes, not permission to infer or mutate.
-5. `restore_native_candidate(...)`: always raises `BackendUnavailable` before
-   touching request source bytes or importing/allocating optional resources.
-   Its unused request keywords are not a final production request schema.
+BasicSR Apache-2.0 的 `_network.py` 与原 RealESRGAN 架构合同保留研究用途，
+不接通为可用产品档。官方 x2plus asset42011922 的67,061,725字节已仅为来源
+研究进行一次HTTPS流式SHA256计算：
+`49fafd45f8fd7aa8d31ab2a22d14d91b536c34494a5cfe31eb5d89c2fa266abb`。
+这是观察到的官方字节散列，不是上游发布/签名校验值；没有保存、反序列化或运行。
+其权重专门许可仍未得到明确官方证据，因此不会因散列已知而放行。
 
-Do not wire any private function as a bypass or advertise the presence of its
-source as a live backend. Future activation requires code review plus explicit
-release admission, not a UI checkbox. No `torch.load` function is provided yet:
-a safe local byte loader must verify expected length/hash and file identity,
-reject symlinks/unknown artifacts and use reviewed `weights_only=True` support
-without fallback or allowlisting, all before this private graph constructor.
+## 验证边界
 
-## Unresolved production gates
-
-Official checkpoint SHA256, checkpoint-specific rights review, authenticated
-runtime distribution hashes, installed code/config integrity, a safe file
-loader, runtime/host reservation enforcement, device scratch bounds, actual
-checkpoint compatibility and numeric/tile/photographic acceptance all remain
-missing. The source candidate records that honestly and refuses production.
-Reference code and upstream Git blob IDs are not authenticated weight hashes.
-
-Region strengths are outside this backend. Face/body skin probabilities are
-not complete face/body regions; `others` is not background. Neither automatic
-nor manual segmentation is claimed by these modules. Whole/restored candidate
-fusion, byte-exact zero strength/zero coverage behavior, current-source ownership,
-semantic evidence and atomic Apply remain separate parent-owned requirements.
-
-## License and provenance
-
-The adapted graph carries Apache-2.0 attribution, a modification notice and the
-complete locally archived upstream license alongside it. The remainder is
-original project code. [PROVENANCE.json](PROVENANCE.json) pins inspected sources
-and distinguishes unknown artifact/runtime evidence. Packaging has not been
-changed or verified. [SOURCE-SHA256.txt](SOURCE-SHA256.txt) describes this slice,
-not a repository-wide atomic snapshot or proof of execution.
+本轮只有官方文本/metadata研究、一次授权hash-only资产读取、源码静态审阅、
+Python AST解析和作者编写的UNRUN fixtures。**未安装、未运行产品/探针/模型、
+未测试、未构建、未typecheck，实机照片画质/幻觉/接缝/耗时/内存及项目导出均未验收。**
+存在源代码与有条件capability，并不说明当前机器已可用或整体开发达到某一百分比。
+区域语义与区域强度、大尺寸婚纱原片AI处理、GPU档、其他倍率和HDR/透明源不包含在此首档中。

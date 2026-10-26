@@ -58,6 +58,38 @@ pub enum LabelTarget { Filename, RelativePath }
 #[serde(deny_unknown_fields)]
 pub struct LabelRule { pub target: LabelTarget, pub contains: String, pub label: String }
 
+/// Frozen execution intent, NOT a fresh user start acknowledgment.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct AutomaticBatchIntent {
+    pub schema: String, pub mode: String, pub scope: String, pub source_mode: String, pub originals: String,
+    pub save: String, pub collision: String, pub unattended: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none", deserialize_with = "explicit_portrait_scope")]
+    pub portrait_scope: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none", deserialize_with = "explicit_portrait_scope")]
+    pub reference_scope: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none", deserialize_with = "explicit_portrait_scope")]
+    pub reference_source_policy: Option<String>,
+}
+// Missing is legacy scalar scope; explicit null is not an opt-in declaration.
+fn explicit_portrait_scope<'de, D: serde::Deserializer<'de>>(deserializer: D) -> std::result::Result<Option<String>, D::Error> {
+    String::deserialize(deserializer).map(Some)
+}
+impl AutomaticBatchIntent {
+    pub fn validate(&self) -> Result<()> {
+        require(self.schema == "lrt.automatic-batch-intent.v1" && self.mode == "automatic"
+            && self.scope == "directory_originals" && self.source_mode == "captured_file_list" && self.originals == "managed_copy_only"
+            && self.save == "target_recipe" && self.collision == "fail_no_overwrite" && self.unattended
+            && self.portrait_scope.as_deref().map_or(true, |scope| scope == "all_verified_detected_faces")
+            && match (self.reference_scope.as_deref(), self.reference_source_policy.as_deref()) {
+                (None, None) => true,
+                (Some("stored_reference_per_target_fit"), Some("reject_same_source")) => self.portrait_scope.is_none(),
+                _ => false,
+            },
+            "unsupported automatic batch intent; no implicit scope, save or overwrite authority")
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 pub enum NodeKind {
@@ -68,6 +100,7 @@ pub enum NodeKind {
     ManagedImport { project_id: String, project_path: String, managed_root: String },
     PathLabels { rules: Vec<LabelRule> },
     CompatiblePreset { preset_id: String, preset_sha256: String, when_all_labels: Vec<String> },
+    AutomaticPreset { preset_id: String, preset_sha256: String, when_all_labels: Vec<String>, intent: AutomaticBatchIntent },
     Export { output_root: String, recipe_sha256: String },
 }
 
@@ -136,7 +169,9 @@ impl Graph {
                         labels.insert(rule.label.clone());
                     }
                 }
-                NodeKind::CompatiblePreset { preset_id, preset_sha256, when_all_labels } => {
+                NodeKind::CompatiblePreset { preset_id, preset_sha256, when_all_labels }
+                | NodeKind::AutomaticPreset { preset_id, preset_sha256, when_all_labels, .. } => {
+                    if let NodeKind::AutomaticPreset { intent, .. } = &node.operation { intent.validate()?; }
                     require(id(preset_id) && digest(preset_sha256) && when_all_labels.len() <= MAX_LABELS,
                         "preset must pin its identity and content SHA-256")?;
                     let unique: BTreeSet<_> = when_all_labels.iter().collect();
@@ -174,14 +209,18 @@ impl Graph {
             && matches!(ordered[ordered.len()-1].operation, NodeKind::Export { .. })
             && match &ordered[2..ordered.len()-1] {
                 [] => true,
-                [node] => matches!(node.operation, NodeKind::PathLabels { .. } | NodeKind::CompatiblePreset { .. }),
+                [node] => matches!(node.operation, NodeKind::PathLabels { .. } | NodeKind::CompatiblePreset { .. } | NodeKind::AutomaticPreset { .. }),
                 [labels, preset] => matches!(labels.operation, NodeKind::PathLabels { .. })
-                    && matches!(preset.operation, NodeKind::CompatiblePreset { .. }),
+                    && matches!(preset.operation, NodeKind::CompatiblePreset { .. } | NodeKind::AutomaticPreset { .. }),
                 _ => false,
             },
             "unsupported v1 node order")?;
+        if ordered.iter().any(|node| matches!(node.operation, NodeKind::AutomaticPreset { .. })) {
+            require(matches!(ordered[0].operation, NodeKind::DirectorySource { include_existing: true, .. }),
+                "automatic captured-file jobs require include_existing; future-file watching is a different mode")?;
+        }
         for node in &ordered {
-            if let NodeKind::CompatiblePreset { when_all_labels, .. } = &node.operation {
+            if let NodeKind::CompatiblePreset { when_all_labels, .. } | NodeKind::AutomaticPreset { when_all_labels, .. } = &node.operation {
                 require(when_all_labels.iter().all(|s| labels.contains(s)), "preset condition refers to a label no rule can produce")?;
             }
         }
@@ -198,8 +237,9 @@ impl ValidatedGraph {
     pub fn source(&self) -> &Node { &self.ordered[0] }
     pub fn import(&self) -> &Node { &self.ordered[1] }
     pub fn preset(&self) -> Option<&Node> {
-        self.ordered.iter().find(|node| matches!(node.operation, NodeKind::CompatiblePreset { .. }))
+        self.ordered.iter().find(|node| matches!(node.operation, NodeKind::CompatiblePreset { .. } | NodeKind::AutomaticPreset { .. }))
     }
+    pub fn automatic(&self) -> bool { self.preset().is_some_and(|node| matches!(node.operation, NodeKind::AutomaticPreset { .. })) }
     pub fn export(&self) -> &Node { self.ordered.last().expect("validated chain") }
     pub fn project_id(&self) -> &str {
         match &self.import().operation { NodeKind::ManagedImport { project_id, .. } => project_id, _ => unreachable!() }

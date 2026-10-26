@@ -28,6 +28,7 @@ class PreparedPeople:
     face_fields: tuple=()
     body_fields: tuple=()
     body_operation_order: dict|None=None
+    document_fields: tuple=()
 
     def apply_source_stage(self, stage, pixels):
         return E.apply(stage, pixels, self.effects, recovery=self.recovery)
@@ -562,7 +563,7 @@ def prepare(state, asset_sha256, source, analyses, *, byte_budget, document_id=N
 
 
 def retained_bytes(prepared,*,include_geometry=True):
-    total=sum(field.resident_bytes() for field in (*prepared.face_fields,*prepared.body_fields))
+    total=sum(field.resident_bytes() for field in (*prepared.face_fields,*prepared.body_fields,*prepared.document_fields))
     total+=sum(array.nbytes for record in prepared.effects for array in (record.delta,record.weights,record.chroma_shift,record.log_gain) if array is not None)
     total+=sum(record['weight'].nbytes for record in prepared.recovery.values())
     total+=sum(record.amounts.resident_bytes() for record in prepared.effects if record.stage in ('skin_reference_match','skin_reference_body_match'))

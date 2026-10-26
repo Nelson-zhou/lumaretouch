@@ -8,6 +8,8 @@ def stop(engine):
     selection_jobs(engine).stop()
     from .light_glow_jobs import controller as glow_jobs
     glow_jobs(engine).stop()
+    from .upscale_restore_jobs import controller as upscale_jobs
+    upscale_jobs(engine).stop()
     from .lens_blur_jobs import controller as lens_jobs
     lens_jobs(engine).stop()
     from .expression_replacement_jobs import controller as expression_jobs
@@ -36,6 +38,8 @@ def ingress(engine, line):
     selection_jobs(engine).ingress(line)
     from .light_glow_jobs import controller as glow_jobs
     if glow_jobs(engine).ingress(line): return True
+    from .upscale_restore_jobs import controller as upscale_jobs
+    if upscale_jobs(engine).ingress(line): return True
     from .lens_blur_jobs import controller as lens_jobs
     if lens_jobs(engine).ingress(line): return True
     from .expression_replacement_jobs import controller as expression_jobs

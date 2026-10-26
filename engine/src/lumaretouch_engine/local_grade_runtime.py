@@ -16,9 +16,12 @@ from . import local_grade_semantics as S
 
 def prompt_stamp(groups):
     from . import prompted_mask_resolver as P
-    if any(layer['enabled'] and P.active(layer['mask']['recipe']) for layer in groups['layers']):
-        return json.dumps(P.dependency_stamp(), sort_keys=True)
-    return None
+    prompted=any(layer['enabled'] and P.active(layer['mask']['recipe']) for layer in groups['layers'])
+    automatic=any(layer['enabled'] and any(o['kind']=='automatic_foreground' and o['enabled'] for o in layer['mask']['recipe']['objects']) for layer in groups['layers'])
+    if not prompted and not automatic:return None
+    from .automatic_foreground import dependency_stamp
+    return json.dumps({'prompted':P.dependency_stamp() if prompted else None,
+                       'automatic':dependency_stamp() if automatic else None},sort_keys=True)
 
 
 def verify_original(groups, row):
@@ -59,7 +62,7 @@ def verify_legacy(state, path, shape):
             if field.ndim != 2 or field.dtype.kind != 'f' or not field.size or not np.isfinite(field).all() or np.any(field<0) or np.any(field>1):
                 raise ValueError('目标旧对象调色的语义操作数无效，不能忽略后继续')
     from . import prompted_mask_resolver as P
-    if P.active(mask['recipe']):
+    if P.active(mask['recipe']) or any(o['kind']=='automatic_foreground' and o['enabled'] for o in mask['recipe']['objects']):
         # A preserved target prompt is recomputed only on that same target,
         # never treated as portable source data.
         P.fields(mask['recipe'], mask['source'], path, (min(shape[0],256),min(shape[1],256)), force=True)

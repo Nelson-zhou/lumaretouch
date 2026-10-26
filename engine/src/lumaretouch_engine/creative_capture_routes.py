@@ -6,12 +6,18 @@ This is a static registration boundary, not dynamic plugin loading.
 """
 
 def guard_other(engine, name, request):
+    from .hand_shape_state import active as hand_shape_active
+    if hand_shape_active(getattr(engine,'_hand_shape',None)) and name in ('inpaint','source_patch','clone_stamp'):
+        raise ValueError('请先清除手部美型，再改变已审核的来源修复；之后可重新审核。')
     from .fabric_sweat_state import active as sweat_active
     if sweat_active(getattr(engine,'_fabric_sweat',None)) and name in ('inpaint','source_patch','clone_stamp'):
         raise ValueError('请先清除衣物汗渍效果，再改变其来源修复；之后可重新审核。')
     from .limb_vein_state import active as vein_active
     if vein_active(getattr(engine,'_limb_vein',None)) and name in ('inpaint','source_patch','clone_stamp'):
         raise ValueError('请先清除肢体青筋效果，再改变其来源修复；之后可重新审核。')
+    from .hand_tone_state import active as hand_tone_active
+    if hand_tone_active(getattr(engine,'_hand_tone',None)) and name in ('inpaint','source_patch','clone_stamp'):
+        raise ValueError('请先清除手部中性灰效果，再改变其来源修复；之后可重新审核。')
     from .hair_volume_controller import guard_other as volume_guard
     volume_guard(engine, name, request)
     from .portrait_crop_routes import guard_other as crop_guard
@@ -26,13 +32,21 @@ def guard_other(engine, name, request):
     lens_guard(engine, name, request)
     expression_guard(engine, name, request)
     glow_guard(engine, name, request)
+    from .upscale_restore_host import guard_other as upscale_guard
+    upscale_guard(engine, name, request)
 
 
 def rejected(engine, name, request, error, boundary, emit):
     if not error:
         return
     started = bool(boundary and boundary['started'])
-    if name == 'limb_vein':
+    if name == 'hand_shape':
+        from .hand_shape_routes import rejected
+        rejected(engine, request, error, started, emit)
+    elif name == 'hand_tone':
+        from .hand_tone_routes import rejected
+        rejected(engine, request, error, started, emit)
+    elif name == 'limb_vein':
         from .limb_vein_routes import rejected
         rejected(engine, request, error, started, emit)
     elif name == 'fabric_sweat':
@@ -49,6 +63,10 @@ def rejected(engine, name, request, error, boundary, emit):
         dispatch_rejected(engine, request, error, started, emit)
     elif name == 'light_glow':
         from .light_glow_host import dispatch_rejected
+        dispatch_rejected(request, error, started, emit, engine=engine)
+
+    elif name == 'upscale_restore':
+        from .upscale_restore_host import dispatch_rejected
         dispatch_rejected(request, error, started, emit, engine=engine)
 
     elif name == 'creative_selection':

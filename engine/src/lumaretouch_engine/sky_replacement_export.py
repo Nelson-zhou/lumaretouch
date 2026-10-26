@@ -50,6 +50,8 @@ def admit_tile(spec,h,w,tile,margin,bits,device):
     from .optics_state import active as optics_active
     output=h*w*(12 if bits==16 or optics_active(spec.optics) else 3)*int(spec.scale)**2
     output+=h*w*(12 if spec.repair else 0)+h*w*(4 if spec.fabric_amount else 0)+h*w*(196 if spec.fabric_sweat else 0)+h*w*(196 if spec.limb_vein else 0)
+    from .hand_tone_measure import preparation_bytes as hand_tone_bytes
+    output+=hand_tone_bytes(spec.hand_tone)
     reserve=64*1024**2
     # Already prepared source/asset arrays are included in available_estimate's
     # resident usage; do not falsely regard proxy storage as reusable export RGB.

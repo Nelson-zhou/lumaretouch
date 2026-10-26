@@ -12,7 +12,7 @@ import json
 import re
 import threading
 
-READS = frozenset(('current', 'prepare_manual_plane', 'preview'))
+READS = frozenset(('current', 'prepare_manual_plane', 'prepare_model_depth', 'preview'))
 MAX_WIRE_BYTES = 524_288 + 4096
 MAX_JOBS = 8
 MAX_IDENTITIES = 512

@@ -1,167 +1,141 @@
-# Optional lens depth adapter v1
+# Optional automatic lens depth v1
 
-Status: source authored; runtime, inference, visual quality and native integration
-acceptance are **UNRUN**. This is an isolated module boundary, not a completed
-lens-blur feature, installed model, or a hot-pluggable runtime.
+**SOURCE AUTHORED / ALL EXECUTION UNRUN (2026-10-25).** The owned source chain is
+now setup → CPU readiness → full-frame inference → depth review → existing lens
+preview/save-copy. It is not a build result, installed model, photo-quality result
+or performance acceptance. Current setup is **unavailable** because four optional
+runtime components still lack sufficient primary license evidence. The authored
+installer checks that eligibility before any download; no flag in a user receipt
+can override it. Missing metadata is not evidence of a restrictive license.
 
-## Public boundary and scope
+## One supported candidate and honest admission
 
-`lens_depth_adapter.py` exposes `capability_v1()`, `proxy_extent_v1(source)`, and
-`estimate_depth_v1(request, model_root=..., cancelled=...)`. Its frozen v1
-records are `DepthSourceV1`, `DepthOwnerV1`, `DepthRequestV1`,
-`DepthNormalizationV1`, `DepthResultV1` and `DepthCapabilityV1`.
-
-The capability is deliberately unavailable. Both missing upstream byte pins and
-an independent unconditional runtime-admission refusal block the proposed model
-route before model imports. Filling a manifest constant, providing a wheel,
-editing an installation receipt, or merely installing Transformers cannot unlock
-it. An actual activation needs a reviewed implementation and acceptance work.
-
-The sole candidate is the official `depth-anything/Depth-Anything-V2-Small-hf`
-checkpoint. There is no interchangeable V1, Base, Large, Giant, metric-depth,
-ONNX, `.pth`, pickle or guessed architecture route. No source/model is downloaded,
-installed or discovered in caches. Imports do not inspect files or load models.
-The caller supplies an explicit local directory; no environment or path search
-is used to locate weights. No source path, arbitrary model ID, import callback,
-user-authored manifest or remote code is accepted.
-
-This module does not register commands, install packages, change the server,
-commit history, mutate recipes, blur pixels, detect subjects, or persist assets.
-Missing/invalid models and cancellation produce an exception and no result. The
-host must preserve saved recipe intent and its independent neutral/manual-depth
-path instead of discarding edits or inventing a depth plane.
-
-## Immutable source and precision contract
-
-- Owner identity matches the UI: document ID, epoch token, decimal uint64 revision,
-  and oriented source SHA256/width/height/`exif_normalized_once`. Source identity
-  is not a filesystem path. The host must authenticate it against its immutable
-  snapshot; matching caller-provided strings alone is not proof.
-- At most 100,000,000 source pixels and 1,000,000 pixels per edge; each edge is at
-  least two. This adapter additionally limits aspect ratio to 4:1. Those are
-  admission bounds, not promises of available RAM, speed or photographic quality.
-- A request contains immutable packed RGB8 analysis bytes, not the source render
-  image. Its whole-frame extent is exactly `proxy_extent_v1`: longest edge at
-  most 1024, no upscale, integer half-up shorter edge. No crop, rotation, padding
-  or undocumented transform is accepted. Mapping is
-  `normalized_full_frame_pixel_centres` throughout.
-- The host prepares encoded-sRGB opaque analysis pixels and a SHA256 identity of
-  the actual colour/alpha transform. Tone mapping HDR or flattening alpha must be
-  an explicit host analysis decision with retained provenance. The adapter cannot
-  validate the original image from the proxy alone. These lossy analysis bytes
-  must NEVER replace the linear, premultiplied, full-precision native source.
-- The candidate uses the upstream DPT processor, including its Pillow RGB8
-  resize semantics. It does not advertise a lossless float32 image-input path.
-  Model input is float32, finite, one RGB batch, each edge a multiple of 14,
-  at most 1536 per edge and 786,432 total pixels. A valid source can still exceed
-  this preprocessor budget and is then rejected, not distorted to fit.
-- CPU float32 only is specified. CUDA/ROCm/MPS, mixed precision, cross-device
-  reproducibility, memory guarantees and concurrency scheduling are not accepted.
-  There are no persistent model resources or global allocator/environment edits.
-
-The proposed result holds immutable little-endian float32 bytes on the complete
-original oriented source grid, plus its exact digest, owner, request identity,
-model/runtime provenance and normalization description. The native aperture
-core consumes this same-grid near-zero/far-one field alongside the untouched
-original source. Source ownership must be rechecked after computation and again
-at publication/commit. A stale document epoch or revision invalidates the result.
-
-## Relative depth, not distance or confidence
-
-The [primary paper, section 5.2](https://arxiv.org/html/2406.09414v2#S5.SS2)
-describes affine-invariant inverse depth. Larger raw values are interpreted as
-nearer, so the candidate maps each full-source value `p` to
-`(maximum - p) / (maximum - minimum)`, after bicubic full-grid interpolation with
-`align_corners=False`. Normalization arithmetic uses float64 chunks and only the
-stored field is rounded to float32. It is per-image global min/max, without
-percentile clipping, and therefore sensitive to outliers and framing. Bicubic
-interpolation can overshoot; the recorded extrema are the post-interpolation
-extrema. The field is not comparable across images, metres, camera distance,
-f-number, a measured optical circle of confusion, or a calibrated uncertainty.
-
-Constant and near-constant fields are rejected rather than turned into fake
-focus planes. Nonfinite values and wrong shapes/dtypes are rejected. Uncertainty
-is explicitly `not-estimated`; subject-focus data is always absent. Any subject
-focus would require a separately authenticated subject mask, not an assumption
-that the nearest region is the subject. No physical-camera or competitor-parity
-claim is made.
-
-The UI needs its own bounded full-frame u16 visualization. The shared host may
-derive that from the normalized float field, record resampling, quantize using
-`round(value * 65535)`, and hash the exact little-endian bytes. Its quantization
-error is at most `0.5/65535` before other resampling error. UI u16 bytes never
-replace the native float32 processing asset. Model provenance and owner bindings
-must survive this derivation; `subject_focus` remains null without separate proof.
-
-## Evidence and exact pins
-
-Evidence inspected 2026-10-24 using primary public pages only; no checkpoint,
-package archive or executable code was downloaded or executed.
-
-1. The [official Small-hf model card](https://huggingface.co/depth-anything/Depth-Anything-V2-Small-hf)
-   identifies the compatible Transformers checkpoint and DPT/DINOv2 architecture.
-   The [revision page](https://huggingface.co/depth-anything/Depth-Anything-V2-Small-hf/commit/5426e4f0f36572d16453bbda7a8389317b1bef99)
-   identifies revision `5426e4f0f36572d16453bbda7a8389317b1bef99`.
-2. The [revision-scoped weight metadata](https://huggingface.co/depth-anything/Depth-Anything-V2-Small-hf/blob/5426e4f0f36572d16453bbda7a8389317b1bef99/model.safetensors)
-   publishes SHA256 `3152477ce0d8d6978d76b995120de97cb5b928701fd0f817769f59e249a16b70`.
-   The [raw public pointer](https://huggingface.co/depth-anything/Depth-Anything-V2-Small-hf/raw/main/model.safetensors)
-   gives size 99,173,660 bytes and the same digest. This is metadata evidence, not
-   a locally verified checkpoint or an inference run. The Xet hash is NOT used
-   as the file SHA256.
-3. The [configuration](https://huggingface.co/depth-anything/Depth-Anything-V2-Small-hf/blob/main/config.json)
-   identifies Small DINOv2 width 384, six heads, stages 3/6/9/12, patch 14 and neck
-   widths 48/96/192/384; the published file size is 950 bytes. The
-   [preprocessor](https://huggingface.co/depth-anything/Depth-Anything-V2-Small-hf/blob/main/preprocessor_config.json)
-   is a 775-byte DPT configuration with 518-size aspect-preserving bicubic resize,
-   multiples of 14, RGB rescale 1/255 and ImageNet mean/std. Exact upstream byte
-   hashes and revision-scoped membership for these two small files remain
-   unverified. Rendered text is NOT hashed and mislabeled as upstream bytes.
-   Attempts to read the revision-scoped raw/API/config pages were inaccessible
-   through the available reader; no access restriction was bypassed.
-4. [Historical Transformers 4.45.2 source](https://raw.githubusercontent.com/huggingface/transformers/v4.45.2/src/transformers/models/depth_anything/modeling_depth_anything.py)
-   and its [DPT processor](https://raw.githubusercontent.com/huggingface/transformers/v4.45.2/src/transformers/models/dpt/image_processing_dpt.py)
-   were inspected to understand the public API, not vendored. Their source
-   headers identify Apache-2.0. No upstream implementation is copied here.
-5. The [official PyPI 4.45.2 JSON manifest](https://pypi.org/pypi/transformers/4.45.2/json)
-   publishes `transformers-4.45.2-py3-none-any.whl`, 9,881,312 bytes, SHA256
-   `c551b33660cfc815bae1f9f097ecfd1e65be623f13c6ee0dda372bd881460210`.
-   It also lists security advisories. This digest is retained as historical
-   research evidence only, NOT a cleared version, approved installation,
-   authenticated installed-code inventory or compatibility recommendation.
-
-The model card labels Small-hf Apache-2.0, and the
+Model: official `depth-anything/Depth-Anything-V2-Small-hf`, revision
+`5426e4f0f36572d16453bbda7a8389317b1bef99`. Small is Apache-2.0;
 [upstream license scope](https://github.com/DepthAnything/Depth-Anything-V2#license)
-distinguishes Small from Base/Large/Giant, which use CC-BY-NC-4.0. Small's license
-does not authorize those larger weights. Any future redistribution must carry
-the applicable license/notice material for actual distributed components.
-This change redistributes no model weights or upstream source package.
+puts Base/Large/Giant under CC-BY-NC-4.0. They are not alternatives in this profile.
+There is no .pth/pickle, V1, metric, ONNX, remote-code, arbitrary model ID, community
+node, cache discovery or manual/luminance depth disguised as AI.
 
-## Local file verification and remaining acceptance
+| Revision-scoped file | Bytes | SHA256 |
+|---|---:|---|
+| model.safetensors | 99,173,660 | `3152477ce0d8d6978d76b995120de97cb5b928701fd0f817769f59e249a16b70` |
+| config.json | 950 | `c56698d3643dde1f83ea2212759e6b31a22b8f827246a36dd007ee8a22b3ff75` |
+| preprocessor_config.json | 775 | `d41175c0d889477ca8fc67191e540faef14baf6275157b3fdecf78469e6bbf84` |
 
-The authored reader uses an exact three-file allowlist, bounded reads, no-follow
-directory/file traversal, regular-file/one-link/size checks, before/after file
-identity checks and exact SHA256 comparison. The candidate consumes the verified
-bytes directly through `safetensors.torch.load`, not a subsequently reopened
-weight path, cache lookup or `from_pretrained` download. `strict=True` loading
-rejects incompatible checkpoints. Configuration semantic checks are additional
-guards, not alternatives to the absent exact hashes.
+Config and preprocessor hashes were computed from actual raw HTTPS response bytes
+at the fixed revision on 2026-10-25, not rendered text:
+[config](https://huggingface.co/depth-anything/Depth-Anything-V2-Small-hf/resolve/5426e4f0f36572d16453bbda7a8389317b1bef99/config.json),
+[processor](https://huggingface.co/depth-anything/Depth-Anything-V2-Small-hf/resolve/5426e4f0f36572d16453bbda7a8389317b1bef99/preprocessor_config.json).
+The weight hash remains the earlier official
+[revision-scoped metadata evidence](https://huggingface.co/depth-anything/Depth-Anything-V2-Small-hf/blob/5426e4f0f36572d16453bbda7a8389317b1bef99/model.safetensors),
+not a locally downloaded/verified checkpoint. A redundant pointer read was denied;
+no denial was bypassed and no weights were downloaded.
 
-Activation still requires all of the following:
+Runtime profile is Linux x86_64, glibc ≥2.28, CPython 3.12; existing explicitly
+selected app `torch==2.7.1+cpu`, `torchvision==0.22.1+cpu`, NumPy ≥2.1 and Pillow
+≥11, ≤15.0 are prerequisites. **This extension does not install/authenticate the
+base interpreter, Torch native libraries or their dependency graph.** They are
+trusted app components; base metadata/RECORD hashes only detect drift, not origin.
+No GPU, interpreter fallback or global environment package replacement occurs.
 
-- Authentic revision-scoped config/preprocessor byte hashes and sizes.
-- A platform-specific, security-reviewed runtime graph and exact distribution
-  artifact hashes; verification of the entire actual imported code inventory,
-  including dependencies, shadowing and previously imported foreign modules.
-  Neither installed metadata nor a mutable local receipt provides that proof.
-- Correct upstream class/config/checkpoint compatibility; processor and raw depth
-  parity against the pinned implementation on real licensed fixtures.
-- Boundaries: orientation, alpha/HDR analysis proxies, model extent, invalid or
-  constant output, source changes, cancellation, memory pressure and concurrency.
-- Actual native full-frame/tile depth alignment, focus ordering, occlusion/edge
-  artifacts, UI visualization/click focus, history, save/reopen and export checks.
+`lens_depth_runtime_lock.json` records 26 exact optional wheels, 24,652,473 bytes,
+from official PyPI metadata including recursive applicable dependency edges.
+The root is `transformers==5.11.0`, wheel 11,094,597 bytes,
+SHA256 `06d0a34eab529955f8e704b530663c7d6bd6f9c7a9e47a05cddb4a44e7b6566b`.
+[Official metadata](https://pypi.org/pypi/transformers/5.11.0/json) reported no listed
+advisories at research time; this is **not** a security audit or compatibility
+clearance. The older 4.45.2 digest retained in the source is historical research,
+not an installation requirement. No package archive was fetched in development.
 
-The fixture file in this directory is explicitly authored and UNRUN. Static AST
-parse and authored-file hashes, if reported separately, are only syntax/inventory
-checks. No tests, imports of authored application code, builds, type checks,
-inference, installation, downloads, Git operations or external tasks were run
-for this adapter change.
+The optional graph includes MPL-2.0 components (certifi, tqdm); do not call it
+"all permissive." `tokenizers==0.22.2`, `safetensors==0.8.0`,
+`markdown-it-py==4.2.0`, `mdurl==0.1.2` had missing license fields in the retained
+metadata. Additional primary-evidence queries were denied and not retried.
+Their setup/distribution eligibility remains explicitly pending. This is a
+research gap, not a finding that these packages are proprietary. Retain actual
+license/notice files if distribution later becomes eligible.
+
+## Concrete setup and runtime boundaries
+
+- The existing native optional-model subprocess owner serializes SAM/depth setup,
+  routes only fixed helper modules, labels extension identity and refuses
+  cancellation from another extension. No automatic setup on opening the panel.
+- Once eligibility is established in reviewed source, explicit install reuses the
+  resumable fixed-Hugging-Face downloader and model-owner lock. Exact size and
+  complete SHA256 precede use. The three model files have an exact allowlist.
+- Optional wheels are fetched by exact HTTPS URL with `--require-hashes --no-deps`.
+  The installer retains each wheel; extraction forbids traversal, links, .pth,
+  bytecode and .data relocation, limits decompression, rejects duplicate ownership.
+  Runtime admission rehashes original wheels and compares every extracted file
+  against their actual member bytes, rejects unowned files and foreign loaded
+  modules. It does not trust a mutable installed inventory receipt.
+- Candidate staging is probed before publication. Prior bytes are retained during
+  repair. Two renames are recoverable in-process but not an atomic crash exchange;
+  rollback/uninstall UX is not implemented.
+- A passing generated 64×48 CPU fixture is retained only for unchanged runtime
+  identity. Recheck removes old readiness first. This local receipt is **not a
+  tamperproof attestation** and never means a real photograph passed acceptance.
+- Both probe and actual inference execute in a child with parent-death binding,
+  actual Linux seccomp network denial, no model downloads, CPU 100-second limit,
+  wall 110-second timeout, 8 GiB address-space cap, 400 MB output limit and visible
+  available-memory floor of 4 GiB. Cancellation kills/reaps the process group,
+  including a stuck model kernel. These bounds are not measured RSS/speed promises.
+- Offline status currently performs full model/wheel/code integrity reads; repeated
+  status may be expensive and has not been benchmarked. Installation and reads
+  cannot establish compatibility without the actual future CPU probe.
+
+## Whole-source inference and precision
+
+The immutable owner binds document ID, epoch, canonical uint64 revision and
+oriented source digest/grid. The existing lens source owner captures the complete
+current edited image and cold-rechecks file/graph ownership after analysis. Stale
+requests are rejected; cancellation and replay use the original read identity.
+Source colour pixels, document history and source files are never changed by
+analysis. Saving a blur result remains the separate existing reviewed new-copy
+operation, not an inference side effect.
+
+The first profile accepts genuine opaque finite unit-range SDR linear-sRGB only.
+Transparent/HDR sources are rejected rather than silently flattened/tone-mapped.
+A nearest-centre whole-frame RGB8 analysis proxy (long edge ≤1024, no upscaling)
+uses the existing native sRGB presentation transform; exact transform and proxy
+hashes are retained. No crop, rotated-grid guess or use of the proxy as source
+render pixels occurs. Source admission is ≤100M pixels, edges ≥2 and aspect ≤4:1;
+existing lens memory budgets may impose stricter limits.
+
+The pinned upstream config specifies Small DINOv2 width384, heads6, stages
+3/6/9/12, patch14 and neck48/96/192/384. Do not use class defaults (different stages).
+The 5.11 default `DPTImageProcessor` changed backend: this adapter explicitly uses
+[`DPTImageProcessorPil`](https://raw.githubusercontent.com/huggingface/transformers/v5.11.0/src/transformers/models/dpt/image_processing_pil_dpt.py)
+for the researched Pillow RGB8 resize semantics. Model input is CPU float32,
+finite RGB batch1, multiples14, max edge1536 and 786,432 pixels; unsupported
+preprocessor extents fail rather than distort/crop. Exact verified safetensors
+bytes feed `load`, and `strict=True` rejects checkpoint/architecture mismatch.
+No remote `from_pretrained` path exists. Actual upstream parity is UNRUN.
+
+The [paper](https://arxiv.org/html/2406.09414v2#S5.SS2) describes affine-invariant
+inverse depth. Full-grid bicubic interpolation uses `align_corners=False`; global
+post-interpolation min/max maps `(max-p)/(max-min)` to near-zero/far-one using
+float64 chunk arithmetic, stored little-endian f32. Nonfinite/constant fields are
+rejected. This is not metres, physical camera blur, uncertainty or confidence.
+Subject focus stays null; nearest pixels are not assumed to be the subject.
+
+**Native processing now retains the actual full-source f32 depth separately from
+UI u16 visualization.** It never reconstructs AI processing depth from quantized
+UI bytes. The UI proxy records nearest-centre sampling and `floor(v*65535+0.5)`
+quantization. Point focus still samples that UI proxy and has its sampling error.
+Only `direct-v1` consumes model depth; `cohort-fft-v2` remains manual-plane only.
+
+The UI requires distinct depth-map review before a model-depth preview and then
+independent actual before/after confirmation before saving a new copy. Failed
+visualization, changed owner/depth, hiding or unmounting revokes depth review.
+
+## What remains unverified
+
+Primary license evidence/eligibility for four optional packages is the current
+setup blocker. Base runtime automatic provisioning, complete base native-library
+provenance, crash recovery/uninstall UX and GPU profiles are outside this slice.
+Actual install, checkpoint integrity, CPU readiness, model inference, Rust/TS
+builds, tests, real-photo detail/edges/occlusion, native depth alignment, save/reopen,
+export and performance acceptance are **all UNRUN**. Only source reading,
+metadata research, authored fixtures and static Python AST parsing were performed.

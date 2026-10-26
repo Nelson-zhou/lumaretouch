@@ -22,11 +22,13 @@ export interface LensCapability {
   version: 2; operation_id: typeof LENS_OPERATION; status: 'available' | 'unavailable';
   kernels: LensAperture[]; renderers: LensRenderer[]; reason: string;
 }
+export const LENS_DEPTH_MODEL = 'depth-anything-v2-small-hf' as const;
+export const LENS_DEPTH_MODEL_SHA256 = '3152477ce0d8d6978d76b995120de97cb5b928701fd0f817769f59e249a16b70' as const;
 export interface LensSource {sha256: string; width: number; height: number; orientation: 'exif_normalized_once'}
 export interface LensOwner {document_id: string; document_epoch: string; document_revision: string; source: LensSource}
 export interface LensPng {mime: 'image/png'; width: number; height: number; sha256: string; base64: string}
 export type LensDepthProvenance =
-  | {kind: 'model'; model_id: string; model_sha256: string; inference_id: string}
+  | {kind: 'model'; model_id: typeof LENS_DEPTH_MODEL; model_sha256: typeof LENS_DEPTH_MODEL_SHA256; inference_id: string; acknowledgement_id: string}
   | {kind: 'manual'; method: 'user_supplied_depth'}
   | {kind: 'manual'; method: 'user_defined_plane'; depth_value: number; acknowledgement_id: string};
 export interface LensDepthRaster {format: 'u16-le'; width: number; height: number; sha256: string; base64: string}
@@ -56,7 +58,9 @@ export interface LensRecipeV2 extends LensRecipeFields {
   version: 2; operation_id: typeof LENS_COHORT_OPERATION; math_identity: typeof LENS_COHORT_MATH;
 }
 export type LensRecipe = LensRecipeV1 | LensRecipeV2;
+export interface LensModelDepthCapability {available: boolean; code: string; reason: string; model_id: typeof LENS_DEPTH_MODEL}
 export interface LensContext {
+  model_depth: LensModelDepthCapability;
   session_id: string; owner: LensOwner; source_image: LensPng;
   depth: LensDepthAsset | null;
   depth_status: 'ready' | 'pending' | 'missing-model' | 'manual-required' | 'failed';
@@ -66,6 +70,10 @@ export interface LensPreviewCommand {version: typeof LENS_PROTOCOL; action: 'pre
 export interface LensManualPlaneCommand {
   version: typeof LENS_PROTOCOL; action: 'prepare_manual_plane'; request_id: string; session_id: string; owner: LensOwner;
   depth_value: number; acknowledged_manual: true;
+}
+export interface LensModelDepthCommand {
+  version: typeof LENS_PROTOCOL; action: 'prepare_model_depth'; request_id: string; session_id: string; owner: LensOwner;
+  acknowledged_model: true;
 }
 export interface LensReview {
   version: typeof LENS_PROTOCOL; request_id: string; session_id: string; token: string; owner: LensOwner;
@@ -93,6 +101,8 @@ export interface LensBlurPort {
   readonly protocol: typeof LENS_PROTOCOL;
   /** Optional read-only preparation, exclusively after the explicit manual-baseline user action. */
   prepareManualPlane?(command: LensManualPlaneCommand): Promise<unknown>;
+  /** Explicit local AI analysis only; never install/download from inference. */
+  prepareModelDepth?(command: LensModelDepthCommand): Promise<unknown>;
   /** A preview must NEVER mutate the document or append history. */
   preview(command: LensPreviewCommand): Promise<unknown>;
   /** Host must persist the original command/receipt outside the mounted workspace. */
@@ -153,8 +163,8 @@ export function wholeFrameSize(width: number, height: number, source: LensSource
 export function validLensProvenance(v: unknown): v is LensDepthProvenance {
   return object(v) && (v.kind === 'manual' ? (v.method === 'user_supplied_depth' ? exact(v, ['kind', 'method'])
     : v.method === 'user_defined_plane' && exact(v, ['kind', 'method', 'depth_value', 'acknowledgement_id']) && unit(v.depth_value) && token(v.acknowledgement_id))
-    : v.kind === 'model' && exact(v, ['kind', 'model_id', 'model_sha256', 'inference_id'])
-      && token(v.model_id) && hash(v.model_sha256) && token(v.inference_id));
+    : v.kind === 'model' && exact(v, ['kind', 'model_id', 'model_sha256', 'inference_id', 'acknowledgement_id'])
+      && v.model_id === LENS_DEPTH_MODEL && v.model_sha256 === LENS_DEPTH_MODEL_SHA256 && hash(v.inference_id) && token(v.acknowledgement_id));
 }
 export function validLensDepth(v: unknown, owner: LensOwner): v is LensDepthAsset {
   if (!object(v) || !exact(v, ['version', 'token', 'owner', 'convention', 'mapping', 'orientation', 'raster', 'provenance', 'subject_focus'])
@@ -167,12 +177,16 @@ export function validLensDepth(v: unknown, owner: LensOwner): v is LensDepthAsse
     || !wholeFrameSize(r.width, r.height, owner.source) || !hash(r.sha256)
     || typeof r.base64 !== 'string' || r.base64.length !== Math.ceil(r.width * r.height * 2 / 3) * 4
     || !/^[A-Za-z0-9+/]+={0,2}$/.test(r.base64)) return false;
-  const f = v.subject_focus;
-  return f === null || v.provenance.kind === 'model' && object(f) && exact(f, ['near', 'far', 'mask_sha256'])
-    && unit(f.near) && unit(f.far) && f.near <= f.far && hash(f.mask_sha256);
+  // This supported model estimates no independently authenticated subject focus.
+  return v.subject_focus === null;
+}
+export function validLensModelDepthCapability(v: unknown): v is LensModelDepthCapability {
+  return object(v) && exact(v, ['available', 'code', 'reason', 'model_id']) && typeof v.available === 'boolean'
+    && token(v.code) && text(v.reason) && v.model_id === LENS_DEPTH_MODEL;
 }
 export function validLensContext(v: unknown): v is LensContext {
-  return object(v) && exact(v, ['session_id', 'owner', 'source_image', 'depth', 'depth_status', 'message'])
+  return object(v) && exact(v, ['session_id', 'owner', 'source_image', 'depth', 'depth_status', 'message', 'model_depth'])
+    && validLensModelDepthCapability(v.model_depth)
     && token(v.session_id) && validLensOwner(v.owner) && validLensPng(v.source_image)
     && wholeFrameSize(v.source_image.width, v.source_image.height, v.owner.source)
     && text(v.message) && ['ready', 'pending', 'missing-model', 'manual-required', 'failed'].includes(v.depth_status as string)

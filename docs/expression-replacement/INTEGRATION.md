@@ -70,8 +70,10 @@ measured process peak-memory or speed claims. No 24MP/all-resolution claim.
 
 ## Remaining original requirement and usability gaps
 
-- Automatic bad-expression detection, donor ranking, same-person recognition,
-  default automatic replacement and full group automation are absent.
+- Automatic bad-expression detection, best-expression ranking, same-person recognition,
+  default automatic replacement and full group automation are absent. Bounded
+  original-eye-aperture ordering within existing user-confirmed associations is
+  now authored; see `DONOR-HINTS-V1.md`. It is not automatic donor selection.
 - Native crop sides above 1024, transparency and HDR are refused, not resized,
   flattened or clipped. No invented 3D pose or semantic occlusion measurement.
 - Full source numerics are retained, but review is a bounded full-frame projection,

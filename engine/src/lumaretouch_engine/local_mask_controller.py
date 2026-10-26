@@ -26,6 +26,11 @@ def prepare_mutation(engine, capture, mutation, *, accepted_prompted=False, sema
         obj = mutation['object']
         normalized = S.R.check_stack({'version': 1, 'domain': 'source-normalized', 'objects': [obj]})['objects'][0]
         index = next((i for i, row in enumerate(objects) if row['id'] == normalized['id']), None)
+        if normalized['kind'] == 'automatic_foreground':
+            if (index is None or objects[index]['kind'] != 'automatic_foreground'
+                    or normalized['selection'] != objects[index]['selection']
+                    or mutation['coordinate_space'] != 'source'):
+                raise ValueError('自动前景只能由源图模型初始化；不能上传或伪造分析凭据')
         if normalized['kind'] == 'prompted' and not accepted_prompted:
             if (index is None or objects[index]['kind'] != 'prompted'
                     or normalized['selection'] != objects[index]['selection']

@@ -51,7 +51,8 @@ class WorkflowOwner:
 
     @staticmethod
     def _profile():
-        return {'recipe_sha256': P.RECIPE_SHA256, 'recipe_profile': deepcopy(P.RECIPE_PROFILE)}
+        return {'recipe_sha256': P.RECIPE_SHA256, 'recipe_profile': deepcopy(P.RECIPE_PROFILE),
+                'export_profiles': P.export_profiles()}
 
     @staticmethod
     def _filesystem(ordered, *, expected_destination_roots=None):
@@ -105,7 +106,7 @@ class WorkflowOwner:
             destination_roots = self._filesystem(ordered, expected_destination_roots=existing['destination_roots'] if existing else None)
             if self.pending():
                 raise ValueError('Original workflow export remains unresolved; query it first')
-            receipt_phases = 4 if any(node['operation']['kind'] == 'compatible_preset' for node in ordered) else 2
+            receipt_phases = 4 if any(node['operation']['kind'] in ('compatible_preset', 'automatic_preset') for node in ordered) else 2
             if len(self.requests) + receipt_phases * lease['max_operations'] > P.MAX_REQUESTS:
                 raise ValueError('Owner receipt capacity cannot retain every preset and export phase for this bounded session')
             if self.session is not None and self.session['session_id'] == request['session_id']:
@@ -114,29 +115,45 @@ class WorkflowOwner:
             if ordered[1]['error_policy'] != 'stop':
                 value['diagnostics'].append({'severity': 'error', 'code': 'import_policy_requires_stop',
                     'message': 'The genuine ingestion lease stops after any failed or cancelled import; skip cannot continue this session. Select stop for the managed-import node.'})
-            preset_nodes = [node for node in ordered if node['operation']['kind'] == 'compatible_preset']
+            preset_nodes = [node for node in ordered if node['operation']['kind'] in ('compatible_preset', 'automatic_preset')]
+            automatic = bool(preset_nodes and preset_nodes[0]['operation']['kind'] == 'automatic_preset')
             if preset_nodes:
                 from .workflow_preset_catalogue import resolve
                 from .workflow_preset_review import support_reason
                 selected = preset_nodes[0]
+                if automatic:
+                    from .workflow_auto_preset import support_reason
                 preset = resolve(selected['operation']['preset_id'], selected['operation']['preset_sha256'])
-                reason = support_reason(preset)
+                reason = support_reason(preset, selected['operation']['intent']) if automatic else support_reason(preset)
                 if reason: raise ValueError(reason)
-                if selected['error_policy'] != 'stop': raise ValueError('Reviewed preset handoff currently requires stop-on-error')
+                if not automatic and selected['error_policy'] != 'stop': raise ValueError('Reviewed preset handoff currently requires stop-on-error')
                 if not self.engine._image_loaded or not self.engine._load_id or self.engine._doc_index < 0:
                     raise ValueError('Open a saved editor document before starting a preset workflow; review must return to that exact document')
-            if ordered[-1]['operation']['recipe_sha256'] != P.RECIPE_SHA256:
+            selected_hash = ordered[-1]['operation']['recipe_sha256']
+            try:
+                selected_profile = P.resolve_export_profile(selected_hash, automatic=automatic)
+                value.update(recipe_sha256=selected_hash, recipe_profile=selected_profile)
+            except ValueError as error:
                 value['diagnostics'].append({'severity': 'error', 'code': 'export_profile_mismatch',
-                    'message': 'Choose the returned explicit export profile, save the graph and preflight again; an arbitrary recipe hash is not export authority.'})
+                    'message': str(error)})
             if not value['diagnostics']:
                 current = self.session
+                if automatic:
+                    from .workflow_auto_preset import AutomaticPresetHandoff
+                    if not isinstance(self.presets, AutomaticPresetHandoff):
+                        self.presets = AutomaticPresetHandoff(self)
+                else:
+                    from .workflow_preset_handoff import PresetHandoff
+                    if type(self.presets) is not PresetHandoff:
+                        self.presets = PresetHandoff(self)
                 self.session = {'session_id': request['session_id'], 'graph_sha256': request['graph_sha256'],
                     'graph': graph, 'ordered': ordered, 'binding': deepcopy(lease['binding']),
                     'destination_roots': deepcopy(destination_roots),
                     'run_id': current.get('run_id') if current and current['session_id'] == request['session_id'] else None}
                 value['supported'] = True
                 value['diagnostics'].append({'severity': 'info', 'code': 'bounded_import_export',
-                    'message': 'Real saved-project managed import and per-document frozen export are supported. Output conflicts stop without overwrite, rename, skip or implicit directory creation. Supported colour presets pause for actual image approval, explicit save and verified editor return.'})
+                    'message': ('Explicit automatic directory job: fixed exposure/WB and explicitly opted-in own-face finish/texture, canonical apply/history/save/return, then frozen export. Native start requires fresh graph-bound opt-in. No human image review is claimed; unknown outcomes remain query-only.' if automatic else
+                        'Real saved-project managed import and per-document frozen export are supported. Output conflicts do not overwrite or rename. Supported reviewed presets pause for actual image approval, explicit save and verified editor return.')})
         except Exception as error:
             value['diagnostics'].append({'severity': 'error', 'code': 'owner_preflight_failed', 'message': str(error)[:2048]})
         self.preflights[request['request_id']] = {'request': deepcopy(request), 'value': deepcopy(value)}
@@ -173,14 +190,21 @@ class WorkflowOwner:
             actual_hash = operation.get('preset_sha256', (operation.get('assessment') or {}).get('preset_sha256'))
             if actual_hash != expected_preset['preset_sha256']:
                 raise ValueError('Preset version differs from the exact preflight graph')
+            if operation['kind'] == 'apply_preset':
+                automatic = expected_preset['kind'] == 'automatic_preset'
+                assessment = operation['assessment']
+                if (assessment['requires_review'] is not (not automatic)
+                        or (automatic and assessment['review'] is not None)
+                        or (not automatic and assessment['review'] is None)):
+                    raise ValueError('Assessment authority mode differs from the exact graph node')
         expected_export = session['ordered'][-1]['operation']
         if operation['kind'] == 'freeze_export':
-            if operation['output_root'] != expected_export['output_root'] or operation['recipe_sha256'] != P.RECIPE_SHA256:
+            if operation['output_root'] != expected_export['output_root'] or operation['recipe_sha256'] != expected_export['recipe_sha256']:
                 raise ValueError('Export settings differ from the preflight profile')
         session['run_id'] = identity['run_id']
         return row
 
-    def _document(self, owner, lease, identity, document):
+    def _document(self, owner, lease, identity, document, *, expected_current_revision=None):
         completed = self.presets.completed.get(document['receipt_id'])
         if completed is not None:
             if document != completed['document'] or identity['input_occurrence_id'] != completed['identity']['input_occurrence_id']:
@@ -188,7 +212,8 @@ class WorkflowOwner:
             # The original durable import proves origin, not the new applied
             # revision. The completed row stamp separately proves the saved edit.
             original = deepcopy(completed['import_document'])
-            row = self._document(owner, lease, identity, original)
+            row = self._document(owner, lease, identity, original,
+                                 expected_current_revision=document['document_revision'])
             if self._row_stamp(row) != completed['row_stamp']:
                 raise ValueError('Saved reviewed preset target changed after its verified return')
             return row
@@ -205,7 +230,7 @@ class WorkflowOwner:
         proof = matches[0]
         if (proof['occurrence_id'] != identity['input_occurrence_id']
                 or proof['source_sha256'] != document['source_sha256']
-                or proof['revision'] != document['document_revision']
+                or proof['revision'] != (expected_current_revision if expected_current_revision is not None else document['document_revision'])
                 or proof['import_receipt_id'] != document['receipt_id']):
             raise ValueError('Imported source/revision/occurrence proof differs from the original receipt')
         source = self.session['ordered'][0]['operation']
@@ -322,7 +347,8 @@ class WorkflowOwner:
                 self.presets.apply(record)
             elif operation['kind'] == 'freeze_export':
                 frozen = E.freeze(self.engine, row, operation['document'], operation['output_root'],
-                                  self.session['graph']['revision'], rid, self.session['destination_roots'])
+                                  self.session['graph']['revision'], rid, self.session['destination_roots'],
+                                  recipe_sha256=operation['recipe_sha256'])
                 frozen['row_stamp'] = self._row_stamp(row)
                 frozen['document'] = deepcopy(operation['document'])
                 frozen['identity'] = deepcopy(command['identity'])
@@ -353,9 +379,12 @@ class WorkflowOwner:
                 result, record['task_id'] = E.start(self.engine, frozen, rid)
                 record['receipt'] = self._receipt(command, result)
         except Exception as error:
-            if operation['kind'] == 'apply_preset' and self.presets.active is not None:
-                self.presets.active.update(phase='unknown', message=str(error)[:2048])
-            result = ({'status': 'unknown', 'reason': str(error)[:2048]} if record['dispatch_started'] else
+            entry = self.presets.active
+            retained_handoff = (entry is not None and (entry.get('apply') is record
+                or (entry.get('preflight') is record and record['dispatch_started'])))
+            if retained_handoff:
+                entry.update(phase='unknown', message=str(error)[:2048])
+            result = ({'status': 'unknown', 'reason': str(error)[:2048]} if record['dispatch_started'] or retained_handoff else
                       {'status': 'failed', 'code': 'owner_admission_rejected', 'message': str(error)[:2048], 'retained_document': None})
             record['receipt'] = self._receipt(command, result)
         return self._publish(request, record)
@@ -401,6 +430,19 @@ class WorkflowOwner:
                         row.update(workflow_supported=reason is None, support_reason=reason or 'target_image_review_required')
                     except Exception as error:
                         row.update(workflow_supported=False, support_reason=str(error)[:2048])
+                    try:
+                        from .workflow_auto_preset import support_reason as automatic_reason
+                        preset = resolve(row['id'], row['preset_sha256'])
+                        reason = automatic_reason(preset)
+                        if reason is None and 'lnx.reference_color.v1' in preset['modules']:
+                            reference = preset['modules']['lnx.reference_color.v1']['reference']
+                            row['automatic_reference'] = {
+                                'asset_id': reference['asset_id'], 'render_sha256': reference['render_sha256'],
+                                'source_sha256': reference['source']['sha256']}
+                        row.update(automatic_supported=reason is None,
+                                   automatic_support_reason=reason or 'explicit_automatic_job_start_required')
+                    except Exception as error:
+                        row.update(automatic_supported=False, automatic_support_reason=str(error)[:2048])
                 return self._result(request, 'readback', supported=True,
                     preset_catalogue=catalogue, **self._profile())
             if request['action'] == 'preflight': return self._preflight(request)
@@ -410,6 +452,8 @@ class WorkflowOwner:
             if request['action'] == 'review_image': return self.presets.image(request)
             self._lease(request['session_id'])
             handoff = self.presets.public()
+            if handoff is not None and handoff.get('mode') == 'automatic':
+                raise ValueError('Automatic job does not expose a human-image review')
             if handoff is None or request['operation_id'] != handoff['operation_id'] or (handoff['review'] or {}).get('review_id') != request['review_id']:
                 raise ValueError('Original preset review is not available')
             return self._result(request, 'readback', opened=True, handoff=handoff)

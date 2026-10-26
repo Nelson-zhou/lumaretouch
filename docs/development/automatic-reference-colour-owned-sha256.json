@@ -1,0 +1,39 @@
+{
+  "schema": "lrt.source-owned-sha256.v1",
+  "base_commit": "c943dcd70a69ec629e5817740b84c2774eeeea3f",
+  "validation": "SOURCE/AST inspection only; all execution, fixtures, image quality and durability UNRUN",
+  "owned_files": [
+    "core/local_workflow/schema.rs",
+    "core/local_workflow/tests.rs",
+    "engine/src/lumaretouch_engine/workflow_auto_reference.py",
+    "engine/src/lumaretouch_engine/workflow_auto_preset.py",
+    "engine/src/lumaretouch_engine/workflow_owner_protocol.py",
+    "engine/src/lumaretouch_engine/workflow_owner_host.py",
+    "engine/tests/test_workflow_auto_reference_unrun.py",
+    "ui/src/localWorkflow/contracts.ts",
+    "ui/src/localWorkflow/model.ts",
+    "ui/src/localWorkflow/presetCatalogue.tsx",
+    "ui/src/localWorkflow/LocalWorkflowPanel.tsx",
+    "ui/src/localWorkflow/controller.ts",
+    "ui/src/localWorkflow/automaticBatch.unrun.test.ts",
+    "docs/development/automatic-reference-colour-source-contract.md",
+    "docs/development/automatic-reference-colour-owned-sha256.json"
+  ],
+  "self_hash_policy": "Manifest owns itself but excludes its own recursive content hash; Git commit pins manifest bytes.",
+  "sha256": {
+    "core/local_workflow/schema.rs": "82b35dfe44e36afdc437a2bfb4eae2aeca3516ff716f3a7817e005a0a813b4bb",
+    "core/local_workflow/tests.rs": "f69d2df441d11522311c7f29e37165951daed1c0d87835274fa4f478778ff52f",
+    "engine/src/lumaretouch_engine/workflow_auto_reference.py": "6395b413adf45d6f79c9a1d2109b09e636245c64a7bf4b2804d949183b4dc90e",
+    "engine/src/lumaretouch_engine/workflow_auto_preset.py": "c18686d591941b4309a79f6eebb7641d295b57ab74043273db0fa7f154cd2d9e",
+    "engine/src/lumaretouch_engine/workflow_owner_protocol.py": "ab5a16affb8458265fc93bc313472cfac4e2ede1fea8c56d6ce1eda83477b1e7",
+    "engine/src/lumaretouch_engine/workflow_owner_host.py": "5e510c71c385b49a223bff53960e940d76cbf9ca844829790ef2a017cb23683d",
+    "engine/tests/test_workflow_auto_reference_unrun.py": "88c7f6591c7f4295ee91b7aac1a73e9b2de31e06038bc3623b7fda27fb7b973a",
+    "ui/src/localWorkflow/contracts.ts": "605c61aa0ad64099cc511f4a512df21cf54fb60e371fa114996f733974617c81",
+    "ui/src/localWorkflow/model.ts": "cf55d1d8c476aa797babb0b1d3eb93e072b5f253a0eea3cd5207959f814b645e",
+    "ui/src/localWorkflow/presetCatalogue.tsx": "59f969e3317f810781b6939b00d6d7cedb61f92ebad7a331074257fa8e31922c",
+    "ui/src/localWorkflow/LocalWorkflowPanel.tsx": "161f63b4619fd3b3916240a4371734bbcb32f15d4b1edfc101abbd24a2833a3d",
+    "ui/src/localWorkflow/controller.ts": "27e00ec8bc2c2c87a329fd21f71cce99d14868c13b2f97ad94a19d046c8ee670",
+    "ui/src/localWorkflow/automaticBatch.unrun.test.ts": "b1d639d6a4478053b585889143fa781ee5ee8986a5a8498d033af35c415cd5e8",
+    "docs/development/automatic-reference-colour-source-contract.md": "062483d4c62429a823f829c93c9efc5c275aa3c33a826bbbf52784199250f544"
+  }
+}

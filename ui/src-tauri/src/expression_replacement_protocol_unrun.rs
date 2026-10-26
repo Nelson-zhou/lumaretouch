@@ -148,3 +148,13 @@ fn apply_binds_retained_preview_and_actual_new_copy_not_original() {
 fn wire_cancelled(req: &Request) -> Value {
     let mut v = pending(req,"cancelled","not allowed for apply")["receipt"].clone(); v["no_write"] = json!(true); v
 }
+
+#[test]
+fn donor_hints_are_bounded_optional_clues_not_selection() {
+    let mut hints = json!({"version":1,"cohorts":[{"association_id":"person","target_ref":face_fixture('a')["face_ref"],
+        "blocked":null,"candidates":[{"document_id":"donor","filename":"donor.jpg","face_ref":face_fixture('b')["face_ref"],"eye_aperture":null}]}],"unavailable":null});
+    assert!(donor_hints(&hints));
+    hints["cohorts"][0]["candidates"][0]["eye_aperture"] = json!(-1);
+    assert!(!donor_hints(&hints));
+    assert!(!donor_hints(&json!({"version":1,"cohorts":[],"unavailable":null,"best_donor":"donor"})));
+}

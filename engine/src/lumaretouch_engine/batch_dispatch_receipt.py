@@ -25,6 +25,29 @@ def rejected(request, error, boundary, emit):
         return
     from .eye_bag_batch_store import read_only, failure_context
     action = request.get('action')
+    from .portrait_preset_batch import read_only as portrait_preset_read_only
+    from .portrait_preset_delivery import command as delivery_command, identity as delivery_identity
+    portrait_commit = (action == 'portrait_preset_commit'
+        and set(request) == {'cmd', 'action', 'request_id', 'preflight_token',
+                            'portrait_preset_ack', 'accepted'})
+    portrait_prepare = (action == 'portrait_preset_prepare' and set(request) ==
+        {'cmd', 'action', 'request_id', 'docs', 'preset_id', 'preset_sha256'})
+    if portrait_preset_read_only(request) or portrait_commit or portrait_prepare or delivery_command(request):
+        identity_fields = {
+            'portrait_preset_prepare': ('preset_id', 'preset_sha256', 'docs'),
+            'portrait_preset_preflight': ('preset_id', 'preset_sha256', 'docs'),
+            'portrait_preset_image': ('preflight_token', 'document_id', 'side', 'page'),
+            'portrait_preset_commit': ('preflight_token', 'portrait_preset_ack', 'accepted'),
+        }.get(action, ())
+        emit({'event': 'batch_result', 'action': action, 'request_id': identity,
+            'success': False, 'outcome_unknown': False, 'no_write': True,
+            'portrait_preset': True,
+            **(delivery_identity(request) if delivery_command(request) else {}),
+            **({'preparation': True, 'portrait_preset_docs': request.get('docs'),
+                'preparation_results': [], 'editor_restored': True} if portrait_prepare else {}),
+            **{key: request.get(key) for key in identity_fields},
+            'error': str(error)[:2000] or 'Portrait preset group handler was not started'})
+        return
     history = (action in ('undo', 'redo')
         and set(request) == {'cmd', 'action', 'request_id', 'batch_id'}
         and _text(request.get('batch_id')))

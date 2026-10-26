@@ -129,7 +129,12 @@ def _publish(owner,engine,plans,targets):
     finally:engine._people_staged=None
 
 
-def commit_scoped(owner,engine,plans,*,request_id,prepare=True,prepared_targets=None,alias_history=None,eye_bag_history=None,face_decoration_history=None,face_decoration_alias_history=None,face_decoration_cohort_history=None,eye_bag_cohort_history=None,eye_bag_alias_history=None,eye_bag_preset_alias_history=None,preset_alias_verify=None,eye_bag_recovery_alias_history=None,recovery_alias_assets=None,recovery_alias_verify=None,face_decoration_support_alias_history=None,decoration_support_alias_assets=None,decoration_support_alias_verify=None,decoration_support_alias_started=lambda:None,face_decoration_preset_alias_history=None,decoration_preset_alias_verify=None,decoration_preset_alias_started=lambda:None):
+def commit_scoped(owner,engine,plans,*,request_id,prepare=True,prepared_targets=None,alias_history=None,eye_bag_history=None,face_decoration_history=None,face_decoration_alias_history=None,face_decoration_cohort_history=None,eye_bag_cohort_history=None,eye_bag_alias_history=None,eye_bag_preset_alias_history=None,preset_alias_verify=None,eye_bag_recovery_alias_history=None,recovery_alias_assets=None,recovery_alias_verify=None,face_decoration_support_alias_history=None,decoration_support_alias_assets=None,decoration_support_alias_verify=None,decoration_support_alias_started=lambda:None,face_decoration_preset_alias_history=None,decoration_preset_alias_verify=None,decoration_preset_alias_started=lambda:None,portrait_group_global_history=None,portrait_group_global_verify=None):
+    global_group=portrait_group_global_history is not None
+    if global_group and any(value is not None for value in (alias_history,eye_bag_history,face_decoration_history,
+            face_decoration_alias_history,face_decoration_cohort_history,eye_bag_cohort_history,eye_bag_alias_history,
+            eye_bag_preset_alias_history,eye_bag_recovery_alias_history,face_decoration_support_alias_history,face_decoration_preset_alias_history)):
+        raise ValueError('Mixed portrait group cannot combine unrelated transaction authorities')
     decoration_preset=face_decoration_preset_alias_history is not None
     composite=eye_bag_preset_alias_history is not None or decoration_preset
     if decoration_preset and any(value is not None for value in (alias_history,eye_bag_history,face_decoration_history,
@@ -158,6 +163,10 @@ def commit_scoped(owner,engine,plans,*,request_id,prepare=True,prepared_targets=
     entry={'ops':[OP],'targets':targets,'at_ns':owner.monotonic(),'undone':False,
         'policy':'protected_scoped_graph','people_changes':[],
         'people_scoped_changes':scoped,'request_id':request_id}
+    if global_group:
+        from . import portrait_group_mixed_history as GLOBAL_GROUP, portrait_group_mixed_transaction as GLOBAL_TRANSACTION
+        entry[GLOBAL_GROUP.KEY]=deepcopy(portrait_group_global_history);GLOBAL_GROUP.check(entry)
+        if prepare:GLOBAL_TRANSACTION.prepare(engine,plans,targets,entry,redo=True)
     if alias_history is not None:
         # Validate before graph publication; no successful alias batch may be
         # left in the ledger without its exact-member restore protection.
@@ -202,7 +211,8 @@ def commit_scoped(owner,engine,plans,*,request_id,prepare=True,prepared_targets=
         entry[SUPPORT.KEY]=deepcopy(face_decoration_support_alias_history);SUPPORT.check(entry)
         if prepare:SUPPORT_TRANSACTION.prepare(engine,plans,targets,entry,redo=True,assets=decoration_support_alias_assets)
     result={'kind':'commit','batch_id':bid,'applied':[int(k) for k in targets],'skipped':[]}
-    frame=(DECORATION_PRESET_TRANSACTION.publish(owner,engine,plans,targets,entry,redo=True,
+    frame=(GLOBAL_TRANSACTION.publish(owner,engine,plans,targets,entry,redo=True,verify_before=portrait_group_global_verify) if global_group else
+           DECORATION_PRESET_TRANSACTION.publish(owner,engine,plans,targets,entry,redo=True,
                verify_before=decoration_preset_alias_verify,mark_started=decoration_preset_alias_started) if decoration_preset else
            TRANSACTION.publish(owner,engine,plans,targets,entry,redo=True,verify_before=preset_alias_verify)
            if composite else RECOVERY_TRANSACTION.publish(owner,engine,plans,targets,entry,redo=True,
@@ -213,8 +223,8 @@ def commit_scoped(owner,engine,plans,*,request_id,prepare=True,prepared_targets=
     engine._people_shared_mutation=True
     try:owner.editor.mark_dirty()
     except Exception as error:
-        if composite or recovery or support:error.side_effects_started=True;error.batch_id=bid
-        if decoration_preset or recovery or support:error.rolled_back=False;error.requires_reload=True
+        if composite or recovery or support or global_group:error.side_effects_started=True;error.batch_id=bid
+        if decoration_preset or recovery or support or global_group:error.rolled_back=False;error.requires_reload=True
         raise
     return bid,frame
 
@@ -251,8 +261,10 @@ def restore_scoped(engine,batch,redo):
     support_history=SUPPORT.check(batch)
     from . import face_decoration_preset_alias_history as DECORATION_PRESET, face_decoration_preset_alias_transaction as DECORATION_PRESET_TRANSACTION
     decoration_preset_history=DECORATION_PRESET.check(batch)
+    from . import portrait_group_mixed_history as GLOBAL_GROUP, portrait_group_mixed_transaction as GLOBAL_TRANSACTION
+    global_history=GLOBAL_GROUP.check(batch)
     owner=engine._batch_controller();plans={};reviewed={}
-    if decoration_alias is not None or decoration_cohort is not None or decoration_history is not None or eye_history is not None or cohort_history is not None or eye_alias_history is not None or mixed_history is not None or recovery_history is not None or support_history is not None or decoration_preset_history is not None:
+    if global_history is not None or decoration_alias is not None or decoration_cohort is not None or decoration_history is not None or eye_history is not None or cohort_history is not None or eye_alias_history is not None or mixed_history is not None or recovery_history is not None or support_history is not None or decoration_preset_history is not None:
         # The scoped restore route bypasses the legacy undo() wrapper. Capture
         # the current document so unsaved repair/crop edits cannot hide behind
         # a parked row's older dependency digest.
@@ -280,6 +292,9 @@ def restore_scoped(engine,batch,redo):
              MIXED.targets(engine,mixed_history,plans['project']['before']) if mixed_history is not None else
              RECOVERY.targets(engine,recovery_history,plans['project']['before']) if recovery_history is not None else
              SUPPORT.targets(engine,support_history,plans['project']['before']) if support_history is not None else _targets(owner,engine,plans))
+    if global_history is not None:
+        GLOBAL_TRANSACTION.prepare(engine,plans,targets,batch,redo=redo)
+        return GLOBAL_TRANSACTION.publish(owner,engine,plans,targets,batch,redo=redo)
     if decoration_preset_history is not None:
         DECORATION_PRESET_TRANSACTION.prepare(engine,plans,targets,batch,redo=redo)
         return DECORATION_PRESET_TRANSACTION.publish(owner,engine,plans,targets,batch,redo=redo)

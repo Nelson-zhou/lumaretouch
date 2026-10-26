@@ -10,7 +10,7 @@ struct Pending { command: Value, composite_history: Option<Value> }
 impl Pending { fn composite(&self)->bool {preset_alias::applies(&self.command)||crate::people_api::decoration_alias::applies(&self.command)||crate::people_api::decoration_support_alias::applies(&self.command)||crate::effect_recovery_host::alias::applies(&self.command)||self.composite_history.is_some()} }
 // Body and neck mutations retain the existing fence until a strict terminal or verified
 // workspace reopen. They do not become composite/alias history operations.
-impl Pending { fn guarded(&self) -> bool { self.composite() || crate::limb_vein_api::mutation(&self.command) || crate::fabric_sweat_api::mutation(&self.command) || crate::people_api::skin_reference_body::mutation(&self.command) || crate::people_api::neck_wrinkle::mutation(&self.command) } }
+impl Pending { fn guarded(&self) -> bool { self.composite() || crate::batch_host::portrait_preset_group::mutation(&self.command) || crate::hand_shape_api::mutation(&self.command) || crate::hand_tone_api::mutation(&self.command) || crate::limb_vein_api::mutation(&self.command) || crate::fabric_sweat_api::mutation(&self.command) || crate::people_api::skin_reference_body::mutation(&self.command) || crate::people_api::neck_wrinkle::mutation(&self.command) } }
 fn pending()->&'static Mutex<HashMap<([u8;16],String),Pending>> {
     static STORE:OnceLock<Mutex<HashMap<([u8;16],String),Pending>>=OnceLock::new();
     STORE.get_or_init(||Mutex::new(HashMap::new()))
@@ -18,8 +18,17 @@ fn pending()->&'static Mutex<HashMap<([u8;16],String),Pending>> {
 pub(crate) fn issued(epoch:[u8;16], command:&Value)->Result<(),String>{
     let mut store=pending().lock().map_err(|_|"恢复回执屏障锁不可用")?;
     if store.iter().any(|((owner_epoch,_),request)|*owner_epoch==epoch&&request.guarded()) {
+        // Read only the exact group whose original export admission is pending.
+        // Engine validates the requested task against its retained task ledger;
+        // this read alone cannot release any fence or authorize a retry.
+        let group_export_observation = command["action"]=="portrait_preset_export_status"
+            && crate::batch_api::portrait_preset_group::read_only(command)
+            && store.iter().any(|((owner_epoch,_),request)|*owner_epoch==epoch
+                && request.command["cmd"]=="batch" && request.command["action"]=="portrait_preset_export_start"
+                && request.command["preflight_token"]==command["preflight_token"]
+                && request.command["batch_id"]==command["batch_id"]);
         if command["request_id"].as_str().is_some_and(|id|store.contains_key(&(epoch,id.to_owned())))
-            || !preset_alias::safe_during_pending(command) {
+            || !(preset_alias::safe_during_pending(command) || group_export_observation) {
             return Err("原审核修改尚未确认；请查询原请求或重新打开工程，不能继续编辑、撤销、保存、导出或重发".into());
         }
         // These reads/recovery escapes cannot create a second uncertain-edit
@@ -44,7 +53,7 @@ pub(crate) fn issued(epoch:[u8;16], command:&Value)->Result<(),String>{
     // Do not turn an unavailable head/portrait-cohort review into an uncertain edit.
     // Check a pending ID collision first: read-only status cannot release or
     // replace an already-issued mutation belonging to another receipt host.
-    if crate::limb_vein_api::read_only(command) || crate::fabric_sweat_api::read_only(command) || crate::batch_api::read_only(command) || crate::torso_transfer_protocol::read_only_head_preflight(command) || crate::preset_api::read_only(command)
+    if crate::hand_shape_api::read_only(command) || crate::hand_tone_api::read_only(command) || crate::limb_vein_api::read_only(command) || crate::fabric_sweat_api::read_only(command) || crate::batch_api::read_only(command) || crate::torso_transfer_protocol::read_only_head_preflight(command) || crate::preset_api::read_only(command)
         || crate::people_api::neck_wrinkle::read_only(command) || crate::people_api::skin_reference_choice::read_only(command) || crate::people_api::skin_reference_body::read_only(command) || crate::people_api::skin_reference_match::read_only(command)
         || crate::people_api::face_style::read_only(command) || crate::people_api::eye_bag::read_only(command)
         || crate::people_api::face_decoration::read_only(command) || crate::people_api::facial_sculpt::read_only(command) || crate::people_api::eye_makeup_enhance::read_only(command) || crate::people_api::decoration_alias::read_only(command) || crate::people_api::decoration_support_alias::read_only(command) {return Ok(());}
@@ -82,10 +91,14 @@ pub(crate) fn observed(epoch:[u8;16], value:&Value){
         let expected=format!("{}_result",command["cmd"].as_str().unwrap_or(""));
         if event!=expected||value["action"]!=command["action"] {return;}
     }
+    if crate::batch_host::portrait_preset_group::mutation(command)
+        && !crate::batch_host::portrait_preset_group::matches_request(command, value) { return; }
     if crate::people_api::skin_reference_body::mutation(command)
         && !crate::people_api::skin_reference_body::matches_request(command, value) { return; }
     if crate::fabric_sweat_api::mutation(command) && !crate::fabric_sweat_api::matches_request(command,value) {return;}
     if crate::limb_vein_api::mutation(command) && !crate::limb_vein_api::matches_request(command,value) {return;}
+    if crate::hand_shape_api::mutation(command) && !crate::hand_shape_api::matches_request(command,value) {return;}
+    if crate::hand_tone_api::mutation(command) && !crate::hand_tone_api::matches_request(command,value) {return;}
     if crate::people_api::neck_wrinkle::mutation(command)
         && !crate::people_api::neck_wrinkle::matches_request(command, value) { return; }
     if preset_alias::applies(command) {
@@ -121,6 +134,15 @@ pub(crate) fn observed(epoch:[u8;16], value:&Value){
         store.remove(&key);
     }
 }
+/// A late hand terminal cannot settle a reopened/replaced document fence.
+/// Match the complete original command, not only a request ID or family label.
+pub(crate) fn hand_shape_pending(epoch:[u8;16],command:&Value)->bool {
+    if epoch==[0;16]||!crate::hand_shape_api::mutation(command){return false;}
+    let Some(id)=command["request_id"].as_str() else{return false;};
+    pending().lock().map(|store|store.get(&(epoch,id.to_owned()))
+        .is_some_and(|entry|entry.command==*command)).unwrap_or(false)
+}
+
 pub(crate) fn proof(epoch:[u8;16])->Result<Value,String>{
     let store=pending().lock().map_err(|_|"恢复回执屏障锁不可用")?;
     if store.keys().any(|(e,_)|*e==epoch){return Err("仍有原生请求正在处理或结果未知，自动保存暂缓".into());}
@@ -185,3 +207,26 @@ mod tests {
 #[cfg(test)]
 #[path = "head_recovery_fence_tests.rs"]
 mod head_tests;
+
+// AUTHORED / UNRUN: a group acceptance is a guarded mutation, never a read.
+#[cfg(test)]
+mod portrait_preset_group_tests_unrun {
+    use super::*;
+    #[test]
+    fn mismatched_group_ack_and_unverified_reopen_cannot_clear_guard() {
+        let epoch=[247;16];
+        let ack=json!([{"document_id":"target","revision":"2","before_sha256":"a".repeat(64),
+            "after_sha256":"b".repeat(64),"review_sha256":"c".repeat(64)}]);
+        let command=json!({"cmd":"batch","action":"portrait_preset_commit","request_id":"portrait-group-fence",
+            "preflight_token":"f".repeat(32),"accepted":true,"portrait_preset_ack":ack});
+        issued(epoch,&command).unwrap();
+        assert!(issued(epoch,&json!({"cmd":"exposure","value":1})).is_err());
+        let mut failed=json!({"event":"batch_result","action":"portrait_preset_commit","request_id":"portrait-group-fence",
+            "portrait_preset":true,"success":false,"outcome_unknown":false,"no_write":true,"error":"stale target",
+            "preflight_token":"e".repeat(32),"portrait_preset_ack":ack});
+        observed(epoch,&failed); assert!(proof(epoch).is_err());
+        observed(epoch,&json!({"event":"project_opened"})); assert!(proof(epoch).is_err());
+        failed["preflight_token"]=command["preflight_token"].clone();
+        observed(epoch,&failed); assert!(proof(epoch).is_ok());
+    }
+}

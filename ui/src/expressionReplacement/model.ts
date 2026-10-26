@@ -32,7 +32,12 @@ export type Image = Readonly<{
   mapping:'normalized_full_frame';orientation:'exif_normalized_once';
 }>;
 export type Photograph = Readonly<{source:Source;label:string;faces:readonly Face[];image:Image}>;
-export type Current = Readonly<{binding:Binding;photo:Photograph;available:boolean;unavailable_reason:string|null}>;
+export type DonorHints = Readonly<{version:1;unavailable:string|null;cohorts:ReadonlyArray<Readonly<{
+  association_id:string;target_ref:FaceRef;blocked:string|null;candidates:ReadonlyArray<Readonly<{
+    document_id:string;filename:string;face_ref:FaceRef;eye_aperture:number|null;
+  }>>;
+}>>}>;
+export type Current = Readonly<{donor_hints?:DonorHints;binding:Binding;photo:Photograph;available:boolean;unavailable_reason:string|null}>;
 export type Point = readonly [number,number];
 export type Stroke = Readonly<{mode:'add'|'erase';radius_px:number;points:readonly Point[]}>;
 /** Pixel-centre coordinates on the complete target source. Never preview pixels. */
@@ -153,7 +158,7 @@ export function validPhotograph(v:unknown):v is Photograph {
   return v.faces.every(face=>validFace(face,source))&&new Set(v.faces.map(face=>faceKey(face.face_ref))).size===v.faces.length&&validImage(v.image,source);
 }
 export function validCurrent(v:unknown):v is Current {
-  return object(v)&&keys(v,['binding','photo','available','unavailable_reason'])&&validBinding(v.binding)&&validPhotograph(v.photo)
+  return object(v)&&keys(v,['binding','photo','available','unavailable_reason',...(v.donor_hints===undefined?[]:['donor_hints'])])&&(v.donor_hints===undefined||validDonorHints(v.donor_hints))&&validBinding(v.binding)&&validPhotograph(v.photo)
     &&same(v.binding.source,v.photo.source)&&typeof v.available==='boolean'&&(v.unavailable_reason===null||typeof v.unavailable_reason==='string');
 }
 export function validFusion(v:unknown,source:Source,face:Face):v is FusionMask {
@@ -222,4 +227,12 @@ export function parseReceipt(value:unknown,sent:Packet):Receipt|null {
     &&typeof value.no_change==='boolean'&&integer(value.result_revision)&&id(value.result_document_id)&&value.result_document_id!==sent.command.binding.document_id
     &&value.copied_original_document_id===sent.command.binding.document_id&&value.result_source_sha256===sent.command.candidate_sha256&&sent.command.return_mode==='new_image'?freeze(value) as Receipt:null;
   return null;
+}
+
+export function validDonorHints(v:unknown):v is DonorHints {
+  const note=(x:unknown)=>x===null||(typeof x==='string'&&x.length<=512);
+  const ref=(x:unknown)=>object(x)&&keys(x,['asset_sha256','face_instance_id','analysis_revision'])&&hash(x.asset_sha256)&&id(x.face_instance_id)&&integer(x.analysis_revision);
+  return object(v)&&keys(v,['version','cohorts','unavailable'])&&v.version===1&&note(v.unavailable)&&Array.isArray(v.cohorts)&&v.cohorts.length<=8&&v.cohorts.every(c=>
+    object(c)&&keys(c,['association_id','target_ref','candidates','blocked'])&&id(c.association_id)&&ref(c.target_ref)&&note(c.blocked)&&Array.isArray(c.candidates)&&c.candidates.length<=15&&c.candidates.every(x=>
+      object(x)&&keys(x,['document_id','filename','face_ref','eye_aperture'])&&id(x.document_id)&&id(x.filename)&&ref(x.face_ref)&&(x.eye_aperture===null||(finite(x.eye_aperture)&&x.eye_aperture>=0))));
 }

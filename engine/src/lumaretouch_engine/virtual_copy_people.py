@@ -323,3 +323,19 @@ def loaded(engine):
     for key in ('_people_project_context', '_people_active_context', '_people_scope_row'):
         engine.__dict__.pop(key, None)
     _project(engine)
+
+
+def peek_landmark_record(engine, row, ref):
+    """One retained record only, with no classification or new owner creation."""
+    from .people_retained_analysis import key
+    S.check_ref(ref)
+    if peek_graph(engine, row) is None: return None
+    if row is current_row(engine):
+        store = engine.__dict__.get('_people_landmarks', {})
+    elif is_private(row):
+        context = row.get(RUNTIME) or row.get(KEY) or {}
+        store = context.get('people_landmarks', {})
+    else:
+        context = engine.__dict__.get('_people_project_context') or {}
+        store = context.get('people_landmarks', {})
+    return deepcopy(store.get(key(ref)))

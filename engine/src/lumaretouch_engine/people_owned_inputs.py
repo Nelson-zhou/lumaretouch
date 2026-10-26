@@ -10,6 +10,8 @@ _MISSING = object()
 def preview(engine, state=None, *, body_bank=_MISSING, body_source=None, support_bank=_MISSING):
     state = engine._people_owner().snapshot() if state is None else state
     support_bank=engine._people_support if support_bank is _MISSING else support_bank
+    from .hand_shape_runtime import checked_live as checked_hand
+    hand_shape=checked_hand(engine)
     document_id=engine._people_binding()['document_id']
     from . import hair_unification_project as UNIFY
     unification_inputs={**UNIFY.preview_kwargs(engine,state),**UNIFY.shared_preview(engine,state)}
@@ -47,7 +49,7 @@ def preview(engine, state=None, *, body_bank=_MISSING, body_source=None, support
         # canonical review bank; it verifies source, face and landmark ownership.
         # The runtime
         # checks the pipeline RGB against this owned inference/display proxy.
-        return {'document_id':document_id,'creative_source':owned,'creative_proxy':analysis_rgb(engine),
+        return {'document_id':document_id,'hand_shape':hand_shape,'creative_source':owned,'creative_proxy':analysis_rgb(engine),
                 **input_banks(support_bank),**hair_inputs,**unification_inputs,
                 'skin_colour_body_assets':support_bank,
                 'skin_finish_body_assets':support_bank,
@@ -57,7 +59,7 @@ def preview(engine, state=None, *, body_bank=_MISSING, body_source=None, support
                 'eye_bag_preserve_assets':support_bank,
                 'body_bank':body,'body_source':owned,'body_source_pixels':body_pixels}
     from .hair_colour_project import preview_kwargs
-    return {'document_id':document_id,**preview_kwargs(engine, state),**unification_inputs,
+    return {'document_id':document_id,'hand_shape':hand_shape,**preview_kwargs(engine, state),**unification_inputs,
             'eye_light_assets': support_bank,
             'blush_makeup_assets': support_bank,
             'face_decoration_assets': support_bank,

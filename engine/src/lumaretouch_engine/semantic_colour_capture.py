@@ -47,6 +47,9 @@ def geometry_key(state,people=None):
     from .body_pose_render import geometry_record
     body_geometry=geometry_record(state)
     if body_geometry is not None:geometry['body_pose']=body_geometry
+    from .hand_shape_state import check as check_hand_shape, active as hand_shape_active
+    hand_geometry=check_hand_shape(state.get('_hand_shape'))
+    if hand_shape_active(hand_geometry):geometry['hand_shape']=hand_geometry  # Neutral/no hand preserves old hashes.
     if people is not None:
         from .people_geometry_identity import record
         geometry['people']=record(people)
@@ -97,8 +100,8 @@ def render(engine,row,state,document_id,revision,*,cancelled=lambda:False):
     snap=engine._state_to_export_snap(state,device='cpu',scale=1,upscale_backend='lanczos3',sharpen=0.,source_path=path,people_context=VP.row_context(engine,row),people_graph=VP.row_snapshot(engine,row),people_document_id=engine._document_versions().version(row).document_id)
     people=snap.get('people');key=candidate_key(state,people);geometry=geometry_key(state,people)
     snap['semantic_colour']=S.empty();snap['semantic_colour_mask_assets']={}  # Only our previous contribution is removed.
-    from . import body_pose_render as body_render, id_background_runtime as id_background
-    for owner in (groups,recovery,manual,studio,sky,body_render,id_background):owner.check_export_decode(snap,path,stamp,(decoded.h,decoded.w))
+    from . import body_pose_render as body_render, hand_shape_runtime as hand_shape, id_background_runtime as id_background
+    for owner in (groups,recovery,manual,studio,sky,body_render,hand_shape,id_background):owner.check_export_decode(snap,path,stamp,(decoded.h,decoded.w))
     if snap.get('grade_scope')=='objects':
         M.verify_source(M.check(snap.get('local_masks')),path,(decoded.h,decoded.w));snap['local_mask_source_path']=path
     spec,skipped=build_export_spec(snap,decoded.h,decoded.w,for_document=True)

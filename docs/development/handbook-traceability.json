@@ -553,10 +553,22 @@
       "source_url": "https://www.pixcakeai.com/guide/230984",
       "title": "AI挑图",
       "phase": null,
-      "status": "pending_independent_verification",
-      "implementation": [],
-      "verification": [],
-      "scope_note": "原始需求全量保留；本条登记不等于实现或验收通过"
+      "status": "partial_source_connected_unrun",
+      "implementation": [
+        "engine/src/lumaretouch_engine/picks.py",
+        "engine/src/lumaretouch_engine/server.py",
+        "ui/src/App.tsx",
+        "docs/local-workflow/PICK-EVIDENCE-V3.md",
+        "engine/src/lumaretouch_engine/pick_original_focus.py",
+        "engine/src/lumaretouch_engine/pick_focus_host.py",
+        "docs/local-workflow/PICK-ORIGINAL-FOCUS-V1.md"
+      ],
+      "verification": [
+        "engine/tests/test_pick_evidence_v3_unrun.py (authored, UNRUN)",
+        "engine/tests/test_pick_original_focus_unrun.py (authored, UNRUN)"
+      ],
+      "scope_note": "原始需求全量保留；本条登记不等于实现或验收通过",
+      "remaining": "Proxy clues plus selected original-pixel bounded crop review source-connected only. No trained scene/aesthetic/front-facing classifier, selected-count optimizer, laugh/group exemption, automatic detected-face focus or universal focus verdict. RAW requires opened full extent and canonical RAW16. All tests/build/typecheck/real-photo calibration/quality/performance acceptance UNRUN."
     },
     {
       "id": "workflow:32450",
@@ -6519,8 +6531,16 @@
       "source_child_index": 0,
       "title": "手部中性灰",
       "status": "pending_independent_verification",
-      "implementation": [],
-      "verification": []
+      "implementation": [
+        "core/hand_tone/lib.rs",
+        "engine/src/lumaretouch_engine/hand_tone_measure.py",
+        "engine/src/lumaretouch_engine/hand_tone_routes.py",
+        "engine/src/lumaretouch_engine/hand_tone_runtime.py",
+        "ui/src/handTone/HandTonePanel.tsx",
+        "docs/hand-tone/CONTRACT.md"
+      ],
+      "verification": [],
+      "scope_note": "PARTIAL / SOURCE ONLY: current-photo manually supported hand/affected/protect source-grid log-luminance band correction; independent original Rust kernel, canonical full comparison/history/project/tiled export. No clean donor needed; no automatic hand detection, identity/age inference, shaping, batch/preset transfer or proven product parity. Builds/typechecks/runtime/numerical/photo/performance acceptance UNRUN."
     },
     {
       "id": "control:PC-46608:2",
@@ -6549,8 +6569,17 @@
       "source_child_index": 2,
       "title": "手部美型",
       "status": "pending_independent_verification",
-      "implementation": [],
-      "verification": []
+      "implementation": [
+        "core/hand_shape/lib.rs",
+        "engine/src/lumaretouch_engine/hand_shape_host.py",
+        "engine/src/lumaretouch_engine/hand_shape_field.py",
+        "engine/src/lumaretouch_engine/hand_shape_runtime.py",
+        "engine/src/lumaretouch_engine/hand_shape_model.py",
+        "ui/src/handShape/HandShapePanel.tsx",
+        "docs/hand-shape/CONTRACT.md"
+      ],
+      "verification": [],
+      "scope_note": "PARTIAL / SOURCE ONLY: standalone source-reviewed hand/palm, finger and joint width geometry, original bounded Rust off-grid kernel, optional genuinely pinned MediaPipe proposals requiring manual visible support correction, one existing document history/project/export and single common geometry sampler. No BodyRef prerequisite, hidden anatomy, identity/demographic template, second undo framework or AI fallback. One hand per document v1; source/contact/overlap limits and no creative-derived or cross-photo reuse. All tests/builds/typechecks/inference/runtime/photo/performance acceptance UNRUN."
     },
     {
       "id": "control:PC-9XYcMCvHXW:1",

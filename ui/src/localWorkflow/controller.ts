@@ -19,9 +19,12 @@ export interface WorkflowViewState {
   lease: ProjectLease | null;
   preflight: PreflightReport | null;
   export_profile: ReturnedExportProfile | null;
+  export_profiles: ReturnedExportProfile[];
   profile_pending: boolean;
   preset_catalogue: PresetCatalogue | null;
   review_images: ReviewImages | null;
+  /** Ephemeral current-start consent; never persisted with a graph or restored. */
+  automatic_start_ack: string | null;
   message: string;
   error: string;
 }
@@ -37,18 +40,36 @@ function exactObjectKeys(value: unknown, keys: readonly string[]): value is Reco
 function returnedProfile(hash?: string, profile?: WorkflowExportProfile): ReturnedExportProfile | null {
   if (!hash || !/^[a-f\d]{64}$/.test(hash) || !profile ||
     !exactObjectKeys(profile, ['profile', 'export_options', 'destination', 'watermark', 'layout']) ||
-    profile.profile !== 'lrt.workflow-export.jpeg-srgb.v1' || profile.watermark !== null || profile.layout !== null) return null;
+    profile.watermark !== null || profile.layout !== null) return null;
   const options = profile.export_options, destination = profile.destination;
   if (!exactObjectKeys(options, ['format', 'quality', 'tile', 'bit_depth', 'scale', 'upscale_backend', 'sharpen',
     'output_profile', 'metadata_include_gps', 'conflict_policy', 'tiff_compression']) ||
-    options.format !== 'jpg' || options.quality !== 95 || options.tile !== 1024 || options.bit_depth !== 8 ||
+    options.tile !== 1024 ||
     options.scale !== 1 || options.upscale_backend !== 'lanczos3' || options.sharpen !== 0 || options.output_profile !== 'srgb' ||
-    options.metadata_include_gps !== false || options.conflict_policy !== 'skip_and_report' || options.tiff_compression !== 'deflate' ||
+    options.metadata_include_gps !== false || options.conflict_policy !== 'skip_and_report' ||
     !exactObjectKeys(destination, ['mode', 'retain_hierarchy', 'conflict', 'create_missing']) ||
     destination.mode !== 'chosen_root' || destination.retain_hierarchy !== false || destination.conflict !== 'ask' || destination.create_missing !== false) return null;
+  const choices = {
+    'lrt.workflow-export.jpeg-srgb.v1': ['jpg', 95, 8, 'deflate'],
+    'lrt.workflow-export.jpeg80-srgb.v1': ['jpg', 80, 8, 'deflate'],
+    'lrt.workflow-export.jpeg100-srgb.v1': ['jpg', 100, 8, 'deflate'],
+    'lrt.workflow-export.png8-srgb.v1': ['png', 95, 8, 'deflate'],
+    'lrt.workflow-export.tiff16-srgb.v1': ['tif', 95, 16, 'none'],
+  };
+  if (!Object.prototype.hasOwnProperty.call(choices, profile.profile) ||
+      JSON.stringify(choices[profile.profile]) !== JSON.stringify([options.format, options.quality, options.bit_depth, options.tiff_compression])) return null;
   // No flattening, omitted settings or client-side hash substitution. The engine owns the exact digest.
   if (new TextEncoder().encode(JSON.stringify(profile)).length > 8192) return null;
   return {recipe_sha256: hash, recipe_profile: structuredClone(profile)};
+}
+
+export function checkedExportProfiles(value: unknown): ReturnedExportProfile[] {
+  if (!Array.isArray(value) || value.length > 5) return [];
+  const rows = value.map(row => row && exactObjectKeys(row, ['recipe_sha256', 'recipe_profile'])
+    ? returnedProfile(row.recipe_sha256 as string, row.recipe_profile as WorkflowExportProfile) : null);
+  if (rows.some(row => !row) || new Set(rows.map(row => row?.recipe_sha256)).size !== rows.length ||
+      new Set(rows.map(row => row?.recipe_profile.profile)).size !== rows.length) return [];
+  return rows as ReturnedExportProfile[];
 }
 
 /** Retain one controller per host scope outside the panel. Unmounting does not cancel or replay a host write. */
@@ -71,19 +92,22 @@ export class WorkflowController {
     this.newId = newId;
     this.value = {draft: structuredClone(initial ?? newDefinition(newId())), dirty: !initial?.storage_revision,
       ready: false, busy: false, capabilities: null, definitions: [], runs: [], active_run: null,
-      inspected_run: null, pending: this.restorePending(), lease: null, preflight: null, export_profile: null, profile_pending: false, preset_catalogue: null,
-      review_images: null, message: '', error: !host ? '本地工作流宿主尚未接入。可编辑草稿，但不能保存、检测或运行。' : ''};
+      inspected_run: null, pending: this.restorePending(), lease: null, preflight: null, export_profile: null, export_profiles: [], profile_pending: false, preset_catalogue: null,
+      review_images: null, automatic_start_ack: null, message: '', error: !host ? '本地工作流宿主尚未接入。可编辑草稿，但不能保存、检测或运行。' : ''};
   }
   async refreshCatalogue(): Promise<void> {
     if (!this.host?.refreshCatalogue || this.disposed) return;
     try { await this.host.refreshCatalogue(); await this.refresh(); }
-    catch (error) { if (!this.disposed) this.patch({error: failureMessage(error)}); }
+    catch (error) { if (!this.disposed) this.patch({ready: false, automatic_start_ack: null, error: failureMessage(error)}); }
   }
   getState = (): WorkflowViewState => this.value;
   subscribe = (listener: () => void): (() => void) => {this.listeners.add(listener); return () => {this.listeners.delete(listener);};};
   private patch(patch: Partial<WorkflowViewState>): void {
     if (this.disposed) return;
+    const consentBinding = this.automaticStartBinding();
     this.value = {...this.value, ...patch};
+    if (patch.ready === false || patch.capabilities?.available === false || consentBinding !== this.automaticStartBinding())
+      this.value = {...this.value, automatic_start_ack: null};
     const run = this.value.active_run, handoff = run?.handoff;
     if (this.value.review_images && (!run || handoff?.phase !== 'reviewing' || this.value.review_images.key !== reviewKey(run.run_id, handoff))) {
       this.imageEpoch += 1;
@@ -148,6 +172,7 @@ export class WorkflowController {
       this.patch({ready: true, capabilities: workspace.capabilities, definitions: workspace.definitions,
         runs: workspace.runs, active_run: this.newerRun(workspace.active_run, this.value.active_run),
         preset_catalogue: checkedCatalogue(workspace.preset_catalogue),
+        export_profiles: checkedExportProfiles(workspace.export_profiles),
         export_profile: returnedProfile(workspace.recipe_sha256, workspace.recipe_profile), profile_pending: workspace.recipe_profile_pending === true,
         ...leasePatch,
         message: pending.size ? '存在未确认操作。请查询原操作，不要重新提交。' : this.value.message});
@@ -165,7 +190,7 @@ export class WorkflowController {
     const host = this.usableHost();
     if (!host || this.editingLocked) return;
     const epoch = this.epoch;
-    this.patch({busy: true, error: ''});
+    this.patch({busy: true, automatic_start_ack: null, error: ''});
     try {
       const definition = await host.readDefinition(workflowId);
       if (this.disposed || epoch !== this.epoch) return;
@@ -199,9 +224,17 @@ export class WorkflowController {
     if (!this.canReleaseLease()) return;
     await this.submit({kind: 'release_project_lease', lease_id: this.value.lease!.lease_id});
   }
-  useReturnedExportProfile(): void {
-    if (this.editingLocked || !this.value.export_profile) return;
-    const hash = this.value.export_profile.recipe_sha256;
+  selectedExportProfile(): ReturnedExportProfile | null {
+    const output = this.value.draft.graph.nodes.find(node => node.operation.kind === 'export')?.operation;
+    if (output?.kind !== 'export') return null;
+    return [...this.value.export_profiles, ...(this.value.export_profile ? [this.value.export_profile] : [])]
+      .find(profile => profile.recipe_sha256 === output.recipe_sha256) ?? null;
+  }
+  useReturnedExportProfile(selectedHash?: string): void {
+    const automatic = this.value.draft.graph.nodes.some(node => node.operation.kind === 'automatic_preset');
+    const profile = selectedHash ? this.value.export_profiles.find(row => row.recipe_sha256 === selectedHash) : this.value.export_profile;
+    if (this.editingLocked || !profile || (!automatic && profile.recipe_profile.profile !== 'lrt.workflow-export.jpeg-srgb.v1')) return;
+    const hash = profile.recipe_sha256;
     const output = this.value.draft.graph.nodes.find(node => node.operation.kind === 'export')?.operation;
     if (output?.kind !== 'export' || output.recipe_sha256 === hash) return;
     this.updateDraft(value => ({...value, graph: {...value.graph, nodes: value.graph.nodes.map(node => node.operation.kind === 'export' ?
@@ -228,19 +261,45 @@ export class WorkflowController {
     } catch (error) {if (epoch === this.epoch) this.patch({error: failureMessage(error)});}
     finally {if (epoch === this.epoch) this.patch({busy: false});}
   }
-  canStart(now = Date.now()): boolean {
+  private automaticStartBinding(): string | null {
+    const {draft, preflight, lease} = this.value;
+    const automatic = draft.graph.nodes.find(node => node.operation.kind === 'automatic_preset')?.operation;
+    const disclosedExport = this.selectedExportProfile();
+    if (automatic?.kind === 'automatic_preset' && !disclosedExport) return null;
+    let disclosedReference: unknown = null;
+    if (automatic?.kind === 'automatic_preset' && automatic.intent.reference_scope) {
+      const catalogue = this.value.preset_catalogue;
+      const preset = catalogue?.presets.find(row => row.id === automatic.preset_id && row.preset_sha256 === automatic.preset_sha256);
+      if (!catalogue?.complete || !preset?.automatic_reference || preset.automatic_supported !== true
+          || preset.module_ids.length !== 1 || preset.module_ids[0] !== 'lnx.reference_color.v1') return null;
+      disclosedReference = preset.automatic_reference;
+    }
+    if (!draft.graph.nodes.some(node => node.operation.kind === 'automatic_preset') || typeof preflight?.graph_sha256 !== 'string' || !/^[a-f0-9]{64}$/.test(preflight.graph_sha256)) return null;
+    return JSON.stringify([this.host?.scope_id, preflight.preflight_token, preflight.graph_sha256, lease?.lease_id, draft.graph, disclosedReference, disclosedExport]);
+  }
+  canAcknowledgeAutomaticStart(): boolean {return this.automaticStartBinding() !== null && this.canStart(Date.now(), false);}
+  acknowledgeAutomaticStart(accepted: boolean): void {
+    this.patch({automatic_start_ack: accepted && this.canAcknowledgeAutomaticStart() ? this.automaticStartBinding() : null});
+  }
+  canStart(now = Date.now(), requireAutomaticAck = true): boolean {
     const {draft, capabilities, preflight, lease} = this.value;
     return !!this.host && this.value.ready && !this.editingLocked && !this.value.dirty && !!draft.storage_revision &&
       !!capabilities?.available && capabilities.can_run && leaseMatches(draft.graph, lease, now) &&
       !!preflight?.can_start && !!preflight.preflight_token && preflight.workflow_id === draft.graph.workflow_id &&
       preflight.graph_revision === draft.graph.revision && preflight.lease_id === lease?.lease_id &&
       Date.parse(preflight.valid_until) > now && !preflight.diagnostics.some(item => item.severity === 'error') &&
-      !validateGraph(draft.graph, capabilities).some(item => item.severity === 'error');
+      !validateGraph(draft.graph, capabilities).some(item => item.severity === 'error') &&
+      (!draft.graph.nodes.some(node => node.operation.kind === 'automatic_preset') ||
+        (this.automaticStartBinding() !== null && (!requireAutomaticAck || this.value.automatic_start_ack === this.automaticStartBinding())));
   }
   async start(): Promise<void> {
     if (!this.canStart() || !this.mayWrite()) return;
+    const automatic = this.value.draft.graph.nodes.some(node => node.operation.kind === 'automatic_preset');
+    const acknowledgment = automatic ? {schema: 'lrt.automatic-batch-start.v1' as const, graph_sha256: this.value.preflight!.graph_sha256!, accepted: true as const} : undefined;
+    // Consume UI consent before dispatch; a lost response is queried, never started again.
+    this.patch({automatic_start_ack: null});
     await this.submit({kind: 'start', graph: structuredClone(this.value.draft.graph), lease_id: this.value.lease!.lease_id,
-      preflight_token: this.value.preflight!.preflight_token});
+      preflight_token: this.value.preflight!.preflight_token, ...(acknowledgment ? {automatic_ack: acknowledgment} : {})});
   }
   async stop(): Promise<void> {
     const run = this.value.active_run;
@@ -261,7 +320,7 @@ export class WorkflowController {
   }
   canReviewStep(step: ReviewStep): boolean {
     const run = this.value.active_run, handoff = run?.handoff;
-    if (!this.host || this.disposed || !this.value.ready || !this.value.capabilities?.available || !this.value.capabilities.can_open_review || this.value.busy || this.value.pending.length || !run || !handoff || !checkedHandoff(handoff)) return false;
+    if (!this.host || this.disposed || !this.value.ready || !this.value.capabilities?.available || !this.value.capabilities.can_open_review || this.value.busy || this.value.pending.length || !run || !handoff || handoff.mode === 'automatic' || !checkedHandoff(handoff)) return false;
     if (run.diagnostics.some(item => item.code === 'owner_outcome_unknown' || item.code === 'native_host_fence')) return false;
     if (step === 'open_target') return handoff.phase === 'awaiting_open';
     if (step === 'prepare_skin') return handoff.phase === 'awaiting_preparation';

@@ -220,7 +220,7 @@ impl Runtime {
                     }
                     let report = json!({"workflow_id":check.input.graph.workflow_id,"graph_revision":check.input.graph.revision,
                         "lease_id":check.input.lease_id,"preflight_token":token,"valid_until":storage::timestamp(check.expires).unwrap_or_default(),
-                        "can_start":supported && self.tokens.contains_key(&token),
+                        "can_start":supported && self.tokens.contains_key(&token), "graph_sha256":check.request["graph_sha256"],
                         "diagnostics":value.get("diagnostics").cloned().unwrap_or_else(||json!([{"severity":"error","code":"owner_preflight_failed","message":value["error"].as_str().unwrap_or("owner 检测未通过")}])) ,
                         "recipe_sha256":value["recipe_sha256"],"recipe_profile":value["recipe_profile"]});
                     let _ = check.reply.send(Ok(report));
@@ -330,11 +330,15 @@ impl Runtime {
                 if self.active.is_some() || self.data.operations.values().any(|op| !op.settled) { return Err("仍有运行或 owner 结果待核对，不能释放租约".into()); }
                 self.ui_external(request, "release", json!({"cmd":"ingest_session","action":"release","request_id":storage::uuid()?,"session_id":lease.lease_id}))
             }
-            Action::Start { graph, lease_id, preflight_token } => self.start(request, graph.clone(), lease_id, preflight_token),
+            Action::Start { graph, lease_id, preflight_token, automatic_ack } => self.start(request, graph.clone(), lease_id, preflight_token, automatic_ack.as_ref()),
             Action::Stop { run_id } => {
                 if self.data.active_run.as_deref() != Some(run_id) { return Err("没有匹配的活动运行".into()); }
                 if !self.data.runs[run_id].handoff.is_null() || self.active.as_ref().and_then(|active| active.runner.state().pending())
-                    .is_some_and(|pending| matches!(pending.operation, CommandKind::PreflightPreset { .. } | CommandKind::ApplyPreset { .. })) { return Err("预设交接尚未结清，来源监听已暂停。请先取消并返回，或完成保存与返回；停止不能释放半完成的交接".into()); }
+                    .is_some_and(|pending| matches!(pending.operation, CommandKind::PreflightPreset { .. } | CommandKind::ApplyPreset { .. })) {
+                    return Err(if self.data.runs[run_id].handoff["mode"] == "automatic" {
+                        "自动处理尚未到达已核实返回边界；等待原操作回执，未知结果只能查询，不能停止后重启"
+                    } else { "预设交接尚未结清，来源监听已暂停。请先取消并返回，或完成保存与返回；停止不能释放半完成的交接" }.into());
+                }
                 self.active.as_mut().ok_or("原运行仅能恢复核对，不能恢复原引擎租约")?.runner.stop().map_err(|e| e.to_string())?;
                 self.update_run()?;
                 self.settle(&request.request_id, request.success(json!({"kind":"stop","run":self.data.runs[run_id].snapshot})))
@@ -481,9 +485,16 @@ impl Runtime {
         }
         Ok(())
     }
-    fn start(&mut self, request: &Request, graph: Graph, lease_id: &str, token: &str) -> Result<(), String> {
+    fn start(&mut self, request: &Request, graph: Graph, lease_id: &str, token: &str, automatic_ack: Option<&wire::AutomaticStartAck>) -> Result<(), String> {
         if self.active.is_some() || self.data.runs.len() >= wire::MAX_RUNS { return Err("已有运行或运行日志已满".into()); }
         let graph = graph.validate().map_err(|e| e.to_string())?;
+        if graph.automatic() {
+            if !automatic_ack.is_some_and(|ack| ack.matches(graph.digest())) {
+                return Err("自动模式须在本次启动明确确认当前图的范围、预设、保存、导出与失败策略；保存定义不能授权启动".into());
+            }
+        } else if automatic_ack.is_some() {
+            return Err("人工审核模式不能携带自动启动授权".into());
+        }
         graph.preflight_filesystem().map_err(|e| e.to_string())?;
         let lease = self.lease(lease_id)?;
         let checked = self.tokens.get(token).ok_or("缺少当前宿主检测令牌")?;
@@ -620,7 +631,11 @@ impl Runtime {
         if matches!(original.command.operation, CommandKind::PreflightPreset { .. } | CommandKind::ApplyPreset { .. })
             && reply["result"]["receipt"].is_object() {
             let value = reply["result"].get("handoff").ok_or("预设 owner 未提供实际交接状态；不能推断目标已返回")?;
-            if !value.is_null() && !review::handoff(value, &original.command) { return Err("预设 owner 交接身份或审核内容不匹配".into()); }
+            if !value.is_null() {
+                if !review::handoff(value, &original.command) { return Err("预设 owner 交接身份或审核内容不匹配".into()); }
+                let automatic = self.active.as_ref().ok_or("原运行不再活动")?.runner.state().graph().automatic();
+                if (value["mode"] == "automatic") != automatic { return Err("预设交接模式与原图定义不匹配".into()); }
+            }
             let run = self.data.runs.get_mut(&original.command.identity.run_id).ok_or("交接运行丢失")?;
             handoff_changed = run.handoff != *value;
             run.handoff = value.clone();

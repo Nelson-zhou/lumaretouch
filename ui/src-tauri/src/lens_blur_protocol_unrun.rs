@@ -140,3 +140,28 @@ fn receipt_fixture()->Value {let c=command_fixture("apply");json!({"version":PRO
     new["depth"]["provenance"]=json!({"kind":"manual","method":"user_supplied_depth"});assert!(!recipe(&new));
     let mut mixed=old;mixed["math_identity"]=json!("cohort-fft-f64-v2-00020001");assert!(!recipe(&mixed));
 }
+
+// AI transport fixtures below are AUTHORED / UNRUN; never model inference evidence.
+#[test] fn model_depth_read_requires_explicit_consent_and_exact_supported_provenance() {
+    let c=json!({"version":PROTOCOL,"action":"prepare_model_depth","request_id":"ai-depth-one","session_id":"session-one",
+        "owner":owner_fixture(),"acknowledged_model":true});
+    assert!(command(&c));
+    let mut bad=c.clone();bad["acknowledged_model"]=json!(false);assert!(!command(&bad));
+    bad=c.clone();bad["model_url"]=json!("untrusted");assert!(!command(&bad));
+    let req=parse_request(&json!({"cmd":"lens_blur","action":"prepare_model_depth","request_id":c["request_id"],"command":c})).unwrap();
+    assert!(req.read());assert!(!req.write());
+    let mut d=depth_fixture();
+    d["provenance"]=json!({"kind":"model","model_id":DEPTH_MODEL,"model_sha256":DEPTH_MODEL_SHA256,
+        "inference_id":sha('d'),"acknowledgement_id":"ai-depth-one"});
+    assert!(depth(&d,&owner_fixture()));
+    let context=json!({"session_id":"session-one","owner":owner_fixture(),"source_image":image_fixture(10),"depth":d,
+        "depth_status":"ready","message":"Fixture only, no actual inference",
+        "model_depth":{"available":true,"code":"ready","reason":"Fixture only","model_id":DEPTH_MODEL}});
+    let result=json!({"event":EVENT,"request_id":"ai-depth-one","status":"ready","context":context});
+    assert!(valid_result(&result,&req));
+    let mut wrong=result.clone();wrong["context"]["depth"]["provenance"]["acknowledgement_id"]=json!("other-request");assert!(!valid_result(&wrong,&req));
+    wrong=result.clone();wrong["context"]["depth"]["provenance"]["model_sha256"]=json!(sha('f'));assert!(!valid_result(&wrong,&req));
+    wrong=result.clone();wrong["context"]["depth"]["subject_focus"]=json!({"near":0.0,"far":0.2,"mask_sha256":sha('a')});assert!(!valid_result(&wrong,&req));
+    let mut r=recipe_fixture();r["depth"]["provenance"]=result["context"]["depth"]["provenance"].clone();assert!(recipe(&r));
+    r["version"]=json!(2);r["operation_id"]=json!("lnx.lens_blur.cohort.v2");r["math_identity"]=json!("cohort-fft-f64-v2-00020001");assert!(!recipe(&r));
+}

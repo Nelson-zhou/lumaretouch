@@ -4,7 +4,7 @@ import type {NodeKind, ProjectLease, WorkflowCapabilities, WorkflowDefinition, W
 
 export const NODE_LABELS: Record<NodeKind, string> = {
   directory_source: '本地文件夹来源', managed_import: '导入当前工程', path_labels: '文件名 / 路径标签',
-  compatible_preset: '兼容预设', export: '导出图片',
+  compatible_preset: '逐图审核预设', automatic_preset: '明确授权的自动批量预设', export: '导出图片',
 };
 export const POLICY_LABELS = {stop: '失败中止', skip: '跳过继续', keep_continue: '保留继续'} as const;
 export const MAX_NODES = 5;
@@ -17,6 +17,7 @@ export function newOperation(kind: NodeKind): WorkflowOperation {
     case 'directory_source': return {kind, root: '', recursive: true, include_existing: false, extensions: ['jpg', 'jpeg', 'png', 'tif', 'tiff'], settle_ms: 2000};
     case 'managed_import': return {kind, project_id: '', project_path: '', managed_root: ''};
     case 'path_labels': return {kind, rules: []};
+    case 'automatic_preset': return {kind, preset_id: '', preset_sha256: '', when_all_labels: [], intent: {schema: 'lrt.automatic-batch-intent.v1', mode: 'automatic', scope: 'directory_originals', source_mode: 'captured_file_list', originals: 'managed_copy_only', save: 'target_recipe', collision: 'fail_no_overwrite', unattended: true}};
     case 'compatible_preset': return {kind, preset_id: '', preset_sha256: '', when_all_labels: []};
     case 'export': return {kind, output_root: '', recipe_sha256: ''};
   }
@@ -78,7 +79,7 @@ export function validateGraph(graph: WorkflowGraph, capabilities?: WorkflowCapab
   for (const kind of kinds) if (graph.nodes.filter(node => node.operation.kind === kind).length !== 1)
     error('required_node', `${NODE_LABELS[kind]}必须有且只有一个。`);
   if (graph.nodes.filter(node => node.operation.kind === 'path_labels').length > 1) error('labels_count', '最多支持一个标签节点。');
-  if (graph.nodes.filter(node => node.operation.kind === 'compatible_preset').length > 1) error('preset_count', '最多支持一个兼容预设节点。');
+  if (graph.nodes.filter(node => node.operation.kind === 'compatible_preset' || node.operation.kind === 'automatic_preset').length > 1) error('preset_count', '逐图审核与自动模式只能选择其中一个预设节点。');
   const partial = {...graph, edges: [] as WorkflowEdge[]};
   for (const edge of graph.edges) {
     const problem = edgeProblem(partial, edge);
@@ -95,7 +96,8 @@ export function validateGraph(graph: WorkflowGraph, capabilities?: WorkflowCapab
   }
   const expected = ['directory_source', 'managed_import',
     ...(graph.nodes.some(node => node.operation.kind === 'path_labels') ? ['path_labels'] : []),
-    ...(graph.nodes.some(node => node.operation.kind === 'compatible_preset') ? ['compatible_preset'] : []), 'export'];
+    ...(graph.nodes.some(node => node.operation.kind === 'compatible_preset') ? ['compatible_preset'] : []),
+    ...(graph.nodes.some(node => node.operation.kind === 'automatic_preset') ? ['automatic_preset'] : []), 'export'];
   if (visited.size !== graph.nodes.length || ordered.join(',') !== expected.join(',') || graph.edges.length !== graph.nodes.length - 1)
     error('chain', '请连接为：来源 → 导入 → 可选标签 → 可选兼容预设 → 导出。');
   const requirePath = (value: string, label: string, id: string) => {
@@ -123,6 +125,9 @@ export function validateGraph(graph: WorkflowGraph, capabilities?: WorkflowCapab
       case 'path_labels':
         if (!op.rules.length || op.rules.length > 64 || op.rules.some(rule => !boundedText(rule.contains, 256) || !boundedText(rule.label, 128)))
           error('label_rule', '需要 1–64 条规则；包含文本最多 256 字节，标签最多 128 字节且不能为空。', node.id); break;
+      case 'automatic_preset':
+        if (!validAutomaticIntent(op.intent)) error('automatic_intent', '自动批量意图缺失或不属于受支持的原图托管、目标配方保存及不覆盖模式。', node.id);
+        // The complete preset remains host-owned; never drop unsupported modules.
       case 'compatible_preset':
         if (!ID.test(op.preset_id) || !HASH.test(op.preset_sha256)) error('preset', '需要有效预设标识和真实的小写 SHA-256 指纹。', node.id);
         if (op.when_all_labels.length > 64 || new Set(op.when_all_labels).size !== op.when_all_labels.length || op.when_all_labels.some(label => !boundedText(label, 128)))
@@ -136,6 +141,8 @@ export function validateGraph(graph: WorkflowGraph, capabilities?: WorkflowCapab
     }
   }
   const input = source?.operation;
+  if (graph.nodes.some(node => node.operation.kind === 'automatic_preset') && input?.kind === 'directory_source' && !input.include_existing)
+    error('automatic_source_mode', '自动任务是一次捕获文件清单，必须启用处理首次已有照片；不会持续接收后续新增照片。');
   const output = graph.nodes.find(node => node.operation.kind === 'export')?.operation;
   const imported = graph.nodes.find(node => node.operation.kind === 'managed_import')?.operation;
   if (input?.kind === 'directory_source' && output?.kind === 'export' && pathsOverlap(input.root, output.output_root))
@@ -159,4 +166,17 @@ export function leaseMatches(graph: WorkflowGraph, lease: ProjectLease | null, n
   return imported?.kind === 'managed_import' && !!lease && lease.saved === true && lease.dedicated === true &&
     !!lease.lease_id && lease.project_id === imported.project_id && lease.project_path === imported.project_path &&
     Number.isFinite(Date.parse(lease.expires_at)) && Date.parse(lease.expires_at) > now;
+}
+
+/** Declaration is not run consent: every automatic start still needs a fresh host-hash-bound acknowledgment. */
+export function validAutomaticIntent(value: unknown): boolean {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+  const expected = {schema: 'lrt.automatic-batch-intent.v1', mode: 'automatic', scope: 'directory_originals', source_mode: 'captured_file_list', originals: 'managed_copy_only', save: 'target_recipe', collision: 'fail_no_overwrite', unattended: true};
+  const actual = value as Record<string, unknown>;
+  const portrait = Object.prototype.hasOwnProperty.call(actual, 'portrait_scope');
+  const reference = Object.prototype.hasOwnProperty.call(actual, 'reference_scope') || Object.prototype.hasOwnProperty.call(actual, 'reference_source_policy');
+  return !(portrait && reference) && (!portrait || actual.portrait_scope === 'all_verified_detected_faces') &&
+    (!reference || (actual.reference_scope === 'stored_reference_per_target_fit' && actual.reference_source_policy === 'reject_same_source')) &&
+    Object.keys(actual).length === Object.keys(expected).length + (portrait ? 1 : reference ? 2 : 0) &&
+    Object.entries(expected).every(([key, item]) => actual[key] === item);
 }

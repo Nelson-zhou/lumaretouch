@@ -1,0 +1,37 @@
+{
+  "schema": "lrt.upscale-product-owner.static-freeze.v1",
+  "scope": "owner files only; runtime and UI have separate owners",
+  "model_id": "Swin2SR-classical-sr-x2-64",
+  "authored_not_accepted": true,
+  "checks": {
+    "static_python_ast_files": 12,
+    "product_imports": false,
+    "tests": false,
+    "build": false,
+    "typecheck": false,
+    "model_download": false,
+    "inference": false
+  },
+  "files": {
+    "engine/src/lumaretouch_engine/light_glow_host.py": "8c6e9665bd7ff753517edbb83b9b2727ae549db3c6df9440a6f26371eabb2f7c",
+    "engine/src/lumaretouch_engine/light_glow_jobs.py": "79b63550dc8c90699e166978c27a329ad293bc89e70eb1eb0d911ac9e0e4fda2",
+    "engine/src/lumaretouch_engine/upscale_restore_host.py": "dbfc01e1fb3ab619038b5994b38a5b146e42ca179b8feedfe97295766a8544f9",
+    "engine/src/lumaretouch_engine/upscale_restore_jobs.py": "c70a2a6daea770b71bff2dfee3cf01a79b1dc17c24574708058f398f470da77f",
+    "engine/src/lumaretouch_engine/upscale_restore_stage.py": "3362e0a893ac1f9243b64ff1fcd3d72747f1ece7105a68cef8931ff33931374a",
+    "engine/src/lumaretouch_engine/server.py": "bca4ccf41ad08fb6a86f4b7ee0af81df896d81de38d47ae078e680bb06d64735",
+    "engine/src/lumaretouch_engine/creative_module_commands.py": "443773b602b0a0b2edc346932e6286e678dbf1d192ef1941e999df1a22bb00fe",
+    "engine/src/lumaretouch_engine/creative_capture_routes.py": "1b5982bfeee5e6ac1e5aefcde379d1ad6992d3ca4deea8b37792b3aee56a0cbd",
+    "engine/src/lumaretouch_engine/command_registry.py": "b9a0d09dd18db742ee6c5b17b605eb24527afb9a7ebba94bfa1cf3dff4ed15b2",
+    "engine/src/lumaretouch_engine/read_job_ingress.py": "ffbd3eb3e72c910eb5520eb9ed249c2bfcba3b82d20d639e792a45f740722c3a",
+    "engine/src/lumaretouch_engine/project_recovery_runtime.py": "216ead6474d52abe5a96c270072d92735b6bc307327c916eaab26213773b97d3",
+    "engine/tests/test_upscale_restore_host_unrun.py": "d985cd06aecafbd6dfb1ac224bc1ae157f298b46bc1fa7533a347306fc8d0356",
+    "docs/upscale-v2/PRODUCT-PATH-UNRUN.md": "3410bf8f97bbe3e884f0d21c5a60197fac076e0f866aebb3b57a7abb2417710f"
+  },
+  "profile": {
+    "min_side": 16,
+    "max_side": 1024,
+    "max_pixels": 1048576,
+    "model_tiles": 1,
+    "downsample_source": false
+  }
+}

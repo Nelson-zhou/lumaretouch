@@ -5,13 +5,13 @@ import {notifyInspectionEditIntent} from '../native';
 import {LENS_OPERATION, LENS_PROTOCOL, lensKey, lensRequestFits, object, token, validLensCapability,
   validLensContext, validLensOwner, validLensRecipe, validLensReview, validLensReceipt, validLensWriteCommand,
   type LensBlurPort, type LensCapability, type LensContext, type LensManualPlaneCommand, type LensPreviewCommand,
-  type LensReceipt, type LensWriteCommand} from './model';
+  type LensReceipt, type LensModelDepthCommand, type LensWriteCommand} from './model';
 
 const EVENT = 'lens_blur_result' as const;
 const READ_WAIT_MS = 130000;
 const MAX_IDENTITIES = 256;
-type ReadAction = 'current' | 'prepare_manual_plane' | 'preview';
-type ReadCommand = LensManualPlaneCommand | LensPreviewCommand;
+type ReadAction = 'current' | 'prepare_manual_plane' | 'prepare_model_depth' | 'preview';
+type ReadCommand = LensManualPlaneCommand | LensModelDepthCommand | LensPreviewCommand;
 type OuterRequest = {cmd: 'lens_blur'; action: ReadAction | 'submit' | 'receipt'; request_id: string; command?: ReadCommand | LensWriteCommand};
 export type LensCurrentReply = {event: typeof EVENT; request_id: string} & (
   | {status: 'ready'; capability: LensCapability; context: LensContext | null; message?: string}
@@ -55,8 +55,8 @@ function readPacket(value: unknown, task: ReadTask): Record<string, unknown> {
     if (!exact(v, [...base, 'capability', 'context', ...(v.message === undefined ? [] : ['message'])])
       || !validLensCapability(v.capability) || (v.message !== undefined && !message(v.message))
       || (v.context === null ? v.capability.status !== 'unavailable' : v.capability.status !== 'available' || !validLensContext(v.context))) throw Error('当前完整来源或模块能力回执无效。');
-  } else if (task.request.action === 'prepare_manual_plane') {
-    if (!exact(v, [...base, 'context']) || !validLensContext(v.context)) throw Error('人工编辑基准面回执无效。');
+  } else if ((task.request.action === 'prepare_manual_plane' || task.request.action === 'prepare_model_depth')) {
+    if (!exact(v, [...base, 'context']) || !validLensContext(v.context)) throw Error('当前来源的景深准备回执无效。');
   } else if (task.request.action === 'preview') {
     if (!exact(v, [...base, 'review']) || !validLensReview(v.review, task.request.command as LensPreviewCommand)) throw Error('真实前后图与原镜头预览请求不匹配。');
   } else throw Error('不是保留的镜头只读请求。');
@@ -194,6 +194,7 @@ export function createLensNativePort(options: {
       const task = writes.get(command.request_id);
       if (task && lensKey(task.command) === lensKey(command) && task.last?.phase !== 'done') task.reconcileRequested = true;
     },
+    async prepareModelDepth(command) {return (await waitRead(command)).context;},
     async prepareManualPlane(command) {return (await waitRead(command)).context;},
     async preview(command) {return (await waitRead(command)).review;},
     async submit(command) {

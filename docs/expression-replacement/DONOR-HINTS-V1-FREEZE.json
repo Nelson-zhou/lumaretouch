@@ -1,0 +1,31 @@
+{
+  "requirement_id": "LNX-REF-PC-32468-C-0e5f836ef1",
+  "status": "SOURCE_CONNECTED_EXPLICIT_ASSOCIATION_EYELID_HINTS_ALL_RUNTIME_UNRUN",
+  "base_commit": "21148688aed4dfadd7941a72c0a5108ea1dda3b6",
+  "verification": [
+    "Python AST syntax only",
+    "git diff --check only"
+  ],
+  "not_run": [
+    "tests",
+    "build",
+    "typecheck",
+    "inference",
+    "product runtime",
+    "image quality",
+    "performance"
+  ],
+  "files": {
+    "docs/expression-replacement/DONOR-HINTS-V1.md": "cb26885a89796f52e40c4ea604ea2d2d73f414684127555368e61e9a25d577b0",
+    "docs/expression-replacement/INTEGRATION.md": "699998a28d18dc4e438218dc450ef9f38f477783251a37a0f14852d75e3e9edd",
+    "engine/src/lumaretouch_engine/expression_donor_hints.py": "b21564a0625f952d0c4281f380d49326dff7a3b3403e9347b177a189fda0d891",
+    "engine/src/lumaretouch_engine/expression_replacement_host.py": "be454ee6ed51e05c4c187e9dbc66e40b2635cdd55bf45b674bc52fb69cb0e480",
+    "engine/src/lumaretouch_engine/virtual_copy_people.py": "1e8a3b4323c7201518a6fc97cbb111a21ceecaf9120f1375292525527cadeb66",
+    "engine/tests/test_expression_donor_hints_unrun.py": "2aa049dae11826b1b1edcac88285dc021abbca7e02c79428dfabebab132ffcc9",
+    "ui/src/expressionReplacement/model.ts": "e8e71c138d96bdcd87d9f6dd28c6b203d53d4d3c05dc216760be23f39848c657",
+    "ui/src/expressionReplacement/ExpressionReplacementPanel.tsx": "b7e826670d9be6a2578bd355798917384c7316f91b8a2122c78dcf18c14f2e1f",
+    "ui/src/expressionReplacement/model.unrun.test.ts": "9f0825c83939db6300721c1f88fc3e797f8c4d1c874383c4d332efa78410b79d",
+    "ui/src-tauri/src/expression_replacement_protocol.rs": "390f9004be52596194aaaa3a4eabd1e95510f600ed783ab5005c6522c8bf0183",
+    "ui/src-tauri/src/expression_replacement_protocol_unrun.rs": "1fadec361137cf3f3aa1e9cc069e327bdd88ce82cca8fb2b166844d5f0f448c6"
+  }
+}

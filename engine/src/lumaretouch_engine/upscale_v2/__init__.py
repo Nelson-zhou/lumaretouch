@@ -1,4 +1,4 @@
-"""Optional AI clarity v2 contract; no admitted production inference backend.
+"""Optional native-size AI clarity: conditional CPU setup, runtime acceptance UNRUN.
 
 Importing this package imports neither Torch nor BasicSR and performs no I/O.
 The legacy ``ops.realesrgan`` experiment is intentionally not reused.

@@ -16,6 +16,7 @@ from __future__ import annotations
 from .ops import curves as curve_ops
 from .levels_stage import LevelsStage
 from .fabric_stage import FabricStage
+from .hand_tone_runtime import Stage as HandToneStage
 from .limb_vein_runtime import Stage as LimbVeinStage
 from .garment_sweat_runtime import Stage as FabricSweatStage
 from .local_grade_stage import LocalGradeStage
@@ -135,6 +136,7 @@ class PreviewPipeline:
         self.device = torch.device(device)
         self.fabric = FabricStage(self.device)
         self.limb_vein = LimbVeinStage(self.device)
+        self.hand_tone = HandToneStage(self.device)
         self.fabric_sweat = FabricSweatStage(self.device)
         self.local_grade_layers = LocalGradeStage(self.device, (h, w))
         self.effect_recovery = EffectRecoveryStage(self.device, (h, w))
@@ -354,6 +356,7 @@ class PreviewPipeline:
         self.src_u8 = src_u8
         self.fabric.clear()
         self.limb_vein.clear()
+        self.hand_tone.clear()
         self.fabric_sweat.clear()
         self.local_grade_layers.set([])
         self._local_grade_layers_key = None
@@ -613,6 +616,7 @@ class PreviewPipeline:
         out = self.effect_recovery.apply('fabric_fine', out, self.fabric.apply(out))
         out = self.fabric_sweat.apply(out)
         out = self.limb_vein.apply(out)
+        out = self.hand_tone.apply(out)
         out = self.studio_background.apply(out)
         if PEOPLE_PIPE.active(self):
             out=PEOPLE_PIPE.source_effect(self,'skin_reference_match',out)

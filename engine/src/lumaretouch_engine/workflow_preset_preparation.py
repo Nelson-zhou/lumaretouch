@@ -110,6 +110,19 @@ class SkinPreparation:
             if fingerprint(left) != fingerprint(right):
                 raise ValueError('Preparation changed unrelated portrait evidence or support')
 
+    def _require_analysis(self):
+        """Legacy scalar admission stays exact; retained-group subclass is separate."""
+        pc = self.engine._precompute
+        if (pc is None or getattr(pc, 'backend', None) != 'mediapipe'
+                or type(getattr(pc, 'num_faces', None)) is not int or pc.num_faces != 1
+                or getattr(pc, 'masks', {}).get('skin') is None
+                or self.engine._channel != 'skin'):
+            raise ValueError('Target preparation requires one real MediaPipe face and its own skin mask')
+
+    def _require_retained_target(self):
+        from .workflow_preset_retained_skin import require_target
+        require_target(self.engine, self.row, self.engine._people_preset_capture())
+
     def analyse(self):
         if self.started or self.restored:
             raise ValueError('An analysis attempt cannot be redispatched through the same preparation')
@@ -121,12 +134,7 @@ class SkinPreparation:
             # become template analysis or permission to copy another face mask.
             dispatch(self.engine, COMMAND, self._check)
             self._check()
-            pc = self.engine._precompute
-            if (pc is None or getattr(pc, 'backend', None) != 'mediapipe'
-                    or type(getattr(pc, 'num_faces', None)) is not int or pc.num_faces != 1
-                    or getattr(pc, 'masks', {}).get('skin') is None
-                    or self.engine._channel != 'skin'):
-                raise ValueError('Target preparation requires one real MediaPipe face and its own skin mask')
+            self._require_analysis()
             # Establish the existing retained-person owner BEFORE rendering or
             # approving a preset. The canonical binder/mirror owns these changes.
             self.engine._people_sync(strict=True)
@@ -138,8 +146,7 @@ class SkinPreparation:
             if (after['_deform']['amounts'] != self.before['_deform']['amounts']
                     or after['_enhance']['amounts'] != self.before['_enhance']['amounts']):
                 raise ValueError('Analysis unexpectedly changed visible portrait parameters')
-            from .workflow_preset_retained_skin import require_target
-            require_target(self.engine, self.row, self.engine._people_preset_capture())
+            self._require_retained_target()
             self.ready = True
         finally:
             # A failed/partial attempt still owns its exact observed state. If

@@ -2,13 +2,13 @@
 """Original offline, fail-closed optional depth boundary. AUTHORED / UNRUN.
 
 This module owns no document, recipe, installation, cache, or native render state.
-It cannot supply a model result in this revision: exact config/code provenance
-and runtime acceptance remain unverified. A missing model never becomes a fake
+It supplies a result only after exact optional-artifact integrity and a genuine
+installed CPU readiness check; development/runtime/quality acceptance is UNRUN. A missing model never becomes a fake
 plane, subject mask, luminance depth, or a silently changed recipe.
 
 The proposed inference route is the upstream Transformers implementation with
 the official compatible safetensors checkpoint, not the original .pth loader.
-Model code imports occur only after admission, which currently always refuses.
+Model code imports occur only inside a bounded worker after conditional admission.
 """
 from __future__ import annotations
 
@@ -201,12 +201,12 @@ class DepthCapabilityV1:
 
 
 def capability_v1() -> DepthCapabilityV1:
-    """No filesystem reads or optional imports. Presence of files is not readiness."""
-    return DepthCapabilityV1(
-        manifest.CONTRACT_VERSION, manifest.ADAPTER_ID, manifest.MODEL_ID, False,
-        "admission-incomplete", "Exact configuration hashes and installed runtime provenance are unverified; optional model inference is unavailable",
-        manifest.admission_gaps_v1(),
-    )
+    """Offline actual integrity/readiness check; never model import or network."""
+    from .lens_depth_setup import model_status
+    status = model_status()
+    return DepthCapabilityV1(manifest.CONTRACT_VERSION, manifest.ADAPTER_ID,
+        manifest.MODEL_ID, status['ready'], status['code'], status['reason'],
+        () if status['ready'] else (status['code'],))
 
 
 def _cancel(cancelled: Cancel | None) -> None:
@@ -282,14 +282,14 @@ def _read_model_bytes(root: Path, cancelled: Cancel | None) -> dict[str, bytes]:
         raise DepthUnavailable("model-not-installed", "Local model pack is absent, unreadable, or unsafe; no download fallback") from exc
 
 
-def _admit_runtime_v1() -> str:
-    # Deliberately unconditional. A version, local RECORD/direct_url.json,
-    # manifest constant, or caller callback cannot authenticate actual code.
-    # Replace this function only in a reviewed release that verifies exact
-    # distribution artifacts AND the imported complete code/dependency inventory,
-    # rejects shadowed/already-loaded foreign modules, and passes compatibility
-    # and security review. No sys.path changes or runtime plugin loading here.
-    raise DepthUnavailable("runtime-provenance-unverified", "Exact runtime artifacts, installed code inventory and compatibility are not admitted")
+def _admit_runtime_v1(model_root: Path) -> str:
+    # The app-selected base runtime is a disclosed trusted prerequisite. Added
+    # optional code must match retained, bundled-SHA256-authenticated wheel bytes.
+    # This is integrity checking, not protection against a hostile OS/user who
+    # can replace the app or the selected interpreter itself.
+    from .lens_depth_setup import activate_runtime
+    identity = activate_runtime(model_root.parent)
+    return hashlib.sha256(_canonical(identity)).hexdigest()
 
 
 def _check_upstream_configs(config: dict, processor: dict) -> None:
@@ -376,9 +376,9 @@ def _normalized_result(raw, request: DepthRequestV1, runtime_identity: str,
                          receipt.decode("utf-8"), normalization)
 
 
-def estimate_depth_v1(request: DepthRequestV1, *, model_root: str | Path,
+def _estimate_depth_in_process(request: DepthRequestV1, *, model_root: str | Path,
                       cancelled: Cancel | None = None) -> DepthResultV1:
-    """Optional CPU float32 route, currently fail-closed before all model imports.
+    """Private worker-only CPU float32 route after installed artifact admission.
 
     The caller owns cancellation/stale-revision rejection and native asset commit.
     Cancellation is cooperative between reads/stages, not inside a Torch kernel.
@@ -390,7 +390,7 @@ def estimate_depth_v1(request: DepthRequestV1, *, model_root: str | Path,
         raise ValueError("An immutable DepthRequestV1 is required")
     _cancel(cancelled)
     files = _read_model_bytes(Path(model_root), cancelled)
-    runtime_identity = _admit_runtime_v1()  # Unconditional refusal in this revision.
+    runtime_identity = _admit_runtime_v1(Path(model_root))
     config_data = json.loads(files["config.json"])
     processor_data = json.loads(files["preprocessor_config.json"])
     if type(config_data) is not dict or type(processor_data) is not dict:
@@ -399,9 +399,10 @@ def estimate_depth_v1(request: DepthRequestV1, *, model_root: str | Path,
     import numpy as np
     import torch
     from safetensors.torch import load as load_safetensors
-    from transformers import DPTImageProcessor, DepthAnythingConfig, DepthAnythingForDepthEstimation
+    from transformers import DepthAnythingConfig, DepthAnythingForDepthEstimation
+    from transformers.models.dpt.image_processing_pil_dpt import DPTImageProcessorPil
     _cancel(cancelled)
-    processor = DPTImageProcessor.from_dict(processor_data)
+    processor = DPTImageProcessorPil.from_dict(processor_data)
     proxy = np.frombuffer(request.proxy_rgb8, dtype=np.uint8).reshape(
         request.proxy_height, request.proxy_width, 3)
     inputs = processor(images=proxy, return_tensors="pt", input_data_format="channels_last")
@@ -439,3 +440,53 @@ def estimate_depth_v1(request: DepthRequestV1, *, model_root: str | Path,
         return _normalized_result(raw, request, runtime_identity, (width, height), cancelled)
     finally:
         del model  # Never change global allocator, precision, threads, or environment.
+
+
+def estimate_depth_v1(request: DepthRequestV1, *, model_root: str | Path,
+                      cancelled: Cancel | None = None) -> DepthResultV1:
+    """Bounded offline child inference; no Torch import or global state in host.
+
+    Genuine installed readiness is required. Cancellation terminates the child,
+    including a long Torch kernel; no output is published before complete receipt
+    and source-grid byte verification. Caller still owns its document fence.
+    """
+    import sys
+    import tempfile
+    from .lens_depth_setup import model_status, _read, runtime_identity
+    from .prompted_model_install import _run
+    if type(request) is not DepthRequestV1:
+        raise ValueError('An immutable DepthRequestV1 is required')
+    _cancel(cancelled)
+    root = Path(model_root)
+    if not root.is_absolute() or root.name != 'model':
+        raise DepthUnavailable('invalid-model-root', 'Canonical explicit depth model directory required')
+    status = model_status(root.parent)
+    if not status['ready']:
+        raise DepthUnavailable(status['code'], status['reason'])
+    identity = runtime_identity(root.parent)
+    _cancel(cancelled)
+    with tempfile.TemporaryDirectory(prefix='lrt-depth-analysis-') as directory:
+        directory = Path(directory)
+        metadata = {'owner': asdict(request.owner), 'proxy_width':request.proxy_width,
+            'proxy_height':request.proxy_height,'analysis_transform_sha256':request.analysis_transform_sha256,
+            'proxy_sha256':request.proxy_sha256,'request_identity':request.identity}
+        (directory/'request.json').write_bytes(_canonical(metadata))
+        (directory/'proxy.rgb8').write_bytes(request.proxy_rgb8)
+        _run([sys.executable,'-B','-m','lumaretouch_engine.lens_depth_worker',
+              '--root',str(root.parent),'--output',str(directory/'result.json'),
+              '--request',str(directory),'--parent-pid',str(os.getpid())],
+             cancelled,directory/'worker.log',timeout=110)
+        _cancel(cancelled)
+        receipt = json.loads(_read(directory/'result.json',65536))
+        raw = _read(directory/'depth.f32',request.owner.source.width*request.owner.source.height*4)
+        if (receipt.get('owner') != asdict(request.owner) or receipt.get('request_identity')!=request.identity
+                or len(raw)!=request.owner.source.width*request.owner.source.height*4
+                or hashlib.sha256(raw).hexdigest()!=receipt.get('depth_sha256')
+                or runtime_identity(root.parent)!=identity):
+            raise DepthUnavailable('invalid-worker-result','Depth child output or runtime identity changed')
+        normalization = DepthNormalizationV1(**receipt['normalization'])
+        provenance = receipt['provenance_json']
+        if (type(provenance) is not str or hashlib.sha256(b'lrt-lens-depth-result-v1\0'+provenance.encode()).hexdigest()!=receipt['inference_id']):
+            raise DepthUnavailable('invalid-worker-provenance','Depth result provenance identity mismatch')
+        return DepthResultV1(request.owner, request.identity, raw, receipt['depth_sha256'],
+                             receipt['inference_id'],provenance,normalization)

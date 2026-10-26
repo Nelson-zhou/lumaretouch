@@ -411,13 +411,21 @@ class BatchSyncController:
                 rolled_back=getattr(e,'face_decoration_preset_alias_history_rolled_back',getattr(e,'face_decoration_support_alias_history_rolled_back',getattr(e,'eye_bag_recovery_alias_history_rolled_back',False))))
 
     def commit(self, ops: list[str], mods: dict, rows: list[dict],
-                      policy: str, bad: list[dict], source_snapshot=None) -> dict:
+                      policy: str, bad: list[dict], source_snapshot=None, *, before_publish=None) -> dict:
         """原子提交：先算好每一格的新状态，全部合法才一次性写回。
 
         中途失败不能留下“同步了一半”的批量——这跟导出那一条“一个目标失败不该拖垮整批，
         但记账要逐格”是同一个要求：skip 是**事先判出来的**，不是跑中途抱的。
         """
         live_idx = self.documents.current_index()
+        # Private prepared-portrait review adapter only. The public batch JSON
+        # protocol cannot provide a callback or bypass ordinary face admission.
+        if before_publish is not None:
+            if (not callable(before_publish) or not ops
+                    or (set(ops) != {RC.OP} and set(ops) - {'lnx.skin.v1', 'lnx.exposure.v1', 'lnx.white_balance.v1'})
+                    or policy != 'recheck' or bad or not rows
+                    or any(row.get('blocked') or row.get('index') == live_idx for row in rows)):
+                raise SC.ScopeError('Prepared portrait group requires exact supported parked targets')
         planned: list[tuple[int, dict, dict]] = []
         applied_rows = []
         family=body_family(ops)
@@ -521,6 +529,8 @@ class BatchSyncController:
             applied_rows.append(r)
         if not planned:
             raise SC.ScopeError("所有目标都不合格，这一批一个也没写（见 preflight 里的 blocked）")
+        if before_publish is not None:
+            before_publish(planned)
         def require_scalar_row(index,revision=None,*,live_state=None):
             if family is None:return
             frozen,path,version=scalar_rows[index];current_rows=self.documents.rows()
@@ -736,6 +746,8 @@ class BatchSyncController:
                     actual=final_live_state if target_index==live_idx else self.documents.rows()[target_index]['state']
                     if fingerprint(actual)!=fingerprint(target_new if target_index==live_idx else target_before):
                         raise SC.ScopeError('Body-scalar target changed at the final publication barrier')
+            if before_publish is not None:
+                before_publish(planned)
         except Exception as error:
             if family is not None and live_plan is not None:
                 # No parked state has been installed. Restore the active target

@@ -2,7 +2,7 @@
 from hashlib import sha256
 import json
 
-ACTIONS=frozenset(('id_state','id_sample','id_clear','id_import','id_import_material','id_set','id_review','id_spill_preview','id_spill_apply','id_spill_paint_source','id_original_shadow_paint_source','id_original_shadow_preview','id_original_shadow_apply'))
+ACTIONS=frozenset(('id_state','id_initialize_foreground','id_sample','id_clear','id_import','id_import_material','id_set','id_review','id_spill_preview','id_spill_apply','id_spill_paint_source','id_original_shadow_paint_source','id_original_shadow_preview','id_original_shadow_apply'))
 MODES=frozenset(('id_background','id_background_subject','id_background_reference'))
 
 
@@ -20,6 +20,8 @@ def require_command(engine,name,request):
     if type(request) is not dict or request.get('cmd')!=name or not is_command(engine,name,request):
         raise ValueError('Unknown derived ID background command')
     action=request.get('action')
+    if action=='id_initialize_foreground':
+        raise ValueError('自动前景初始化暂不支持创意回流源图；不会回退到原照片推理')
     if name=='background':
         rid=request.get('request_id')
         if type(rid) is not str or not 1<=len(rid)<=128:raise ValueError('Invalid ID request identity')

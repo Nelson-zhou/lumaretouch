@@ -153,7 +153,7 @@ def portable(groups):
         for obj in layer['mask']['recipe']['objects']:
             if obj['kind'] == 'brush':
                 raise ValueError(f'“{layer["name"]}”含画笔，手册不支持画笔批量/预设；整组被拒，未静默排除对象')
-            if obj['kind'] == 'prompted':
+            if obj['kind'] in ('prompted', 'automatic_foreground'):
                 raise ValueError(f'“{layer["name"]}”含绑定原照片的 AI 提示选区；请在目标图重新选区，不能跨照片复制提示或匹配身份')
         _, channels = M.R.dependencies(layer['mask']['recipe'])
         if channels and layer['mask']['semantic_owner'] is None:

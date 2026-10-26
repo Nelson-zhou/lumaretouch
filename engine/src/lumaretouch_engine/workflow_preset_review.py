@@ -133,14 +133,14 @@ def _loaded(engine, target):
     return row, owner, people_owner, engine.__dict__['_people_active_context']
 
 
-def _proof(engine, row, state, target):
+def _proof(engine, row, state, target, *, people_graph=None):
     from . import full_candidate_render as full, creative_derived_source as source
     from .creative_derived_repairs import stack_digest
     from .optics_candidate_identity import fingerprint
     from .people_export import isolated_snapshot, verify_source
     source.verify_precompute(state, state.get('_precompute'))
     repairs = stack_digest(state)
-    proof, graph, context = full.identity(engine, row, state, target['document_id'], target['revision'])
+    proof, graph, context = full.identity(engine, row, state, target['document_id'], target['revision'], people_graph=people_graph)
     snapshot = engine._state_to_export_snap(state, device='cpu', scale=1, upscale_backend='lanczos3',
         sharpen=0., source_path=row['path'], people_graph=graph, people_context=context,
         people_document_id=target['document_id'])

@@ -187,7 +187,9 @@ impl DurableRunner {
     /// Exact duplicates are acknowledged without consuming another slot.
     /// Surplus candidates are neither admitted nor acknowledged: the durable
     /// source checkpoint retains them for explicit subsequent processing.
-    /// This does not seal the run, enlarge a lease or authorize a new session.
+    /// Watched mode does not seal the run. Captured-file mode instead rejects
+    /// an over-budget complete list before admission and seals after its final
+    /// durable admission. Neither mode enlarges a lease or starts a new session.
     pub fn poll_source_bounded(&mut self, source: &mut crate::poll::DirectoryPoller,
         monotonic_ms: u64, maximum_jobs: usize) -> Result<usize> {
         require((1..=crate::schema::MAX_JOBS).contains(&maximum_jobs), "owner job budget must be 1..256")?;
@@ -215,6 +217,18 @@ impl DurableRunner {
         monotonic_ms: u64, maximum_jobs: Option<usize>) -> Result<usize> {
         let mut staged = source.clone();
         let inputs = staged.poll(monotonic_ms)?;
+        if let Some(count) = staged.captured_count() {
+            // Capture is durable BEFORE the first Admit/engine dispatch. On
+            // recovery, only this list is restored; no fresh ignore-existing
+            // baseline or later arrival can replace it.
+            let checkpoint = staged.checkpoint()?;
+            if self.scheduler.source_checkpoint.as_ref() != Some(&checkpoint) {
+                self.persist(Event::SourceCheckpoint { checkpoint })?;
+            }
+            *source = staged.clone();
+            let limit = maximum_jobs.unwrap_or(crate::schema::MAX_JOBS);
+            require(count <= limit, &format!("captured file list has {count} originals but owner capacity is {limit}; job refused before import, no truncation"))?;
+        }
         let mut admitted = 0;
         for input in inputs {
             if self.scheduler.knows_occurrence(&input)? {
@@ -233,7 +247,9 @@ impl DurableRunner {
         if self.scheduler.source_checkpoint.as_ref() != Some(&checkpoint) {
             self.persist(Event::SourceCheckpoint { checkpoint })?;
         }
+        let captured_complete = staged.capture_admitted();
         *source = staged;
+        if captured_complete { self.seal()?; }
         Ok(admitted)
     }
     fn persist(&mut self, event: Event) -> Result<()> {

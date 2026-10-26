@@ -199,6 +199,32 @@ fn whole_source(sw:u64,sh:u64,dw:u64,dh:u64)->bool{
 /// This validates the canonical publisher's proof, not the pixels or numerical
 /// quality independently. The engine verifies actual map/pixel hashes before
 /// publication. Native routing must never manufacture a separate render owner.
+// The full common map may have an explicitly attested standalone hand prefix.
+// A legacy body/face suffix string never authorizes an unreported prefix.
+fn composition_proof(outcome:&Value,view:&Value,sw:u64,sh:u64)->bool{
+ let order=&outcome["composition_order"];
+ if order=="body-then-face-inverse-v1"{return outcome.get("document_geometry").is_none();}
+ if order!="hand-then-body-then-face-inverse-v1"{return false;}
+ let extension=&outcome["document_geometry"];
+ if !fields(extension,&["version","composition_order","hand_ids","fields","single_source_sample","runtime_quality_accepted"])
+  ||extension["version"]!=1||extension["composition_order"]!=*order
+  ||extension["single_source_sample"]!=true||extension["runtime_quality_accepted"]!=false{return false;}
+ let (Some(ids),Some(proofs))=(extension["hand_ids"].as_array(),extension["fields"].as_array())else{return false};
+ // v1 is intentionally one explicitly reviewed standalone hand per document.
+ if ids.len()!=1||proofs.len()!=1||!text(&ids[0]){return false;}
+ let proof=&proofs[0];let source=&proof["source"];let amounts=&proof["amounts"];
+ proof["hand_id"]==ids[0]&&proof["family"]=="hand_shape"&&proof["operation_id"]=="lnx.hand_shape.v1"
+  &&proof["status"]=="rendered"&&proof["applied"]==true&&proof["runtime_quality_accepted"]==false
+  &&proof["model_proposal_is_not_visibility"]==true&&digest(&proof["recipe_sha256"])
+  &&proof["region_count"].as_u64().is_some_and(|n|(1..=32).contains(&n))
+  &&matches!(proof["strategy"].as_str(),Some("manual-visible-support"|"model-proposal-visible-support-reviewed"))
+  &&fields(source,&["sha256","width","height"])&&source["sha256"]==view["binding"]["asset_sha256"]
+  &&source["width"].as_u64()==Some(sw)&&source["height"].as_u64()==Some(sh)
+  &&fields(amounts,&["palm","finger","joint"])
+  &&["palm","finger","joint"].iter().all(|k|amounts[*k].as_f64().is_some_and(|v|v.is_finite()&&(-1.0..=1.0).contains(&v)))
+  &&["palm","finger","joint"].iter().any(|k|amounts[*k].as_f64().is_some_and(|v|v!=0.0))
+}
+
 fn publication_proof(receipt:&Value)->bool{
  let view=&receipt["view"];let outcome=&view["last_outcome"];
  if outcome["version"]!=1||outcome["request_id"]!=receipt["request_id"]
@@ -211,7 +237,7 @@ fn publication_proof(receipt:&Value)->bool{
  if !whole_source(sw,sh,dw,dh)||outcome["original_resolution"]!=json!(sw==dw&&sh==dh)
   ||!revision(&outcome["render_revision"])||outcome["render_revision"]!=view["binding"]["document_revision"]
   ||!digest(&outcome["geometry_delta_sha256"])||outcome["single_source_sample"]!=true
-  ||outcome["composition_order"]!="body-then-face-inverse-v1"
+  ||!composition_proof(outcome,view,sw,sh)
   ||!matches!(outcome["output_dtype"].as_str(),Some("uint8"|"uint16"|"float32")){return false;}
  let order=&outcome["body_operation_order"];
  let Some(ids)=order["operation_ids"].as_array()else{return false};
@@ -331,3 +357,43 @@ pub(crate) fn body_slim(state:State<'_,Arc<AppState>>,request:Value)->Result<Val
 #[cfg(test)]
 #[path = "body_slim_api_unrun.rs"]
 mod tests;
+
+#[cfg(test)]
+mod hand_prefix_unrun {
+ use super::*;
+ // Authored source fixtures only; not executed or compiled.
+ fn fixture()->(Value,Value){
+  let asset="a".repeat(64);let recipe="b".repeat(64);
+  let view=json!({"binding":{"asset_sha256":asset}});
+  let outcome=json!({"composition_order":"hand-then-body-then-face-inverse-v1",
+   "document_geometry":{"version":1,"composition_order":"hand-then-body-then-face-inverse-v1",
+    "hand_ids":["hand:reviewed"],"single_source_sample":true,"runtime_quality_accepted":false,
+    "fields":[{"hand_id":"hand:reviewed","family":"hand_shape","operation_id":"lnx.hand_shape.v1",
+     "status":"rendered","applied":true,"runtime_quality_accepted":false,"model_proposal_is_not_visibility":true,
+     "recipe_sha256":recipe,"region_count":1,"strategy":"manual-visible-support",
+     "source":{"sha256":view["binding"]["asset_sha256"],"width":1001,"height":1601},
+     "amounts":{"palm":0.2,"finger":0.0,"joint":0.0}}]}});
+  (outcome,view)
+ }
+ #[test]fn accepts_only_attested_hand_prefix(){
+  let(outcome,view)=fixture();assert!(composition_proof(&outcome,&view,1001,1601));
+  let mut missing=outcome.clone();missing.as_object_mut().unwrap().remove("document_geometry");
+  assert!(!composition_proof(&missing,&view,1001,1601));
+  let legacy=json!({"composition_order":"body-then-face-inverse-v1"});
+  assert!(composition_proof(&legacy,&view,1001,1601));
+  let mut hidden=outcome.clone();hidden["composition_order"]=json!("body-then-face-inverse-v1");
+  assert!(!composition_proof(&hidden,&view,1001,1601));
+ }
+ #[test]fn refuses_wrong_source_identity_amount_and_hash(){
+  let(outcome,view)=fixture();
+  for(path,value) in [
+   ("/document_geometry/fields/0/source/sha256",json!("c".repeat(64))),
+   ("/document_geometry/fields/0/hand_id",json!("another")),
+   ("/document_geometry/fields/0/recipe_sha256",json!("not-a-hash")),
+   ("/document_geometry/fields/0/amounts/palm",json!(2.0)),
+   ("/document_geometry/runtime_quality_accepted",json!(true))]{
+    let mut wrong=outcome.clone();*wrong.pointer_mut(path).unwrap()=value;
+    assert!(!composition_proof(&wrong,&view,1001,1601));
+  }
+ }
+}

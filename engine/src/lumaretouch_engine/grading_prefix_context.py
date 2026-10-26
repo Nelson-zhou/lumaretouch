@@ -26,6 +26,9 @@ def narrow_context(engine):
     and cancellation. Missing attributes deliberately fail closed there.
     """
     p = engine._vram
+    from .hand_shape_state import active as hand_shape_active
+    if hand_shape_active(getattr(engine, '_hand_shape', None)):
+        return None  # Never reuse a colour-only prefix over requested hand geometry.
     if engine._strength != 0 or engine._channel is not None:
         return None
     # Even a presently idle owned preview is excluded: its lifecycle may carry
@@ -47,6 +50,7 @@ def narrow_context(engine):
     # Repair/light and all pre-exposure spatial/source-derived consumers.
     if (p.repair_base is not None or p.repair_ops or p.light_field_gpu is not None
             or p.light_ops or p.fabric.amount != 0 or p.fabric.field is not None
+            or p.hand_tone.amount != 0 or p.hand_tone.field is not None
             or p.limb_vein.amount != 0 or p.limb_vein.field is not None
             or p.fabric_sweat.amount != 0 or p.fabric_sweat.field is not None
             or p.effect_recovery.required or p.effect_recovery.fields

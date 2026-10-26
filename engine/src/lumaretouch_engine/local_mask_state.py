@@ -30,6 +30,8 @@ def check(value):
                 or any(type(source[k]) is not int or source[k] < 1 for k in ('width', 'height'))):
             raise ValueError('Invalid mask source binding')
     if recipe['objects'] and source is None: raise ValueError('Mask objects require their source binding')
+    if any(o['kind']=='automatic_foreground' and o['selection']['source']!=source for o in recipe['objects']):
+        raise ValueError('Automatic foreground provenance belongs to a different source')
     owner = value['semantic_owner']
     if owner is not None:
         if (type(owner) is not dict or set(owner) != {'backend', 'contract'}
@@ -115,8 +117,10 @@ def sync(engine, *, strict=False):
         stamp = file_stamp(row['path'])
         from . import prompted_mask_resolver as P
         prompted_stamp = P.dependency_stamp() if P.active(value['recipe']) else None
+        from .automatic_foreground import dependency_stamp
+        automatic_stamp = dependency_stamp() if any(o['kind']=='automatic_foreground' and o['enabled'] for o in value['recipe']['objects']) else None
         key = (json.dumps(value, sort_keys=True), stamp, id(pipe.src_f32), id(pc),
-               json.dumps(current_owner(engine), sort_keys=True), prompted_stamp)
+               json.dumps(current_owner(engine), sort_keys=True), prompted_stamp, automatic_stamp)
         if getattr(pipe, '_local_mask_key', None) == key:
             pipe.grade_scope = 'objects'
             if strict and pipe.local_mask_suspended: raise ValueError(pipe.local_mask_suspended)
@@ -157,7 +161,7 @@ def export_prepare(spec, source, *, cancelled=lambda: False):
     # RGB stays in this process; the raster bridge sends bounded tiles only.
     from . import prompted_mask_resolver as P
     semantics = dict(spec.local_mask_semantics)
-    if P.active(value['recipe']):
+    if P.active(value['recipe']) or any(o['kind']=='automatic_foreground' and o['enabled'] for o in value['recipe']['objects']):
         if not spec.local_mask_source_path:
             raise ValueError('Prompted export requires the bound original source path')
         semantics.update(P.fields(value['recipe'], value['source'], spec.local_mask_source_path,

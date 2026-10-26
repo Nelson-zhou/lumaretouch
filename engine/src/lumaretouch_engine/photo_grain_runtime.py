@@ -97,6 +97,8 @@ def render_preview(engine, *, pack=True, editor_mode=None):
     from . import common_background_source as common_background
     for module in (LM,LG,ER,ML,SB,OP,SK,common_background):module.check_export_decode(snap,path,before,original_hw)
     BP.check_export_decode(snap,path,before,original_hw);verify_export(snap,path,original_hw)
+    from .hand_shape_runtime import check_export_decode as hand_shape_decode
+    hand_shape_decode(snap,path,before,original_hw)
     FR.check_export_decode(snap,path,before,original_hw)
     if snap.get("grade_scope")=="objects":snap["local_mask_source_path"]=path
     spec,skipped=build_export_spec(snap,h,w,for_document=for_doc)

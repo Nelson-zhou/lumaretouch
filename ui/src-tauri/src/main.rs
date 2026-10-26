@@ -25,6 +25,8 @@ mod levels_api;
 mod fabric_api;
 mod fabric_sweat_api;
 mod limb_vein_api;
+mod hand_tone_api;
+mod hand_shape_api;
 mod lip_makeup_api;
 mod brow_shape_api;
 mod nose_shape_api;
@@ -54,6 +56,7 @@ mod waist_length_api;
 mod head_size_api;
 mod body_slim_api;
 mod light_glow_api;
+mod upscale_restore_api;
 mod portrait_crop_api;
 mod portrait_crop_protocol;
 mod lens_blur_api;
@@ -693,7 +696,12 @@ impl AppState {
             *self.session_rev.lock().unwrap() += 1;
         }
         if name != "pick_item" {
-            *self.pick.lock().unwrap() = Some(v.clone());
+            // Distinguish repeated identical rejections/state replies for UI acknowledgement.
+            let mut latest = self.pick.lock().unwrap();
+            let sequence = latest.as_ref().and_then(|p| p["host_sequence"].as_u64()).unwrap_or(0) + 1;
+            let mut event = v.clone();
+            event["host_sequence"] = json!(sequence);
+            *latest = Some(event);
         }
     }
 
@@ -1810,6 +1818,9 @@ fn pick(
     exposure: Option<String>,
     eyes: Option<String>,
     force: Option<bool>,
+    focus_x: Option<f64>,
+    focus_y: Option<f64>,
+    focus_documents: Option<Vec<String>>,
 ) -> Result<Value, String> {
     let mut cmd = json!({"cmd": "pick", "action": action});
     if let Some(v) = indices {
@@ -1838,6 +1849,17 @@ fn pick(
     }
     if let Some(v) = force {
         cmd["force"] = json!(v);
+    }
+    if let Some(v) = focus_documents {
+        cmd["focus_documents"] = json!(v);
+    }
+    for (key, value) in [("focus_x", focus_x), ("focus_y", focus_y)] {
+        if let Some(v) = value {
+            if !v.is_finite() || !(0.0..=1.0).contains(&v) {
+                return Err(format!("{} must be finite and between 0 and 1", key));
+            }
+            cmd[key] = json!(v);
+        }
     }
     state.send_to_engine(cmd)?;
     Ok(json!({"requested": true}))
@@ -1964,6 +1986,7 @@ fn main() {
             custom_lut_api::custom_lut_choose, custom_lut_api::custom_lut_request, custom_lut_api::custom_lut_status, custom_lut_api::custom_lut_cancel,
             inpaint, light, portrait_api::deform, lut, grade, portrait_api::enhance, background, export, session, filmstrip, history,
             light_glow_api::light_glow_request, light_glow_api::light_glow_status, light_glow_api::light_glow_cancel, light_glow_api::light_glow_capability,
+            upscale_restore_api::upscale_restore_request, upscale_restore_api::upscale_restore_status, upscale_restore_api::upscale_restore_cancel, upscale_restore_api::upscale_restore_capability,
             portrait_crop_api::portrait_crop, portrait_crop_api::portrait_crop_status, portrait_crop_api::portrait_crop_cancel_read,
             lens_blur_api::lens_blur_request, lens_blur_api::lens_blur_status, lens_blur_api::lens_blur_cancel, lens_blur_api::lens_blur_capability,
             expression_replacement_api::expression_replacement_request, expression_replacement_api::expression_replacement_status, expression_replacement_api::expression_replacement_cancel, expression_replacement_api::expression_replacement_capability,
@@ -2012,7 +2035,7 @@ fn main() {
             source_relocation_api::source_relocation_request, source_relocation_api::source_relocation_status,
             project_recovery_api::project_recovery_request, project_recovery_api::project_recovery_status,
             project_package_api::project_package_request, project_package_api::project_package_status,
-            project, task, edit_commands::exposure, edit_commands::hsl, edit_commands::curves, edit_commands::curve_preview, curve_api::curve_parametric_drag, edit_commands::crop, levels_api::levels, fabric_api::fabric, fabric_sweat_api::fabric_sweat_request, fabric_sweat_api::fabric_sweat_status, limb_vein_api::limb_vein_request, limb_vein_api::limb_vein_status, lip_makeup_api::lip_makeup, brow_shape_api::brow_shape, nose_shape_api::nose_shape, eye_shape_api::eye_shape, mouth_shape_api::mouth_shape, color_scopes_api::color_scopes, preset_api::preset, preset_api::preset_result, preset_organisation_api::preset_organisation, preset_organisation_api::preset_organisation_result, white_balance_api::white_balance, white_balance_api::white_balance_result, batch_api::batch, batch_api::batch_result, face, pick,
+            project, task, edit_commands::exposure, edit_commands::hsl, edit_commands::curves, edit_commands::curve_preview, curve_api::curve_parametric_drag, edit_commands::crop, levels_api::levels, fabric_api::fabric, fabric_sweat_api::fabric_sweat_request, fabric_sweat_api::fabric_sweat_status, limb_vein_api::limb_vein_request, limb_vein_api::limb_vein_status, hand_tone_api::hand_tone_request, hand_tone_api::hand_tone_status, hand_shape_api::hand_shape_request, hand_shape_api::hand_shape_status, lip_makeup_api::lip_makeup, brow_shape_api::brow_shape, nose_shape_api::nose_shape, eye_shape_api::eye_shape, mouth_shape_api::mouth_shape, color_scopes_api::color_scopes, preset_api::preset, preset_api::preset_result, preset_organisation_api::preset_organisation, preset_organisation_api::preset_organisation_result, white_balance_api::white_balance, white_balance_api::white_balance_result, batch_api::batch, batch_api::batch_result, face, pick,
             prompted_mask_api::prompted_masks, prompted_mask_api::prompted_masks_status,
             prompted_model_api::prompted_model, prompted_model_api::prompted_model_status,
             native_dispatch::report, app_shutdown::quit

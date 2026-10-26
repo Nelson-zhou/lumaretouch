@@ -84,7 +84,8 @@ def save(engine,project):
         check_da(entry);check_dc(entry);check_decoration_history(entry);check_alias_history(entry);check_eye_history(entry);check_cohort_history(entry);check_eye_alias_history(entry)
     from .eye_bag_preset_alias_history import encode_states
     from .face_decoration_preset_alias_history import encode_states as encode_dp_states
-    project['people_batch_history']={key:encode_dp_states(encode_states(entry,project['assets']),project['assets']) for key,entry in batches.items()}
+    from .portrait_group_mixed_history import encode_states as encode_group_states
+    project['people_batch_history']={key:encode_group_states(encode_dp_states(encode_states(entry,project['assets']),project['assets']),project['assets']) for key,entry in batches.items()}
 
 
 def prepare(project,rows,limit):
@@ -142,7 +143,8 @@ def prepare(project,rows,limit):
             raise ValueError('Invalid people batch history contract')
         from .eye_bag_preset_alias_history import decode_states
         from .face_decoration_preset_alias_history import decode_states as decode_dp_states
-        entry=decode_dp_states(decode_states(deepcopy(value),project['assets']),project['assets'])
+        from .portrait_group_mixed_history import decode_states as decode_group_states
+        entry=decode_group_states(decode_dp_states(decode_states(deepcopy(value),project['assets']),project['assets']),project['assets'])
         scopes=entry.get('people_scoped_changes')
         if scopes is not None:
             if type(scopes) is not list or not scopes or len(scopes)>10000 or entry['people_changes']:

@@ -23,7 +23,7 @@ def observe(event):
             or event.get('outcome_unknown') or event.get('requires_reload')
             or event.get('status') in ('failed', 'unknown', 'partial', 'blocked')
             or event.get('requires_readback')
-            or (event.get('event')=='light_glow_result' and (event.get('receipt') or {}).get('outcome_unknown') is True)
+            or (event.get('event') in ('light_glow_result', 'upscale_restore_result') and (event.get('receipt') or {}).get('outcome_unknown') is True)
             or (event.get('event')=='lens_blur_result' and (event.get('receipt') or {}).get('outcome_unknown') is True)
             or (event.get('event')=='expression_replacement_result' and (event.get('receipt') or {}).get('phase')=='unknown')):
             boundary['failed'] = True
@@ -56,10 +56,19 @@ def finish(engine, boundary, error=None):
         # managed transaction writes the saved project; readback cannot bless a
         # partial copy or taint a committed recipe on a rejected session request.
         return
+    from .portrait_preset_delivery import command as delivery_command
+    if delivery_command(message):
+        # Scoped project CAS and canonical export jobs own their durable truth.
+        # No recipe/history publication or unrelated autosave is authorized here.
+        return
     from .creative_selection_host import read_only as selection_read_only
+    from .portrait_preset_batch import read_only as portrait_preset_read_only
+    if portrait_preset_read_only(message): return
     if selection_read_only(message): return
     from .light_glow_host import read_only as glow_read_only
     if glow_read_only(message):return
+    from .upscale_restore_host import read_only as upscale_read_only
+    if upscale_read_only(message):return
     from .lens_blur_host import read_only as lens_read_only
     if lens_read_only(message):return
     from .expression_replacement_host import read_only as expression_read_only
@@ -106,6 +115,16 @@ def finish(engine, boundary, error=None):
             if outcome.get('status') == 'applied' and outcome.get('success') is True:
                 runtime.revision += 1
                 return
+    if message.get('cmd') == 'batch' and message.get('action') == 'portrait_preset_prepare':
+        # Only the preparation owner can set this private boundary fact. A
+        # known restored partial retains earlier analyses but is not an
+        # uncertain project; an emitted JSON flag alone cannot settle it.
+        outcome = boundary.get('portrait_preparation_outcome') or {}
+        if (not error and boundary['returned'] and outcome.get('outcome_unknown') is False
+                and outcome.get('editor_restored') is True and not runtime.tainted):
+            if outcome.get('no_write') is not True:
+                runtime.revision += 1
+            return
     # Errors can occur after a partial mutation even if a handler returns. Keep
     # taint until a successful explicit project open/create establishes a base.
     if error or boundary['failed'] or not boundary['returned']:
@@ -115,7 +134,7 @@ def finish(engine, boundary, error=None):
         'project','session','history','virtual_copy','managed_import','source_relocation',
         'people','hair_volume','batch','primary_calibration','colour_editor','selective_colour','colour_grading',
         'photo_grain','photo_detail','extended_tone','shoulder_shape','leg_shape','arm_shape',
-        'waist_shape','leg_length','neck_shape','torso_length','waist_length','head_size','body_slim','custom_lut','semantic_colour','creative_document','common_background','expression_replacement','lens_blur','light_glow'):
+        'waist_shape','leg_length','neck_shape','torso_length','waist_length','head_size','body_slim','custom_lut','semantic_colour','creative_document','common_background','expression_replacement','lens_blur','light_glow','upscale_restore'):
         if message.get('action') not in ('state','query','status','receipt','list','context'):
             runtime.revision += 1
 
@@ -160,7 +179,7 @@ class Runtime:
             # implement the existing active/pending/uncertain/job conventions.
             if name in ('bench', '_export', '_thumbs', '_picks'):
                 if owner.is_alive(): raise RecoveryError('后台任务尚未完成：' + name)
-            if not (name.endswith(('_controller', '_owner', '_host')) or name in ('_batch_sync','_portrait_crop_service','_expression_replacement_service','_lens_blur_service','_light_glow_service')):
+            if not (name.endswith(('_controller', '_owner', '_host')) or name in ('_batch_sync','_portrait_crop_service','_expression_replacement_service','_lens_blur_service','_light_glow_service','_upscale_restore_service')):
                 continue
             for field in ('active', 'uncertain', 'pending', 'job', 'worker_running'):
                 value = getattr(owner, field, None)

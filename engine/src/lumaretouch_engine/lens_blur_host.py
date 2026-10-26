@@ -343,12 +343,30 @@ class Service:
         self.depth = jobs(self.engine).run(request['request_id'], command_hash(request), work)
         return {'status': 'ready', 'context': self._context()}
 
+    def prepare_model_depth(self, request):
+        command = request['command']
+        self._guard()
+        self._require(command)
+        from . import lens_depth_setup
+        status = lens_depth_setup.model_status()
+        if not status.get('ready', False):
+            raise ValueError(status.get('reason') or 'Verified AI-depth runtime is unavailable; no depth was invented')
+        self.candidate = self.depth = None
+        def work(event):
+            depth = stage.prepare_model_depth(command, self.source, model_root=lens_depth_setup.model_root(),
+                budget=self._budget(), cancelled=lambda: self._stopped(event))
+            self._require(command)
+            self._admit_retained(self.source, depth)
+            return depth
+        self.depth = jobs(self.engine).run(request['request_id'], command_hash(request), work)
+        return {'status': 'ready', 'context': self._context()}
+
     def preview(self, request):
         command = request['command']
         self._guard()
         self._require(command)
         if self.depth is None:
-            raise ValueError('请先明确选择人工散焦基准面；AI 景深不可用，不会编造景深')
+            raise ValueError('请先明确分析 AI 景深或选择人工散焦基准面；不会编造景深')
         if len(self.sessions[self.session_id]['tokens']) >= 64:
             raise ValueError('Lens session preview limit reached; explicitly begin a new source session')
         self.candidate = None
@@ -519,9 +537,9 @@ class Service:
             if self.candidate is None or self.candidate.review['request_id'] != request['request_id']:
                 raise ValueError('Lens reviewed read has been superseded; no blind read retry')
             return {'status': 'ready', 'review': self.candidate.review}
-        if request['action'] == 'prepare_manual_plane':
+        if request['action'] in ('prepare_manual_plane', 'prepare_model_depth'):
             if self.depth is None or self.depth.asset['provenance'].get('acknowledgement_id') != request['request_id']:
-                raise ValueError('Lens manual-plane read has been superseded')
+                raise ValueError('Lens depth preparation read has been superseded')
         result = {'status': 'ready', 'context': self._context()}
         if request['action'] == 'current':
             result['capability'] = capability()
@@ -535,7 +553,7 @@ class Service:
             if not token(ident) or request.get('cmd') != 'lens_blur':
                 raise ValueError('Malformed lens transport identity')
             keys = {'cmd', 'action', 'request_id'}
-            if action in ('prepare_manual_plane', 'preview', 'submit', 'receipt'):
+            if action in ('prepare_manual_plane', 'prepare_model_depth', 'preview', 'submit', 'receipt'):
                 keys.add('command')
             elif action != 'current':
                 raise ValueError('Unknown lens host action')
@@ -550,7 +568,7 @@ class Service:
                     raise ValueError('Lens complete inner command exceeds its exact request budget')
                 if action != 'receipt' and command.get('request_id') != ident:
                     raise ValueError('Lens transport and command request identities differ')
-                if action in ('preview', 'prepare_manual_plane') and command.get('action') != action:
+                if action in ('preview', 'prepare_manual_plane', 'prepare_model_depth') and command.get('action') != action:
                     raise ValueError('Lens read action differs from its exact inner command')
             self.maintain()
             if action in ('submit', 'receipt'):
@@ -578,7 +596,7 @@ class Service:
         except Exception as error:
             result = {'status': 'rejected', 'message': _text(error)}
         finally:
-            if action in ('current', 'prepare_manual_plane', 'preview') and sha is not None:
+            if action in ('current', 'prepare_manual_plane', 'prepare_model_depth', 'preview') and sha is not None:
                 jobs(self.engine).retire(ident, sha)
         self.emit({'event': 'lens_blur_result', 'request_id': ident, **result})
 
@@ -596,7 +614,7 @@ def handle(engine, request, emit):
 
 
 def read_only(request):
-    return request.get('cmd') == 'lens_blur' and request.get('action') in ('current', 'prepare_manual_plane', 'preview', 'receipt')
+    return request.get('cmd') == 'lens_blur' and request.get('action') in ('current', 'prepare_manual_plane', 'prepare_model_depth', 'preview', 'receipt')
 
 
 def guard_other(engine, name, request):
@@ -615,7 +633,7 @@ def invalidate(engine):
 
 def dispatch_rejected(request, message, started, emit, *, engine=None):
     """Complete the outer native mailbox when a shared guard prevented entry."""
-    if engine is not None and request.get('action') in ('current','prepare_manual_plane','preview'):
+    if engine is not None and request.get('action') in ('current','prepare_manual_plane','prepare_model_depth','preview'):
         try:jobs(engine).retire(request.get('request_id'),command_hash(request))
         except (ValueError,TypeError,KeyError):pass
     result = {'event': 'lens_blur_result', 'request_id': request.get('request_id'),
