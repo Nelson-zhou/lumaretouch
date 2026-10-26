@@ -98,11 +98,17 @@ fn receive(epoch: [u8; 16], value: &Value) -> bool {
     row.result = Some(value.clone());
     true
 }
+fn exact_named_not_sent(command:&Value,value:&Value)->bool {
+    if !command["action"].as_str().is_some_and(|s|s.starts_with("named_")){return true;}
+    let keys=["event","protocol","request_id","original_request","success","outcome_unknown","requires_reload","phase","completed_steps","reached","last_confirmed","authority","error"];
+    value.as_object().is_some_and(|o|o.len()==keys.len()&&keys.iter().all(|k|o.contains_key(*k)))
+        &&value["completed_steps"]==0&&value["reached"].is_null()&&value["last_confirmed"].is_null()&&value["error"].is_string()
+}
 pub(crate) fn matches_request(command:&Value,value:&Value)->bool {
     crate::history_navigation_protocol::receipt(command,value)
         || (value["event"]=="history_navigation_result" && value["protocol"]==1
             && value["request_id"]==command["request_id"] && value["original_request"]==*command
-            && value["phase"]=="not_sent" && value["authority"]=="native-admission"
+            && value["phase"]=="not_sent" && value["authority"]=="native-admission" && exact_named_not_sent(command,value)
             && value["success"]==false && value["outcome_unknown"]==false && value["requires_reload"]==false)
 }
 pub(crate) fn guards_result(epoch: [u8;16], id: &str) -> bool {

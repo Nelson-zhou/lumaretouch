@@ -1053,6 +1053,7 @@ export interface EngineStatus {
    *  控件按“引擎没说”处理（不画/禁用），而不是前端自己猜一份。 */
   ready_caps?: {
     history_navigation_protocol?: number;
+    named_recipe_versions_protocol?: number;
     upscale_restore_protocol?: number;
     upscale_restore_capability?: unknown;
     light_glow_protocol?: number;
@@ -1913,7 +1914,7 @@ export const runHistory = (action: "undo" | "redo" | "state" | "clear") =>
 
 /** Exact retained-history ownership; reads/status never imply a mutation. */
 export async function historyNavigationRequest<T>(request:import('./historyNavigation/model').HistoryRequest):Promise<T>{
-  if(request.action==='navigate'){await settleCurveEdit();notifyInspectionEditIntent();}
+  if(request.action!=='state'&&request.action!=='named_state'){await settleCurveEdit();notifyInspectionEditIntent();}
   return tauriInvoke<T>('history_navigation',{request});
 }
 export const historyNavigationStatus=<T,>(request:import('./historyNavigation/model').HistoryRequest)=>tauriInvoke<T>('history_navigation_status',{request});

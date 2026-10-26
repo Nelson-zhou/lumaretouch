@@ -116,6 +116,9 @@ def plan(request):
     rid = request.get('request_id')
     if not navigation_id(rid):
         raise ValueError('历史请求缺少有界身份')
+    from .named_recipe_versions import ACTIONS, validate_request
+    if request.get('action') in ACTIONS:
+        return validate_request(request)
     if request.get('action') == 'state' and set(request) == {'cmd', 'action', 'request_id'}:
         return None
     if request.get('action') != 'navigate' or set(request) != {'cmd', 'action', 'request_id', 'view', 'target'}:
@@ -156,7 +159,7 @@ def guard(engine, name, message):
 def finish(engine, boundary):
     if boundary['message'].get('cmd') != COMMAND:
         return False
-    if boundary['message'].get('action') == 'state' or not boundary['started']:
+    if boundary['message'].get('action') in ('state', 'named_state') or not boundary['started']:
         return True
     runtime = engine.__dict__.get('_project_recovery_runtime')
     phase = boundary.get('history_navigation_phase')
@@ -266,7 +269,18 @@ def command(engine, request, emit):
     result = packet(request)
     try:
         if route is None:
-            result.update(success=True, phase='state', view=checkpoint(engine)[0])
+            state_view = checkpoint(engine)[0]
+            metadata = {}
+            if request['action'] == 'named_state':
+                from .named_recipe_versions import catalog
+                metadata = catalog(engine)
+            result.update(success=True, phase='state', view=state_view, **metadata)
+            if request['action'] == 'named_state':
+                from .named_recipe_versions import check_packet
+                check_packet(result)
+        elif route[0] == 'named':
+            from .named_recipe_versions import apply
+            apply(engine, request, result, emit)
         else:
             navigate(engine, request, result)
     except Exception as error:
@@ -276,11 +290,16 @@ def command(engine, request, emit):
         # Once a successful edge has happened or the restore boundary was entered,
         # an exception without the exact current proof is unknown, never target success.
         unknown = phase == 'unknown' or engine.__dict__.get('_history_navigation_unresolved') is not None or bool(result['completed_steps'])
+        if request.get('action', '').startswith('named_'):
+            result = packet(request)  # Exact phase envelope; no stale view/catalog on refusal.
         result.update(success=False, phase='unknown' if unknown else 'rejected',
                       outcome_unknown=unknown, requires_reload=unknown, error=str(error)[:2000])
         if unknown:
             result['reached'] = None
             mark(engine, 'unknown')
+    if request.get('action', '').startswith('named_') and result['phase'] in ('rejected', 'unknown'):
+        from .named_recipe_versions import bound_error
+        bound_error(result)
     receipts[rid] = (deepcopy(request), deepcopy(result))
     emit(deepcopy(result))
 
@@ -294,8 +313,11 @@ def dispatch_rejected(engine, request, error, started, emit):
     from .project_recovery_runtime import _local
     boundary = getattr(_local, 'boundary', None)
     phase = None if boundary is None else boundary.get('history_navigation_phase')
-    unknown = started and request.get('action') == 'navigate' and phase not in ('rejected', 'no_change')
+    unknown = started and request.get('action') in ('navigate', 'named_create', 'named_rename', 'named_select') and phase not in ('rejected', 'no_change')
     result.update(phase='unknown' if unknown else 'rejected', outcome_unknown=unknown,
                   requires_reload=unknown, error=str(error)[:2000])
     if unknown: mark(engine, 'unknown')
+    if request.get('action', '').startswith('named_'):
+        from .named_recipe_versions import bound_error
+        bound_error(result)
     emit(result)

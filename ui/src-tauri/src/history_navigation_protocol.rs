@@ -38,9 +38,63 @@ pub(crate) fn view(v:&Value)->bool {
             && v["undo_steps"].as_u64().is_some_and(|n|n<=limit)&&v["redo_steps"].as_u64().is_some_and(|n|n<=limit))
         && v["cursor"]==v["undo_steps"]
 }
+fn named_action(r:&Value)->bool {matches!(r["action"].as_str(),Some("named_state"|"named_create"|"named_rename"|"named_select"))}
+fn version_name(v:&Value)->bool {v.as_str().is_some_and(|s|!s.is_empty()&&s.trim()==s&&s.len()<=160&&!s.chars().any(|c|c<' '||c=='\u{7f}'))}
+fn digest(v:&Value)->bool {v.as_str().is_some_and(|s|s.len()==64&&s.bytes().all(|b|b.is_ascii_digit()||(b'a'..=b'f').contains(&b)))}
+fn catalog(v:&Value)->bool {
+    digest(&v["catalog_digest"])&&v["versions"].as_array().is_some_and(|rows|rows.len()<=128&&{
+        let mut seen=std::collections::HashSet::new();
+        rows.iter().all(|row|fields(row,&["id","name"])&&text(&row["id"])&&version_name(&row["name"])&&seen.insert(row["id"].as_str().unwrap()))
+    })
+}
+fn named_request(r:&Value)->bool {
+    if r["action"]=="named_state" {return fields(r,&["cmd","action","request_id"]);}
+    let keys: &[&str]=match r["action"].as_str(){
+        Some("named_create")=>&["cmd","action","request_id","view","catalog_digest","name"],
+        Some("named_rename")=>&["cmd","action","request_id","view","catalog_digest","name","version_id"],
+        Some("named_select")=>&["cmd","action","request_id","view","catalog_digest","version_id"],_=>return false};
+    fields(r,keys)&&view(&r["view"])&&digest(&r["catalog_digest"])
+        &&revision(&r["view"]["revision"]).is_some_and(|n|n<u64::MAX)
+        &&(r["action"]=="named_select"||version_name(&r["name"]))
+        &&(r["action"]=="named_create"||text(&r["version_id"]))
+}
+fn named_receipt(r:&Value,v:&Value)->bool {
+    let phase=v["phase"].as_str().unwrap_or("");
+    let mut keys=vec!["event","protocol","request_id","original_request","success","outcome_unknown","requires_reload","phase","completed_steps","reached","last_confirmed"];
+    match phase {
+        "state" if r["action"]=="named_state"=>keys.extend(["view","catalog_digest","versions"]),
+        "applied" if r["action"]!="named_state"=>keys.extend(["catalog_digest","versions"]),
+        "rejected"|"unknown"=>keys.push("error"),_=>return false,
+    }
+    if !fields(v,&keys){return false;}
+    if r["action"]=="named_state" {
+        return v["completed_steps"]==0&&v["reached"].is_null()&&v["last_confirmed"].is_null()&&v["outcome_unknown"]==false&&v["requires_reload"]==false
+            &&((phase=="state"&&v["success"]==true&&view(&v["view"])&&catalog(v))
+               ||(phase=="rejected"&&v["success"]==false&&v["error"].is_string()));
+    }
+    if v.get("view").is_some(){return false;}
+    if phase=="unknown" {return v["success"]==false&&v["outcome_unknown"]==true&&v["requires_reload"]==true&&v["error"].is_string()
+        &&v["reached"].is_null()&&v["last_confirmed"].is_null()&&v["completed_steps"]==0;}
+    if v["outcome_unknown"]!=false||v["requires_reload"]!=false{return false;}
+    if phase=="rejected" {return v["success"]==false&&v["error"].is_string()&&v["completed_steps"]==0&&v["reached"].is_null()&&v["last_confirmed"].is_null();}
+    let reached=&v["reached"];let before=&r["view"];
+    phase=="applied"&&v["success"]==true&&v["completed_steps"]==1&&view(reached)&&v["last_confirmed"]==*reached&&catalog(v)
+        && match r["action"].as_str(){
+            Some("named_create")=>v["catalog_digest"]!=r["catalog_digest"]&&v["versions"].as_array().unwrap().iter().any(|row|row["name"]==r["name"]),
+            Some("named_rename")=>v["versions"].as_array().unwrap().iter().any(|row|row["id"]==r["version_id"]&&row["name"]==r["name"]),
+            Some("named_select")=>v["catalog_digest"]==r["catalog_digest"]&&v["versions"].as_array().unwrap().iter().any(|row|row["id"]==r["version_id"]),_=>false,
+        }
+        &&["workspace","document_id","load_id","history_max"].iter().all(|k|reached[*k]==before[*k])
+        &&revision(&before["revision"]).and_then(|n|n.checked_add(1))==revision(&reached["revision"])
+        &&(r["action"]=="named_select"||["cursor","undo_steps","redo_steps"].iter().all(|k|reached[*k]==before[*k]))
+}
 pub(crate) struct Plan {pub(crate) direction:&'static str,pub(crate) steps:u64}
 pub(crate) fn checked(r:&Value)->Result<Option<Plan>,String> {
     if r["cmd"]!="history_navigation"||!navigation_id(&r["request_id"]) {return Err("历史请求身份无效".into());}
+    if named_action(r) {
+        if !named_request(r){return Err("命名版本请求绑定无效".into());}
+        return Ok(if r["action"]=="named_state" {None}else{Some(Plan{direction:"named",steps:1})});
+    }
     if r["action"]=="state"&&fields(r,&["cmd","action","request_id"]) {return Ok(None);}
     if r["action"]!="navigate"||!fields(r,&["cmd","action","request_id","view","target"])||!view(&r["view"]) {return Err("历史选择绑定无效；请刷新历史".into());}
     let v=&r["view"];let total=v["undo_steps"].as_u64().unwrap()+v["redo_steps"].as_u64().unwrap();
@@ -50,7 +104,7 @@ pub(crate) fn checked(r:&Value)->Result<Option<Plan>,String> {
     if revision(&v["revision"]).and_then(|n|n.checked_add(target.abs_diff(cursor))).is_none() {return Err("文档版本不足以完成此跳转；未提交".into());}
     Ok(Some(Plan{direction:if target>cursor{"redo"}else{"undo"},steps:target.abs_diff(cursor)}))
 }
-pub(crate) fn mutation(r:&Value)->bool {r["cmd"]=="history_navigation"&&r["action"]=="navigate"}
+pub(crate) fn mutation(r:&Value)->bool {r["cmd"]=="history_navigation"&&matches!(r["action"].as_str(),Some("navigate"|"named_create"|"named_rename"|"named_select"))}
 pub(crate) fn read_only(r:&Value)->bool {checked(r).is_ok_and(|p|p.is_none())}
 fn reached(r:&Value,v:&Value,completed:u64,plan:&Plan)->bool {
     if !view(v) {return false;}
@@ -65,10 +119,11 @@ fn reached(r:&Value,v:&Value,completed:u64,plan:&Plan)->bool {
 pub(crate) fn receipt(r:&Value,v:&Value)->bool {
     let Some(o)=v.as_object() else{return false;};
     let required=["event","protocol","request_id","original_request","success","outcome_unknown","requires_reload","phase","completed_steps","reached","last_confirmed"];
-    if !required.iter().all(|k|o.contains_key(*k))||o.keys().any(|k|!required.contains(&k.as_str())&&k!="error"&&k!="view") {return false;}
+    if !required.iter().all(|k|o.contains_key(*k))||o.keys().any(|k|!required.contains(&k.as_str())&&k!="error"&&k!="view"&&!(named_action(r)&&(k=="catalog_digest"||k=="versions"))) {return false;}
     if v["event"]!="history_navigation_result"||v["protocol"]!=1||v["request_id"]!=r["request_id"]||v["original_request"]!=*r
         ||!v["success"].is_boolean()||!v["outcome_unknown"].is_boolean()||!v["requires_reload"].is_boolean() {return false;}
     let Ok(plan)=checked(r) else{return false;};
+    if named_action(r){return named_receipt(r,v);}
     let Some(done)=v["completed_steps"].as_u64() else{return false;};
     let phase=v["phase"].as_str().unwrap_or("");
     let Some(plan)=plan else {
@@ -171,4 +226,30 @@ mod tests {
         assert!(!navigation_shaped(&json!({"event":"other_result","protocol":1,"phase":"done","success":true,"original_request":{"cmd":"other"}})));
     }
 
+}
+
+// AUTHORED / UNRUN named-version extension; existing navigation fixtures retained.
+#[cfg(test)]
+mod named_versions_unrun {
+    use super::*;
+    use serde_json::json;
+    fn request()->Value {json!({"cmd":"history_navigation","action":"named_create","request_id":"history-nav-v1:named","name":"Natural light","catalog_digest":"b".repeat(64),
+        "view":{"workspace":"workspace","document_id":"doc","load_id":"load","revision":"7","digest":"a".repeat(64),"cursor":1,"undo_steps":1,"redo_steps":0,"history_max":64}})}
+    #[test] fn named_actions_share_namespace_but_not_old_ordinal_contract() {
+        let r=request();assert!(checked(&r).is_ok());assert!(mutation(&r));assert!(!read_only(&r));
+        let mut wrong=r.clone();wrong["target"]=json!(1);assert!(checked(&wrong).is_err());
+        wrong=r.clone();wrong["action"]=json!("navigate");assert!(checked(&wrong).is_err());
+        wrong=r.clone();wrong["request_id"]=json!("unreserved");assert!(checked(&wrong).is_err());
+        wrong=r;wrong["name"]=json!(" padded ");assert!(checked(&wrong).is_err());
+    }
+    #[test] fn only_exact_named_terminal_can_settle() {
+        let r=request();let mut reached=r["view"].clone();reached["revision"]=json!("8");
+        let v=json!({"event":"history_navigation_result","protocol":1,"request_id":r["request_id"],"original_request":r,
+            "success":true,"outcome_unknown":false,"requires_reload":false,"phase":"applied","completed_steps":1,"reached":reached,"last_confirmed":reached,
+            "catalog_digest":"c".repeat(64),"versions":[{"id":"named-id","name":"Natural light"}]});
+        assert!(receipt(&r,&v));
+        let mut wrong=v.clone();wrong["reached"]["revision"]=json!("7");assert!(!receipt(&r,&wrong));
+        wrong=v.clone();wrong["original_request"]["catalog_digest"]=json!("d".repeat(64));assert!(!receipt(&r,&wrong));
+        wrong=v;wrong["snapshot"]=json!({});assert!(!receipt(&r,&wrong));
+    }
 }

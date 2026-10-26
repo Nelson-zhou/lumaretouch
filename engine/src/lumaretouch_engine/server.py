@@ -566,6 +566,7 @@ class Engine(HVC.HairVolumeHostMixin, PortraitCropEngineMixin, HUC.HairUnificati
               # 前端刻一份"最多 64 步"或"700 ms 算一次手势"，下一轮改口径时漏改的就是它——
               # 而且这一次漏改不会报错，只会让按钮的灰与不灰和真实栈深对不上。
               "history_navigation_protocol": 1,
+              "named_recipe_versions_protocol": 1,
               "history_actions": list(self.HISTORY_ACTIONS),
               "history_max": self.HISTORY_MAX,
               "history_group_ms": self.HISTORY_GROUP_MS,
@@ -7096,7 +7097,7 @@ class Engine(HVC.HairVolumeHostMixin, PortraitCropEngineMixin, HUC.HairUnificati
                 fn(msg); return  # Dedicated exact source/copy transaction owns its history and receipts.
             if name == 'portrait_protection_receipt':
                 fn(msg); return  # Exact receipt validation/readback only; preserve every preview/capture owner.
-            if name == 'history_navigation' and msg.get('action') == 'state':
+            if name == 'history_navigation' and msg.get('action') in ('state', 'named_state'):
                 fn(msg); return  # Metadata only: no capture invalidation, revision or history write.
             if name == 'creative_document' and msg.get('action') == 'state':
                 fn(msg); return  # Read-only polling must not revoke capture/edit owners.
