@@ -8491,8 +8491,19 @@
       "source_child_index": 7,
       "title": "白平衡/自动白平衡",
       "status": "pending_independent_verification",
-      "implementation": [],
-      "verification": []
+      "implementation": [
+        "ui/src/components/RetouchPanel.tsx (exact ordinary-auto leaf)",
+        "ui/src/whiteBalance/WhiteBalanceControls.tsx",
+        "ui/src-tauri/src/white_balance_api.rs",
+        "engine/src/lumaretouch_engine/white_balance_controller.py",
+        "engine/src/lumaretouch_engine/white_balance_auto.py",
+        "core/white_balance/automatic.rs",
+        "docs/development/automatic-white-balance.md"
+      ],
+      "verification": [
+        "docs/development/automatic-white-balance-unrun.json (AUTHORED_UNRUN; not a runtime pass)",
+        "docs/development/automatic-white-balance-source-manifest.json (source-only freeze)"
+      ]
     },
     {
       "id": "control:PC-32455:9",

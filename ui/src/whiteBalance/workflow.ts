@@ -1,6 +1,7 @@
 export type Algorithm='legacy-xyz-ratio-v1'|'linear-srgb-d-white-ratio-v1';
-export type Request={request_id:string;document_id:string;action:'set_algorithm'|'reset'|'clear_pick';algorithm?:Algorithm};
-export type Context={enabled:boolean;documentId:string;reason?:string};
+export type AutoInput={input_id:string;recipe_document_id:string;recipe_revision:string};
+export type Request={request_id:string;document_id:string;action:'set_algorithm'|'reset'|'clear_pick'|'auto';algorithm?:Algorithm}&Partial<AutoInput>;
+export type Context={enabled:boolean;documentId:string;reason?:string;autoAvailable?:boolean;autoInput?:AutoInput|null};
 export type State={phase:'idle'|'sending'|'waiting'|'success'|'failure'|'uncertain';message:string;request?:Request};
 export type Ports={send:(r:Request)=>Promise<unknown>;query:(id:string)=>Promise<unknown>;refresh:()=>Promise<void>;id:()=>string;sleep:(ms:number)=>Promise<void>;timeoutMs?:number};
 const object=(x:unknown):x is Record<string,unknown>=>!!x&&typeof x==='object'&&!Array.isArray(x);
@@ -27,6 +28,13 @@ export function createWhiteBalanceWorkflow(ports:Ports){
         if(packet.phase!=='done'||!object(packet.result))throw Error('白平衡回执丢失或引擎已重启');
         const r=packet.result;
         if(r.protocol!==1||r.request_id!==request.request_id||r.document_id!==request.document_id||r.action!==request.action||typeof r.success!=='boolean'||typeof r.outcome_unknown!=='boolean')throw Error('白平衡回执不完整');
+        if(request.action==='auto'){
+          const original=r.original_request;
+          if(!object(original)||original.cmd!=='white_balance'
+            || !(['request_id','document_id','action','input_id','recipe_document_id','recipe_revision'] as const).every(k=>original[k]===request[k]))throw Error('自动白平衡原输入回执不匹配');
+          if(r.success===true&&(!object(r.diagnostic)||r.diagnostic.origin!=='classic-statistical-estimate'
+            ||r.diagnostic.policy!=='stratified-trimmed-log-gray-world-v1'||!['applied','no_change'].includes(String(r.phase))))throw Error('自动白平衡缺少统计估计证据');
+        }
         if(r.outcome_unknown)throw Error(typeof r.error==='string'?r.error:'调整结果未确认');
         if(!r.success){publish({phase:'failure',request,message:typeof r.error==='string'?r.error:'白平衡未提交'});return;}
         if(r.requires_reload!==false)throw Error('白平衡画面需要重新载入');
@@ -38,6 +46,7 @@ export function createWhiteBalanceWorkflow(ports:Ports){
         try{await bounded(ports.refresh(),Math.min(timeout,3000));}catch{refreshFailed=true;}
         if(token!==generation)return;
         let message=context.documentId===request.document_id?'白平衡调整已完成':'上一张照片的白平衡调整已完成';
+        if(request.action==='auto')message=r.no_change===true?'自动白平衡结果未变化，未增加历史步骤':'自动白平衡已应用，可撤销；这是统计估计，主导色场景仍可能偏色';
         if(refreshFailed)message+='；状态刷新失败，请稍后重试刷新';
         publish({phase:'success',request,message});return;
       }
@@ -53,10 +62,13 @@ export function createWhiteBalanceWorkflow(ports:Ports){
     subscribe:(f:(s:State)=>void)=>{listeners.add(f);return()=>{listeners.delete(f);};},
     context:(next:Context)=>{context=next;},
     busy,
-    async start(action:Request['action'],algorithm:Algorithm|undefined,expectedDocument:string,expectedGeneration=generation){
+    async start(action:Request['action'],algorithm:Algorithm|undefined,expectedDocument:string,expectedGeneration=generation,expectedInput?:string){
       if(!active||expectedGeneration!==generation||busy())return;
       if(!context.enabled||!context.documentId||context.documentId!==expectedDocument){publish({phase:'failure',message:'照片或编辑状态已变化，未提交调整'});return;}
-      const request:Request={request_id:ports.id(),document_id:context.documentId,action,...(algorithm?{algorithm}: {})};
+      if(action==='auto'&&(!context.autoAvailable||!context.autoInput||context.autoInput.input_id!==expectedInput)){
+        publish({phase:'failure',message:'自动白平衡核心或当前输入不可用，请刷新照片状态；未提交'});return;
+      }
+      const request:Request={request_id:ports.id(),document_id:context.documentId,action,...(algorithm?{algorithm}: {}),...(action==='auto'?context.autoInput:{})};
       const token=generation;publish({phase:'sending',request,message:'正在提交白平衡调整…'});running=true;
       try{await bounded(ports.send(request),timeout);}catch(error){if(token===generation){publish({phase:'uncertain',request,message:`提交结果未确认：${String(error)}`});running=false;}return;}
       if(token!==generation)return;
@@ -64,7 +76,7 @@ export function createWhiteBalanceWorkflow(ports:Ports){
     },
     async check(){if(active&&state.request&&!running)await query(state.request);},
     acknowledgeAfterReload(){
-      if(active&&state.phase==='uncertain'&&!running&&state.request&&context.enabled&&context.documentId!==state.request.document_id){publish({phase:'idle',message:'已切换至重新打开的照片；不会重发旧调整'});}
+      if(active&&state.phase==='uncertain'&&!running&&state.request&&state.request.action!=='auto'&&context.enabled&&context.documentId!==state.request.document_id){publish({phase:'idle',message:'已切换至重新打开的照片；不会重发旧调整'});}
     },
   };
 }

@@ -67,3 +67,36 @@ test('a disposed owner and stale confirmation cannot submit a new mutation',asyn
   f.flow.activate();await f.flow.start('set_algorithm','linear-srgb-d-white-ratio-v1','doc',generation);
   assert.equal(f.sent.length,0);
 });
+
+// AUTHORED / UNRUN: new automatic route is not covered by historical test passes.
+const autoInput={input_id:'a'.repeat(64),recipe_document_id:'recipe',recipe_revision:'7'};
+test('auto captures exact input and a no-change receipt is not a new history claim',async()=>{
+  const f=fixture();f.flow.context({enabled:true,documentId:'doc',autoAvailable:true,autoInput});
+  f.ports.query=async()=>f.complete(f.sent[0],{original_request:{cmd:'white_balance',...f.sent[0]},phase:'no_change',no_change:true,
+    diagnostic:{origin:'classic-statistical-estimate',policy:'stratified-trimmed-log-gray-world-v1'}});
+  await f.flow.start('auto',undefined,'doc',f.flow.generation(),autoInput.input_id);
+  assert.equal(f.sent.length,1);assert.equal(f.sent[0].input_id,autoInput.input_id);
+  assert.equal(f.flow.snapshot().phase,'success');assert.match(f.flow.snapshot().message,/未增加历史/);
+});
+test('auto refuses unavailable helper and stale input instead of falling back',async()=>{
+  const f=fixture();f.flow.context({enabled:true,documentId:'doc',autoAvailable:false,autoInput});
+  await f.flow.start('auto',undefined,'doc',f.flow.generation(),autoInput.input_id);assert.equal(f.sent.length,0);
+  f.flow.context({enabled:true,documentId:'doc',autoAvailable:true,autoInput});
+  await f.flow.start('auto',undefined,'doc',f.flow.generation(),'stale');assert.equal(f.sent.length,0);
+});
+test('unknown auto cannot unlock on photo navigation or resubmit after remount',async()=>{
+  const f=fixture();f.flow.context({enabled:true,documentId:'doc',autoAvailable:true,autoInput});
+  f.ports.send=async(r:Request)=>{f.sent.push(r);throw Error('transport unknown');};
+  await f.flow.start('auto',undefined,'doc',f.flow.generation(),autoInput.input_id);
+  f.flow.context({enabled:true,documentId:'another',autoAvailable:true,autoInput});
+  f.flow.acknowledgeAfterReload();assert.equal(f.flow.snapshot().phase,'uncertain');
+  f.flow.stop();f.flow.activate();await f.flow.start('auto',undefined,'another',f.flow.generation(),autoInput.input_id);
+  assert.equal(f.sent.length,1);
+});
+test('auto rejects a terminal receipt for another input and queries without resending',async()=>{
+  const f=fixture();f.flow.context({enabled:true,documentId:'doc',autoAvailable:true,autoInput});
+  f.ports.query=async()=>f.complete(f.sent[0],{original_request:{cmd:'white_balance',...f.sent[0],input_id:'b'.repeat(64)},
+    phase:'applied',diagnostic:{origin:'classic-statistical-estimate',policy:'stratified-trimmed-log-gray-world-v1'}});
+  await f.flow.start('auto',undefined,'doc',f.flow.generation(),autoInput.input_id);
+  assert.equal(f.flow.snapshot().phase,'uncertain');await f.flow.check();assert.equal(f.sent.length,1);
+});

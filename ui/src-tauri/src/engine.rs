@@ -317,6 +317,12 @@ pub fn spawn(py: &str, engine_src: &str, session: &str, state: Arc<AppState>,
                     }
                 }
                 if let Ok(v)=serde_json::from_str::<Value>(&line) {
+                    if v["event"]=="white_balance_result" && v["action"]=="auto"
+                        && crate::portrait_crop_protocol::unique_json(&line,16384).is_err() {
+                        st.white_balance_results.lock().unwrap().failed_bound_auto_white_balance(
+                            inspection_epoch,&v,"malformed or oversized auto WB receipt");
+                        continue;
+                    }
                     // Owned outcomes were already processed from duplicate-key-checked raw JSON.
                     // A renamed event must not enter another generic receipt or readiness path.
                     if v["request_id"].as_str().is_some_and(|id| crate::hair_volume_api::guards_result(inspection_epoch, id)) { continue; }
@@ -328,7 +334,8 @@ pub fn spawn(py: &str, engine_src: &str, session: &str, state: Arc<AppState>,
                     let scalar_review=v["request_id"].as_str().is_some_and(|id| {
                         // Even a wrong event name must not bypass an existing
                         // request's exact scalar receipt validation.
-                        st.batch_results.lock().map(|h|h.guards_review(inspection_epoch,id)).unwrap_or(true)
+                        st.white_balance_results.lock().map(|h|h.guards_auto_white_balance(inspection_epoch,id)).unwrap_or(true)
+                            || st.batch_results.lock().map(|h|h.guards_review(inspection_epoch,id)).unwrap_or(true)
                             || st.preset_results.lock().map(|h|h.guards_review(inspection_epoch,id)).unwrap_or(true)
                             || st.effect_recovery.lock().map(|h|h.guards_review(inspection_epoch,id)).unwrap_or(true)
                             || crate::people_api::guards_review(inspection_epoch,id)
@@ -347,7 +354,7 @@ pub fn spawn(py: &str, engine_src: &str, session: &str, state: Arc<AppState>,
                             || crate::final_canvas_flip_api::guards_result(inspection_epoch,id)
                             || crate::lens_blur_api::guards_result(inspection_epoch,id)
                     });
-                    if !scalar_review && v["event"] != "final_canvas_flip_result" && v["event"] != "hand_shape_result" && v["event"] != "hand_tone_result" && v["event"] != "limb_vein_result" && v["event"] != "fabric_sweat_result" && v["event"] != "portrait_crop_result" && v["event"] != "hair_unification_result" && v["event"] != "hair_volume_result" && v["event"] != "creative_selection_result" && v["event"] != "ingest_session_result" && v["event"] != "workflow_owner_result" && v["event"] != "light_glow_result" && v["event"] != "upscale_restore_result" && v["event"] != "lens_blur_result" && v["event"] != "expression_replacement_result" && v["event"] != "common_background_result" && v["event"] != "fringe_repair_result" && v["event"] != "id_background_result" && v["event"] != "torso_length_result" && v["event"] != "waist_length_result" && v["event"] != "head_size_result" && v["event"] != "body_slim_result" {
+                    if !scalar_review && !(v["event"]=="white_balance_result" && v["action"]=="auto") && v["event"] != "final_canvas_flip_result" && v["event"] != "hand_shape_result" && v["event"] != "hand_tone_result" && v["event"] != "limb_vein_result" && v["event"] != "fabric_sweat_result" && v["event"] != "portrait_crop_result" && v["event"] != "hair_unification_result" && v["event"] != "hair_volume_result" && v["event"] != "creative_selection_result" && v["event"] != "ingest_session_result" && v["event"] != "workflow_owner_result" && v["event"] != "light_glow_result" && v["event"] != "upscale_restore_result" && v["event"] != "lens_blur_result" && v["event"] != "expression_replacement_result" && v["event"] != "common_background_result" && v["event"] != "fringe_repair_result" && v["event"] != "id_background_result" && v["event"] != "torso_length_result" && v["event"] != "waist_length_result" && v["event"] != "head_size_result" && v["event"] != "body_slim_result" {
                         crate::project_recovery_fence::observed(inspection_epoch, &v);
                     }
                     if v["event"]=="ready" && v["command_ack"].as_u64()!=Some(1) {

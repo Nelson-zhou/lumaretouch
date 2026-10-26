@@ -178,6 +178,11 @@ mod scalar_binding_tests {
 struct ReviewBinding { fields: Value, bytes: usize, read_only: bool, strict_failure_identity: bool }
 impl ReviewBinding {
     fn from_command(epoch: [u8;16], value: &Value) -> Result<Option<Self>, String> {
+        if let Some(fields)=crate::white_balance_api::binding(value)? {
+            let bytes=fields.to_string().len();
+            if bytes>8192 {return Err("auto white-balance receipt binding exceeds budget".into());}
+            return Ok(Some(Self{fields,bytes,read_only:false,strict_failure_identity:true}));
+        }
         if let Some(fields) = crate::batch_host::portrait_preset_group::binding(value)? {
             let bytes = fields.to_string().len();
             if bytes > 16 * 1024 { return Err("portrait group identity exceeds receipt budget".into()); }
@@ -446,6 +451,27 @@ impl<K: ReceiptKind> ReceiptHost<K> {
     /// original review binding and receipt have been checked here.
     pub fn guards_review(&self, epoch: [u8; 16], id: &str) -> bool {
         epoch == self.epoch && self.records.iter().any(|record| record.id == id && record.review.is_some())
+    }
+    /// Auto-WB only: old/rejected auto rows must not mask a different pending
+    /// owner that happens to use the same request ID.
+    pub fn guards_auto_white_balance(&self, epoch:[u8;16], id:&str)->bool {
+        K::NAME=="white_balance" && epoch!=[0;16] && epoch==self.epoch
+            && self.records.iter().any(|record|record.id==id && record.action=="auto"
+                && record.review.as_ref().is_some_and(|review|
+                    crate::project_recovery_fence::white_balance_auto_pending(epoch,&review.fields["original_request"])))
+    }
+    /// Reject a malformed raw auto record only for its exact retained original
+    /// action/request and current RX epoch. Bare IDs cannot poison manual WB or
+    /// a replacement engine; unbound malformed input is simply not admitted.
+    pub fn failed_bound_auto_white_balance(&mut self, epoch:[u8;16], value:&Value, error:&str) {
+        if K::NAME!="white_balance" || epoch==[0;16] || epoch!=self.epoch
+            || value["event"]!="white_balance_result" || value["action"]!="auto" || value["protocol"]!=1 {return;}
+        let Some(id)=value["request_id"].as_str() else{return;};
+        let owned=self.records.iter().any(|record|record.id==id && record.action=="auto"
+            && record.review.as_ref().is_some_and(|review|
+                review.fields["original_request"]==value["original_request"]
+                    && crate::white_balance_api::mutation(&review.fields["original_request"])));
+        if owned {self.failed(id,error);}
     }
     pub fn begin(&mut self, epoch: [u8; 16], id: &str, action: &str) -> Result<(), String> {
         self.begin_bound(epoch, id, action, None)

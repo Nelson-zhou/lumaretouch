@@ -23,6 +23,10 @@ cp "$here/../core/pick_group_eye/"*.rs "$here/../LICENSE" "$here/../docs/local-w
 # Ship the Rust compiler used by headless recipe restore and batch processing.
 # Build into staging, not the source tree, so no host-specific binary is committed.
 bash "$here/build-curve-compiler.sh" "$stage/lumaretouch_engine/bin/curve-compiler"
+# Separate fixed-size classical auto-WB helper; no model or network acquisition.
+bash "$here/build-white-balance-auto.sh" "$stage/lumaretouch_engine/bin/white-balance-auto"
+mkdir -p "$stage/lumaretouch_engine/third_party/white_balance_auto"
+cp "$here/../core/white_balance/automatic"*.rs "$here/../core/white_balance/white_balance.rs" "$here/../LICENSE" "$here/../docs/development/automatic-white-balance.md" "$stage/lumaretouch_engine/third_party/white_balance_auto/"
 bash "$here/build-color-scopes.sh" "$stage/lumaretouch_engine/bin/color-scopes"
 bash "$here/build-local-masks.sh" "$stage/lumaretouch_engine/bin/local-masks"
 bash "$here/build-manual-liquify.sh" "$stage/lumaretouch_engine/bin/manual-liquify"

@@ -4,7 +4,8 @@ import {createWhiteBalanceWorkflow,type Context} from './workflow';
 export function useWhiteBalanceWorkflow(context:Context,refresh:()=>Promise<void>){
   const refreshRef=useRef(refresh);refreshRef.current=refresh;
   const workflow=useMemo(()=>createWhiteBalanceWorkflow({
-    send:r=>invoke('white_balance',{action:r.action,algorithm:r.algorithm??null,requestId:r.request_id,documentId:r.document_id}),
+    send:r=>invoke('white_balance',{action:r.action,algorithm:r.algorithm??null,requestId:r.request_id,documentId:r.document_id,
+      inputId:r.input_id??null,recipeDocumentId:r.recipe_document_id??null,recipeRevision:r.recipe_revision??null}),
     query:id=>invoke('white_balance_result',{requestId:id}),refresh:()=>refreshRef.current(),
     id:()=>`wb-${crypto.randomUUID()}`,sleep:ms=>new Promise(resolve=>setTimeout(resolve,ms)),
   }),[]);

@@ -22,6 +22,13 @@ def handle(self, p: dict, emit, _current_writer):
         emit({"event": "error", "error": f"未知 project action: {action}"
               f"（可用：{'/'.join(self.PROJECT_ACTIONS)}，名单在 ready 的 project_actions 里）"})
         return
+    if action == 'create':
+        # create saves an empty project but deliberately preserves live _docs.
+        # It cannot launder these unknown edits via runtime.switch/new_workspace.
+        from .final_canvas_flip_recovery import guard_create as guard_flip_create
+        from .white_balance_auto_recovery import guard_create as guard_auto_create
+        guard_flip_create(self)
+        guard_auto_create(self)
     if action == "state":
         emit({"event": "project_state", **self._project_state()})
         return

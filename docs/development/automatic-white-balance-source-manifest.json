@@ -1,0 +1,238 @@
+{
+  "version": 1,
+  "control": "control:PC-32455:8",
+  "scope": "Ordinary classic statistical automatic white balance; AI calibration/exposure excluded",
+  "status": "SOURCE_ONLY_RUNTIME_UNRUN",
+  "base_local_commit": "fb1e5f41f7a06f8a381013c68284564f581588a5",
+  "base_canonical_remote_commit": "c468c02ec18b6c46d163f5d045f2be4f306b621f",
+  "base_tree": "d90dfac036c3557c162975e276dc74b0376b91df",
+  "manifest_self_excluded": true,
+  "source_file_count": 36,
+  "validation": {
+    "python_ast": {
+      "status": "PASSED_STATIC_ONLY",
+      "files": [
+        "engine/src/lumaretouch_engine/final_canvas_flip_recovery.py",
+        "engine/src/lumaretouch_engine/project_package_project_commands.py",
+        "engine/src/lumaretouch_engine/project_recovery_runtime.py",
+        "engine/src/lumaretouch_engine/server.py",
+        "engine/src/lumaretouch_engine/white_balance_auto.py",
+        "engine/src/lumaretouch_engine/white_balance_auto_native.py",
+        "engine/src/lumaretouch_engine/white_balance_auto_recovery.py",
+        "engine/src/lumaretouch_engine/white_balance_auto_sampling.py",
+        "engine/src/lumaretouch_engine/white_balance_controller.py",
+        "engine/tests/test_final_canvas_flip_unrun.py",
+        "engine/tests/test_white_balance_auto_roundtrip_unrun.py",
+        "engine/tests/test_white_balance_auto_unrun.py"
+      ]
+    },
+    "json_parse": {
+      "status": "PASSED_STATIC_ONLY",
+      "files": [
+        "docs/development/automatic-white-balance-unrun.json",
+        "docs/development/handbook-traceability.json"
+      ]
+    },
+    "git_diff_check": "PASSED_STATIC_ONLY",
+    "typescript_parser": "UNRUN; no installed parser resolved; no install performed",
+    "rust_parser": "UNRUN",
+    "tests": "UNRUN",
+    "build": "UNRUN",
+    "typecheck": "UNRUN",
+    "product_imports": "NOT_PERFORMED",
+    "inference": "NOT_PERFORMED",
+    "downloads_installs": "NOT_PERFORMED",
+    "runtime_and_photographic_acceptance": "UNRUN; Qoder local responsibility"
+  },
+  "source_table_sha256": "562b07f0dc04694f90bfa0615fa8ae76ba7c43d376e66cad90790e9b78f40d7a",
+  "files": [
+    {
+      "path": "core/white_balance/automatic.rs",
+      "bytes": 4565,
+      "sha256": "1a6fa293f405b4e027e27216d246bb848689bb5511c0d8cce4fafe9c5c1e194a"
+    },
+    {
+      "path": "core/white_balance/automatic_main.rs",
+      "bytes": 1816,
+      "sha256": "aaaa6a7f38fa9330cebd31c0102297023eff3443cd7e9588a7c64b3e51c08dff"
+    },
+    {
+      "path": "core/white_balance/automatic_test.rs",
+      "bytes": 3519,
+      "sha256": "29347122b7f7eb5a727d4fa089a00b5545802d8620e152192b6ee990dabce87f"
+    },
+    {
+      "path": "docs/development/automatic-white-balance-unrun.json",
+      "bytes": 4533,
+      "sha256": "2b30fc9a68884cc971aea642a8e111d92cb5041b95ed3c3d3782ea03377df2db"
+    },
+    {
+      "path": "docs/development/automatic-white-balance.md",
+      "bytes": 11702,
+      "sha256": "ed66ace555e354e5332c6c3b42908f0dd2038138cf5ffd866afe3fcaec376abf"
+    },
+    {
+      "path": "docs/development/handbook-traceability.json",
+      "bytes": 499440,
+      "sha256": "3dad64aca8556c96c06d580bcceb6b3de7d2369bf081c79008428f7976016ea0"
+    },
+    {
+      "path": "docs/final-canvas-flip/ACCEPTANCE-UNRUN.md",
+      "bytes": 6701,
+      "sha256": "d9eb9bd117410ec7d1a8886def67359ce1c8dcfa9f892fe240383b56a4a6f12e"
+    },
+    {
+      "path": "docs/final-canvas-flip/CONTRACT.md",
+      "bytes": 8805,
+      "sha256": "e3814ea10f53e6213eeb16673cda0aeda4cae76b8c27a5d665ca69e80abd50c9"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/final_canvas_flip_recovery.py",
+      "bytes": 2005,
+      "sha256": "443c5d59eed9f0bf5a99192fee774bc29551139803a9c0fec2beb4717d1c204f"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/project_package_project_commands.py",
+      "bytes": 19835,
+      "sha256": "f30bb6a7c530a21f4b1e34f1c6cc9f938f5a0ee933d7077881f8f4d4775c13cb"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/project_recovery_runtime.py",
+      "bytes": 14122,
+      "sha256": "d4e571cccd7ef0809533e5f17a7f206909fd45d518f6c9711b7a6f38def371f4"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/server.py",
+      "bytes": 488124,
+      "sha256": "8507c1ace87fcd1dbf0f714b2783fd77d3429bca9baedffaa2a52ff09745bb84"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/white_balance_auto.py",
+      "bytes": 6566,
+      "sha256": "339fb257f601412e0306be377d166e4b6b0f8ffc818da9ab545db4772ce03956"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/white_balance_auto_native.py",
+      "bytes": 3383,
+      "sha256": "b67bb23e09513a127bcb19d688608dc424b6fd7191bf05c349de3f8e75ed0023"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/white_balance_auto_recovery.py",
+      "bytes": 3011,
+      "sha256": "f4fb09f5e75c1a913a9845ba5c1887c84b2e1921ea2e3e4703b33e4d4c71858f"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/white_balance_auto_sampling.py",
+      "bytes": 1818,
+      "sha256": "869d114e81e8a686a2102254d3a2a8409b1e1faab24ed171b9d432990b85614f"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/white_balance_controller.py",
+      "bytes": 16873,
+      "sha256": "f5b1c250576b56e625c14879771a9d41c2ea6aacb496251447c0850c355a18da"
+    },
+    {
+      "path": "engine/tests/test_final_canvas_flip_unrun.py",
+      "bytes": 15639,
+      "sha256": "b5ce981a0c7424fe809205eb83378de0f2c46a5408fb882911a6471956ad5428"
+    },
+    {
+      "path": "engine/tests/test_white_balance_auto_roundtrip_unrun.py",
+      "bytes": 3556,
+      "sha256": "3c5400be13607640e563942b1622ab11e77edc59fa2d8393d7b822fc9f00aab5"
+    },
+    {
+      "path": "engine/tests/test_white_balance_auto_unrun.py",
+      "bytes": 7929,
+      "sha256": "822c86c6e7fe5b7b54bb7553f65399daebae954f689ca490efad63348711f306"
+    },
+    {
+      "path": "packaging/build-white-balance-auto.sh",
+      "bytes": 434,
+      "sha256": "5ef0e7540dfdcd83f82c02cf79d4575b9f60729245cf69cdefc783ef41e96508"
+    },
+    {
+      "path": "packaging/stage-engine.sh",
+      "bytes": 35163,
+      "sha256": "782ea06ccc0153da7cc31399baf1868ac053e4534b7378b2522a51ceb4926347"
+    },
+    {
+      "path": "ui/src-tauri/src/engine.rs",
+      "bytes": 60171,
+      "sha256": "464c3995da4e1d0ce07d66861a8c153bb7dc5e00195f5dcea2a2a91e64fbe386"
+    },
+    {
+      "path": "ui/src-tauri/src/final_canvas_flip_api.rs",
+      "bytes": 22161,
+      "sha256": "6d92e46de230630500f5237252af1613ce4909f6060b5db71f04afbe54a6e5dc"
+    },
+    {
+      "path": "ui/src-tauri/src/project_recovery_fence.rs",
+      "bytes": 19530,
+      "sha256": "514dcdea999c34e90ba48eb8659140548bda910a6fb76678b56d52908675891a"
+    },
+    {
+      "path": "ui/src-tauri/src/receipt_host.rs",
+      "bytes": 58600,
+      "sha256": "89c7a9274c2786dad41ffb47e5fad827a60ac33d683d1b7a3c58ab15bc1440b5"
+    },
+    {
+      "path": "ui/src-tauri/src/white_balance_api.rs",
+      "bytes": 7185,
+      "sha256": "041be7167d26125da69a167b780c8cb23f07620e9300a1c23f3c2f439306d88f"
+    },
+    {
+      "path": "ui/src-tauri/src/white_balance_auto_unrun.rs",
+      "bytes": 9447,
+      "sha256": "b2ce96bec98febedc538df922212d77440c0c51105a465d01b0dab8f06cbf093"
+    },
+    {
+      "path": "ui/src-tauri/src/white_balance_host.rs",
+      "bytes": 8842,
+      "sha256": "79136e743496648d26d311cfd92c5b358574a1891ec3c9065288348827902b39"
+    },
+    {
+      "path": "ui/src/App.tsx",
+      "bytes": 172373,
+      "sha256": "c51611d10185e30d49c8e1cd6ea6fe033577afdbf397d0a16505526e14c6ee20"
+    },
+    {
+      "path": "ui/src/components/RetouchPanel.tsx",
+      "bytes": 92284,
+      "sha256": "92143b1f5e147ed63d64071fd38fe812212fb13568051238816449bcb42c5dc5"
+    },
+    {
+      "path": "ui/src/native.ts",
+      "bytes": 121793,
+      "sha256": "c1c3105d6fca97e7f7340e3946591889017e3e2c552ca4e60c0f0b4416a42c65"
+    },
+    {
+      "path": "ui/src/whiteBalance/WhiteBalanceControls.tsx",
+      "bytes": 4200,
+      "sha256": "4d68e1708543531e857f060235538e1af2a13f41c9b1d4492426b0ac7c72fa43"
+    },
+    {
+      "path": "ui/src/whiteBalance/useWhiteBalanceWorkflow.ts",
+      "bytes": 1114,
+      "sha256": "c742bce727ac0f418e236ef60a0da373bf656bc7cab8ec58950684d8c5e9a3ed"
+    },
+    {
+      "path": "ui/src/whiteBalance/workflow.test.ts",
+      "bytes": 7595,
+      "sha256": "66ab44e8da8cb082471bffba7777e05264939c044b61cd86dd7b6135bdbb2d24"
+    },
+    {
+      "path": "ui/src/whiteBalance/workflow.ts",
+      "bytes": 7504,
+      "sha256": "3fcde619ad653da122ac380d9651059066b3610d19c9ed325df7903f59232bd0"
+    }
+  ],
+  "review_source_repairs": [
+    "Tiny cropped input cannot manufacture independent grid support by resize.",
+    "Auto native no-write ID collisions cannot clear or suppress another owner terminal.",
+    "Malformed auto raw failure is exact-original-action and inspected-epoch bound.",
+    "New project preserves live documents and cannot recover unknown auto WB/final canvas flip; verified open replaces state.",
+    "Canonical nullable WB reference survives reattach/Undo/Redo/reopen; 6500 is resolved only for renderer math.",
+    "Native auto receipt mirrors explicit history limit, capped undo increment and cleared redo."
+  ]
+}

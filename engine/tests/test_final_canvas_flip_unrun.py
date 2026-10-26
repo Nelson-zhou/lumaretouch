@@ -138,6 +138,8 @@ class FakeEngine:
         self._vram = SimpleNamespace(final_canvas_flip=recipe())
         self.history = SimpleNamespace(undo=[], redo=['retained'], group='', group_ns=0)
         self.frames = []; self.rev = 9; self.fail = False
+        self.versions = SimpleNamespace(workspace='flip-fixture-workspace')
+    def _document_versions(self): return self.versions
     def _guard_editable(self, _): return None
     def _cancel_snapshot(self, _): pass
     def _close_owned_previews(self): pass

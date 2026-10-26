@@ -19,7 +19,7 @@ fn pick_parts(bound: Option<&str>) -> Option<(&str, &str, &str)> {
 }
 impl ReceiptKind for WhiteBalanceKind {
     const NAME: &'static str = "white_balance";
-    const ACTIONS: &'static [&'static str] = &["set_algorithm", "reset", "pick", "clear_pick"];
+    const ACTIONS: &'static [&'static str] = &["set_algorithm", "reset", "pick", "clear_pick", "auto"];
     fn valid_request(action: &str, document: Option<&str>) -> bool {
         if action=="pick" {pick_parts(document).is_some()} else {document.is_some_and(|d| !d.is_empty() && d.len()<=64)}
     }
@@ -31,6 +31,41 @@ impl ReceiptKind for WhiteBalanceKind {
         } else {bound};
         let (Some(success),Some(unknown))=(v["success"].as_bool(),v["outcome_unknown"].as_bool()) else{return false};
         if v["protocol"]!=1 || v["document_id"].as_str()!=document || !v["requires_reload"].is_boolean() || (success&&unknown){return false;}
+        if v["action"]=="auto" {
+            let original=&v["original_request"];
+            if crate::white_balance_api::binding(original).ok().flatten().is_none()
+                || original["request_id"]!=v["request_id"] || original["document_id"]!=v["document_id"]
+                || v["event"]!="white_balance_result" || !v["no_write"].is_boolean() {return false;}
+            if !success {
+                if !v["error"].as_str().is_some_and(|s|!s.is_empty()) {return false;}
+                return match v["phase"].as_str() {
+                    Some("rejected")=>!unknown&&v["requires_reload"]==false&&v["no_write"]==true
+                        && v.get("after").is_none()&&v.get("history").is_none()&&v["operation_committed"]!=true,
+                    Some("rolled_back")=>!unknown&&v["requires_reload"]==false&&v["no_write"]==true
+                        && exposure(&v["before"])&&v["before"]==v["after"]&&v["before_history"]==v["history"]
+                        && ["undo_steps","redo_steps"].iter().all(|k|v["history"][*k].as_u64().is_some()),
+                    Some("unknown")=>unknown&&v["requires_reload"]==true&&v["no_write"]==false,
+                    _=>false,
+                };
+            }
+            let diag=&v["diagnostic"];
+            let Some(limit)=v["history_limit"].as_u64().filter(|n|*n>0) else{return false;};
+            let (Some(old_undo),Some(new_undo),Some(old_redo),Some(new_redo))=(v["before_history"]["undo_steps"].as_u64(),
+                v["history"]["undo_steps"].as_u64(),v["before_history"]["redo_steps"].as_u64(),v["history"]["redo_steps"].as_u64()) else{return false;};
+            if [old_undo,new_undo,old_redo,new_redo].iter().any(|n|*n>limit)
+                || (v["no_change"]==false && (new_undo!=old_undo.saturating_add(1).min(limit)||new_redo!=0)) {return false;}
+            if !v["no_change"].is_boolean() || v["no_write"]!=v["no_change"]
+                || !["undo_steps","redo_steps"].iter().all(|k|v["before_history"][*k].as_u64().is_some())
+                || (v["no_change"]==true && (v["phase"]!="no_change"||v["before"]!=v["after"]||v["before_history"]!=v["history"]))
+                || (v["no_change"]==false && (v["phase"]!="applied"||v["before"]["options"]["picked_gains"]==v["after"]["options"]["picked_gains"]))
+                || diag["origin"]!="classic-statistical-estimate" || diag["policy"]!="stratified-trimmed-log-gray-world-v1"
+                || diag["domain"]!="pre-wb-linear-working-srgb" || diag["quality"]!="current-proxy-stratified" || diag["samples"]!=1024
+                || !diag["accepted"].as_u64().is_some_and(|n|(512..=1024).contains(&n))
+                || !diag["stable_tiles"].as_u64().is_some_and(|n|(12..=16).contains(&n))
+                || !diag["spread"].as_f64().is_some_and(|n|n.is_finite()&&(0.0..=0.60).contains(&n))
+                || !diag["illuminant"].as_array().is_some_and(|a|a.len()==3&&a.iter().all(|n|n.as_f64().is_some_and(|x|x.is_finite()&&x>0.0)))
+                || !v["after"]["options"]["picked_gains"].as_array().is_some_and(|a|a.len()==3&&a.iter().all(|n|n.as_f64().is_some_and(|x|(0.25..=4.0).contains(&x)))) {return false;}
+        }
         if !success{return true;}
         if v["requires_reload"]!=false || !exposure(&v["before"]) || !exposure(&v["after"])
             || !["undo_steps","redo_steps"].iter().all(|k|v["history"][*k].as_u64().is_some()){return false;}
@@ -39,7 +74,7 @@ impl ReceiptKind for WhiteBalanceKind {
         match v["action"].as_str(){
             Some("set_algorithm")=>before["temperature_shift"]==after["temperature_shift"] && before["tint_shift"]==after["tint_shift"]
                 && before["options"]["picked_gains"]==after["options"]["picked_gains"],
-            Some("pick") | Some("clear_pick")=>before["temperature_shift"]==after["temperature_shift"]
+            Some("pick") | Some("clear_pick") | Some("auto")=>before["temperature_shift"]==after["temperature_shift"]
                 && before["tint_shift"]==after["tint_shift"] && before["options"]["algorithm"]==after["options"]["algorithm"]
                 && (v["action"]!="clear_pick" || after["options"]["picked_gains"].as_array().is_some_and(|a|a.iter().all(|n|n.as_f64()==Some(1.0)))),
             Some("reset")=>after["temperature_shift"].as_f64()==Some(0.0) && after["tint_shift"].as_f64()==Some(0.0)
@@ -50,12 +85,16 @@ impl ReceiptKind for WhiteBalanceKind {
     }
     fn decorate_failure(value: &mut Value, document: Option<&str>){
         value["protocol"]=json!(1);value["requires_reload"]=json!(true);
+        if value["action"]=="auto" {value["phase"]=json!("unknown");value["no_write"]=json!(false);}
         if let Some((doc,capture,ticket))=pick_parts(document){
             value["document_id"]=json!(doc);value["capture_id"]=json!(capture);value["ticket"]=json!(ticket);
         } else if let Some(doc)=document{value["document_id"]=json!(doc);}
     }
 }
 pub(crate) type WhiteBalanceHost = ReceiptHost<WhiteBalanceKind>;
+#[cfg(test)]
+#[path="white_balance_auto_unrun.rs"]
+mod automatic_unrun;
 #[cfg(test)]
 mod tests {
     use super::*;

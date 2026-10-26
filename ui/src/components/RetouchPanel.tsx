@@ -118,6 +118,7 @@ export interface RetouchProps {
   hairBusy: boolean;
   refreshHair: () => Promise<void>;
   whiteBalancePanel?: React.ReactNode;
+  whiteBalanceAutoPanel?: React.ReactNode;
   whiteBalanceBusy?: boolean;
   colorSamplePanel?: React.ReactNode;
   blushMakeupPanel?: React.ReactNode;
@@ -1482,6 +1483,7 @@ export default function RetouchPanel(props: RetouchProps) {
                 <SpecNodes nodes={withoutCoveredLeaves(tree, f.id, f.id === "PC-32455" ? !!props.opticsPanel : !!custom)}
                   openPaths={openPathsFor(f)} renderExtra={node=>renderExtra(node,f.id)}
                   renderLeaf={(leaf, name) => {
+                    if(f.id==='PC-32455'&&leaf.path==='白平衡/自动白平衡'&&props.whiteBalanceAutoPanel)return props.whiteBalanceAutoPanel;
                     if(f.id==='PC-32464'&&leaf.path==='面部祛瑕疵/祛颈纹'&&props.neckWrinklePanel)return <p className="toolRouteNote">上方提供独立颈部细纹审核；须手绘可见颈部及首饰、衣领等保护区，不是自动颈部识别。</p>;
                     if(f.id==='PC-32468'&&leaf.path==='AI完美表情'&&props.expressionPanel)return <p className="toolRouteNote">上方接通同场次真实素材的手动替换与融合审核；自动识别人选、最佳表情选择仍未提供。</p>;
                     if (f.id === 'PC-32466' && ['脸型预设/少年', '脸型预设/圆脸适用', '脸型预设/长脸适用', '脸型预设/方脸适用', '脸型预设/程度'].includes(leaf.path)) return null; // New versioned chooser above; legacy routes remain untouched.

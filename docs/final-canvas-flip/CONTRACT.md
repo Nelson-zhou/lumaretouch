@@ -66,7 +66,11 @@ IDs only replay; a later failed invocation cannot relabel an earlier queued requ
 
 Unknown has a bounded recovery escape, not a timeout unlock. After the queue is idle,
 an explicit UI action may abandon only the old wait when native proves a different
-engine epoch or a later verified project-open/create event. The old outcome stays
+engine epoch or a later verified project-open event. Creating an empty project is
+not recovery: it preserves the live document recipes. While an unresolved flip or
+ordinary automatic-WB owner remains, create is rejected before changing workspace
+or clearing taint; a `project_created` event cannot clear either owner's native
+fence or advance flip's recovery generation. The old outcome stays
 `unknown`; no success, recipe change or resend is invented. Reset generation is
 anchored only on an explicit unresolved-request status query after admission finishes
 and the native queue is idle. The query observes idle first, then reads the reset

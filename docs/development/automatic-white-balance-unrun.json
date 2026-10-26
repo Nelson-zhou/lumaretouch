@@ -1,0 +1,37 @@
+{
+  "version": 1,
+  "control": "control:PC-32455:8",
+  "status": "AUTHORED_UNRUN",
+  "runtime_executor": "Qoder local testing; not executed in this source-only task",
+  "cases": [
+    {"id": "auto-neutral", "expect": "Neutral input/manual controls yields unchanged correction, no render/history/redo loss/autosave revision."},
+    {"id": "warm-cool-tint", "expect": "Known synthetic casts produce bounded correction, compensate both existing manual algorithms and preserve reference/EV/tone/shadows."},
+    {"id": "repeat", "expect": "Second distinct auto request on same pre-WB input/manual settings is no-op; prior picked correction is replaced, never multiplied twice."},
+    {"id": "support", "expect": "Dark, saturated, risk-interpolated, missing-quadrant, unstable/mixed-light and insufficient samples reject prewrite; dominant-colour limitation remains explicit."},
+    {"id": "tiny-crop", "expect": "4096px proxy cropped to 1×1 or either axis <32 cannot pass by fixed-proxy resizing; no independent samples manufactured."},
+    {"id": "resource", "expect": "CPU/GPU unknown or insufficient available memory, cold prefix, excessive rotated raster and worker/inspection ownership refuse before expensive new work."},
+    {"id": "flip", "expect": "Non-neutral final canvas flip remains an unavailable capture condition, without discarding or relabelling the flip."},
+    {"id": "identity", "expect": "Stale load/document/revision/source instance/crop/token, changed request reused ID, UI-supplied gains and fake picker proof cannot commit."},
+    {"id": "transport", "expect": "Pending/unknown only queries original native ID. Wrong document/input/event, duplicate JSON keys, restart and oversized receipt never prove success."},
+    {"id": "cross-owner-collision", "expect": "Native no-write auto rejection cannot clear an exposure/manual-WB pending fence with the same ID or suppress that owner's actual terminal."},
+    {"id": "malformed-epoch", "expect": "Malformed auto failure can affect only the exact retained original auto owner and RX epoch, not manual WB or a replacement process sharing an ID."},
+    {"id": "create-not-recovery", "expect": "Unknown auto WB and final-canvas flip cannot be laundered through project create, which retains live documents; project_created cannot clear either native fence or advance flip recovery generation. Clean create remains allowed."},
+    {"id": "rollback", "expect": "Fault before set, failed render with successful exact rollback, failed rollback and history-finalization failure produce distinct rejection/rollback/unknown; no taint for proved no-write or rollback."},
+    {"id": "history", "expect": "Effective auto is one ordinary non-coalesced Undo step including at the 64-step cap; Undo/Redo restores identical canonical options/manual/reference and non-WB layers."},
+    {"id": "persistence", "expect": "Project save/reopen preserves exact fixed canonical correction; absent legacy options and malformed explicit recipe rejection retain existing behaviour."},
+    {"id": "nullable-reference-reattach", "expect": "Both WB algorithms with auto/picker gains retain canonical null reference through Undo/Redo/save/reopen; only renderer math resolves 6500. Explicit 7000 K stays 7000."},
+    {"id": "output", "expect": "RGB8/RGB16 and full-resolution export use the same saved canonical WB values through existing output paths, not sampling proxy enlargement or re-estimation."},
+    {"id": "preset", "expect": "Ordinary preset/transfer copies fixed results only, not an auto mode or per-photo batch re-estimate; AI WB/exposure controls remain open."},
+    {"id": "ui", "expect": "Exact ordinary-auto leaf enabled only with matching helper/input and compatible single view; repeated clicks, folding, unmount, navigation, timeout and failed refresh do not resend or optimistically change controls."},
+    {"id": "helper", "expect": "Staged helper protocol and 41,000-byte ABI match; absent/wrong helper rejects without Python/manual/picker fallback; core/curves retains 16 KiB limit."}
+  ],
+  "authored_fixtures": [
+    "core/white_balance/automatic_test.rs",
+    "engine/tests/test_white_balance_auto_unrun.py",
+    "engine/tests/test_white_balance_auto_roundtrip_unrun.py",
+    "engine/tests/test_final_canvas_flip_unrun.py (recovery fixture extension)",
+    "ui/src-tauri/src/white_balance_auto_unrun.rs",
+    "ui/src-tauri/src/final_canvas_flip_api.rs (project-created recovery fixture extension)",
+    "ui/src/whiteBalance/workflow.test.ts (new auto cases only)"
+  ]
+}

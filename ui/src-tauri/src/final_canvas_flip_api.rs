@@ -16,7 +16,8 @@ fn workspaces() -> &'static Mutex<HashMap<[u8;16],u64>> {
 fn generation(epoch: [u8;16]) -> Result<u64,String> {
     Ok(*workspaces().lock().map_err(|_|"翻转工作区证明锁错误")?.get(&epoch).unwrap_or(&0))
 }
-/// Called only after the existing project-recovery fence validates a real open/create.
+/// Called only after the fence validates a real state-replacing project open.
+/// Creating a new project preserves live documents and is not recovery evidence.
 pub(crate) fn verified_workspace_opened(epoch: [u8;16]) {
     if let Ok(mut clock)=workspaces().lock() {
         if !clock.contains_key(&epoch) && clock.len()>=4096 { return; }
@@ -267,6 +268,10 @@ mod tests {
             assert!(!recovery_allowed(row,epoch,0,&idle)); // explicit query alone is not authority.
         }
         crate::project_recovery_fence::observed(epoch,&json!({"event":"project_opened"}));
+        assert_eq!(generation(epoch).unwrap(),0);
+        // AUTHORED / UNRUN repair: create keeps live _docs, so it is never the
+        // later state-replacing reset required by this flip's idle baseline.
+        crate::project_recovery_fence::observed(epoch,&json!({"event":"project_created","open":true,"path":"/fixture/new.lrt","project_id":"new","docs":1,"dirty":true}));
         assert_eq!(generation(epoch).unwrap(),0);
         crate::project_recovery_fence::observed(epoch,&json!({"event":"project_opened","open":true,"path":"/fixture/confirmed.lrt","project_id":"confirmed","docs":1,"dirty":false}));
         let opened=generation(epoch).unwrap();assert_eq!(opened,1);

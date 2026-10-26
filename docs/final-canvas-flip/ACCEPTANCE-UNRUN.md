@@ -41,6 +41,15 @@ active reflection works. Preserve all fixture originals and hash them before/aft
   ID already owned by exposure/custom edits must remain pending after flip not_sent;
   the other owner's real terminal must still reach and settle its own fence. Exact same-ID replay
   does not add history; same-ID changed payload rejects. No automatic resend/toggle.
+- Shared unknown-recovery repair (authored, UNRUN): after unknown flip or ordinary
+  automatic WB, new-project/create must reject before clearing runtime taint or
+  changing the workspace, because it retains the live document recipes. Even a
+  well-shaped `project_created` event must retain these native fences and must not
+  advance flip's recovery generation. Only a later verified state-replacing
+  `project_opened` or a proven different engine, with the existing idle/baseline
+  checks, permits abandoning the old wait; the old result remains unknown. Normal
+  clean create and unrelated owners retain their existing behavior. Earlier source
+  freeze hashes are historical and are not runtime evidence for this repair.
 - Recovery: stale/native refusal and proved rollback preserve previous autosave eligibility;
   one applied edit increments committed revision once; exact receipt replay does not.
   Failed rollback or partially advanced fence remains unknown and blocks save/export.

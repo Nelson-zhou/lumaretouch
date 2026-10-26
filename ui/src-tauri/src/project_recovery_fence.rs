@@ -10,13 +10,18 @@ struct Pending { command: Value, composite_history: Option<Value> }
 impl Pending { fn composite(&self)->bool {preset_alias::applies(&self.command)||crate::people_api::decoration_alias::applies(&self.command)||crate::people_api::decoration_support_alias::applies(&self.command)||crate::effect_recovery_host::alias::applies(&self.command)||self.composite_history.is_some()} }
 // Body and neck mutations retain the existing fence until a strict terminal or verified
 // workspace reopen. They do not become composite/alias history operations.
-impl Pending { fn guarded(&self) -> bool { self.command["cmd"] == "final_canvas_flip" || self.composite() || crate::batch_host::portrait_preset_group::mutation(&self.command) || crate::hand_shape_api::mutation(&self.command) || crate::hand_tone_api::mutation(&self.command) || crate::limb_vein_api::mutation(&self.command) || crate::fabric_sweat_api::mutation(&self.command) || crate::people_api::skin_reference_body::mutation(&self.command) || crate::people_api::neck_wrinkle::mutation(&self.command) } }
+impl Pending { fn guarded(&self) -> bool { self.command["cmd"] == "final_canvas_flip" || crate::white_balance_api::mutation(&self.command) || self.composite() || crate::batch_host::portrait_preset_group::mutation(&self.command) || crate::hand_shape_api::mutation(&self.command) || crate::hand_tone_api::mutation(&self.command) || crate::limb_vein_api::mutation(&self.command) || crate::fabric_sweat_api::mutation(&self.command) || crate::people_api::skin_reference_body::mutation(&self.command) || crate::people_api::neck_wrinkle::mutation(&self.command) } }
 fn pending()->&'static Mutex<HashMap<([u8;16],String),Pending>> {
     static STORE:OnceLock<Mutex<HashMap<([u8;16],String),Pending>>=OnceLock::new();
     STORE.get_or_init(||Mutex::new(HashMap::new()))
 }
 pub(crate) fn issued(epoch:[u8;16], command:&Value)->Result<(),String>{
     let mut store=pending().lock().map_err(|_|"恢复回执屏障锁不可用")?;
+    if command["cmd"]=="project" && command["action"]=="create"
+        && store.iter().any(|((owner_epoch,_),request)|*owner_epoch==epoch
+            && (request.command["cmd"]=="final_canvas_flip" || crate::white_balance_api::mutation(&request.command))) {
+        return Err("原翻转/自动白平衡结果尚未确认；新建工程保留当前照片，不能用作恢复，请打开已确认工程".into());
+    }
     if store.iter().any(|((owner_epoch,_),request)|*owner_epoch==epoch&&request.guarded()) {
         // Read only the exact group whose original export admission is pending.
         // Engine validates the requested task against its retained task ledger;
@@ -73,8 +78,12 @@ pub(crate) fn observed(epoch:[u8;16], value:&Value){
     preset_alias_history::observe_session(epoch,value);
     if matches!(value["event"].as_str(),Some("project_opened"|"project_created")) {
         let reopened=preset_alias::reopened(value);
-        if reopened {preset_alias_history::clear(epoch);crate::final_canvas_flip_api::verified_workspace_opened(epoch);}
-        store.retain(|(e,_),request|*e!=epoch||(request.guarded()&&!reopened));return;
+        let replaced=reopened && value["event"]=="project_opened";
+        if reopened {preset_alias_history::clear(epoch);}
+        if replaced {crate::final_canvas_flip_api::verified_workspace_opened(epoch);}
+        store.retain(|(e,_),request|*e!=epoch || if request.command["cmd"]=="final_canvas_flip" || crate::white_balance_api::mutation(&request.command) {
+            !replaced // A new empty project keeps the old live document recipes.
+        } else {request.guarded()&&!reopened});return;
     }
     let Some(id)=value["request_id"].as_str() else{return;};
     let event=value["event"].as_str().unwrap_or("");
@@ -82,6 +91,8 @@ pub(crate) fn observed(epoch:[u8;16], value:&Value){
     let key=(epoch,id.to_owned());
     let Some(request)=store.get(&key) else{return;};
     let command=&request.command;
+    if (crate::white_balance_api::mutation(command) || (event=="white_balance_result" && value["action"]=="auto"))
+        && (!crate::white_balance_api::mutation(command) || !crate::white_balance_api::matches_request(command,value)) {return;}
     if (command["cmd"] == "final_canvas_flip" || event == "final_canvas_flip_result")
         && (command["cmd"] != "final_canvas_flip" || event != "final_canvas_flip_result"
             || value["original_request"] != *command) { return; }
@@ -152,6 +163,15 @@ pub(crate) fn hand_shape_pending(epoch:[u8;16],command:&Value)->bool {
 pub(crate) fn final_canvas_flip_pending(epoch:[u8;16], command:&Value)->bool {
     if command["cmd"]!="final_canvas_flip" { return false; }
     let Some(id)=command["request_id"].as_str() else { return false; };
+    pending().lock().map(|store|store.get(&(epoch,id.to_owned()))
+        .is_some_and(|entry|entry.command==*command)).unwrap_or(true)
+}
+
+/// A retained auto receipt cannot suppress or settle another owner's later
+/// command with the same request ID, including native no-write collisions.
+pub(crate) fn white_balance_auto_pending(epoch:[u8;16], command:&Value)->bool {
+    if epoch==[0;16] || !crate::white_balance_api::mutation(command){return false;}
+    let Some(id)=command["request_id"].as_str() else{return false;};
     pending().lock().map(|store|store.get(&(epoch,id.to_owned()))
         .is_some_and(|entry|entry.command==*command)).unwrap_or(true)
 }

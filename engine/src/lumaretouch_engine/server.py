@@ -493,7 +493,8 @@ class Engine(HVC.HairVolumeHostMixin, PortraitCropEngineMixin, HUC.HairUnificati
         from .skin_reference_body_state import capability as skin_reference_body_capability
         from .eye_makeup_enhance_state import capability as eye_makeup_enhance_capability
         from .eye_bag_preserve_state import capability as eye_bag_preserve_capability
-        emit({"event": "ready", "protocol": PROTOCOL_VERSION, "command_ack": 1, "inspection_protocol": 1, "color_capture_protocol": 1, "color_scopes_protocol": 1, "batch_preflight_protocol": 1, "portrait_preset_group_protocol": 1, "portrait_preset_preparation_protocol": 1, "portrait_preset_delivery_protocol": 1, "preset_result_protocol": 1, "xmp_import_protocol": 1, "preset_organisation_protocol": 1, "source_relocation_protocol": 1, "managed_import_protocol": 1, "project_recovery_protocol": 1, "white_balance_result_protocol": 1, "color_picker_capture_protocol": 1, "color_picker_result_protocol": 1, "white_balance_capture_protocol": 1, "source_patch_capture_protocol": 1, "source_patch_result_protocol": 1, "clone_stamp_protocol": 1, "heal_vector_protocol": 1, "local_masks_result_protocol": 1, "effect_recovery_protocol": 1, "manual_liquify_protocol": 1, "manual_liquify_preview_protocol": 2, "optics_protocol": 1, "sky_replacement_protocol": 1, "sky_semantic_protocol": 1,"lip_makeup_protocol":1,"brow_shape_protocol":2,"nose_shape_protocol":2,"eye_shape_protocol":2,"mouth_shape_protocol":2,"people_protocol":1,"hair_colour_protocol":1,"eyeliner_protocol":int((Path(__file__).resolve().parent/"bin/liblrt_eyeliner.so").is_file()),"iris_makeup_protocol":int((Path(__file__).resolve().parent/"bin/liblrt_iris_makeup.so").is_file()),"eyelash_protocol":int((Path(__file__).resolve().parent/"bin/liblrt_eyelash.so").is_file()),"brow_makeup_protocol":int((Path(__file__).resolve().parent/"bin/liblrt_brow_makeup.so").is_file()),"lipstick_protocol":int((Path(__file__).resolve().parent/"bin/liblrt_lipstick.so").is_file()),"blush_makeup_protocol":int((Path(__file__).resolve().parent/"bin/liblrt_blush_makeup.so").is_file()),"eye_light_protocol":int((Path(__file__).resolve().parent/"bin/liblrt_eye_light.so").is_file()),"ingest_session_protocol":1,"workflow_owner_protocol":1,"reference_color_protocol":1,"sample_library_protocol":1,"semantic_colour_protocol":1,"primary_calibration_protocol":int(self._primary_calibration_service().available()),"colour_editor_protocol":int((Path(__file__).parent/"bin/liblrt_colour_editor.so").is_file()),"selective_colour_protocol":int((Path(__file__).parent/"bin/liblrt_selective_colour.so").is_file()),"photo_grain_protocol":int(PGR.available()),"colour_grading_protocol":int((Path(__file__).parent/"bin/liblrt_colour_grading.so").is_file()),"photo_detail_protocol":int(PDH.available()),"fringe_repair_protocol":int(FRN.available()),"extended_tone_protocol":int((Path(__file__).parent/"bin/liblrt_extended_tone.so").is_file()),"semantic_colour_workflow_protocol":1,"shoulder_shape_protocol":1,"leg_shape_protocol":1,"arm_shape_protocol":1,"waist_shape_protocol":1,"neck_shape_protocol":int((Path(__file__).resolve().parent/"bin/liblrt_neck_shape.so").is_file()),"body_slim_protocol":1,"body_slim_available":body_slim_ready,"body_slim_unavailable_reason":None if body_slim_ready else "整体瘦身 Rust 核心未安装或 ABI 不匹配；不会用局部瘦腰或缩放预览替代","head_size_protocol":1,"head_size_available":head_size_ready,"head_size_unavailable_reason":None if head_size_ready else "头部大小 Rust 核心未安装或 ABI 不匹配；仍可查询、归零或停用，不会以脸框代替完整头发区域","waist_length_protocol":1,"waist_length_available":waist_length_ready,"waist_length_unavailable_reason":None if waist_length_ready else "腰部长度 Rust 核心未安装或 ABI 不匹配；仍可查询、归零或停用，不会替代算法","torso_length_protocol":1,"torso_length_available":torso_length_ready,"torso_length_unavailable_reason":None if torso_length_ready else "上身长度 Rust 核心未安装或 ABI 不匹配；仍可查询、归零或停用，不会替代算法","leg_length_protocol":int((Path(__file__).resolve().parent/"bin/liblrt_leg_length.so").is_file()), "studio_background_protocol": 1, "common_background_protocol": 1, "common_background_readback_protocol": 1, "id_background_protocol": 1, "local_grade_live_protocol": 1, "prompted_masks_protocol": 1, "curve_recipe_versions": [1, 2, 3], "pid": os.getpid(),
+        from .white_balance_auto_native import available as auto_wb_available
+        emit({"event": "ready", "protocol": PROTOCOL_VERSION, "command_ack": 1, "inspection_protocol": 1, "color_capture_protocol": 1, "color_scopes_protocol": 1, "batch_preflight_protocol": 1, "portrait_preset_group_protocol": 1, "portrait_preset_preparation_protocol": 1, "portrait_preset_delivery_protocol": 1, "preset_result_protocol": 1, "xmp_import_protocol": 1, "preset_organisation_protocol": 1, "source_relocation_protocol": 1, "managed_import_protocol": 1, "project_recovery_protocol": 1, "white_balance_auto_protocol": int(auto_wb_available()), "white_balance_result_protocol": 1, "color_picker_capture_protocol": 1, "color_picker_result_protocol": 1, "white_balance_capture_protocol": 1, "source_patch_capture_protocol": 1, "source_patch_result_protocol": 1, "clone_stamp_protocol": 1, "heal_vector_protocol": 1, "local_masks_result_protocol": 1, "effect_recovery_protocol": 1, "manual_liquify_protocol": 1, "manual_liquify_preview_protocol": 2, "optics_protocol": 1, "sky_replacement_protocol": 1, "sky_semantic_protocol": 1,"lip_makeup_protocol":1,"brow_shape_protocol":2,"nose_shape_protocol":2,"eye_shape_protocol":2,"mouth_shape_protocol":2,"people_protocol":1,"hair_colour_protocol":1,"eyeliner_protocol":int((Path(__file__).resolve().parent/"bin/liblrt_eyeliner.so").is_file()),"iris_makeup_protocol":int((Path(__file__).resolve().parent/"bin/liblrt_iris_makeup.so").is_file()),"eyelash_protocol":int((Path(__file__).resolve().parent/"bin/liblrt_eyelash.so").is_file()),"brow_makeup_protocol":int((Path(__file__).resolve().parent/"bin/liblrt_brow_makeup.so").is_file()),"lipstick_protocol":int((Path(__file__).resolve().parent/"bin/liblrt_lipstick.so").is_file()),"blush_makeup_protocol":int((Path(__file__).resolve().parent/"bin/liblrt_blush_makeup.so").is_file()),"eye_light_protocol":int((Path(__file__).resolve().parent/"bin/liblrt_eye_light.so").is_file()),"ingest_session_protocol":1,"workflow_owner_protocol":1,"reference_color_protocol":1,"sample_library_protocol":1,"semantic_colour_protocol":1,"primary_calibration_protocol":int(self._primary_calibration_service().available()),"colour_editor_protocol":int((Path(__file__).parent/"bin/liblrt_colour_editor.so").is_file()),"selective_colour_protocol":int((Path(__file__).parent/"bin/liblrt_selective_colour.so").is_file()),"photo_grain_protocol":int(PGR.available()),"colour_grading_protocol":int((Path(__file__).parent/"bin/liblrt_colour_grading.so").is_file()),"photo_detail_protocol":int(PDH.available()),"fringe_repair_protocol":int(FRN.available()),"extended_tone_protocol":int((Path(__file__).parent/"bin/liblrt_extended_tone.so").is_file()),"semantic_colour_workflow_protocol":1,"shoulder_shape_protocol":1,"leg_shape_protocol":1,"arm_shape_protocol":1,"waist_shape_protocol":1,"neck_shape_protocol":int((Path(__file__).resolve().parent/"bin/liblrt_neck_shape.so").is_file()),"body_slim_protocol":1,"body_slim_available":body_slim_ready,"body_slim_unavailable_reason":None if body_slim_ready else "整体瘦身 Rust 核心未安装或 ABI 不匹配；不会用局部瘦腰或缩放预览替代","head_size_protocol":1,"head_size_available":head_size_ready,"head_size_unavailable_reason":None if head_size_ready else "头部大小 Rust 核心未安装或 ABI 不匹配；仍可查询、归零或停用，不会以脸框代替完整头发区域","waist_length_protocol":1,"waist_length_available":waist_length_ready,"waist_length_unavailable_reason":None if waist_length_ready else "腰部长度 Rust 核心未安装或 ABI 不匹配；仍可查询、归零或停用，不会替代算法","torso_length_protocol":1,"torso_length_available":torso_length_ready,"torso_length_unavailable_reason":None if torso_length_ready else "上身长度 Rust 核心未安装或 ABI 不匹配；仍可查询、归零或停用，不会替代算法","leg_length_protocol":int((Path(__file__).resolve().parent/"bin/liblrt_leg_length.so").is_file()), "studio_background_protocol": 1, "common_background_protocol": 1, "common_background_readback_protocol": 1, "id_background_protocol": 1, "local_grade_live_protocol": 1, "prompted_masks_protocol": 1, "curve_recipe_versions": [1, 2, 3], "pid": os.getpid(),
               # 版本自证（M5-c）：.deb 的 Version 取自 tauri.conf.json，这一份取自
               # packaging/VERSION 同步下来的 __version__。发布校验把两者对起来——分叉时
               # 装机 UI 上显示的版本与真正在跑的引擎版本就是两句话。
@@ -967,11 +968,12 @@ class Engine(HVC.HairVolumeHostMixin, PortraitCropEngineMixin, HUC.HairUnificati
             # 说的是另一个数——与上面那段担心是同一个错误，只是藏在另一个键上。
             if (self._exposure != (0.0,) * 7 or self._exposure_ref_k is not None
                     or WB.has_picks(self._wb_options) or self._wb_options["algorithm"] == WB.CORRECTED):
-                st = pipe.set_exposure(*self._exposure[:3], ref_k=self._exposure_ref_k,
+                # Resolve an unspecified reference only for the installed math;
+                # reattach/Undo/Redo/reopen must not rewrite canonical null as 6500.
+                pipe.set_exposure(*self._exposure[:3], ref_k=6500.0 if self._exposure_ref_k is None else self._exposure_ref_k,
                                        contrast=self._exposure[3], highlights=self._exposure[4],
                                        shadows=self._exposure[5], saturation=self._exposure[6],
                                        wb_options=self._wb_options)
-                self._exposure_ref_k = float(st["exposure_reference_k"])
             # Curves are independent of LUTs and must survive every session rebuild.
             if not LEVELS.is_identity(self._levels): pipe.set_levels(self._levels)
             if not CURVES.is_identity(self._curves):
@@ -1721,7 +1723,8 @@ class Engine(HVC.HairVolumeHostMixin, PortraitCropEngineMixin, HUC.HairUnificati
                                              tuple(self._crop_rect),
                                              float(self._crop_rotation)))
         from .final_canvas_flip_host import report as flip_report
-        return {"final_canvas_flip": flip_report(self), "fringe_repair":self._fringe_status(), "document_id": self._load_id, "source_uid": CDH.source_uid(self), "photo_detail": {**PDS.status(self._photo_detail),"available":PDH.available()}, "photo_grain": PGA.report(self), "colour_grading": CGA.report(self), "primary_calibration": PCA.report(self), "selective_colour": SCLA.report(self), "colour_editor": CEA.report(self), "extended_tone": {**ETS.status(self._extended_tone), "available": (Path(__file__).parent/"bin/liblrt_extended_tone.so").is_file()}, "hand_shape": HSR.report(self), "hand_tone": HTR.report(self), "limb_vein": LVR.report(self), "fabric_sweat": FSWR.report(self), "fabric": FABRIC.status(self), "local_masks": LM.state(self), "effect_recovery": ERR.report(self), "manual_liquify": MLR.report(self), "studio_background": SBR.report(self), "id_background": IDR.report(self), "optics": OPR.report(self), "sky_replacement": SKR.report(self), "lip_makeup": LIPR.report(self), "brow_shape": BROWR.report(self), "nose_shape": NOSER.report(self), "eye_shape": EYER.report(self), "mouth_shape": MOUTHR.report(self), "reference_color": RCR.report(self), "semantic_colour": SCR.report(self), **self._body_report(),
+        from .white_balance_auto import report as auto_wb_report
+        return {"white_balance_auto_input": auto_wb_report(self), "final_canvas_flip": flip_report(self), "fringe_repair":self._fringe_status(), "document_id": self._load_id, "source_uid": CDH.source_uid(self), "photo_detail": {**PDS.status(self._photo_detail),"available":PDH.available()}, "photo_grain": PGA.report(self), "colour_grading": CGA.report(self), "primary_calibration": PCA.report(self), "selective_colour": SCLA.report(self), "colour_editor": CEA.report(self), "extended_tone": {**ETS.status(self._extended_tone), "available": (Path(__file__).parent/"bin/liblrt_extended_tone.so").is_file()}, "hand_shape": HSR.report(self), "hand_tone": HTR.report(self), "limb_vein": LVR.report(self), "fabric_sweat": FSWR.report(self), "fabric": FABRIC.status(self), "local_masks": LM.state(self), "effect_recovery": ERR.report(self), "manual_liquify": MLR.report(self), "studio_background": SBR.report(self), "id_background": IDR.report(self), "optics": OPR.report(self), "sky_replacement": SKR.report(self), "lip_makeup": LIPR.report(self), "brow_shape": BROWR.report(self), "nose_shape": NOSER.report(self), "eye_shape": EYER.report(self), "mouth_shape": MOUTHR.report(self), "reference_color": RCR.report(self), "semantic_colour": SCR.report(self), **self._body_report(),
                 "canvas_guides": CGH.report(self),
                 "strength": float(self._strength), "params": dict(self._params),
                 "channel": self._channel,
@@ -5327,7 +5330,7 @@ class Engine(HVC.HairVolumeHostMixin, PortraitCropEngineMixin, HUC.HairUnificati
                 _gs(int(row["src_w"]), int(row["src_h"]), self._crop_rect, self._crop_rotation))
         emit(fr)
 
-    def cmd_exposure(self, p: dict, *, preserve_reference=False):
+    def cmd_exposure(self, p: dict, *, preserve_reference=False, auto_transaction=None):
         """全局曝光与白平衡（P0 注册表的 lnx.exposure / lnx.white_balance）。
 
         铁律逐字沿用 cmd_grade/cmd_lut：跑靶互斥、先全量校验后一次性提交、被拒整条
@@ -5337,6 +5340,8 @@ class Engine(HVC.HairVolumeHostMixin, PortraitCropEngineMixin, HUC.HairUnificati
         量程不靠这里的字面量：引擎把硬上限随每次事件报出去（exposure_limits），
         UI 自己抄一份数是两个会漂的地方。
         """
+        if auto_transaction is not None:
+            auto_transaction["phase"] = "no_write"
         action = p.get("action", "set")
         if action not in ("set", "clear"):
             emit({"event": "error", "error": f"未知 exposure action: {action}（可用：set/clear）"})
@@ -5350,6 +5355,11 @@ class Engine(HVC.HairVolumeHostMixin, PortraitCropEngineMixin, HUC.HairUnificati
         prev = tuple(self._exposure)
         prev_ref = self._exposure_ref_k
         prev_options = WB.check_options(self._wb_options)
+        auto_pipeline = None
+        if auto_transaction is not None:
+            from copy import deepcopy
+            auto_pipeline = deepcopy((self._vram.exposure_params, self._vram.exposure_ref_k,
+                                      self._vram.wb_options, self._vram.prepared_wb))
         if action == "clear":
             st = self._vram.clear_exposure()
             self._exposure = (0.0,) * 7
@@ -5373,11 +5383,15 @@ class Engine(HVC.HairVolumeHostMixin, PortraitCropEngineMixin, HUC.HairUnificati
             try:
                 options = WB.check_options(p["wb_options"]) if "wb_options" in p else prev_options
                 # 部分提交：拖一个滑块不该把另两个抹零，但合出来的那组必须整组校过
+                if auto_transaction is not None:
+                    auto_transaction["phase"] = "unknown"
                 st = self._vram.set_exposure(cur[0], cur[1], cur[2],
                                              ref_k=p.get("reference_k", self._exposure_ref_k),
                                              contrast=cur[3], highlights=cur[4],
                                              shadows=cur[5], saturation=cur[6], wb_options=options)
             except (ValueError, RuntimeError, OSError) as e:
+                if auto_transaction is not None and auto_pipeline == (self._vram.exposure_params, self._vram.exposure_ref_k, self._vram.wb_options, self._vram.prepared_wb):
+                    auto_transaction["phase"] = "no_write"
                 emit({"event": "error", "error": f"曝光/白平衡被拒，整条不生效：{e}"})
                 return
             self._exposure = (float(st["exposure_ev"]),
@@ -5400,12 +5414,24 @@ class Engine(HVC.HairVolumeHostMixin, PortraitCropEngineMixin, HUC.HairUnificati
                 self._vram.set_exposure(*prev[:3], ref_k=6500.0 if prev_ref is None else prev_ref,
                                         contrast=prev[3], highlights=prev[4], shadows=prev[5],
                                         saturation=prev[6], wb_options=prev_options)
+                if auto_transaction is not None:
+                    # Restore the exact installed state, including legacy None
+                    # versus explicit neutral options and the compiled gains.
+                    (self._vram.exposure_params, self._vram.exposure_ref_k,
+                     self._vram.wb_options, self._vram.prepared_wb) = deepcopy(auto_pipeline)
                 back = self._write_current_frame("exposure")
                 back.pop("render_ms", None)
+                if auto_transaction is not None:
+                    if (self._exposure != prev or self._exposure_ref_k != prev_ref or self._wb_options != prev_options
+                            or auto_pipeline != (self._vram.exposure_params, self._vram.exposure_ref_k, self._vram.wb_options, self._vram.prepared_wb)):
+                        raise RuntimeError("Auto WB rollback identity mismatch")
+                    auto_transaction["phase"] = "rolled_back"
                 emit(back)
             except Exception:      # 回滚后仍出不了一帧：能说清的只有“重新导图”
                 self._vram = None
                 rollback_ok = False
+                if auto_transaction is not None:
+                    auto_transaction["phase"] = "unknown"
                 emit({"event": "engine_warn", "warn": "曝光回滚后仍无法出帧，本会话不可信，"
                       "请重新导入图片"})
             outcome = "已退回上一状态" if rollback_ok else "配方已恢复，但画面回滚失败；请重新导入"
@@ -5415,6 +5441,8 @@ class Engine(HVC.HairVolumeHostMixin, PortraitCropEngineMixin, HUC.HairUnificati
         fr["exposure"].update(self._vram.exposure_state())
         fr["doc_state"] = self.doc_state()          # 同 crop：让宿主的滑块跟着这一笔走
         emit(fr)
+        if auto_transaction is not None:
+            auto_transaction["phase"] = "applied"
         return True
 
     def _white_balance_controller(self):
@@ -6877,6 +6905,8 @@ class Engine(HVC.HairVolumeHostMixin, PortraitCropEngineMixin, HUC.HairUnificati
                 return
             if name=='common_background_readback':
                 fn(msg); return  # Exact read-only receipt query survives broken pipelines and expired previews.
+            from .white_balance_auto_recovery import guard as auto_wb_guard
+            auto_wb_guard(self, name, msg)
             WOH.guard_command(self, name, msg)
             ISH.guard_command(self, name, msg)
             from .project_recovery_runtime import begin

@@ -169,6 +169,8 @@ export const dragParametricCurve=(spec:CurveSpec,region:number,target:number)=>i
 export const previewCurves = (spec:CurveSpec) => invoke<CurvePreview>("curve_preview",{spec});
 
 export interface DocState {
+  /** Frozen current pre-WB input, not a presented/manual-picker proof. */
+  white_balance_auto_input?: {input_id:string;recipe_document_id:string;recipe_revision:string}|null;
   final_canvas_flip?: import('./finalCanvasFlip/model').FlipReport;
   canvas_guides?: import('./canvasGuides/model').GuideReport;
   id_background?: import('./idBackground/model').Report;
@@ -1174,6 +1176,7 @@ export interface EngineStatus {
     heal_vector_protocol?: number;
     local_masks_result_protocol?: number;
     white_balance_result_protocol?: number;
+    white_balance_auto_protocol?: number;
     white_balance_capture_protocol?: number;
     color_picker_capture_protocol?: number;
     color_picker_result_protocol?: number;
