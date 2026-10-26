@@ -1,3 +1,4 @@
+import {PickGroupEyeReview} from './pickGroupEye/PickGroupEyeReview';
 import {HandShapePanel,useHandShapePort} from './handShape';
 import {handShapeRequest,handShapeStatus} from './native';
 import {HandTonePanel,useHandTonePort} from './handTone';
@@ -1018,6 +1019,11 @@ export default function App() {
     visible={library.docs.length} selected={sel.size}
     onSelectVisible={()=>setSel(prev=>new Set([...prev,...library.docs.map(d=>d.document_id)]))}
     onClearSelection={()=>{setSel(new Set());selAnchor.current=null;}}/>
+    <PickGroupEyeReview docs={library.docs} selected={sel} sessionId={library.result?.session_id??''}
+      blocked={library.pending||!!library.error||busy||!!status?.export_progress}
+      capability={status?.ready_caps?.pick_group_eye_rule}
+      running={!!strip?.picks_running||status?.pick?.running===true||status?.pick?.event==='pick_start'||status?.pick?.event==='pick_progress'}
+      run={status?.pick??null} lastError={status?.last_error??null} refresh={refreshStatus}/>
     <OriginalFocusReview docs={library.docs} selected={sel} sessionId={library.result?.session_id??''}
       blocked={library.pending||!!library.error||busy||!!status?.export_progress} available={!!status?.ready_caps?.pick_actions?.includes('focus')}
       running={!!strip?.picks_running||status?.pick?.running===true||status?.pick?.event==='pick_start'||status?.pick?.event==='pick_progress'}

@@ -37,11 +37,13 @@ from dataclasses import dataclass, field
 
 import numpy as np
 
+from . import pick_group_eye as GE
+
 SCHEMA = "lrt.pick.v1"
 # 度量算到哪一版算法就记哪一版：同一张图在不同算法下数值不可比，台账要能分辨。
 # v2 的分界是 `clarity` 多了「相对自身对比度」这一格（v1 只看绝对高频能量，会把
 # 一张整体压暗的好照片报成糊图——标定台上实测错得很干脆）
-ALGO_VERSION = "dhash-fixed9x8-area+proxy-clues-edge160+facemesh-eye-aperture-v3"
+ALGO_VERSION = "dhash-fixed9x8-area+proxy-clues-edge160+facemesh-eye-aperture-group-rule-v4"
 
 # 缩略图/预览的公共尺度：所有像素类度量都在**长边固定**的这一档上算。
 # 不换尺度不行：拉普拉斯方差随像素数直接变，一张 4000px 的锐图和一张 160px 的锐图
@@ -111,6 +113,7 @@ class Measures:
     eye_open: float | None = None          # None = 没量到（没脸 / 没装后端）
     eye_note: str = ""
     faces: int = 0
+    face_detection: dict = field(default_factory=dict)  # absent/failed is unknown, not census zero
     decoded_from: str = ""           # "decoded_proxy" / "camera_preview"：RAW 那一路必须说清
     decode_size: tuple = ()          # 度量时那份像素的尺寸（FaceMesh 就在这份上跑）
     source_size: tuple = ()
@@ -123,6 +126,7 @@ class Measures:
                 "under": self.under, "over": self.over,
                 "eye_open": (None if self.eye_open is None else self.eye_open),
                 "eye_note": self.eye_note, "faces": int(self.faces),
+                "face_detection": dict(self.face_detection),
                 "decoded_from": self.decoded_from, "decode_size": list(self.decode_size),
                 "source_size": list(self.source_size), "source_stamp": list(self.source_stamp),
                 "quality_scope": "decoded-proxy-edge160-not-original-focus",
@@ -209,6 +213,27 @@ def source_stamp(path: str) -> list[int]:
             int(st.st_mtime_ns), int(st.st_ctime_ns)]
 
 
+def source_owners(rows, session):
+    """Freeze the first source publisher's exact row/document/workspace identity."""
+    result = {}
+    for row in rows:
+        path = row['path']
+        if path not in result:
+            result[path] = {'row': row, 'path': path, 'document_id': row.get('document_id'),
+                            'session': session}
+    return result
+
+
+def owner_index(rows, session, owner):
+    """Never substitute a same-path or same-document-ID replacement row."""
+    if not owner or owner['session'] != session:
+        return -1
+    row = owner['row']
+    if row.get('path') != owner['path'] or row.get('document_id') != owner['document_id']:
+        return -1
+    return next((i for i, candidate in enumerate(rows) if candidate is row), -1)
+
+
 def reusable(suggestion, path: str, edge: int, sensitivities: dict, model_dir=None) -> bool:
     """Never combine old hash definitions, decoder scales or replaced sources."""
     if not isinstance(suggestion, dict):
@@ -221,8 +246,11 @@ def reusable(suggestion, path: str, edge: int, sensitivities: dict, model_dir=No
             or mm.get("algo") != ALGO_VERSION):
         return False
     try:
-        return mm.get("source_stamp") == source_stamp(path)
-    except OSError:
+        if mm.get("source_stamp") != source_stamp(path):
+            return False
+        # Verified detection is tied to actual model bytes, not only its directory.
+        return not mm.get("face_detection") or GE.current(restore_measures(path, mm)) is not None
+    except (OSError, KeyError, TypeError, ValueError):
         return False
 
 
@@ -232,7 +260,8 @@ def restore_measures(path: str, value: dict) -> Measures:
                     sharpness=value["sharpness"], ratio=value["clarity_ratio"],
                     contrast=value["contrast"], under=value["under"], over=value["over"],
                     eye_open=value["eye_open"], eye_note=value.get("eye_note", ""),
-                    faces=value["faces"], decoded_from=value["decoded_from"],
+                    faces=value["faces"], face_detection=dict(value.get("face_detection") or {}),
+                    decoded_from=value["decoded_from"],
                     decode_size=tuple(value["decode_size"]), source_size=tuple(value["source_size"]),
                     source_stamp=list(value["source_stamp"]), ms=dict(value.get("ms", {})))
 
@@ -373,7 +402,7 @@ def suggest(m: Measures, *, group: list[str], is_leader: bool, rank_in_group: in
             dup_bits: int | None, dup: str = "standard", blur: str = "standard",
             exposure: str = "standard", eyes: str = "standard",
             batch_median_ratio: float | None = None, group_scope: dict | None = None,
-            user_marked: bool = False) -> dict:
+            user_marked: bool = False, group_eye_rule=None) -> dict:
     """把读数折成「建议 + 原因」。每一条原因都带着**数值与阈值**，可复核。
 
     `user_marked` 是「这一格已经有用户自己的标签/标记/回收站」：那时建议只作为旁注报出，
@@ -418,23 +447,16 @@ def suggest(m: Measures, *, group: list[str], is_leader: bool, rank_in_group: in
                         "text": f"luma≥{BRIGHT_CUTOFF} 的像素占 {m.over * 100:.1f}%"
                                 f"（档上限 {EXPOSURE_SENSITIVITY[exposure] * 100:.0f}%）；"
                                 "仅量代理亮度近白占比，不证明原始传感器裁切或过曝"})
-    if m.eye_open is None:
-        reasons.append({"kind": "eyes_unknown", "method": "facemesh-eye-aperture",
-                        "value": None, "threshold": EYE_SENSITIVITY[eyes],
-                        "text": m.eye_note or "没量到眼睑几何（没探到可用人脸或未装后端）："
-                                              "这一格不写「睁眼」，也不写「闭眼」"})
-    elif m.eye_open < EYE_SENSITIVITY[eyes]:
-        labels.append("eyes_closed")
-        reasons.append({"kind": "eyes_closed", "method": "facemesh-eye-aperture",
-                        "value": round(m.eye_open, 5), "threshold": EYE_SENSITIVITY[eyes],
-                        "text": f"眼裂睁开比 {m.eye_open:.3f} 低于档阈值 {EYE_SENSITIVITY[eyes]:.3f}"
-                                "（量的是上下睑距离/眼裂宽，不是分类器；只当复核标记）"})
+    eye_labels, eye_reasons, rule_state = eye_hints(m, eyes, group_eye_rule)
+    labels.extend(eye_labels)
+    reasons.extend(eye_reasons)
     return {"schema": SCHEMA, "path": m.path, "labels": labels,
             "suggest": ("review" if labels else "none"),
             "overridden_by_user": bool(user_marked),
             "overridable": True, "auto_deleted": False, "auto_trashed": False,
             "sensitivities": {"duplicate": dup, "blur": blur,
                               "exposure": exposure, "eyes": eyes},
+            "group_eye_rule": GE.settings(group_eye_rule), "group_eye_rule_state": rule_state,
             "reasons": reasons, "measures": m.for_json(),
             "notes": ["像素度量是确定性旁注；眼睑位置依赖FaceMesh模型，不是闭眼分类器或身份识别",
                       "只测解码代理及长边160缩图，非原片100%焦点/传感器曝光验收；无标签不代表质量合格",
@@ -443,6 +465,67 @@ def suggest(m: Measures, *, group: list[str], is_leader: bool, rank_in_group: in
                       "阈值出处：packaging/pick-calibrate.py 在同一夹具上的实测读数；"
                       "夹具是程序化的脸，只能定方向，不能当真人阈值",
                       "建议不改动、不删除、也不移动任何源文件；人工标签/标记/回收站优先"]}
+
+
+def eye_hints(m: Measures, eyes: str, group_eye_rule=None):
+    """Only Rust decides the optional group predicate. Unknown never passes."""
+    rule = GE.settings(group_eye_rule)
+    state = GE.decision(m, rule)
+    labels, reasons = [], []
+    if m.eye_open is None or not np.isfinite(m.eye_open):
+        state = 'unknown' if rule['more_than'] is not None else 'disabled'
+        reasons.append({'kind': 'eyes_unknown', 'method': 'facemesh-eye-aperture',
+                        'value': None, 'threshold': EYE_SENSITIVITY[eyes],
+                        'text': m.eye_note or '没有可用眼睑几何；未知，不代表睁眼或通过'})
+    elif state == 'omit':
+        reasons.append({'kind': 'eyes_omitted_by_rule', 'method': 'detected-group-eye-rule-v1',
+                        'value': m.face_detection['count'], 'threshold': rule['more_than'],
+                        'text': f"按用户规则省略闭眼提示：本次实际检测到 {m.face_detection['count']} 张脸，"
+                                f"严格多于 {rule['more_than']}。检测上限32；不是完整人数统计，"
+                                '不是睁眼、分析通过或质量合格；仍请人工复核'})
+    elif m.eye_open < EYE_SENSITIVITY[eyes]:
+        labels.append('eyes_closed')
+        reasons.append({'kind': 'eyes_closed', 'method': 'facemesh-eye-aperture',
+                        'value': round(m.eye_open, 5), 'threshold': EYE_SENSITIVITY[eyes],
+                        'text': f'眼裂睁开比 {m.eye_open:.3f} 低于档阈值 {EYE_SENSITIVITY[eyes]:.3f}'
+                                '（上下睑距离/眼裂宽，不是闭眼分类器；仅供复核）'})
+    if state in ('unknown', 'unavailable') and rule['more_than'] is not None:
+        reasons.append({'kind': 'eyes_rule_unknown', 'method': 'detected-group-eye-rule-v1',
+                        'value': None, 'threshold': rule['more_than'],
+                        'text': '例外未生效：检测证据缺失/过期或Rust规则不可用；未省略已有闭眼提示，'
+                                '未知不代表睁眼或通过。需要时显式重新测量'})
+    return labels, reasons, state
+
+
+def reapply_eye_rule(suggestion, path, rule):
+    """Recompute only eye hints from fenced cache; never invoke FaceMesh/decoder."""
+    if not reusable(suggestion, path, suggestion.get('edge'),
+                    suggestion.get('sensitivities'), suggestion.get('model_dir')):
+        raise ValueError('原片、模型或缓存版本已变化；旧提示失效，请显式重新测量')
+    m = restore_measures(path, suggestion['measures'])
+    labels, reasons, state = eye_hints(m, suggestion['sensitivities']['eyes'], rule)
+    result = dict(suggestion)
+    result['labels'] = [v for v in suggestion['labels'] if v != 'eyes_closed'] + labels
+    result['reasons'] = [r for r in suggestion['reasons'] if not r['kind'].startswith('eyes_')] + reasons
+    result['suggest'] = 'review' if result['labels'] else 'none'
+    result['group_eye_rule'] = GE.settings(rule)
+    result['group_eye_rule_state'] = state
+    return result
+
+
+def visible(suggestion, path, error=None):
+    """Session display never presents a known stale exemption as a current hint."""
+    if not suggestion:
+        return None, error
+    try:
+        m = restore_measures(path, suggestion['measures'])
+        if (suggestion.get('fingerprint') != fingerprint() or source_stamp(path) != m.source_stamp
+                or (m.face_detection and GE.current(m, hash_model=False) is None)
+                or (suggestion.get('group_eye_rule_state') == 'omit' and not m.face_detection)):
+            raise ValueError('stale')
+    except (KeyError, TypeError, ValueError, OSError):
+        return None, '原片、检测模型或缓存版本变化；旧提示已隐藏，未知不代表通过，请重新测量'
+    return suggestion, error
 
 
 def thresholds_for_json() -> dict:
@@ -460,5 +543,5 @@ def fingerprint() -> str:
                  sorted(BLUR_SENSITIVITY.items()), sorted(BLUR_RATIO_SENSITIVITY.items()),
                  sorted(BLUR_REL_FACTOR.items()), CONTRAST_FLOOR,
                  sorted(EXPOSURE_SENSITIVITY.items()),
-                 sorted(EYE_SENSITIVITY.items()), DARK_CUTOFF, BRIGHT_CUTOFF)).encode("utf-8")
+                 sorted(EYE_SENSITIVITY.items()), GE.VERSION, GE.EVIDENCE_SCHEMA, DARK_CUTOFF, BRIGHT_CUTOFF)).encode("utf-8")
     return hashlib.sha256(blob).hexdigest()[:16]

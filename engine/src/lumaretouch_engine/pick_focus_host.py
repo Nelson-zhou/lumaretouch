@@ -17,7 +17,8 @@ def running(engine):
     """Wire state may be terminal while the thread retains admission ownership."""
     worker = getattr(engine, "_picks", None)
     return bool(worker is not None and worker.is_alive()
-                and not getattr(worker, "_lrt_focus_terminal", False))
+                and not getattr(worker, "_lrt_focus_terminal", False)
+                and not getattr(worker, "_lrt_pick_terminal", False))
 
 
 def _write(engine, row, path, **values):

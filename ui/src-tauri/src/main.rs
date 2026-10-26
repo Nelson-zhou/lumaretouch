@@ -1824,8 +1824,12 @@ fn pick(
     focus_x: Option<f64>,
     focus_y: Option<f64>,
     focus_documents: Option<Vec<String>>,
+    pick_documents: Option<Vec<String>>,
+    group_eye_rule: Option<Value>,
 ) -> Result<Value, String> {
     let mut cmd = json!({"cmd": "pick", "action": action});
+    if let Some(v) = pick_documents { cmd["pick_documents"] = json!(v); }
+    if let Some(v) = group_eye_rule { cmd["group_eye_rule"] = v; }
     if let Some(v) = indices {
         cmd["indices"] = json!(v);
     }

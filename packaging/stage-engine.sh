@@ -15,6 +15,11 @@ mkdir -p "$stage"
 mkdir -p "$stage/lumaretouch_engine/third_party/sky_semantic"
 cp "$here/../docs/development/sky-semantic-proposals.md" "$stage/lumaretouch_engine/third_party/sky_semantic/README.md"
 
+# Optional detected-group closed-eye hint predicate. Source-only / UNRUN.
+bash "$here/build-pick-group-eye.sh" "$stage/lumaretouch_engine/bin/liblrt_pick_group_eye.so"
+mkdir -p "$stage/lumaretouch_engine/third_party/pick_group_eye"
+cp "$here/../core/pick_group_eye/"*.rs "$here/../LICENSE" "$here/../docs/local-workflow/PICK-GROUP-EYE-RULE-SOURCE.md" "$stage/lumaretouch_engine/third_party/pick_group_eye/"
+
 # Ship the Rust compiler used by headless recipe restore and batch processing.
 # Build into staging, not the source tree, so no host-specific binary is committed.
 bash "$here/build-curve-compiler.sh" "$stage/lumaretouch_engine/bin/curve-compiler"

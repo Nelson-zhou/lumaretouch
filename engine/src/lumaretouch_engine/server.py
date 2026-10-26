@@ -577,6 +577,7 @@ class Engine(HVC.HairVolumeHostMixin, PortraitCropEngineMixin, HUC.HairUnificati
               "pick_thresholds": PK.thresholds_for_json(),
               "pick_schema": PK.SCHEMA, "pick_algo": PK.ALGO_VERSION,
               "pick_fingerprint": PK.fingerprint(),
+              "pick_group_eye_rule": {"version": 1, "default": None, "min": 1, "max": 31, "detection_limit": 32},
               "pick_edge": [self.PICK_MIN_EDGE, self.PICK_MAX_EDGE],
               "pick_edge_default": self.PICK_EDGE})
 
@@ -1836,6 +1837,7 @@ class Engine(HVC.HairVolumeHostMixin, PortraitCropEngineMixin, HUC.HairUnificati
                 # 挑图那一格（PICK-001）。徽章只能读引擎这份：前端自己按缩略图亮度判断
                 # 「这张糊不糊」就是又造一个不可复算的出处
                 "pick": d.get("pick"), "pick_error": d.get("pick_error")}
+        row["pick"], row["pick_error"] = PK.visible(d.get("pick"), d["path"], d.get("pick_error"))
         from .pick_original_focus import visible as focus_visible
         row["pick_focus"], row["pick_focus_error"] = focus_visible(d)
         from .virtual_copy_host import IDENTITY_KEYS
@@ -2057,9 +2059,9 @@ class Engine(HVC.HairVolumeHostMixin, PortraitCropEngineMixin, HUC.HairUnificati
         return [d["path"] for d in self._docs]
 
     # ------------------------------------------------------------ 挑图建议（LNX-PICK-001）
-    PICK_ACTIONS = ("analyze", "focus", "stop", "state")
+    PICK_ACTIONS = ("analyze", "focus", "group_rule", "stop", "state")
     PICK_KEYS = {"cmd", "action", "indices", "paths", "edge", "model_dir", "force",
-                 "duplicate", "blur", "exposure", "eyes"}
+                 "duplicate", "blur", "exposure", "eyes", "pick_documents"}
     # 度量时的解码尺度：像素类度量自己在 picks 层再降到长边 160，这一档决定的是
     # 「FaceMesh 能看到多大的眼」与「要不要为一原图付全额解码」。160 太小（眼睑几个
     # 像素，几何量全是噪声），全额解码太慢（挑图是一次过几百张的后台活）。
@@ -2098,6 +2100,7 @@ class Engine(HVC.HairVolumeHostMixin, PortraitCropEngineMixin, HUC.HairUnificati
         with self._doclock:
             n = len(self._docs)
             rows = list(self._docs)
+            owners = PK.source_owners(rows, LQ.session_id(self))
         idxs: list = []
         if want_idx is not None:
             if not isinstance(want_idx, list) or not want_idx:
@@ -2127,6 +2130,19 @@ class Engine(HVC.HairVolumeHostMixin, PortraitCropEngineMixin, HUC.HairUnificati
                 idxs.append(by[ap])
         else:
             idxs = list(range(n))
+        if "pick_documents" in p:
+            ids = p["pick_documents"]
+            if (want_idx is None or len(ids) != len(idxs)
+                    or any(rows[i].get("document_id") != ident for i, ident in zip(idxs, ids))):
+                emit({"event": "pick_failed", "action": "analyze",
+                      "error": "选择文档在目标捕获时变化，请刷新后重试"})
+                return None
+            # The legacy measurement publisher is source-path keyed. A virtual-copy
+            # row must not silently cause measurement to be written onto another row.
+            if any(next(j for j, row in enumerate(rows) if row["path"] == rows[i]["path"]) != i for i in idxs):
+                emit({"event": "pick_failed", "action": "analyze",
+                      "error": "代理测量以源路径归属；请选择该来源的首个文档，不能把虚拟副本结果写到其他照片"})
+                return None
         out: list = []
         seen: set = set()
         skipped = 0
@@ -2138,7 +2154,7 @@ class Engine(HVC.HairVolumeHostMixin, PortraitCropEngineMixin, HUC.HairUnificati
                     rows[i].get("pick"), rows[i]["path"], edge, sens, p.get("model_dir")):
                 skipped += 1
                 continue
-            out.append((i, rows[i]["path"]))
+            out.append((i, rows[i]["path"], owners[rows[i]["path"]]))
         if skipped:
             emit({"event": "engine_warn", "warn": f"pick：{skipped} 格已有建议，本次跳过"
                                                   "（要重算给 force=true；判据指纹变了也建议重算，"
@@ -2154,9 +2170,20 @@ class Engine(HVC.HairVolumeHostMixin, PortraitCropEngineMixin, HUC.HairUnificati
                   "reason": "没有要分析的格子（都已分析过或被筛掉）",
                   "fingerprint": PK.fingerprint(), "sensitivities": sens})
             return False
+        with self._doclock:
+            session = LQ.session_id(self)
+            if any(PK.owner_index(self._docs, session, owner) < 0 for _, _, owner in idxs):
+                emit({"event": "pick_failed", "action": "analyze", "running": False,
+                      "error": "测量目标所属文档或工程已替换；本次未启动"})
+                return False
+            owners = PK.source_owners(self._docs, session)
+            if any(owners[path]['row'] is not target['row'] for _, path, target in idxs):
+                emit({"event": "pick_failed", "action": "analyze", "running": False,
+                      "error": "来源归属在启动前变化；本次未启动，请重新选择"})
+                return False
         self._pick_stop.clear()
-        # Freeze source identity, not mutable filmstrip positions.
-        self._pick_args = (list(idxs), int(edge), model_dir, dict(sens))
+        # Freeze exact owners for BOTH measured and pooled cache publications.
+        self._pick_args = (list(idxs), int(edge), model_dir, dict(sens), owners)
         self._picks = threading.Thread(target=self._pick_loop, daemon=True)
         self._picks.start()
         return True
@@ -2198,6 +2225,8 @@ class Engine(HVC.HairVolumeHostMixin, PortraitCropEngineMixin, HUC.HairUnificati
                 # 多人图取**最小**的那一张脸的那一只眼：任何一个人闭眼都值得复核，
                 # 取均值会把「半个人闭眼」冲淡成"没问题"
                 m.eye_open = min(vals) if vals else None
+                # Same actual native result, source and decoded pixels as eyelid geometry.
+                m.face_detection = PK.GE.capture(pc, fn, m)
                 if m.eye_open is None:
                     m.eye_note = (f"画面里探到 {m.faces} 张脸，但没有一份关键点够 478 点契约"
                                   "——这一格不写「睁眼」，也不写「闭眼」")
@@ -2208,15 +2237,14 @@ class Engine(HVC.HairVolumeHostMixin, PortraitCropEngineMixin, HUC.HairUnificati
                 "face_ms": (t3 - t2) / 1e6}
         return m
 
-    def _pick_write(self, path: str, **fields) -> int:
-        """按 path 认格子再写（与缩略图同一条铁律：列表可能在半路上被换掉）。"""
+    def _pick_write(self, path: str, *, owner, **fields) -> int:
+        """Publish only to the captured exact row in its original workspace."""
         with self._doclock:
-            for i, d in enumerate(self._docs):
-                if d["path"] == path:
-                    for k, v in fields.items():
-                        d[k] = v
-                    return i
-        return -1
+            i = PK.owner_index(self._docs, LQ.session_id(self), owner)
+            if i < 0 or owner['path'] != path:
+                return -1
+            self._docs[i].update(fields)
+            return i
 
     def _pick_loop(self):
         """两遍：先逐张量读数（能发进度），再一次成组、折建议（分组要看到全部哈希）。
@@ -2226,7 +2254,11 @@ class Engine(HVC.HairVolumeHostMixin, PortraitCropEngineMixin, HUC.HairUnificati
         """
         from statistics import median
 
-        idxs, edge, model_dir, sens = self._pick_args
+        idxs, edge, model_dir, sens, owners = self._pick_args
+
+        def owned(path):
+            with self._doclock:
+                return PK.owner_index(self._docs, LQ.session_id(self), owners.get(path)) >= 0
         t0 = monotonic_ns()
         from . import face as face_mod
         fn = None
@@ -2241,16 +2273,26 @@ class Engine(HVC.HairVolumeHostMixin, PortraitCropEngineMixin, HUC.HairUnificati
         order: list = []
         measured: dict = {}
         failed = 0
-        for j, (i, path) in enumerate(idxs):
+        for j, (i, path, _target_owner) in enumerate(idxs):
             if self._pick_stop.is_set():
                 break
+            if not owned(path):
+                failed += 1
+                continue
             try:
                 m = self._pick_measure_one(path, edge, fn, eyes_error)
             except Exception as e:                # 一张解不开只坏自己那一格，不带到倒整批
                 failed += 1
-                self._pick_write(path, pick_error=f"{type(e).__name__}: {e}", pick=None)
-                emit({"event": "pick_failed", "index": i, "path": path,
-                      "error": f"{type(e).__name__}: {e}"})
+                idx = self._pick_write(path, owner=owners.get(path), pick_error=f"{type(e).__name__}: {e}", pick=None)
+                if idx >= 0:
+                    emit({"event": "pick_failed", "action": "analyze", "index": idx, "path": path,
+                          "error": f"{type(e).__name__}: {e}"})
+                else:
+                    emit({"event": "pick_failed", "action": "analyze",
+                          "error": "原测量文档或工程已替换；未向新文档写入失败状态"})
+                continue
+            if not owned(path):
+                failed += 1
                 continue
             measured[path] = m
             order.append(path)
@@ -2262,31 +2304,35 @@ class Engine(HVC.HairVolumeHostMixin, PortraitCropEngineMixin, HUC.HairUnificati
         # 分组池 = 本次量到的 + 本会话此前已经量过的那些格的哈希（存在 row["pick"] 里）。
         # 少了后半截就会出这种错：重跑一张，那张的"组内 3 张"变成"组内 1 张"，徽章自己在动。
         with self._doclock:
-            stored = [(d["path"], d.get("pick")) for d in self._docs]
+            session = LQ.session_id(self)
+            stored = [(p, owner['row'].get('pick')) for p, owner in owners.items()
+                      if PK.owner_index(self._docs, session, owner) >= 0]
         reused = 0
+        cached_rules = {}
         for p, pk in stored:
             if p in measured or not pk:
                 continue
             if not PK.reusable(pk, p, edge, sens, model_dir):
-                self._pick_write(p, pick=None, pick_error="旧建议与源文件/算法/解码参数不匹配，请重新分析")
+                self._pick_write(p, owner=owners.get(p), pick=None, pick_error="旧建议与源文件/算法/解码参数不匹配，请重新分析")
                 continue
             try:
                 measured[p] = PK.restore_measures(p, pk["measures"])
             except (KeyError, TypeError, ValueError):
-                self._pick_write(p, pick=None, pick_error="旧建议读数不完整，请重新分析")
+                self._pick_write(p, owner=owners.get(p), pick=None, pick_error="旧建议读数不完整，请重新分析")
                 continue
+            cached_rules[p] = pk.get("group_eye_rule")
             reused += 1
         # Exclude sources removed from the session or changed since measurement
         # before group construction (not only when their own badge is published).
         active_paths = {p for p, _ in stored}
         for p, m in list(measured.items()):
             try:
-                valid = p in active_paths and PK.source_stamp(p) == m.source_stamp
+                valid = p in active_paths and owned(p) and PK.source_stamp(p) == m.source_stamp
             except OSError:
                 valid = False
             if not valid:
                 measured.pop(p)
-                self._pick_write(p, pick=None, pick_error="原片在分析后变化或移出会话，请重新分析")
+                self._pick_write(p, owner=owners.get(p), pick=None, pick_error="原片在分析后变化或移出会话，请重新分析")
         # Recompute all valid pooled badges together, including cached members.
         # Otherwise re-analyzing B changes A's group but leaves A's old badge intact.
         pool = {p: {"dhash": m.dhash, "ratio": m.ratio,
@@ -2319,14 +2365,18 @@ class Engine(HVC.HairVolumeHostMixin, PortraitCropEngineMixin, HUC.HairUnificati
             gi = info.get(p)
             m = measured[p]
             try:
-                unchanged = PK.source_stamp(p) == m.source_stamp
+                unchanged = owned(p) and PK.source_stamp(p) == m.source_stamp
             except OSError:
                 unchanged = False
             if not unchanged:
-                self._pick_write(p, pick=None, pick_error="原片在分析后变化，请重新分析")
+                self._pick_write(p, owner=owners.get(p), pick=None, pick_error="原片在分析后变化，请重新分析")
                 continue
             with self._doclock:
-                row = next((d for d in self._docs if d["path"] == p), None)
+                owner = owners.get(p)
+                row = owner['row'] if PK.owner_index(self._docs, LQ.session_id(self), owner) >= 0 else None
+            if row is None:
+                failed += 1
+                continue
             marked = bool(row is not None and ((row.get("tags") or []) or row.get("label")
                                                or row.get("trashed")))
             sug = PK.suggest(m, group=(gi["members"] if gi else [p]),
@@ -2337,7 +2387,7 @@ class Engine(HVC.HairVolumeHostMixin, PortraitCropEngineMixin, HUC.HairUnificati
                              exposure=sens["exposure"], eyes=sens["eyes"],
                              batch_median_ratio=med_ratio,
                              group_scope={"analyzed": len(order), "pooled": len(pool)},
-                             user_marked=marked)
+                             user_marked=marked, group_eye_rule=cached_rules.get(p))
             sug["fingerprint"] = fp
             sug["edge"] = int(edge)
             sug["model_dir"] = model_dir
@@ -2345,26 +2395,31 @@ class Engine(HVC.HairVolumeHostMixin, PortraitCropEngineMixin, HUC.HairUnificati
             sug["group_leader"] = (gi["members"][0] if gi else None)
             sug["decoded_from"] = m.decoded_from
             sug["analyzed_at_ns"] = int(monotonic_ns())
-            idx = self._pick_write(p, pick=sug, pick_error=None)
+            idx = self._pick_write(p, owner=owners.get(p), pick=sug, pick_error=None)
+            if idx < 0:
+                failed += 1
+                continue
             emit({"event": "pick_item", "index": idx, **sug})
             emitted += 1
         # Group membership depends on every source. If one changed while badges
         # were published, invalidate the entire result rather than leave peers
         # referring to a now-stale member. Final session state clears early items.
-        with self._doclock:
-            current_paths = {d["path"] for d in self._docs}
         invalid_pool = False
         for p, m in measured.items():
             try:
-                invalid_pool |= p not in current_paths or PK.source_stamp(p) != m.source_stamp
+                invalid_pool |= not owned(p) or PK.source_stamp(p) != m.source_stamp
             except OSError:
                 invalid_pool = True
         if invalid_pool:
             for p in measured:
-                self._pick_write(p, pick=None, pick_error="分组来源在发布时变化，请重新分析")
+                self._pick_write(p, owner=owners.get(p), pick=None, pick_error="分组来源在发布时变化，请重新分析")
             failed += len(measured)
             emitted = 0
             groups = []
+        # Wire completion is terminal before the final session snapshot. Keep the
+        # thread alive/reserved until return: admission still checks is_alive(),
+        # not this display marker, so a new job cannot steal the stop token.
+        threading.current_thread()._lrt_pick_terminal = True
         emit({"event": "pick_done", "count": emitted, "measured": len(order), "failed": failed,
               "source_changed": invalid_pool,
               "pooled": len(pool), "reused_hashes": reused,
@@ -2392,6 +2447,10 @@ class Engine(HVC.HairVolumeHostMixin, PortraitCropEngineMixin, HUC.HairUnificati
         （这一路只有读文件，没有任何 unlink/move/trash 的代码路径，回收站是工程记录）；
         近似分组与判定原因可见（`groups` 与每条 reason 的 method/value/threshold）。
         """
+        if p.get("action") == "group_rule":
+            from .pick_group_eye_host import apply
+            apply(self, p, emit)
+            return
         if p.get("action") == "focus":
             from .pick_focus_host import start
             start(self, p, emit)
@@ -2441,6 +2500,13 @@ class Engine(HVC.HairVolumeHostMixin, PortraitCropEngineMixin, HUC.HairUnificati
         if not self._docs:
             emit({"event": "error", "error": "底片条是空的：先 session scan/add"})
             return
+        if "pick_documents" in p:
+            try:
+                from .pick_group_eye_host import targets
+                targets(self, p)  # fail closed on reordered/hidden selected rows
+            except (KeyError, TypeError, ValueError) as exc:
+                emit({"event": "pick_failed", "action": "analyze", "error": str(exc)})
+                return
         idxs = self._pick_targets(p, edge, sens)
         if idxs is None:
             return

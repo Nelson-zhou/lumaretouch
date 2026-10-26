@@ -432,6 +432,10 @@ export interface PickMeasures {
   eye_open: number | null;
   eye_note?: string;
   faces: number;
+  face_detection?: {schema: string; status: string; count: number; backend: string;
+    detector_sha256: string; model_path: string; model_stamp: number[];
+    source_path: string; source_stamp: number[]; decode_size: number[];
+    decoded_from: string; eye_open: number; limit: number; limit_reached: boolean};
   /** "decoded_proxy" / "camera_preview": neither is an original-focus verdict. */
   decoded_from?: string;
   decode_size?: number[];
@@ -442,6 +446,9 @@ export interface PickMeasures {
   algo: string;
   ms?: Record<string, number>;
 }
+
+export type PickGroupEyeRule = {version: 1; more_than: number | null};
+export type PickGroupEyeCapability = {version: number; default: null; min: number; max: number; detection_limit: number};
 
 export interface PickSuggestion {
   schema: string;
@@ -460,6 +467,8 @@ export interface PickSuggestion {
   fingerprint?: string;
   edge?: number;
   batch_median_ratio?: number;
+  group_eye_rule?: PickGroupEyeRule;
+  group_eye_rule_state?: string;
   group_leader?: string | null;
   decoded_from?: string;
   analyzed_at_ns?: number;
@@ -1179,6 +1188,7 @@ export interface EngineStatus {
     /** 挑图（LNX-PICK-001）：动作名单、四组档位的可选值、阈值本体与判据指纹。
      *  面板上的下拉项由这几格决定，前端不刻一份档名（刻了就双出处）。 */
     pick_actions?: string[];
+    pick_group_eye_rule?: PickGroupEyeCapability;
     pick_sensitivities?: Record<string, string[]>;
     pick_thresholds?: Record<string, unknown>;
     pick_fingerprint?: string;
@@ -1857,13 +1867,16 @@ export const runSession = (
  *  都不抄一份：抄了就是双出处，加一档时先漂的那一处永远是抄的那一份。
  *  参数一律"给了才附"，默认档位由引擎说。 */
 export const runPick = (
-  action: "analyze" | "focus" | "stop" | "state",
+  action: "analyze" | "focus" | "group_rule" | "stop" | "state",
   opts: { indices?: number[]; paths?: string[]; edge?: number; model_dir?: string;
           duplicate?: string; blur?: string; exposure?: string; eyes?: string;
-          force?: boolean; focus_x?: number; focus_y?: number; focus_documents?: string[] } = {},
+          force?: boolean; focus_x?: number; focus_y?: number; focus_documents?: string[];
+          pick_documents?: string[]; group_eye_rule?: PickGroupEyeRule } = {},
 ) => {
-  const {focus_x, focus_y, focus_documents, ...rest} = opts;
+  const {focus_x, focus_y, focus_documents, pick_documents, group_eye_rule, ...rest} = opts;
   return invoke<{ requested: boolean }>("pick", {action, ...rest,
+    ...(pick_documents === undefined ? {} : {pickDocuments: pick_documents}),
+    ...(group_eye_rule === undefined ? {} : {groupEyeRule: group_eye_rule}),
     ...(focus_x === undefined ? {} : {focusX: focus_x}),
     ...(focus_y === undefined ? {} : {focusY: focus_y}),
     ...(focus_documents === undefined ? {} : {focusDocuments: focus_documents})});
