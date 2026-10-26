@@ -6,8 +6,12 @@ from .semantic_colour_host import OWNED
 from .semantic_colour_batch_target import owned_key
 
 
-def publish(owner,planned,*,policy,source_snapshot=None,review_token=None):
+def publish(owner,planned,*,policy,source_snapshot=None,review_token=None,automatic_authority=None):
     """Candidates are independently fitted and verified before this publication."""
+    if automatic_authority is not None:
+        from .semantic_colour_review import automatic_authority as check_authority
+        automatic_authority=check_authority(automatic_authority)
+        if review_token is not None:raise ValueError('Automatic assessment cannot claim a reviewed batch token')
     if not planned:raise ValueError('没有可提交的追色目标')
     live=owner.documents.current_index();frame=None
     for index,row,before,after in planned:
@@ -36,6 +40,7 @@ def publish(owner,planned,*,policy,source_snapshot=None,review_token=None):
             'before':before,'after':after,'applied':owned_key(after),'before_owned':owned_key(before)}
     owner.ledger[bid]={'ops':[S.OP],'targets':targets,'at_ns':owner.monotonic(),'undone':False,
         'policy':policy,'source_snapshot':source_snapshot,'semantic_colour_owned':True,'review_token':review_token}
+    if automatic_authority is not None:owner.ledger[bid]['automatic_authority']=deepcopy(automatic_authority)
     owner.last_result={'kind':'commit','batch_id':bid,'applied':[x[0] for x in planned],'skipped':[]}
     owner.editor.mark_dirty();return bid,frame
 

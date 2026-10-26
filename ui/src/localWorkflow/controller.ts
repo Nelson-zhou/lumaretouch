@@ -1,3 +1,4 @@
+import {checkedSemanticArchive, sameSemanticArchive} from './semanticArchive';
 import {checkedHandoff, fetchReviewImage, reviewAck, reviewKey, type ReviewImages, type ReviewSide, type ReviewStep} from './presetReview';
 import {checkedCatalogue, type PresetCatalogue} from './presetCatalogue';
 // SPDX-License-Identifier: GPL-3.0-or-later
@@ -94,6 +95,24 @@ export class WorkflowController {
       ready: false, busy: false, capabilities: null, definitions: [], runs: [], active_run: null,
       inspected_run: null, pending: this.restorePending(), lease: null, preflight: null, export_profile: null, export_profiles: [], profile_pending: false, preset_catalogue: null,
       review_images: null, automatic_start_ack: null, message: '', error: !host ? '本地工作流宿主尚未接入。可编辑草稿，但不能保存、检测或运行。' : ''};
+  }
+  async selectSemanticArchive(nodeId: string, path: string): Promise<void> {
+    if (!this.host?.inspectSemanticArchive || this.editingLocked) return;
+    const node = this.value.draft.graph.nodes.find(row => row.id === nodeId);
+    if (node?.operation.kind !== 'automatic_preset' || !node.operation.intent.semantic_scope) return;
+    const epoch = this.epoch, graphId = this.value.draft.graph.workflow_id, revision = this.value.draft.graph.revision;
+    this.patch({busy: true, automatic_start_ack: null, preflight: null, error: ''});
+    try {
+      const archive = checkedSemanticArchive(await this.host.inspectSemanticArchive(path));
+      if (this.disposed || epoch !== this.epoch || this.value.draft.graph.workflow_id !== graphId || this.value.draft.graph.revision !== revision) return;
+      if (!archive || archive.path !== path) throw new Error('语义追色归档回执无效或不属于所选文件。');
+      this.patch({busy: false});
+      this.updateDraft(value => ({...value, graph: {...value.graph, nodes: value.graph.nodes.map(row => row.id === nodeId && row.operation.kind === 'automatic_preset' ?
+        {...row, operation: {...row.operation, preset_id: `semantic:${archive.file_sha256}`, preset_sha256: archive.file_sha256,
+          intent: {...row.operation.intent, semantic_archive: archive}}} : row)}}));
+      this.patch({message: '已验证完整 .lrtcolour 和便携意图；尚未启动推理或应用。保存并检测后，再确认本次启动。'});
+    } catch (error) {if (epoch === this.epoch) this.patch({error: failureMessage(error)});}
+    finally {if (epoch === this.epoch) this.patch({busy: false});}
   }
   async refreshCatalogue(): Promise<void> {
     if (!this.host?.refreshCatalogue || this.disposed) return;
@@ -267,6 +286,10 @@ export class WorkflowController {
     const disclosedExport = this.selectedExportProfile();
     if (automatic?.kind === 'automatic_preset' && !disclosedExport) return null;
     let disclosedReference: unknown = null;
+    if (automatic?.kind === 'automatic_preset' && automatic.intent.semantic_scope) {
+      if (!sameSemanticArchive(automatic.intent.semantic_archive, preflight?.semantic_archive)) return null;
+      disclosedReference = automatic.intent.semantic_archive;
+    }
     if (automatic?.kind === 'automatic_preset' && automatic.intent.reference_scope) {
       const catalogue = this.value.preset_catalogue;
       const preset = catalogue?.presets.find(row => row.id === automatic.preset_id && row.preset_sha256 === automatic.preset_sha256);

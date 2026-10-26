@@ -1,3 +1,4 @@
+import {SemanticArchivePicker, SemanticArchiveSummary} from './SemanticArchivePicker';
 import {PresetHandoffPanel} from './PresetHandoffPanel';
 import {WorkflowPresetPicker, type PresetCatalogue} from './presetCatalogue';
 // SPDX-License-Identifier: GPL-3.0-or-later
@@ -23,7 +24,7 @@ function Diagnostics({items, label}: {items: WorkflowDiagnostic[]; label: string
   </section>;
 }
 
-function NodeParameters({operation: op, onChange, catalogue}: {operation: WorkflowOperation; catalogue: PresetCatalogue | null; onChange: (op: WorkflowOperation) => void}) {
+function NodeParameters({operation: op, onChange, catalogue, onArchive}: {operation: WorkflowOperation; catalogue: PresetCatalogue | null; onChange: (op: WorkflowOperation) => void; onArchive: (path: string) => void}) {
   switch (op.kind) {
     case 'directory_source': return <>
       <label>来源文件夹（绝对路径）<input value={op.root} placeholder="/photos/incoming" onChange={event => onChange({...op, root: event.currentTarget.value})}/></label>
@@ -57,18 +58,22 @@ function NodeParameters({operation: op, onChange, catalogue}: {operation: Workfl
     case 'automatic_preset':
     case 'compatible_preset': return <>
       {op.kind === 'automatic_preset' && <label>明确选择自动操作范围<select
-        value={op.intent.reference_scope ? 'reference' : op.intent.portrait_scope ? 'portrait' : 'scalar'}
-        onChange={event => {const {portrait_scope: _portrait, reference_scope: _reference, reference_source_policy: _policy, ...scalar} = op.intent;
+        value={op.intent.semantic_scope ? 'semantic' : op.intent.reference_scope ? 'reference' : op.intent.portrait_scope ? 'portrait' : 'scalar'}
+        onChange={event => {const {portrait_scope: _portrait, reference_scope: _reference, reference_source_policy: _policy, semantic_scope: _semantic, semantic_archive: _archive, ...scalar} = op.intent;
           const mode = event.currentTarget.value;
-          onChange({...op, intent: mode === 'reference' ? {...scalar, reference_scope: 'stored_reference_per_target_fit', reference_source_policy: 'reject_same_source'}
+          onChange({...op, ...(mode === 'semantic' || op.intent.semantic_scope ? {preset_id: '', preset_sha256: ''} : {}),
+            intent: mode === 'semantic' ? {...scalar, semantic_scope: 'global_six_class_per_target_fit', reference_source_policy: 'reject_same_source'} : mode === 'reference' ? {...scalar, reference_scope: 'stored_reference_per_target_fit', reference_source_policy: 'reject_same_source'}
             : mode === 'portrait' ? {...scalar, portrait_scope: 'all_verified_detected_faces'} : scalar});}}>
         <option value="scalar">固定曝光／白平衡</option>
         <option value="portrait">每张目标全部已验证检测人脸的肤质／皮肤质感（非身份匹配）</option>
-        <option value="reference">仅参考色彩：固定已保存样片，每目标独立拟合（拒绝参考同源）</option>
+        <option value="reference">仅参考色彩：同场景对应拟合（非语义匹配）</option>
+        <option value="semantic">自动 AI 语义追色：.lrtcolour 全图六类，每目标独立重算</option>
       </select></label>}
-      <WorkflowPresetPicker catalogue={catalogue} operation={op} onChange={onChange}/>
+      {op.kind === 'automatic_preset' && op.intent.semantic_scope
+        ? <SemanticArchivePicker archive={op.intent.semantic_archive} onSelect={onArchive}/>
+        : <WorkflowPresetPicker catalogue={catalogue} operation={op} onChange={onChange}/>}
       <label>必须同时具备的标签（逗号分隔；留空匹配全部）<input value={op.when_all_labels.join(',')} onChange={event => onChange({...op, when_all_labels: splitList(event.currentTarget.value)})}/></label>
-      <small>{op.kind === 'automatic_preset' ? '独立自动模式：选择固定曝光／白平衡、目标自有人像分析或仅参考色彩。参考色彩不能混合其他模块，不转移身份或源蒙版；切换范围不会删改已选预设。启动前须确认本次样片、范围、输出与失败策略。' : '宿主按真实预设内容检查兼容性。需要逐图审核的效果会暂停，只有原审核流程产生的有效回执才能继续。'}</small>
+      <small>{op.kind === 'automatic_preset' ? '独立自动模式：选择固定曝光／白平衡、目标自有人像分析、同场景参考色彩，或独立 .lrtcolour 全图语义追色。参考色彩不能混合其他模块，不转移身份或源蒙版；进入或离开语义范围会清空当前选择，须重新选择对应配方，不删改任何预设文件。启动前须确认本次样片、范围、输出与失败策略。' : '宿主按真实预设内容检查兼容性。需要逐图审核的效果会暂停，只有原审核流程产生的有效回执才能继续。'}</small>
     </>;
     case 'export': return <>
       <label>导出文件夹（绝对路径）<input value={op.output_root} onChange={event => onChange({...op, output_root: event.currentTarget.value})}/></label>
@@ -78,12 +83,12 @@ function NodeParameters({operation: op, onChange, catalogue}: {operation: Workfl
   }
 }
 
-function NodeCard({node, locked, capabilities, onChange, onRemove, catalogue}: {node: WorkflowNode; locked: boolean;
-  capabilities: WorkflowCapabilities | null; catalogue: PresetCatalogue | null; onChange: (node: WorkflowNode) => void; onRemove: () => void}) {
+function NodeCard({node, locked, capabilities, onChange, onRemove, catalogue, onArchive}: {node: WorkflowNode; locked: boolean;
+  capabilities: WorkflowCapabilities | null; catalogue: PresetCatalogue | null; onChange: (node: WorkflowNode) => void; onRemove: () => void; onArchive: (path: string) => void}) {
   const supported = capabilities?.error_policies[node.operation.kind] ?? [];
   return <fieldset className="local-workflow-node" disabled={locked}>
     <legend>{NODE_LABELS[node.operation.kind]} · {node.id}</legend>
-    <NodeParameters catalogue={catalogue} operation={node.operation} onChange={operation => onChange({...node, operation})}/>
+    <NodeParameters catalogue={catalogue} onArchive={onArchive} operation={node.operation} onChange={operation => onChange({...node, operation})}/>
     <label>错误策略<select value={node.error_policy} onChange={event => onChange({...node, error_policy: event.currentTarget.value as ErrorPolicy})}>
       {(Object.keys(POLICY_LABELS) as ErrorPolicy[]).map(policy => <option key={policy} value={policy}
         disabled={!supported.includes(policy) || (policy === 'keep_continue' && node.operation.kind !== 'compatible_preset') || (node.operation.kind === 'directory_source' && policy !== 'stop')}>
@@ -220,6 +225,7 @@ export function LocalWorkflowPanel({controller}: LocalWorkflowPanelProps) {
         }}>添加节点</button>
       </div>
       <div className="local-workflow-nodes">{graph.nodes.map(node => <NodeCard key={node.id} node={node} locked={locked} capabilities={capabilities} catalogue={state.preset_catalogue}
+        onArchive={path => void controller.selectSemanticArchive(node.id, path)}
         onChange={next => changeGraph({...graph, nodes: graph.nodes.map(item => item.id === node.id ? next : item)})}
         onRemove={() => changeGraph({...graph, nodes: graph.nodes.filter(item => item.id !== node.id), edges: graph.edges.filter(edge => edge.from !== node.id && edge.to !== node.id)})}/>)}</div>
       <EdgeEditor graph={graph} locked={locked} onChange={changeGraph}/>
@@ -249,9 +255,11 @@ export function LocalWorkflowPanel({controller}: LocalWorkflowPanelProps) {
         <dl>
           <dt>范围</dt><dd>{sourceNode?.kind === 'directory_source' ? `${sourceNode.root} · ${sourceNode.recursive ? '包含子目录' : '仅本目录'} · ${sourceNode.include_existing ? '一次捕获已有照片清单' : '配置无效：必须启用首次已有照片'} · ${sourceNode.extensions.join(', ')}` : '来源尚未配置'}</dd>
           <dt>完整固定配方</dt><dd>{automaticNode.operation.preset_id || '未选择'}<br/>{automaticNode.operation.preset_sha256 || '尚无真实指纹'}</dd>
-          <dt>操作范围</dt><dd>{automaticNode.operation.intent.portrait_scope === 'all_verified_detected_faces'
+          <dt>操作范围</dt><dd>{automaticNode.operation.intent.semantic_scope ? '全图六类语义 AI 追色：固定完整样片及便携意图，样片分析一次，每张目标独立原画布渲染、真实分割和颜色拟合；提交只核验冻结结果，不重新拟合。不能混合普通预设、人像模块或同场景参考色彩。' : automaticNode.operation.intent.portrait_scope === 'all_verified_detected_faces'
             ? '明确选择：每张目标中全部已验证检测人脸；最多八张脸，真实自身皮肤、遮挡与关键点支持；肤质／皮肤质感，可混合曝光／白平衡。不做跨照片身份匹配。'
             : automaticNode.operation.intent.reference_scope ? '仅参考色彩：每个目标真实匹配及拟合一次，冻结后只核验；不做人像处理，不复制已有目标增益、源蒙版或身份。' : '未选择人像操作；仅固定曝光／白平衡。'}</dd>
+          {automaticNode.operation.intent.semantic_scope && <><dt>完整语义归档与参考身份</dt><dd><SemanticArchiveSummary archive={automaticNode.operation.intent.semantic_archive}/></dd>
+            <dt>语义边界与失败</dt><dd>仅背景、头发、身体皮肤、面部皮肤、衣物、其它六类；不是人物实例、天空或嘴唇识别。不能携带局部选区。参考同源、缺失请求类别、偏移越界、模型或完整画布内存不足会明确拒绝；不复制源蒙版、目标增益或静默降级。已证明无修改并返回编辑器才可按策略跳过；发布、历史、保存或导出结果未知时只查询原操作。</dd></>}
           {automaticNode.operation.intent.reference_scope && <><dt>不可变已存参考样片</dt><dd>{automaticPreset?.automatic_reference
             ? <>资产 {automaticPreset.automatic_reference.asset_id}<br/>渲染 {automaticPreset.automatic_reference.render_sha256}<br/>源图 {automaticPreset.automatic_reference.source_sha256}</>
             : '尚无宿主核验的参考身份；不能视为已选定可用样片。'}<br/>身份连同完整预设内容由上述预设指纹固定；内容变化须重新选择并授权。</dd>
@@ -262,7 +270,7 @@ export function LocalWorkflowPanel({controller}: LocalWorkflowPanelProps) {
           <dt>失败策略</dt><dd>{graph.nodes.map(node => `${NODE_LABELS[node.operation.kind]}：${POLICY_LABELS[node.error_policy]}`).join('；')}</dd>
         </dl>
         <p>启动后首次扫描捕获本次路径与文件状态清单（不是文件系统原子快照）；后续新增不加入，清单处理结束后收尾。超过当前租约容量会在导入前明确拒绝，不截断清单。清单文件改变或丢失会停止；原图不改写。跳过只适用于 owner 明确确认的失败；部分写入或结果未知保留原操作并停止继续写入。</p>
-        <p>仅显式选择人像范围时运行每目标自身分析。未检测到脸、歧义、检测上限、缺少真实支持、已编辑或关联目标均拒绝；检测并不保证找全场景中的人。旧磨皮、美白红润、手动支持及身份依赖效果不在此自动范围。整份不支持配方会拒绝，不丢模块；分析证据不是照片质量验收。构建、运行及实拍验收尚未验证。</p>
+        <p>人像自有分析与语义追色是分开的明确范围；语义分析不等于人脸身份匹配。仅选择人像范围时运行以下人脸准备：未检测到脸、歧义、检测上限、缺少真实支持、已编辑或关联目标均拒绝；检测并不保证找全场景中的人。旧磨皮、美白红润、手动支持及身份依赖效果不在此自动范围。整份不支持配方会拒绝，不丢模块；分析证据不是照片质量验收。构建、运行及实拍验收尚未验证。</p>
         <small>当前宿主图 SHA-256：{state.preflight?.graph_sha256 ?? '请保存定义并完成检测后确认'}</small>
         <label className="local-workflow-review-check"><input type="checkbox" checked={state.automatic_start_ack !== null} disabled={!controller.canAcknowledgeAutomaticStart()}
           onChange={event => controller.acknowledgeAutomaticStart(event.currentTarget.checked)}/>我确认以上本次范围、完整配方、输出、保存与失败策略，授权自动执行；此确认不是逐图查看批准。</label>

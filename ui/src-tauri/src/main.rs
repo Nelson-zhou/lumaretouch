@@ -2030,7 +2030,7 @@ fn main() {
             managed_import_api::managed_import_request, managed_import_api::managed_import_status,
             ingest_session_api::ingest_session_request, ingest_session_api::ingest_session_status,
             local_workflow_host::local_workflow_workspace, local_workflow_host::local_workflow_definition, local_workflow_host::local_workflow_preflight, local_workflow_host::local_workflow_submit, local_workflow_host::local_workflow_request, local_workflow_host::local_workflow_run,
-            local_workflow_host::local_workflow_review_image,
+            local_workflow_host::local_workflow_review_image, local_workflow_host::local_workflow_semantic_archive,
             tether_host::tether_capture_state, tether_host::tether_capture_request, tether_host::tether_capture_receipt, tether_host::tether_capture_destination,
             source_relocation_api::source_relocation_request, source_relocation_api::source_relocation_status,
             project_recovery_api::project_recovery_request, project_recovery_api::project_recovery_status,

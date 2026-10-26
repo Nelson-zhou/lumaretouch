@@ -361,7 +361,7 @@ fn automatic_graph() -> Graph {
         preset_id: "preset-one".into(), preset_sha256: "a".repeat(64), when_all_labels: vec![],
         intent: AutomaticBatchIntent { schema: "lrt.automatic-batch-intent.v1".into(), mode: "automatic".into(),
             scope: "directory_originals".into(), source_mode: "captured_file_list".into(), originals: "managed_copy_only".into(), save: "target_recipe".into(),
-            collision: "fail_no_overwrite".into(), unattended: true, portrait_scope: None, reference_scope: None, reference_source_policy: None },
+            collision: "fail_no_overwrite".into(), unattended: true, portrait_scope: None, reference_scope: None, reference_source_policy: None, semantic_scope: None, semantic_archive: None },
     };
     value
 }
@@ -520,4 +520,44 @@ fn automatic_reference_scope_is_exact_and_hash_bound() {
         intent.portrait_scope = Some("all_verified_detected_faces".into());
     }
     assert!(reference.validate().is_err());
+}
+
+// AUTHORED / UNRUN: syntax/schema contracts only, never image/model acceptance.
+#[test]
+fn automatic_semantic_archive_is_exact_separate_and_hash_bound() {
+    use crate::schema::SemanticArchive;
+    let raw = serde_json::json!({"reference":{"asset_id":"b".repeat(64),"render_sha256":"c".repeat(64),
+        "source":{"sha256":"d".repeat(64),"width":64,"height":64}}}).to_string();
+    // The genuine archive owner validates the complete semantic intent. This
+    // synthetic fixture exercises only the native small-message boundary.
+    let archive = SemanticArchive { path:"/fixture/reference.lrtcolour".into(), file_bytes:8192,
+        file_sha256:"e".repeat(64), intent_sha256:crate::schema::sha256(raw.as_bytes()), portable_intent_json:raw };
+    let mut graph = automatic_graph();
+    if let NodeKind::AutomaticPreset { preset_id, preset_sha256, intent, .. } = &mut graph.nodes[2].operation {
+        *preset_id = format!("semantic:{}", archive.file_sha256); *preset_sha256 = archive.file_sha256.clone();
+        intent.reference_source_policy = Some("reject_same_source".into());
+        intent.semantic_scope = Some("global_six_class_per_target_fit".into());
+        intent.semantic_archive = Some(archive.clone());
+    }
+    assert!(graph.clone().validate().unwrap().automatic());
+    let encoded = serde_json::to_value(&graph).unwrap();
+    for field in ["semantic_scope", "semantic_archive", "reference_source_policy"] {
+        let mut missing = encoded.clone();
+        missing["nodes"][2]["operation"]["intent"].as_object_mut().unwrap().remove(field);
+        assert!(serde_json::from_value::<Graph>(missing).unwrap().validate().is_err());
+        let mut null = encoded.clone(); null["nodes"][2]["operation"]["intent"][field] = serde_json::Value::Null;
+        assert!(serde_json::from_value::<Graph>(null).is_err());
+    }
+    for field in ["portrait_scope", "reference_scope"] {
+        let mut mixed = encoded.clone(); mixed["nodes"][2]["operation"]["intent"][field] = serde_json::json!("all_verified_detected_faces");
+        assert!(serde_json::from_value::<Graph>(mixed).unwrap().validate().is_err());
+    }
+    let mut changed = archive.clone(); changed.file_bytes = 256*1024*1024+128*1024+1;
+    assert!(changed.validate().is_err());
+    let mut changed = archive; changed.portable_intent_json.push(' ');
+    assert!(changed.validate().is_err());
+    let mut wrong_id = graph.clone();
+    if let NodeKind::AutomaticPreset { preset_id, .. } = &mut wrong_id.nodes[2].operation { *preset_id = "ordinary-preset".into(); }
+    assert!(wrong_id.validate().is_err());
+    assert_ne!(fingerprint(&graph).unwrap(), fingerprint(&automatic_graph()).unwrap());
 }

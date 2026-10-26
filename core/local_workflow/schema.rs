@@ -58,6 +58,30 @@ pub enum LabelTarget { Filename, RelativePath }
 #[serde(deny_unknown_fields)]
 pub struct LabelRule { pub target: LabelTarget, pub contains: String, pub label: String }
 
+/// Exact .lrtcolour file and complete portable intent, validated by its engine
+/// archive owner before the separate fresh graph-bound Start acknowledgment.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct SemanticArchive {
+    pub path: String, pub file_bytes: u64, pub file_sha256: String,
+    pub intent_sha256: String, pub portable_intent_json: String,
+}
+impl SemanticArchive {
+    pub fn validate(&self) -> Result<()> {
+        require(path_text(&self.path) && Path::new(&self.path).extension().and_then(|v| v.to_str())
+            .is_some_and(|v| v.eq_ignore_ascii_case("lrtcolour"))
+            && self.file_bytes > 0 && self.file_bytes <= 256 * 1024 * 1024 + 128 * 1024
+            && digest(&self.file_sha256) && digest(&self.intent_sha256)
+            && bounded(&self.portable_intent_json, 64 * 1024) && sha256(self.portable_intent_json.as_bytes()) == self.intent_sha256,
+            "invalid bounded semantic archive identity/intent")?;
+        // Keep exact canonical intent JSON as text: JS must not rewrite floats.
+        let intent: serde_json::Value = serde_json::from_str(&self.portable_intent_json)?;
+        let reference = &intent["reference"];
+        require([&reference["asset_id"], &reference["render_sha256"], &reference["source"]["sha256"]]
+            .iter().all(|value| value.as_str().is_some_and(digest)), "incomplete semantic reference identities")
+    }
+}
+
 /// Frozen execution intent, NOT a fresh user start acknowledgment.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -70,22 +94,33 @@ pub struct AutomaticBatchIntent {
     pub reference_scope: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none", deserialize_with = "explicit_portrait_scope")]
     pub reference_source_policy: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none", deserialize_with = "explicit_portrait_scope")]
+    pub semantic_scope: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none", deserialize_with = "explicit_semantic_archive")]
+    pub semantic_archive: Option<SemanticArchive>,
 }
 // Missing is legacy scalar scope; explicit null is not an opt-in declaration.
 fn explicit_portrait_scope<'de, D: serde::Deserializer<'de>>(deserializer: D) -> std::result::Result<Option<String>, D::Error> {
     String::deserialize(deserializer).map(Some)
 }
+fn explicit_semantic_archive<'de, D: serde::Deserializer<'de>>(deserializer: D) -> std::result::Result<Option<SemanticArchive>, D::Error> {
+    SemanticArchive::deserialize(deserializer).map(Some)
+}
 impl AutomaticBatchIntent {
     pub fn validate(&self) -> Result<()> {
+        if let Some(archive) = &self.semantic_archive { archive.validate()?; }
+        let semantic = self.semantic_scope.as_deref() == Some("global_six_class_per_target_fit")
+            && self.semantic_archive.is_some() && self.portrait_scope.is_none() && self.reference_scope.is_none()
+            && self.reference_source_policy.as_deref() == Some("reject_same_source");
         require(self.schema == "lrt.automatic-batch-intent.v1" && self.mode == "automatic"
             && self.scope == "directory_originals" && self.source_mode == "captured_file_list" && self.originals == "managed_copy_only"
             && self.save == "target_recipe" && self.collision == "fail_no_overwrite" && self.unattended
             && self.portrait_scope.as_deref().map_or(true, |scope| scope == "all_verified_detected_faces")
-            && match (self.reference_scope.as_deref(), self.reference_source_policy.as_deref()) {
+            && (semantic || (self.semantic_scope.is_none() && self.semantic_archive.is_none() && match (self.reference_scope.as_deref(), self.reference_source_policy.as_deref()) {
                 (None, None) => true,
                 (Some("stored_reference_per_target_fit"), Some("reject_same_source")) => self.portrait_scope.is_none(),
                 _ => false,
-            },
+            })),
             "unsupported automatic batch intent; no implicit scope, save or overwrite authority")
     }
 }
@@ -171,7 +206,13 @@ impl Graph {
                 }
                 NodeKind::CompatiblePreset { preset_id, preset_sha256, when_all_labels }
                 | NodeKind::AutomaticPreset { preset_id, preset_sha256, when_all_labels, .. } => {
-                    if let NodeKind::AutomaticPreset { intent, .. } = &node.operation { intent.validate()?; }
+                    if let NodeKind::AutomaticPreset { intent, .. } = &node.operation {
+                        intent.validate()?;
+                        if let Some(archive) = &intent.semantic_archive {
+                            require(preset_sha256 == &archive.file_sha256 && preset_id == &format!("semantic:{}", archive.file_sha256),
+                                "semantic archive must be selected as its exact separate preset identity")?;
+                        }
+                    }
                     require(id(preset_id) && digest(preset_sha256) && when_all_labels.len() <= MAX_LABELS,
                         "preset must pin its identity and content SHA-256")?;
                     let unique: BTreeSet<_> = when_all_labels.iter().collect();

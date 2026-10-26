@@ -21,6 +21,8 @@ PORTRAIT_MODULES = frozenset(('lnx.skin_finish.v1', 'lnx.skin_texture.v1'))
 
 
 def support_reason(preset, intent=None):
+    if type(intent) is dict and ('semantic_scope' in intent or 'semantic_archive' in intent):
+        return 'automatic_semantic_requires_dedicated_archive_owner'
     if (type(preset) is not dict or type(preset.get('modules')) is not dict
             or not preset['modules']):
         return 'invalid_automatic_preset_modules'
@@ -50,6 +52,9 @@ def support_reason(preset, intent=None):
 
 
 class AutomaticPresetHandoff(PresetHandoff):
+    def _resolve(self, preset_id, preset_sha256):
+        return resolve(preset_id, preset_sha256)
+
     def node(self):
         return next((node for node in self.owner.session['ordered']
                      if node['operation']['kind'] == 'automatic_preset'), None)
@@ -77,7 +82,7 @@ class AutomaticPresetHandoff(PresetHandoff):
     def start(self, record, row):
         self._intent()
         operation = record['command']['operation']
-        reason = self._support_reason(resolve(operation['preset_id'], operation['preset_sha256']))
+        reason = self._support_reason(self._resolve(operation['preset_id'], operation['preset_sha256']))
         if reason:
             raise ValueError(reason + ': complete preset refused; no module is omitted')
         super().start(record, row)
@@ -99,8 +104,8 @@ class AutomaticPresetHandoff(PresetHandoff):
                 entry['preparation'] = None
             entry['target']['revision'] = self._version(row)
             self._check(target_loaded=True)
-            if entry.get('reference_plan') is not None:
-                entry['reference_plan'].assert_unchanged()
+            if (entry.get('reference_plan') or entry.get('semantic_plan')) is not None:
+                (entry.get('reference_plan') or entry['semantic_plan']).assert_unchanged()
             entry['automatic_rejection'] = str(error)[:1800]
             self._return()  # exact rollback and editor return must both succeed
             record['dispatch_started'] = False
@@ -108,8 +113,8 @@ class AutomaticPresetHandoff(PresetHandoff):
     def _cancel_result(self, entry, row):
         if 'automatic_rejection' not in entry:
             return super()._cancel_result(entry, row)
-        if entry.get('reference_plan') is not None:
-            entry['reference_plan'].assert_unchanged(loaded=False)
+        if (entry.get('reference_plan') or entry.get('semantic_plan')) is not None:
+            (entry.get('reference_plan') or entry['semantic_plan']).assert_unchanged(loaded=False)
         return {'status': 'failed', 'code': 'automatic_target_ineligible',
             'message': entry['automatic_rejection'],
             'retained_document': {**entry['initial_document'], 'document_revision': self._version(row)}}
@@ -121,7 +126,7 @@ class AutomaticPresetHandoff(PresetHandoff):
         entry = self.active
         self._intent()
         _, row = self._check(target_loaded=True)
-        preset = resolve(entry['preset_id'], entry['preset_sha256'])
+        preset = self._resolve(entry['preset_id'], entry['preset_sha256'])
         reason = self._support_reason(preset)
         if reason:
             raise ValueError(reason)
@@ -151,7 +156,7 @@ class AutomaticPresetHandoff(PresetHandoff):
         entry = self.active
         # This phase denotes observed target load, not a claimed image review.
         entry['phase'] = 'awaiting_preparation'
-        preset = resolve(entry['preset_id'], entry['preset_sha256'])
+        preset = self._resolve(entry['preset_id'], entry['preset_sha256'])
         if set(preset['modules']) & PORTRAIT_MODULES:
             from .portrait_group_people import PeoplePreparation
             from .workflow_preset_people_save import capture, context
@@ -216,7 +221,7 @@ class AutomaticPresetHandoff(PresetHandoff):
             record['dispatch_started'] = True
             plan = entry.get('portrait_plan') or entry.get('reference_plan')
             if plan is not None:
-                preset = resolve(entry['preset_id'], entry['preset_sha256'])
+                preset = self._resolve(entry['preset_id'], entry['preset_sha256'])
                 result = plan.commit(preset, entry['target'], request['request_id'], evidence)
             else:
                 dispatch(self.engine, request, lambda: self._check(target_loaded=True))

@@ -1,3 +1,4 @@
+import {checkedSemanticArchive} from './semanticArchive';
 // SPDX-License-Identifier: GPL-3.0-or-later
 import type {NodeKind, ProjectLease, WorkflowCapabilities, WorkflowDefinition, WorkflowDiagnostic, WorkflowEdge,
   WorkflowGraph, WorkflowNode, WorkflowOperation, WorkflowRun} from './contracts';
@@ -127,6 +128,8 @@ export function validateGraph(graph: WorkflowGraph, capabilities?: WorkflowCapab
           error('label_rule', '需要 1–64 条规则；包含文本最多 256 字节，标签最多 128 字节且不能为空。', node.id); break;
       case 'automatic_preset':
         if (!validAutomaticIntent(op.intent)) error('automatic_intent', '自动批量意图缺失或不属于受支持的原图托管、目标配方保存及不覆盖模式。', node.id);
+        if (op.intent.semantic_archive && (op.preset_id !== `semantic:${op.intent.semantic_archive.file_sha256}` || op.preset_sha256 !== op.intent.semantic_archive.file_sha256))
+          error('semantic_archive_identity', '语义归档必须绑定本次验证的完整文件指纹，不使用普通文本预设。', node.id);
         // The complete preset remains host-owned; never drop unsupported modules.
       case 'compatible_preset':
         if (!ID.test(op.preset_id) || !HASH.test(op.preset_sha256)) error('preset', '需要有效预设标识和真实的小写 SHA-256 指纹。', node.id);
@@ -174,6 +177,11 @@ export function validAutomaticIntent(value: unknown): boolean {
   const expected = {schema: 'lrt.automatic-batch-intent.v1', mode: 'automatic', scope: 'directory_originals', source_mode: 'captured_file_list', originals: 'managed_copy_only', save: 'target_recipe', collision: 'fail_no_overwrite', unattended: true};
   const actual = value as Record<string, unknown>;
   const portrait = Object.prototype.hasOwnProperty.call(actual, 'portrait_scope');
+  const semantic = Object.prototype.hasOwnProperty.call(actual, 'semantic_scope') || Object.prototype.hasOwnProperty.call(actual, 'semantic_archive');
+  if (semantic) return !portrait && !Object.prototype.hasOwnProperty.call(actual, 'reference_scope') &&
+    actual.semantic_scope === 'global_six_class_per_target_fit' && actual.reference_source_policy === 'reject_same_source' &&
+    !!checkedSemanticArchive(actual.semantic_archive) && Object.keys(actual).length === Object.keys(expected).length + 3 &&
+    Object.entries(expected).every(([key, item]) => actual[key] === item);
   const reference = Object.prototype.hasOwnProperty.call(actual, 'reference_scope') || Object.prototype.hasOwnProperty.call(actual, 'reference_source_policy');
   return !(portrait && reference) && (!portrait || actual.portrait_scope === 'all_verified_detected_faces') &&
     (!reference || (actual.reference_scope === 'stored_reference_per_target_fit' && actual.reference_source_policy === 'reject_same_source')) &&

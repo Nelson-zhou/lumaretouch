@@ -1,3 +1,4 @@
+import type {SemanticArchive} from './semanticArchive';
 import type {ReviewImagePage} from './presetReview';
 // SPDX-License-Identifier: GPL-3.0-or-later
 import {invoke} from '@tauri-apps/api/core';
@@ -17,6 +18,7 @@ export async function connectNativeWorkflow(): Promise<WorkflowHostPort> {
     submit: input => invoke<WorkflowReceipt>('local_workflow_submit', {input}),
     queryRequest: requestId => invoke<WorkflowReceipt>('local_workflow_request', {requestId}),
     readRun: runId => invoke<WorkflowRun>('local_workflow_run', {runId}),
+    inspectSemanticArchive: path => invoke<SemanticArchive>('local_workflow_semantic_archive', {path}),
     readReviewImage: input => invoke<ReviewImagePage>('local_workflow_review_image', {input}),
   };
 }

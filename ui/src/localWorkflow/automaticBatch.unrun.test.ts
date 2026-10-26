@@ -1,3 +1,4 @@
+import {checkedSemanticArchive, semanticIntent, type SemanticArchive} from './semanticArchive.ts';
 // SPDX-License-Identifier: GPL-3.0-or-later
 /** AUTHORED / UNRUN. No tests, typechecks, builds, engine or image processing executed. */
 import test from 'node:test';
@@ -198,4 +199,54 @@ test('missing selected disclosure blocks consent and profile choice invalidates 
   assert.equal(h.sent.length, 0);
   h.workspace.export_profiles = []; delete h.workspace.recipe_profile;
   await h.controller.refresh(); assert.equal(h.controller.canAcknowledgeAutomaticStart(), false);
+});
+
+
+function semanticArchive(): SemanticArchive {
+  return {path: '/fixture/reference.lrtcolour', file_bytes: 8192, file_sha256: 'd'.repeat(64), intent_sha256: 'e'.repeat(64),
+    portable_intent_json: JSON.stringify({version: 1, algorithm: 'semantic-oklab-log-ot-pchip-hsv8-v1', enabled: true,
+      mode: 'harmonious', strengths: [100, 80, 90], offset_policy: 'recompute-then-user-offset-v1', class_policy: 'require-requested-support-v1',
+      reference: {asset_id: 'a'.repeat(64), render_sha256: 'b'.repeat(64), source: {sha256: 'c'.repeat(64), width: 64, height: 64}},
+      groups: [{id: 'global', enabled: true, offsets: Array(50).fill(0)}, {id: 'others', enabled: false, offsets: Array(50).fill(0)}]})};
+}
+function semanticDefinition() {
+  const value = definition(), operation = value.graph.nodes[3].operation, archive = semanticArchive();
+  if (operation.kind !== 'automatic_preset') throw Error('Fixture automatic');
+  operation.preset_id = `semantic:${archive.file_sha256}`; operation.preset_sha256 = archive.file_sha256;
+  operation.intent = {...operation.intent, reference_source_policy: 'reject_same_source', semantic_scope: 'global_six_class_per_target_fit', semantic_archive: archive};
+  return value;
+}
+test('semantic metadata retains complete intent text and cannot claim unknown classes or authority', () => {
+  const archive = semanticArchive();
+  assert.deepEqual(checkedSemanticArchive(archive), archive);
+  assert.equal(semanticIntent(archive)?.groups[1].enabled, false);
+  for (const changed of [{file_bytes: 256*1024*1024+128*1024+1}, {path: '/fixture/preset.json'}, {reviewed: true}, {portable_intent_json: '{}'}])
+    assert.equal(checkedSemanticArchive({...archive, ...changed}), null);
+  const op = semanticDefinition().graph.nodes[3].operation;
+  if (op.kind !== 'automatic_preset') throw Error('Fixture automatic');
+  assert.equal(validAutomaticIntent(op.intent), true);
+  assert.equal(validAutomaticIntent({...op.intent, portrait_scope: 'all_verified_detected_faces'}), false);
+  assert.equal(validAutomaticIntent({...op.intent, reference_scope: 'stored_reference_per_target_fit'}), false);
+  assert.equal(validAutomaticIntent({...op.intent, semantic_archive: null}), false);
+});
+test('semantic Start consent requires identical engine-frozen preflight archive and remains one-shot', async () => {
+  for (const returned of [semanticArchive(), undefined, {...semanticArchive(), file_sha256: '9'.repeat(64)}]) {
+    const h = harness(semanticDefinition()), preflight = h.host.preflight;
+    h.host.preflight = async input => ({...await preflight(input), semantic_archive: returned});
+    await ready(h); assert.equal(h.controller.canStart(), false);
+    h.controller.acknowledgeAutomaticStart(true);
+    const matched = returned?.file_sha256 === semanticArchive().file_sha256;
+    assert.equal(h.controller.canStart(), matched);
+    await h.controller.start(); assert.equal(h.sent.length, matched ? 1 : 0);
+    assert.equal(h.controller.getState().automatic_start_ack, null);
+  }
+});
+test('selecting an archive only changes the draft and clears all old consent', async () => {
+  const h = harness(semanticDefinition()); await h.controller.refresh();
+  h.host.inspectSemanticArchive = async path => ({...semanticArchive(), path});
+  await h.controller.selectSemanticArchive('auto', '/fixture/new.lrtcolour');
+  assert.equal(h.controller.getState().dirty, true); assert.equal(h.controller.getState().preflight, null);
+  assert.equal(h.controller.getState().automatic_start_ack, null); assert.equal(h.sent.length, 0);
+  const op = h.controller.getState().draft.graph.nodes[3].operation;
+  assert.equal(op.kind === 'automatic_preset' && op.intent.semantic_archive?.path, '/fixture/new.lrtcolour');
 });

@@ -3,6 +3,7 @@
 mod wire;
 mod validation;
 mod review;
+mod archive;
 mod transport;
 #[cfg(target_os = "linux")] mod storage;
 #[cfg(target_os = "linux")] mod data;
@@ -86,11 +87,12 @@ pub(crate) async fn local_workflow_preflight(app: tauri::AppHandle, state: State
     {
         if input.to_string().len() > 512 * 1024 { return Err("检测请求过大".into()); }
         let input: wire::PreflightInput = serde_json::from_value(input).map_err(|e| e.to_string())?;
+        let semantic = input.graph.nodes.iter().any(|node| matches!(&node.operation, lrt_local_workflow::schema::NodeKind::AutomaticPreset { intent, .. } if intent.semantic_archive.is_some()));
         let host = host(app, state.inner().clone())?;
         tauri::async_runtime::spawn_blocking(move || {
             let (tx, rx) = std::sync::mpsc::sync_channel(1);
             host.tx.try_send(runtime::Message::Preflight(input, tx)).map_err(|_| "宿主队列已满或已关闭；没有启动检测")?;
-            rx.recv_timeout(std::time::Duration::from_secs(20)).map_err(|_| "检测尚未完成；没有启动工作流".to_string())?
+            rx.recv_timeout(std::time::Duration::from_secs(if semantic {610} else {20})).map_err(|_| "检测尚未完成；没有启动工作流".to_string())?
         }).await.map_err(|error| error.to_string())?
     }
     #[cfg(not(target_os = "linux"))]
@@ -127,6 +129,22 @@ pub(crate) async fn local_workflow_review_image(app: tauri::AppHandle, state: St
     }
     #[cfg(not(target_os = "linux"))]
     { let _ = (app, state, input); Err("当前平台不支持本地工作流审核".into()) }
+}
+/// Returns authenticated small archive metadata only; never starts a job.
+#[tauri::command]
+pub(crate) async fn local_workflow_semantic_archive(app: tauri::AppHandle, state: State<'_, Arc<AppState>>, path: String) -> Result<Value, String> {
+    #[cfg(target_os = "linux")]
+    {
+        if path.is_empty() || path.len() > 4096 || path.chars().any(char::is_control) { return Err("追色归档路径无效".into()); }
+        let host = host(app, state.inner().clone())?;
+        tauri::async_runtime::spawn_blocking(move || {
+            let (tx, rx) = std::sync::mpsc::sync_channel(1);
+            host.tx.try_send(runtime::Message::SemanticArchive(path, tx)).map_err(|_| "只读归档队列已满或关闭")?;
+            rx.recv_timeout(std::time::Duration::from_secs(610)).map_err(|_| "归档读取尚未确认；没有启动任务或应用效果".to_string())?
+        }).await.map_err(|error| error.to_string())?
+    }
+    #[cfg(not(target_os = "linux"))]
+    { let _ = (app, state, path); Err("当前平台不支持本地工作流归档选择".into()) }
 }
 pub(crate) fn shutdown() {
     #[cfg(target_os = "linux")]

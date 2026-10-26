@@ -115,7 +115,7 @@ def _full_image(recipe, *, reviewed):
     if set(masks) != expected_masks:
         raise ValueError('AI 追色便携分组与生成语义蒙版不匹配')
     review = out['last_review']
-    if reviewed and review is None:
+    if reviewed and (review is None or review.get('authorization') is not None):
         raise ValueError('只能从已明确审核并提交的 AI 追色配方提取便携意图')
     if review is not None:
         binding = review['reference_binding']

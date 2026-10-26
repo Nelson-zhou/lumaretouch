@@ -123,3 +123,10 @@ normal undo/redo and save/reopen; no unrelated document changes; exact original
 provenance after revision advancement; collisions and no-clobber output;
 skip/stop/partial results; genuine final output bytes and actual photographic
 quality. Source inspection is not a passed acceptance result.
+
+## Separate automatic semantic archive scope
+
+The explicit global six-class `.lrtcolour` path is documented in
+[AUTOMATIC-SEMANTIC.md](AUTOMATIC-SEMANTIC.md). It reuses the same finite scheduler
+and fresh Start gate, not the scalar catalogue or same-scene reference fitter.
+Its source integration, fixtures and all runtime/photographic acceptance remain UNRUN.

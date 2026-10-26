@@ -20,7 +20,7 @@ pub fn send(state: &AppState, request: Value, expected_epoch: [u8; 16]) -> Resul
     if epoch(state)? != expected_epoch { return Err("引擎已变化；保留原请求，不重发".into()); }
     let id = request["request_id"].as_str().filter(|s| super::wire::identity(s)).ok_or("缺少工作流 owner 请求身份")?.to_owned();
     if request["cmd"] != "workflow_owner" || request["protocol"] != 1 || request.to_string().len() > 1024 * 1024
-        || !matches!(request["action"].as_str(), Some("profile" | "preflight" | "execute" | "query" | "open_review" | "review_step" | "review_image")) {
+        || !matches!(request["action"].as_str(), Some("profile" | "semantic_archive" | "preflight" | "execute" | "query" | "open_review" | "review_step" | "review_image")) {
         return Err("无效工作流 owner 请求".into());
     }
     {
@@ -32,7 +32,7 @@ pub fn send(state: &AppState, request: Value, expected_epoch: [u8; 16]) -> Resul
         // Only completed read-only envelopes may be dropped. Mutation receipts
         // and unknown results are retained for this process/epoch.
         rows.retain(|_, row| !(row.delivered_read && row.result.as_ref().is_some_and(|result|
-            matches!(row.request["action"].as_str(), Some("profile" | "preflight" | "query" | "open_review" | "review_image")) && result["status"] == "readback")));
+            matches!(row.request["action"].as_str(), Some("profile" | "semantic_archive" | "preflight" | "query" | "open_review" | "review_image")) && result["status"] == "readback")));
         let capacity = if matches!(request["action"].as_str(), Some("execute" | "review_step")) { 1008 } else { 1024 };
         if rows.len() >= capacity { return Err("工作流 owner 回执容量已满；不会驱逐原操作".into()); }
         rows.insert(id.clone(), Entry { epoch: expected_epoch, request: request.clone(), result: None, delivered_read: false });
@@ -124,5 +124,5 @@ pub fn receive(epoch: [u8; 16], event: &Value) -> bool {
 }
 
 pub fn read_only(request: &Value) -> bool {
-    request["cmd"] == "workflow_owner" && matches!(request["action"].as_str(), Some("profile" | "preflight" | "query" | "open_review" | "review_image"))
+    request["cmd"] == "workflow_owner" && matches!(request["action"].as_str(), Some("profile" | "semantic_archive" | "preflight" | "query" | "open_review" | "review_image"))
 }

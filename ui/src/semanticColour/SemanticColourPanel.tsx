@@ -79,7 +79,7 @@ export function SemanticColourPanel({port,workflowEnabled,documentKey,refreshKey
    <label><input type="checkbox" checked={reviewed} disabled={busy} onChange={e=>setReviewed(e.target.checked)}/>我已检查前后图、语义覆盖和限制</label>
    <button data-control-id="PC-32452-C-20622a1901" disabled={!reviewed||busy||flow.phase==='uncertain'} onClick={()=>void flow.commit()}>应用此冻结结果</button>
   </section>}
-  {!flow.review&&recipe?.last_review&&<details><summary>上次 AI 初始估计的保留诊断</summary><p>颜色残差 {recipe.last_review.diagnostics[0][0].toFixed(4)} → {recipe.last_review.diagnostics[0][1].toFixed(4)}。这是已审核初始估计的记录，后续手动参数或蒙版编辑不会伪称重新拟合。</p><ul>{recipe.last_review.warnings.map(w=><li key={w}>{w}</li>)}</ul></details>}
+  {!flow.review&&recipe?.last_review&&<details><summary>上次 AI 初始估计的保留诊断</summary><p>颜色残差 {recipe.last_review.diagnostics[0][0].toFixed(4)} → {recipe.last_review.diagnostics[0][1].toFixed(4)}。{recipe.last_review.authorization ? '这是自动任务的冻结机器评估；没有逐图查看批准，不是摄影质量验收。' : '这是已审核初始估计的记录。'}后续手动参数或蒙版编辑不会伪称重新拟合。</p><ul>{recipe.last_review.warnings.map(w=><li key={w}>{w}</li>)}</ul></details>}
   {flow.report?.suspended&&<p className="semantic-warning" role="alert">{flow.report.suspended}</p>}
   {!!recipe?.groups.length&&<section data-control-id="PC-32452-C-e84df35afd"><div className="semantic-toolbar"><label><input type="checkbox" checked={recipe.enabled} disabled={busy} onChange={e=>flow.edit('enabled',e.target.checked)}/>启用 AI 追色组</label><button data-control-id="PC-32452-C-a6f71ac905" disabled={busy} onClick={()=>flow.edit('reset',null)}>清除本次 AI 追色贡献</button></div>
    {recipe.groups.map(group=><details key={group.id} open={precise&&group.id==='global'}><summary>{group.name} {group.enabled?'':'（关闭）'}</summary>

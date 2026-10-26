@@ -74,6 +74,9 @@ def public(record):
 
 def check_saved_review(value):
     expected={'proof','reference_binding','diagnostics','coverage','warnings','quality_acceptance','owned_fields'}
+    if type(value) is dict and 'authorization' in value:
+        expected.add('authorization')
+        automatic_authority(value['authorization'])
     if type(value) is not dict or set(value)!=expected or value['quality_acceptance']!='UNRUN':raise ValueError('AI 追色保留审核摘要无效')
     S.digest(value['proof']);S.binding(value['reference_binding'])
     if value['owned_fields']!=[S.KEY,'_semantic_colour_bundle','_semantic_colour_mask_assets']:raise ValueError('AI 追色审核所有权无效')
@@ -96,3 +99,19 @@ def check_saved_review(value):
 def saved_review(record):
     return check_saved_review({'proof':record['proof'],'reference_binding':record['reference'],
         **{key:record[key] for key in ('diagnostics','coverage','warnings','quality_acceptance','owned_fields')}})
+
+
+def automatic_authority(value):
+    """Execution provenance, expressly NOT a viewed-image acknowledgment."""
+    keys = {'schema', 'graph_sha256', 'operation_id', 'archive_sha256', 'reviewed'}
+    if (type(value) is not dict or set(value) != keys
+            or value['schema'] != 'lrt.automatic-semantic-assessment.v1' or value['reviewed'] is not False):
+        raise ValueError('Invalid automatic semantic assessment authority')
+    for key in ('graph_sha256', 'operation_id', 'archive_sha256'): S.digest(value[key])
+    return deepcopy(value)
+
+
+def automatic_summary(record, authority):
+    # Legacy recipe field last_review is a persisted frozen-proof summary. This
+    # explicit tag prevents automatic assessment from masquerading as review.
+    return check_saved_review({**saved_review(record), 'authorization': automatic_authority(authority)})

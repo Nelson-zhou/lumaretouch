@@ -36,7 +36,16 @@ AUTOMATIC_REFERENCE_INTENT = {**AUTOMATIC_INTENT,
     'reference_source_policy': 'reject_same_source'}
 
 def automatic_intent(value):
-    """Three exact declarations; neither substitutes for fresh job-start consent."""
+    """Exact separate declarations; none substitutes for fresh Start consent."""
+    if type(value) is dict and ('semantic_scope' in value or 'semantic_archive' in value):
+        from .workflow_semantic_archive import metadata
+        expected = {**AUTOMATIC_INTENT, 'reference_source_policy': 'reject_same_source',
+                    'semantic_scope': 'global_six_class_per_target_fit', 'semantic_archive': None}
+        intent = record(value, tuple(expected))
+        intent['semantic_archive'] = metadata(intent['semantic_archive'])
+        if any(intent[key] != item for key, item in expected.items() if key != 'semantic_archive') or intent['unattended'] is not True:
+            raise ValueError('Unsupported or mixed automatic semantic scope')
+        return intent
     expected = (AUTOMATIC_REFERENCE_INTENT if type(value) is dict and 'reference_scope' in value
                 else AUTOMATIC_PORTRAIT_INTENT if type(value) is dict and
                 'portrait_scope' in value else AUTOMATIC_INTENT)
@@ -48,6 +57,7 @@ def automatic_intent(value):
 
 FIELDS = {
     'profile': set(),
+    'semantic_archive': {'path'},
     'preflight': {'graph', 'graph_sha256'},
     'execute': {'command'},
     'query': {'original_request_id', 'operation_id'},
@@ -136,11 +146,12 @@ def envelope(value):
     action = value.get('action')
     if not isinstance(action, str) or action not in FIELDS:
         raise ValueError('Unknown workflow owner action')
-    record(value, {'cmd', 'protocol', 'action', 'request_id'} | ({'session_id'} if action != 'profile' else set()) | FIELDS[action])
+    record(value, {'cmd', 'protocol', 'action', 'request_id'} | ({'session_id'} if action not in ('profile', 'semantic_archive') else set()) | FIELDS[action])
     if value['cmd'] != 'workflow_owner' or type(value['protocol']) is not int or value['protocol'] != PROTOCOL:
         raise ValueError('Unsupported workflow owner protocol')
     I.identity(value['request_id'])
-    if action != 'profile': I.identity(value['session_id'])
+    if action not in ('profile', 'semantic_archive'): I.identity(value['session_id'])
+    if action == 'semantic_archive': I.path(value['path'])
     if action == 'preflight': I.digest(value['graph_sha256'])
     if action == 'query': I.identity(value['original_request_id'])
     if action in ('query', 'open_review', 'review_step', 'review_image'): I.digest(value['operation_id'])
@@ -206,6 +217,10 @@ def graph(value, expected_sha256):
             if len(set(labels)) != len(labels): raise ValueError('Repeated preset label')
             if kind == 'automatic_preset':
                 operation['intent'] = automatic_intent(operation['intent'])
+                archive = operation['intent'].get('semantic_archive')
+                if archive is not None and (operation['preset_sha256'] != archive['file_sha256']
+                        or operation['preset_id'] != 'semantic:' + archive['file_sha256']):
+                    raise ValueError('Semantic archive must be the exact separate selected preset identity')
         else:
             I.path(operation['output_root']); I.digest(operation['recipe_sha256'])
         node['operation'] = operation

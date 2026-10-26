@@ -1,0 +1,110 @@
+{
+  "schema": "lrt.automatic-semantic-source-contract.v1",
+  "status": "SOURCE_AUTHORED_ACCEPTANCE_UNRUN",
+  "base_local_commit": "e1dc0cc580af4dcd47389736203b7802cf5260f8",
+  "scope": {
+    "node": "automatic_preset",
+    "semantic_scope": "global_six_class_per_target_fit",
+    "archive": ".lrtcolour",
+    "classes": [
+      "background",
+      "hair",
+      "body_skin",
+      "face_skin",
+      "clothes",
+      "others"
+    ],
+    "global_base": true,
+    "maximum_captured_inputs": 64
+  },
+  "source_manifest": "docs/local-workflow/AUTOMATIC-SEMANTIC-SOURCE-MANIFEST.txt",
+  "source_files": [
+    "core/local_workflow/schema.rs",
+    "core/local_workflow/tests.rs",
+    "docs/local-workflow/AUTOMATIC-BATCH.md",
+    "docs/local-workflow/AUTOMATIC-SEMANTIC-CONTRACT.json",
+    "docs/local-workflow/AUTOMATIC-SEMANTIC-SOURCE-MANIFEST.txt",
+    "docs/local-workflow/AUTOMATIC-SEMANTIC.md",
+    "engine/src/lumaretouch_engine/semantic_colour_batch_ledger.py",
+    "engine/src/lumaretouch_engine/semantic_colour_batch_target.py",
+    "engine/src/lumaretouch_engine/semantic_colour_portable.py",
+    "engine/src/lumaretouch_engine/semantic_colour_review.py",
+    "engine/src/lumaretouch_engine/workflow_auto_preset.py",
+    "engine/src/lumaretouch_engine/workflow_auto_semantic.py",
+    "engine/src/lumaretouch_engine/workflow_owner_host.py",
+    "engine/src/lumaretouch_engine/workflow_owner_protocol.py",
+    "engine/src/lumaretouch_engine/workflow_preset_handoff.py",
+    "engine/src/lumaretouch_engine/workflow_semantic_archive.py",
+    "engine/tests/test_workflow_auto_semantic_unrun.py",
+    "ui/src-tauri/src/local_workflow_host/archive.rs",
+    "ui/src-tauri/src/local_workflow_host/mod.rs",
+    "ui/src-tauri/src/local_workflow_host/runtime.rs",
+    "ui/src-tauri/src/local_workflow_host/tests_unrun.rs",
+    "ui/src-tauri/src/local_workflow_host/transport.rs",
+    "ui/src-tauri/src/main.rs",
+    "ui/src/localWorkflow/LocalWorkflowPanel.tsx",
+    "ui/src/localWorkflow/SemanticArchivePicker.tsx",
+    "ui/src/localWorkflow/automaticBatch.unrun.test.ts",
+    "ui/src/localWorkflow/contracts.ts",
+    "ui/src/localWorkflow/controller.ts",
+    "ui/src/localWorkflow/model.ts",
+    "ui/src/localWorkflow/nativePort.ts",
+    "ui/src/localWorkflow/semanticArchive.ts",
+    "ui/src/semanticColour/SemanticColourPanel.tsx",
+    "ui/src/semanticColour/model.ts",
+    "ui/src/semanticColour/workflowModel.ts"
+  ],
+  "static_checks": {
+    "python_ast": "passed; no product modules imported",
+    "json_parse": "passed",
+    "git_diff_check": "passed",
+    "typescript_tsx_parser": "UNRUN: parser unavailable, no installation",
+    "rust_parser": "UNRUN: parser unavailable, no installation"
+  },
+  "not_run": [
+    "tests",
+    "typechecks",
+    "builds",
+    "runtime imports",
+    "model inference",
+    "downloads",
+    "installations",
+    "photographic acceptance",
+    "memory or performance measurements",
+    "project reopen/export durability"
+  ],
+  "safety_contracts": [
+    "Archive snapshot and full canonical portable intent identities are frozen before fresh graph-bound Start consent.",
+    "Canonical intent remains JSON text across JS/Rust; full float number spelling is not round-tripped.",
+    "One guarded reference-analysis attempt per retained archive; each target gets one independent full-canvas semantic analysis/fit.",
+    "Commit/save/export never refit; actual post-history state is compared to its frozen candidate.",
+    "No human-image acknowledgment. Machine summary authorization explicitly has reviewed:false and cannot satisfy reviewed portable-source extraction.",
+    "Known preparation skip requires exact no-effect proof and verified editor return. Uncertain writes/save/return/export are query-only.",
+    "Canonical semantic owned-field ledger, live history, scoped target project CAS, editor return, finite captured scheduler and managed-copy importer are reused.",
+    "Memory and requested missing-class bounds are preserved, including disabled requested classes; no dropped groups or proxy fallback."
+  ],
+  "unrun_fixture_files": [
+    "engine/tests/test_workflow_auto_semantic_unrun.py",
+    "core/local_workflow/tests.rs",
+    "ui/src-tauri/src/local_workflow_host/tests_unrun.rs",
+    "ui/src/localWorkflow/automaticBatch.unrun.test.ts"
+  ],
+  "required_local_acceptance": [
+    "Reference analysis count exactly one, independently fitted multiple target images, no inference on commit/undo/reopen/export.",
+    "Archive source replacement, retained snapshot/reference tamper, byte/intent mismatch, oversize, nonregular/symlink leaf and invalid manifest.",
+    "Fresh Start disclosure and acknowledgment; saved-definition/recheck/edit/disconnect/dismissal invalidation.",
+    "Missing/disabled requested class, unsupported source/model, out-of-range offsets and low-memory explicit failures.",
+    "Same source aliases refused before analysis; finite captured file list rejects over-capacity before import.",
+    "Known target failure stop/skip with exact return proof; lost load/publication/history/save/return/export remains query-only.",
+    "Post-history revision, complete candidate verification, canonical undo/redo, scoped CAS, unrelated records unchanged, project reopen.",
+    "Real RGB8/RGB16/RAW full-resolution exports for configured JPEG/PNG8/TIFF16 profiles with no silent format substitution.",
+    "Reviewed modes and generic scalar/portrait/reference preset behaviour unchanged; machine assessment not shown as viewed image."
+  ],
+  "limitations": [
+    "No local masks or mixed portrait/reference recipe",
+    "No new models or sky/lip/person-instance classifier",
+    "No depth or super-resolution",
+    "No durable engine-restart resumption",
+    "No throughput/quality/completion percentage claim"
+  ]
+}

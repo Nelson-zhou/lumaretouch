@@ -1,9 +1,10 @@
+import type {SemanticArchive} from './semanticArchive';
 import type {PresetReviewAck, ReviewImageInput, ReviewImagePage, ReviewStep, WorkflowPresetHandoff} from './presetReview';
 // SPDX-License-Identifier: GPL-3.0-or-later
 /** Local-only v1 contract. The application supplies the port; this module never invokes native APIs. */
 export const WORKFLOW_PORT_VERSION = 1 as const;
 export type ErrorPolicy = 'stop' | 'skip' | 'keep_continue';
-export interface AutomaticBatchIntent {schema: 'lrt.automatic-batch-intent.v1'; mode: 'automatic'; scope: 'directory_originals'; source_mode: 'captured_file_list'; originals: 'managed_copy_only'; save: 'target_recipe'; collision: 'fail_no_overwrite'; unattended: true; portrait_scope?: 'all_verified_detected_faces'; reference_scope?: 'stored_reference_per_target_fit'; reference_source_policy?: 'reject_same_source'}
+export interface AutomaticBatchIntent {schema: 'lrt.automatic-batch-intent.v1'; mode: 'automatic'; scope: 'directory_originals'; source_mode: 'captured_file_list'; originals: 'managed_copy_only'; save: 'target_recipe'; collision: 'fail_no_overwrite'; unattended: true; portrait_scope?: 'all_verified_detected_faces'; reference_scope?: 'stored_reference_per_target_fit'; reference_source_policy?: 'reject_same_source'; semantic_scope?: 'global_six_class_per_target_fit'; semantic_archive?: SemanticArchive}
 export interface AutomaticStartAck {schema: 'lrt.automatic-batch-start.v1'; graph_sha256: string; accepted: true}
 export type WorkflowOperation =
   | {kind: 'directory_source'; root: string; recursive: boolean; include_existing: boolean; extensions: string[]; settle_ms: number}
@@ -63,6 +64,8 @@ export interface WorkflowExportProfile {
 }
 export interface ReturnedExportProfile {recipe_sha256: string; recipe_profile: WorkflowExportProfile}
 export interface PreflightReport {
+  /** Exact archive frozen before this preflight token; no target inference yet. */
+  semantic_archive?: SemanticArchive | null;
   /** Canonical host graph hash; never reconstructed from renderer JSON ordering. */
   graph_sha256?: string;
   workflow_id: string;
@@ -170,6 +173,7 @@ export interface WorkflowHostPort {
   refreshCatalogue?(): Promise<WorkflowWorkspace>;
   readDefinition(workflow_id: string): Promise<WorkflowDefinition>;
   preflight(input: {port_version: 1; graph: WorkflowGraph; lease_id: string}): Promise<PreflightReport>;
+  inspectSemanticArchive?(path: string): Promise<SemanticArchive>;
   readReviewImage?(input: ReviewImageInput): Promise<ReviewImagePage>;
   /** Persist exact identity before effects. Only an explicit review_step can acknowledge a reviewed pair. */
   submit(input: {port_version: 1; request_id: string; command: WorkflowCommand}): Promise<WorkflowReceipt>;

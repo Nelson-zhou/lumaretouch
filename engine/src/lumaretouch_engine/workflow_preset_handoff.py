@@ -138,6 +138,9 @@ class PresetHandoff:
                 raise ValueError('Loaded preset target no longer matches its retained owner')
         return lease, row
 
+    def _resolve(self, preset_id, preset_sha256):
+        return resolve(preset_id, preset_sha256)
+
     def _support_reason(self, preset):
         return support_reason(preset)
 
@@ -145,7 +148,7 @@ class PresetHandoff:
         if self.active is not None:
             raise ValueError('An earlier preset handoff remains unresolved')
         operation = record['command']['operation']
-        preset = resolve(operation['preset_id'], operation['preset_sha256'])
+        preset = self._resolve(operation['preset_id'], operation['preset_sha256'])
         reason = self._support_reason(preset)
         if reason:
             raise ValueError(reason)

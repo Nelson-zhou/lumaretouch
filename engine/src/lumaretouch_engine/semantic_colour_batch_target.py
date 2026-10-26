@@ -30,7 +30,8 @@ def reference_analysis(intent,bundle,*,cancelled=lambda:False):
     return job.wait(cancelled=cancelled)
 
 
-def prepare(engine,row,state,document_id,revision,intent,cache,*,cancelled=lambda:False):
+def prepare(engine,row,state,document_id,revision,intent,cache,*,cancelled=lambda:False,preview=True):
+    if type(preview) is not bool:raise ValueError('Semantic preview mode must be explicit')
     import numpy as np
     from .semantic_colour_capture import render
     from .render_snapshot import own_render_inputs
@@ -45,12 +46,13 @@ def prepare(engine,row,state,document_id,revision,intent,cache,*,cancelled=lambd
     snapshot=own_render_inputs({k:v for k,v in state.items() if k not in OWNED},max_asset_bytes=budget).value
     frame=render(engine,row,snapshot,document_id,revision,cancelled=cancelled)
     record=BatchFitJob(frame,intent=intent,reference_analysis=cache).wait(cancelled=cancelled)
-    _,sample=view(frame)
-    after=SemanticColourStage(record['recipe'],binding=frame.binding).apply_np(sample)
+    if preview:
+        _,sample=view(frame)
+        after=SemanticColourStage(record['recipe'],binding=frame.binding).apply_np(sample)
+        record['preview']={'before':png(np.rint(np.clip(sample,0,1)*255).astype(np.uint8)),
+            'after':png(np.rint(np.clip(after,0,1)*255).astype(np.uint8)),
+            'notice':'完整浮点原画布的空间采样检查预览；不是整幅摄影质量验收。'}
     if cancelled():raise InterruptedError('追色目标审核准备已取消')
-    record['preview']={'before':png(np.rint(np.clip(sample,0,1)*255).astype(np.uint8)),
-        'after':png(np.rint(np.clip(after,0,1)*255).astype(np.uint8)),
-        'notice':'完整浮点原画布的空间采样检查预览；不是整幅摄影质量验收。'}
     record['proof']=R.proof(record)
     verify(engine,row,state,document_id,revision,intent,record)
     return record
@@ -75,8 +77,10 @@ def verify(engine,row,state,document_id,revision,intent,record):
     return recipe
 
 
-def install(state,record,bundle):
-    recipe=S.check(record['recipe']);recipe['last_review']=R.saved_review(record)
+def install(state,record,bundle,*,automatic_authority=None):
+    recipe=S.check(record['recipe'])
+    recipe['last_review']=(R.saved_review(record) if automatic_authority is None
+                           else R.automatic_summary(record,automatic_authority))
     recipe,assets=MA.retain(recipe)
     out={**state,S.KEY:recipe,MA.KEY:assets,BUNDLE:bundle}
     from .semantic_colour_project import validate_decoded

@@ -183,3 +183,20 @@ fn automatic_handoff_never_accepts_review_steps_or_image_ack() {
     handoff["review"] = json!({"accepted":true});
     assert!(!super::review::handoff(&handoff, &command));
 }
+
+// AUTHORED / UNRUN: archive selection cannot dispatch edits or mint Start consent.
+#[test]
+fn semantic_archive_readback_is_exact_and_read_only() {
+    use sha2::{Digest, Sha256};
+    let intent = json!({"reference":{"asset_id":"b".repeat(64),"render_sha256":"c".repeat(64),
+        "source":{"sha256":"d".repeat(64)}}}).to_string();
+    let hash: String = Sha256::digest(intent.as_bytes()).iter().map(|byte| format!("{byte:02x}")).collect();
+    let value = json!({"path":"/fixture/reference.lrtcolour","file_bytes":8192,"file_sha256":"e".repeat(64),
+        "intent_sha256":hash,"portable_intent_json":intent});
+    assert!(super::archive::checked(&value, "/fixture/reference.lrtcolour").is_ok());
+    assert!(super::archive::checked(&value, "/fixture/other.lrtcolour").is_err());
+    let mut changed = value; changed["reviewed"] = json!(true);
+    assert!(super::archive::checked(&changed, "/fixture/reference.lrtcolour").is_err());
+    assert!(super::transport::read_only(&json!({"cmd":"workflow_owner","action":"semantic_archive"})));
+    assert!(!super::transport::read_only(&json!({"cmd":"workflow_owner","action":"execute"})));
+}

@@ -95,6 +95,7 @@ class WorkflowOwner:
         if len(self.preflights) >= 64:
             raise ValueError('Preflight receipt bound reached; retained identities are not evicted')
         value = {'supported': False, 'diagnostics': [], **self._profile()}
+        semantic_archive = None
         try:
             owner, lease = self._lease(request['session_id'], idle=True)
             graph, ordered = P.graph(request['graph'], request['graph_sha256'])
@@ -123,9 +124,16 @@ class WorkflowOwner:
                 selected = preset_nodes[0]
                 if automatic:
                     from .workflow_auto_preset import support_reason
-                preset = resolve(selected['operation']['preset_id'], selected['operation']['preset_sha256'])
-                reason = support_reason(preset, selected['operation']['intent']) if automatic else support_reason(preset)
-                if reason: raise ValueError(reason)
+                semantic = automatic and 'semantic_archive' in selected['operation']['intent']
+                if semantic:
+                    from .workflow_semantic_archive import FrozenArchive
+                    selected_archive = selected['operation']['intent']['semantic_archive']
+                    semantic_archive = FrozenArchive(selected_archive['path'], selected_archive)
+                    value['semantic_archive'] = deepcopy(semantic_archive.metadata)
+                else:
+                    preset = resolve(selected['operation']['preset_id'], selected['operation']['preset_sha256'])
+                    reason = support_reason(preset, selected['operation']['intent']) if automatic else support_reason(preset)
+                    if reason: raise ValueError(reason)
                 if not automatic and selected['error_policy'] != 'stop': raise ValueError('Reviewed preset handoff currently requires stop-on-error')
                 if not self.engine._image_loaded or not self.engine._load_id or self.engine._doc_index < 0:
                     raise ValueError('Open a saved editor document before starting a preset workflow; review must return to that exact document')
@@ -138,24 +146,35 @@ class WorkflowOwner:
                     'message': str(error)})
             if not value['diagnostics']:
                 current = self.session
-                if automatic:
+                if semantic_archive is not None:
+                    from .workflow_auto_semantic import AutomaticSemanticHandoff
+                    old_archive = getattr(self.presets, 'archive', None)
+                    self.presets = AutomaticSemanticHandoff(self, semantic_archive)
+                    semantic_archive = None  # ownership transferred before Start consent
+                    if old_archive is not None: old_archive.close()
+                elif automatic:
                     from .workflow_auto_preset import AutomaticPresetHandoff
-                    if not isinstance(self.presets, AutomaticPresetHandoff):
+                    if type(self.presets) is not AutomaticPresetHandoff:
+                        old_archive = getattr(self.presets, 'archive', None)
                         self.presets = AutomaticPresetHandoff(self)
+                        if old_archive is not None: old_archive.close()
                 else:
                     from .workflow_preset_handoff import PresetHandoff
                     if type(self.presets) is not PresetHandoff:
+                        old_archive = getattr(self.presets, 'archive', None)
                         self.presets = PresetHandoff(self)
+                        if old_archive is not None: old_archive.close()
                 self.session = {'session_id': request['session_id'], 'graph_sha256': request['graph_sha256'],
                     'graph': graph, 'ordered': ordered, 'binding': deepcopy(lease['binding']),
                     'destination_roots': deepcopy(destination_roots),
                     'run_id': current.get('run_id') if current and current['session_id'] == request['session_id'] else None}
                 value['supported'] = True
                 value['diagnostics'].append({'severity': 'info', 'code': 'bounded_import_export',
-                    'message': ('Explicit automatic directory job: fixed exposure/WB and explicitly opted-in own-face finish/texture, canonical apply/history/save/return, then frozen export. Native start requires fresh graph-bound opt-in. No human image review is claimed; unknown outcomes remain query-only.' if automatic else
+                    'message': ('Explicit automatic directory job: fixed exposure/WB, explicitly opted-in own-face finish/texture, same-scene reference or separate full-canvas six-class semantic archive intent; canonical apply/history/save/return, then frozen export. Native start requires fresh graph-bound opt-in. No human image review is claimed; unknown outcomes remain query-only.' if automatic else
                         'Real saved-project managed import and per-document frozen export are supported. Output conflicts do not overwrite or rename. Supported reviewed presets pause for actual image approval, explicit save and verified editor return.')})
         except Exception as error:
             value['diagnostics'].append({'severity': 'error', 'code': 'owner_preflight_failed', 'message': str(error)[:2048]})
+        if semantic_archive is not None: semantic_archive.close()
         self.preflights[request['request_id']] = {'request': deepcopy(request), 'value': deepcopy(value)}
         return self._result(request, 'readback', **value)
 
@@ -420,6 +439,10 @@ class WorkflowOwner:
         request = payload if type(payload) is dict else {}
         try:
             request = P.envelope(payload)
+            if request['action'] == 'semantic_archive':
+                from .workflow_semantic_archive import inspect
+                if self.pending(): raise ValueError('Resolve original workflow effects before selecting another archive')
+                return self._result(request, 'readback', semantic_archive=inspect(request['path']))
             if request['action'] == 'profile':
                 from .workflow_preset_catalogue import list_catalogue, resolve
                 from .workflow_preset_review import support_reason
@@ -480,7 +503,7 @@ def ingest_passthrough(engine, payload):
     """Exact same-lease transitions only; no general editor exemption."""
     try:
         request = P.envelope(payload)
-        if request['action'] == 'profile': return True
+        if request['action'] in ('profile', 'semantic_archive'): return True
         ingestion = getattr(engine, '_ingest_session_host', None)
         if ingestion is None: return False
         lease = ingestion._session(request['session_id'])

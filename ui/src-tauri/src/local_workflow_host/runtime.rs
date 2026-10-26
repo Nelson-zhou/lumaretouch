@@ -11,6 +11,7 @@ pub enum Message {
     Submit(Request, SyncSender<Result<Value, String>>),
     Preflight(PreflightInput, SyncSender<Result<Value, String>>),
     ReviewImage(ReviewImageInput, SyncSender<Result<Value, String>>),
+    SemanticArchive(String, SyncSender<Result<Value, String>>),
     Refresh,
     RefreshCatalogue,
     Shutdown,
@@ -27,12 +28,13 @@ struct Check {
     managed_root_identity: [String; 2],
 }
 struct ImageRead { request: Value, handoff: Value, epoch: [u8; 16], deadline: Instant, reply: SyncSender<Result<Value, String>> }
+struct ArchiveRead { request: Value, epoch: [u8; 16], deadline: Instant, reply: SyncSender<Result<Value, String>> }
 struct Token { graph_digest: String, lease_id: String, expires: u64, managed_root_identity: [String; 2] }
 struct Active { runner: DurableRunner, poller: DirectoryPoller, maximum: usize, last_poll: Instant }
 pub struct Runtime {
     store: Store, data: Data, state: Arc<AppState>, public: Arc<Mutex<Public>>,
     active: Option<Active>, checks: Vec<Check>, tokens: BTreeMap<String, Token>,
-    images: Vec<ImageRead>,
+    images: Vec<ImageRead>, archives: Vec<ArchiveRead>,
     profile: Value, profile_request: Option<Value>, profile_epoch: Option<[u8; 16]>,
     closing: bool, shutdown_requested: Arc<AtomicBool>,
 }
@@ -56,7 +58,7 @@ impl Runtime {
             }
         }
         let mut runtime = Self { store, data, state, public, active: None, checks: Vec::new(), tokens: BTreeMap::new(),
-            images: Vec::new(), profile: Value::Null, profile_request: None, profile_epoch: None, closing: false, shutdown_requested };
+            images: Vec::new(), archives: Vec::new(), profile: Value::Null, profile_request: None, profile_epoch: None, closing: false, shutdown_requested };
         runtime.persist()?; // Bootstrap exposes a stable scope, never a null snapshot.
         Ok(runtime)
     }
@@ -92,6 +94,7 @@ impl Runtime {
                 Ok(Message::Submit(request, reply)) => { let result = self.submit(request); let _ = reply.send(result); }
                 Ok(Message::Preflight(input, reply)) => self.preflight(input, reply),
                 Ok(Message::ReviewImage(input, reply)) => self.review_image(input, reply),
+                Ok(Message::SemanticArchive(path, reply)) => self.semantic_archive(path, reply),
                 Ok(Message::Refresh) => {
                     if self.profile_request.is_none() && self.profile["unavailable"] == true { self.profile = Value::Null; }
                     self.refresh_profile();
@@ -115,6 +118,7 @@ impl Runtime {
             self.refresh_profile();
             self.poll_checks();
             self.poll_images();
+            self.poll_archives();
             if self.data.blocked.is_none() && !self.closing {
                 if self.data.lease.as_ref().is_some_and(|lease| transport::epoch(&self.state).ok() != Some(lease.epoch)) {
                     self.fence("引擎代际已变化，原租约不可恢复；保留原请求，只能核对，不能重放".into());
@@ -196,13 +200,14 @@ impl Runtime {
                     "session_id":lease.lease_id,"graph":input.graph,"graph_sha256":graph.digest()});
                 let expires = storage::now().unwrap_or(0).saturating_add(60).min(lease.expires);
                 if let Err(error) = transport::send(&self.state, request.clone(), lease.epoch) { let _ = reply.send(Err(error)); return; }
-                self.checks.push(Check { input, request, epoch: lease.epoch, expires, deadline: Instant::now() + Duration::from_secs(15), reply, managed_root_identity });
+                let semantic = matches!(graph.preset().map(|node| &node.operation), Some(NodeKind::AutomaticPreset { intent, .. }) if intent.semantic_archive.is_some());
+                self.checks.push(Check { input, request, epoch: lease.epoch, expires, deadline: Instant::now() + Duration::from_secs(if semantic {600} else {15}), reply, managed_root_identity });
             }
         }
     }
     fn poll_checks(&mut self) {
         let checks = std::mem::take(&mut self.checks);
-        for check in checks {
+        for mut check in checks {
             if check.deadline < Instant::now() || transport::epoch(&self.state).ok() != Some(check.epoch) {
                 let _ = check.reply.send(Err("检测回执尚未确认或引擎代际变化；没有启动工作流".into())); continue;
             }
@@ -210,7 +215,15 @@ impl Runtime {
             match result {
                 Ok(value) if value["phase"] == "done" => {
                     let value = &value["result"];
-                    let supported = value["supported"] == true && matches!(value["status"].as_str(), Some("readback" | "succeeded"));
+                    let expected_archive = check.input.graph.nodes.iter().find_map(|node| match &node.operation {
+                        NodeKind::AutomaticPreset { intent, .. } => intent.semantic_archive.as_ref(), _ => None,
+                    });
+                    let archive_matches = expected_archive.map_or(true, |archive| serde_json::to_value(archive).ok().as_ref() == Some(&value["semantic_archive"]));
+                    let supported = archive_matches && value["supported"] == true && matches!(value["status"].as_str(), Some("readback" | "succeeded"));
+                    if expected_archive.is_some() {
+                        check.expires = storage::now().unwrap_or(0).saturating_add(60)
+                            .min(self.data.lease.as_ref().map_or(0, |lease| lease.expires));
+                    }
                     let token = if supported { storage::uuid().unwrap_or_default() } else { String::new() };
                     if supported && !token.is_empty() {
                         self.tokens.retain(|_, token| token.expires > storage::now().unwrap_or(u64::MAX));
@@ -222,11 +235,46 @@ impl Runtime {
                         "lease_id":check.input.lease_id,"preflight_token":token,"valid_until":storage::timestamp(check.expires).unwrap_or_default(),
                         "can_start":supported && self.tokens.contains_key(&token), "graph_sha256":check.request["graph_sha256"],
                         "diagnostics":value.get("diagnostics").cloned().unwrap_or_else(||json!([{"severity":"error","code":"owner_preflight_failed","message":value["error"].as_str().unwrap_or("owner 检测未通过")}])) ,
-                        "recipe_sha256":value["recipe_sha256"],"recipe_profile":value["recipe_profile"]});
+                        "recipe_sha256":value["recipe_sha256"],"recipe_profile":value["recipe_profile"],
+                        "semantic_archive":value["semantic_archive"]});
                     let _ = check.reply.send(Ok(report));
                 }
                 Err(error) => { let _ = check.reply.send(Err(error)); }
                 _ => self.checks.push(check),
+            }
+        }
+    }
+    fn semantic_archive(&mut self, path: String, reply: SyncSender<Result<Value, String>>) {
+        let result = (|| -> Result<(Value, [u8; 16]), String> {
+            if self.closing || self.data.blocked.is_some() || self.active.is_some() || !self.archives.is_empty()
+                || !self.checks.is_empty() || self.data.requests.values().any(|row| wire::unresolved(&row.receipt)) {
+                return Err("请先核对原工作流；当前不能选择新追色归档".into());
+            }
+            let epoch = transport::epoch(&self.state)?;
+            let request = json!({"cmd":"workflow_owner","protocol":1,"action":"semantic_archive","request_id":storage::uuid()?,"path":path});
+            transport::send(&self.state, request.clone(), epoch)?;
+            Ok((request, epoch))
+        })();
+        match result {
+            Ok((request, epoch)) => self.archives.push(ArchiveRead { request, epoch, deadline: Instant::now() + Duration::from_secs(600), reply }),
+            Err(error) => { let _ = reply.send(Err(error)); }
+        }
+    }
+    fn poll_archives(&mut self) {
+        for read in std::mem::take(&mut self.archives) {
+            if read.deadline < Instant::now() || transport::epoch(&self.state).ok() != Some(read.epoch) {
+                let _ = read.reply.send(Err("原归档读取未确认或引擎变化；没有选择替代内容或启动任务".into())); continue;
+            }
+            match transport::read(&self.state, read.request["request_id"].as_str().unwrap_or("")) {
+                Ok(response) if response["phase"] == "done" => {
+                    let value = &response["result"];
+                    let result = if value["status"] == "readback" {
+                        super::archive::checked(&value["semantic_archive"], read.request["path"].as_str().unwrap_or(""))
+                    } else { Err(value["error"].as_str().unwrap_or("追色归档验证未通过").into()) };
+                    let _ = read.reply.send(result);
+                }
+                Err(error) => { let _ = read.reply.send(Err(error)); }
+                _ => self.archives.push(read),
             }
         }
     }
