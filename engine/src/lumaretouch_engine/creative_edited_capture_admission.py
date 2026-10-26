@@ -240,8 +240,8 @@ def admit_snapshot_copy(value, *, max_bytes, host_lease_bytes=0, copies=1):
     return census
 
 
-# Explicit producer inventory. A new field needs an audit, even when neutral.
-SNAPSHOT_FIELDS = frozenset('''final_canvas_flip people_document_id creative_base id_background id_background_bundle people strength params grade grade_scope grade_mask local_masks local_mask_owner local_grade_groups effect_recovery manual_liquify studio_background optics sky_replacement lip_makeup brow_shape brow_shape_owner nose_shape nose_shape_owner eye_shape eye_shape_owner reference_color mouth_shape mouth_shape_owner extended_tone photo_detail photo_grain fringe_repair colour_grading selective_colour colour_editor primary_calibration exposure exposure_ref_k wb_options hsl curves levels crop_rect crop_rotation lut lut_amount light light_ops repair_ops deform deform_defer hand_shape hand_shape_path hand_shape_stamp hand_tone hand_tone_repair_sha256 limb_vein limb_vein_repair_sha256 fabric_sweat fabric_sweat_repair_sha256 fabric_amount enhance enhance_defer channel _bg precompute device scale upscale_backend sharpen body_pose body_pose_source_proof semantic_colour semantic_colour_mask_assets semantic_colour_source_path semantic_colour_binding export_skipped local_mask_source_path local_grade_source_stamp effect_recovery_path effect_recovery_stamp manual_liquify_path manual_liquify_stamp studio_background_path studio_background_stamp optics_path optics_stamp sky_replacement_path sky_replacement_stamp id_background_path id_background_stamp fringe_repair_source fringe_repair_path fringe_repair_stamp common_background_path common_background_stamp body_pose_source_path body_pose_source_stamp semantic_colour_source_stamp creative_mask_context creative_smoothing_context creative_fabric_context creative_recovery_context creative_sky_context creative_studio_context creative_id_background_context'''.split())
+# Shared explicit producer inventory. New fields fail closed, even when neutral.
+from .export_snapshot_schema import SNAPSHOT_FIELDS
 PARAM_FIELDS = frozenset(('radius', 'eps', 'texture_radius', 'broad_gain', 'mid_gain', 'detail_gain'))
 CORE_FIELDS = frozenset('strength params grade lut lut_amount light light_ops repair_ops deform enhance channel precompute crop_rect crop_rotation'.split())
 
@@ -428,6 +428,11 @@ def _classify(snapshot, *, geometry_version=0, finishing_version=0):
         reasons.append('source-reviewed fabric sweat processing')
     if snapshot.get('fabric_amount', 0) != 0:
         reasons.append('fabric processing')
+    # These three colour families are admitted by this capture renderer. Validate
+    # actual state first; only the diagnostic passthrough probe may see neutral.
+    native = {}
+    for key, module in (('colour_grading', CG), ('selective_colour', SC), ('primary_calibration', PC)):
+        native[key] = module.check(snapshot[key]) if key in snapshot else module.neutral()
     # Neutralize ONLY a local diagnostic dict, never the user's actual recipe.
     from .master16_policy import Master16PolicyMixin
     diagnostic = dict(snapshot)
@@ -435,7 +440,9 @@ def _classify(snapshot, *, geometry_version=0, finishing_version=0):
         exposure=(0.,) * 7, wb_options=WB.default_options(), hsl=(0.,) * 24,
         curves=CURVES.default_curves(), levels=LEVELS.default_levels(), lut=None,
         lut_amount=0., crop_rect=(0., 0., 1., 1.), crop_rotation=0.,
-        photo_grain=grain, fringe_repair=fringe, colour_editor=editor)
+        photo_grain=grain, fringe_repair=fringe, colour_editor=editor,
+        colour_grading=CG.neutral(), selective_colour=SC.neutral(),
+        primary_calibration=PC.neutral())
     reasons.extend(Master16PolicyMixin._master16_snapshot_blockers(diagnostic))
     bg = snapshot.get('_bg')
     if bg is None:
@@ -452,9 +459,6 @@ def _classify(snapshot, *, geometry_version=0, finishing_version=0):
                 reasons.append('unaccounted source-bound field: ' + key)
     if snapshot.get('semantic_colour_mask_assets'):
         reasons.append('semantic colour assets')
-    native = {}
-    for key, module in (('colour_grading', CG), ('selective_colour', SC), ('primary_calibration', PC)):
-        native[key] = module.check(module.neutral() if snapshot.get(key) is None else snapshot[key])
     fingerprint = _freeze(dict(params=params, grade=grade, exposure=exposure,
         exposure_ref_k=reference, wb_options=options, hsl=hsl, curves=curves,
         levels=levels, lut=cube, lut_amount=float(snapshot['lut_amount']), **native))

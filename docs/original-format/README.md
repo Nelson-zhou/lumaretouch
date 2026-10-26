@@ -42,9 +42,11 @@ App destination preview (document IDs + intent only)
 
 Original native16 always uses the existing canonical edited-RGB16 recipe/render
 path, including neutral documents. It never relies on the legacy master-copy
-shortcut's incomplete neutral classifier. This preserves all document edits
-without introducing an RGB8 fallback; explicit-format shortcut behavior stays
-unchanged. Neutral identity is a pixel expectation when no color conversion or
+shortcut's neutral classifier. This preserves all document edits without
+introducing an RGB8 fallback. The independent explicit-format classifier was
+subsequently hardened for six omitted families and malformed state; see
+[`../master16-policy/README.md`](../master16-policy/README.md). Original routing
+remains independent of those gates. Neutral identity is a pixel expectation when no color conversion or
 other edit is requested, not a byte-identical encoded-file guarantee.
 
 There is no second renderer, file naming owner or task queue. The inactive

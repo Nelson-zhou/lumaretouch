@@ -7,6 +7,9 @@ from . import white_balance_recipe as WB,local_grade_layers as LG,effect_recover
 from . import manual_liquify_state as MLS,studio_background_state as SBS,optics_state as OPS,sky_replacement_state as SKS
 from . import lip_makeup_state as LIPS,brow_shape_state as BROWS,nose_shape_state as NOSES,eye_shape_state as EYES,mouth_shape_state as MOUTHS
 from . import reference_color_state as RCS,semantic_colour_state as SCS
+from . import colour_grading_state as CGS,selective_colour_state as SCLS,primary_calibration_state as PCS
+from . import extended_tone_state as ETS,photo_detail_state as PDS,id_background_state as IDBS
+from .export_snapshot_schema import SNAPSHOT_FIELDS
 
 
 class Master16PolicyMixin:
@@ -20,12 +23,14 @@ class Master16PolicyMixin:
         result must now route to edits, never be ignored or treated as completion.
         """
         from types import SimpleNamespace
+        if type(snap) is not dict or set(snap) - SNAPSHOT_FIELDS:
+            raise ValueError('Unknown frozen export snapshot fields; passthrough is not safe')
         defaults = {
             "strength": 0.0, "grade": (0.0, 0.0, 0.0, 1.0),
             "grade_scope": "all", "lut": None, "lut_amount": 0.0,
             "repair_ops": [], "light_ops": [], "deform": {},
             "crop_rect": (0.0, 0.0, 1.0, 1.0), "crop_rotation": 0.0,
-            "exposure": (0.0,) * 7, "wb_options": WB.default_options(), "hsl": (0.0,) * 24, "enhance": {}, "fabric_amount": 0.0, "hand_shape": None, "hand_tone": None, "limb_vein": None, "fabric_sweat": None,
+            "exposure": (0.0,) * 7, "exposure_ref_k": None, "wb_options": WB.default_options(), "hsl": (0.0,) * 24, "enhance": {}, "fabric_amount": 0.0, "hand_shape": None, "hand_tone": None, "limb_vein": None, "fabric_sweat": None,
             "curves": CURVES.default_curves(), "levels": LEVELS.default_levels(),
         }
         fields = {"_" + key: snap.get(key, value) for key, value in defaults.items()}
@@ -35,6 +40,10 @@ class Master16PolicyMixin:
         fields["_colour_editor"] = CES.check(snap["colour_editor"]) if "colour_editor" in snap else CES.neutral()
         fields["_photo_grain"] = PGS.check(snap["photo_grain"]) if "photo_grain" in snap else PGS.neutral()
         fields["_fringe_repair"] = FRS.check(snap["fringe_repair"]) if "fringe_repair" in snap else FRS.neutral()
+        for key, module in (('colour_grading', CGS), ('selective_colour', SCLS), ('primary_calibration', PCS)):
+            fields['_' + key] = module.check(snap[key]) if key in snap else module.neutral()
+        for key, module in (('extended_tone', ETS), ('photo_detail', PDS), ('id_background', IDBS)):
+            fields['_' + key] = module.check(snap.get(key))
         fields["_bg"] = snap.get("_bg", {})
         fields["_local_grade_layers"] = LG.check(snap.get("local_grade_groups"))
         fields["_effect_recovery"] = ERS.check(snap.get("effect_recovery"))
@@ -50,9 +59,21 @@ class Master16PolicyMixin:
         fields["_reference_color"] = RCS.check(snap.get("reference_color")); fields["_semantic_colour"] = SCS.check(snap.get("semantic_colour"))
         fields["_mouth_shape"] = MOUTHS.check(snap.get("mouth_shape"))
         fields["_mouth_shape_owner"] = snap.get("mouth_shape_owner")
-        fields["_body_pose_bank"]=(snap.get("body_pose") or {}).get("bank")
+        body = snap.get('body_pose')
+        fields['_body_pose_bank'] = None
+        if body is not None:
+            from .arm_shape_project import check_snapshot
+            # Validate the envelope before reading its bank: an empty/malformed
+            # present value is not a neutral omitted legacy snapshot.
+            check_snapshot(body, body.get('source') if type(body) is dict else None)
+            fields['_body_pose_bank'] = body['bank']
         blockers=Master16PolicyMixin._master16_blockers(SimpleNamespace(**fields),
             scale=snap.get("scale", 1), sharpen=snap.get("sharpen", 0.0))
+        if any(snap.get(key) is not None for key in SNAPSHOT_FIELDS
+               if key.startswith('creative_') and key.endswith('_context')):
+            blockers.append('派生编辑上下文（须验证合成底图与完整编辑链，不可直通）')
+        if snap.get('body_pose_source_proof') is not None and body is None:
+            blockers.append('身体源图证明缺少对应快照（不可直通）')
         from .people_export import fastpath_blocker
         if fastpath_blocker(snap.get('people')):blockers.append('人物图保留的参数或源归属资产（须完整尺寸准备，不可直通）')
         return blockers
@@ -77,6 +98,12 @@ class Master16PolicyMixin:
         if CES.active(getattr(self,"_colour_editor",CES.neutral())):b.append("连续色彩编辑器（全源图统一目标，不可直通）")
         if PGS.active(getattr(self,"_photo_grain",PGS.neutral())):b.append("确定性源像素颗粒（须完整浮点编辑，不能直通）")
         if FRS.active(getattr(self,"_fringe_repair",FRS.neutral())):b.append("黑白边缘修复（逐图重算边缘支持，不可直通）")
+        if CGS.active(getattr(self, '_colour_grading', CGS.neutral())):b.append('分区色彩分级（须完整浮点编辑，不可直通）')
+        if SCLS.active(getattr(self, '_selective_colour', SCLS.neutral())):b.append('可选颜色（须完整浮点编辑，不可直通）')
+        if PCS.active(getattr(self, '_primary_calibration', PCS.neutral())):b.append('三原色校准（须完整浮点编辑，不可直通）')
+        if ETS.active(getattr(self, '_extended_tone', None)):b.append('扩展影调或黑白（须完整浮点编辑，不可直通）')
+        if PDS.active(getattr(self, '_photo_detail', None)):b.append('照片细节（须完整浮点编辑，不可直通）')
+        if IDBS.active(getattr(self, '_id_background', None)):b.append('证件照背景（须完整源图合成，不可直通）')
         from .body_pose_render import fastpath_blocker
         if fastpath_blocker(getattr(self,"_body_pose_bank",None)):b.append("身体几何（源图姿态与完整尺寸共同映射，不可直通）")
         if any(layer['enabled'] for layer in LG.check(getattr(self, '_local_grade_layers', None))['layers']):
@@ -99,13 +126,20 @@ class Master16PolicyMixin:
             b.append('效果恢复笔迹（须验证源图与全尺寸蒙版，不能绕过编辑路径）')
         if float(self._strength) != 0.0:
             b.append(f"磨皮强度={self._strength}")
-        grade = list(self._grade) + [0.0, 0.0, 0.0, 0.0]
-        if any(abs(float(v)) > 0.0 for v in grade[:3]) and float(grade[3]) != 0.0:
+        from .ops import grade as GRADE, hsl as HSL, deform as DEFORM, enhance as ENH, lut as LUT
+        from .ops.exposure import check_params as check_exposure
+        from .ops.tone import check_tone
+        if not isinstance(self._grade, (tuple, list)) or len(self._grade) != 4:
+            raise ValueError('Complete four-scalar grade required for passthrough')
+        grade = GRADE.check_params(*self._grade[:3], amount=self._grade[3])
+        grade_active = not GRADE.is_identity(*grade)
+        if grade_active:
             b.append(f"色阶增量={tuple(grade[:3])}")
         # P1-5 附带修：老写法 `if self._lut` 在 cube 是 numpy/torch 数组时会抛
 # 「truth value ambiguous」——还没走到「拒绝并说明理由」就崩。is not None 才是这里要的
 # 判据（cube 挂了没有），配合 amount>0 才叫「LUT 层在像素上有点火」。
-        if self._lut is not None and float(self._lut_amount) > 0.0:
+        lut_amount = LUT.check_amount(self._lut_amount)
+        if self._lut is not None and lut_amount > 0.0:
             b.append(f"LUT 强度={self._lut_amount}")
         if self._repair_ops:
             b.append(f"修脸算子 {len(self._repair_ops)} 个")
@@ -113,8 +147,11 @@ class Master16PolicyMixin:
             b.append(f"光影算子 {len(self._light_ops)} 个")
         # 控制点"存在"不等于"作用了"：load_image 会把上一次的控制点带进新一张图（位置还在、
         # 位移全零），拿条目数当判据会把一张干净的图挪成"有图层"而拒掉直通。只有非零位移才会改像素。
-        nz = sum(1 for v in (self._deform.get("amounts") or {}).values()
-                 if abs(float(v)) > 0.0)
+        if type(self._deform) is not dict or type(self._deform.get('amounts', {})) is not dict:
+            raise ValueError('Deform amounts must be an object')
+        amounts = self._deform.get('amounts', {})
+        deform = DEFORM.check_amounts(amounts) if amounts else {}
+        nz = sum(v != 0.0 for v in deform.values())
         if nz:
             b.append(f"形变控制点 {nz} 个（位移非零）")
         if self._crop_rect != (0.0, 0.0, 1.0, 1.0):
@@ -132,17 +169,22 @@ class Master16PolicyMixin:
         # 曝光/白平衡：7 元组 = (ev, temperature_shift, tint_shift, contrast,
         # highlights, shadows, saturation)。非零任一分量都会动像素；ref_k 只有
         # 在 temperature/tint 有值时才起作用，所以不单独拦（与 exposure 那条同源）。
-        expo = list(self._exposure) + [0.0] * 7
-        if any(abs(float(v)) > 0.0 for v in expo[:7]):
+        wb = WB.normalize_state({'_exposure': self._exposure,
+            '_exposure_ref_k': getattr(self, '_exposure_ref_k', None),
+            '_wb_options': getattr(self, '_wb_options', WB.default_options())})
+        expo = tuple(self._exposure)
+        reference = wb['_exposure_ref_k']
+        first = check_exposure(*expo[:3], ref_k=6500.0 if reference is None else reference)
+        expo = first[:3] + check_tone(*(expo[3:] if len(expo) == 7 else (0.0,) * 4))
+        if any(v != 0.0 for v in expo):
             b.append(f"曝光/白平衡/影调={tuple(round(float(v), 4) for v in expo[:7])}")
-        if WB.has_picks(getattr(self, "_wb_options", WB.default_options())):
+        if WB.has_picks(wb['_wb_options']):
             b.append("白平衡中性点校正")
         # 八色 HSL：24 元组（8 段 × 色相/饱和度/明亮度），任一分量非零都会动像素。
         if not LEVELS.is_identity(getattr(self, "_levels", None)): b.append("色阶（有有效调整）")
         if not CURVES.is_identity(getattr(self, "_curves", None)):
             b.append("RGB/master 曲线（含亮度通道）")
-        hsl = list(self._hsl) + [0.0] * 24
-        if any(abs(float(v)) > 0.0 for v in hsl[:24]):
+        if not HSL.is_identity(self._hsl):
             b.append("八色 HSL（有色调偏移）")
         # 眼/牙增强：amounts 里任一非零就是像素级编辑（与 deform 同规：
         # 「条目存在」不等于「作用了」——只有非零位移/非零额度才真的改像素）。
@@ -155,9 +197,12 @@ class Master16PolicyMixin:
         if vein_active(getattr(self,"_limb_vein",None)): b.append("参考辅助肢体青筋减淡")
         from .fabric_sweat_state import active as sweat_active
         if sweat_active(getattr(self,"_fabric_sweat",None)): b.append("参考辅助衣物汗渍修正")
-        _en = (self._enhance or {}).get("amounts") or {}
-        _en_nz = sum(1 for v in _en.values() if abs(float(v)) > 0.0)
-        if _en_nz:
+        if type(self._enhance) is not dict or type(self._enhance.get('amounts', {})) is not dict:
+            raise ValueError('Enhance amounts must be an object')
+        from .facial_wrinkle_state import active_enhance, LINK_KEY
+        _en = ENH.check_amounts(self._enhance.get('amounts', {}))
+        if active_enhance(_en):
+            _en_nz = sum(v != 0.0 for key, v in _en.items() if key != LINK_KEY)
             b.append(f"眼/牙增强 {_en_nz} 项（额度非零）")
         # 换底：active=True 意味着合成链上有一层 composite_t 会重画背景像素。
         # 与 P1-2 修的那条相呼应——直通这一路目前还没接 bg_matte/bg_ref，那就要拦。
@@ -165,7 +210,6 @@ class Master16PolicyMixin:
             b.append("换底（背景合成会改像素，直通不进这一层）")
         # 局部调色：scope=brush/skin 时那一片 matte 会参与 grade；直通这一路目前
         # 也不进 matte。全图 grade 上面已经通过 `self._grade` 拦了，这里只补作用域那一条。
-        if str(self._grade_scope) != "all" and float(grade[3]) != 0.0 and any(abs(float(v)) > 0.0
-                                                    for v in (list(self._grade) + [0.0, 0.0, 0.0, 0.0])[:3]):
+        if str(self._grade_scope) != "all" and grade_active:
             b.append(f"局部调色作用域={self._grade_scope}（brush/skin 遮罩不参与直通）")
         return b

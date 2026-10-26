@@ -66,7 +66,16 @@ def fastpath_blocker(snapshot):
             except ValueError:return True
     defaults=A.defaults();specs=A.specifications()
     faces=[face for face in state['faces'].values() if face['asset_sha256']==asset and face['enabled']]
-    if not faces and any(row['scope']=='all_people' and row['target_id']==asset and row['value']!=defaults.get(row['operation_id'],{}).get(row['parameter_path']) for row in state['overrides']):return True
+    if not faces:
+        # No invented face/detection is needed to validate retained all-people
+        # intent. Raw default equality lets malformed False == 0 leaves escape.
+        operations = {}
+        for row in state['overrides']:
+            if row['scope'] == 'all_people' and row['target_id'] == asset:
+                operations.setdefault(row['operation_id'], {})[row['parameter_path']] = {'value': row['value']}
+        try:values = A.recipes({'operations': operations, 'conflicts': []})
+        except ValueError:return True
+        if any(value != specs[operation][0] for operation, value in values.items()):return True
     for face in faces:
         if face['local_assets']:return True
         try:values=A.recipes(R.resolve(state,face['face_instance_id'],defaults))

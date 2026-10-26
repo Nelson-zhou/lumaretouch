@@ -62,7 +62,10 @@ def test_combined_supported_colours_keep_the_original_recipe():
     assert result.eligible, result.reasons
     assert {'native-full-colour', 'primary-calibration'} <= set(result.features)
     assert value == before
-    assert A.validate_spec(build(value), value).eligible
+    spec = build(value)
+    assert A.validate_spec(spec, value).eligible
+    for key in ('colour_grading', 'selective_colour', 'primary_calibration'):
+        assert getattr(spec, key) == before[key]
     assert value == before
 
 
@@ -673,3 +676,24 @@ def test_finishing_version_never_adds_private_spec_fields_or_widens_the_cohort()
     spec._creative_capture_finishing = {'version': 1, 'max_bytes': 100_000_000}
     with pytest.raises(A.AdmissionError, match='Unknown/missing'):
         A.validate_spec(spec, recipe, finishing_version=1)
+
+
+@pytest.mark.parametrize('key,module', [('colour_grading', CG), ('selective_colour', SC), ('primary_calibration', PC)])
+def test_native_colour_diagnostic_neutralization_never_rewrites_or_erases_actual_recipe(key, module):
+    from lumaretouch_engine.master16_policy import Master16PolicyMixin
+    value = snapshot(); value[key] = module.neutral()
+    neutral_fingerprint = A.classify_snapshot(value).fingerprint
+    if key == 'colour_grading': value[key]['global']['luminance'] = 12.
+    elif key == 'selective_colour': value[key]['ranges']['blacks']['magenta'] = -12.
+    else: value[key]['blue']['saturation'] = 12.
+    before = deepcopy(value)
+    assert Master16PolicyMixin._master16_snapshot_blockers(value)
+    result = A.classify_snapshot(value)
+    assert result.eligible, result.reasons
+    assert result.fingerprint != neutral_fingerprint
+    assert getattr(build(value), key) == value[key] == before[key]
+    assert value == before
+    for invalid in (None, {}, {**module.neutral(), 'future_effect': 0}):
+        value[key] = invalid
+        assert not A.classify_snapshot(value).eligible
+        assert value[key] is invalid

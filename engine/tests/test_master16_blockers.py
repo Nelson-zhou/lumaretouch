@@ -50,7 +50,7 @@ def test_master16_blockers_empty_on_neutral():
 @pytest.mark.parametrize("patch,expect_sub", [
     # 原版本已经拦的：回归一下不丢
     (lambda e: setattr(e, "_strength", 0.5), "磨皮强度"),
-    (lambda e: setattr(e, "_grade", (0.1, 0.0, 0.0, 1.0)), "色阶增量"),
+    (lambda e: setattr(e, "_grade", (0.02, 0.0, 0.0, 1.0)), "色阶增量"),
     (lambda e: (setattr(e, "_lut", np.zeros((2, 2, 2, 3))),
                 setattr(e, "_lut_amount", 0.5)), "LUT 强度"),
     # P1-5 补上的五条：这是原始缺陷的现场
@@ -64,7 +64,7 @@ def test_master16_blockers_empty_on_neutral():
                                     0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
                                     0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0)),
      "八色 HSL"),
-    (lambda e: e._enhance.__setitem__("amounts", {"eyes": 0.5, "teeth": 0.0}),
+    (lambda e: e._enhance.__setitem__("amounts", {"sclera": 0.5, "teeth": 0.0}),
      "眼/牙增强"),
     (lambda e: e._bg.__setitem__("active", True), "换底"),
     (lambda e: (setattr(e, "_grade_scope", "skin"),
@@ -87,7 +87,7 @@ def test_master16_blockers_reports_multiple_layers_together():
     e._strength = 0.3
     e._exposure = (0.5, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0)
     e._hsl = (0.1,) + (0.0,) * 23
-    e._enhance = {"amounts": {"eyes": 0.4, "teeth": 0.0}, "built": True, "box": None}
+    e._enhance = {"amounts": {"sclera": 0.4, "teeth": 0.0}, "built": True, "box": None}
     e._bg = {"active": True, "matte": np.zeros((4, 4), np.uint8), "bg": [0.0, 0.0, 1.0],
              "backend": "color_key", "tol": 0.1, "softness": 0.1}
     b = e._master16_blockers(scale=1, sharpen=0.0)
@@ -103,7 +103,7 @@ def test_master16_blockers_ignores_enhance_when_all_zero():
     拿条目数当判据会把一张干净的图挪成"有图层"而拒掉直通。
     """
     e = _mk()
-    e._enhance = {"amounts": {"eyes": 0.0, "teeth": 0.0}, "built": True, "box": None}
+    e._enhance = {"amounts": {"sclera": 0.0, "teeth": 0.0}, "built": True, "box": None}
     assert e._master16_blockers(scale=1, sharpen=0.0) == []
 
 
