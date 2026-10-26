@@ -18,14 +18,18 @@ def _deliver(frame, path, watermark, write):
     # Render before writing either version: missing/invalid marks never silently
     # produce an apparently complete clean-only delivery.
     marked, facts = WM.composite(frame, watermark)
+    def deliver(pixels, target):
+        from .export_destination_runtime import reuse_output
+        previous = reuse_output(target)
+        return previous if previous is not None else write(pixels, target)
     try:
         if watermark and watermark["alsoClean"]:
             clean_dir = os.path.join(os.path.dirname(path), "无水印")
             from .export_destination_runtime import active, variant_target
             if not active(): os.makedirs(clean_dir, exist_ok=True)
-            clean = write(frame, variant_target(os.path.join(clean_dir, os.path.basename(path)), "clean"))
+            clean = deliver(frame, variant_target(os.path.join(clean_dir, os.path.basename(path)), "clean"))
             outputs.append({**clean, "variant": "clean"})
-        result = write(marked, path)
+        result = deliver(marked, path)
         outputs.append({**result, "variant": "watermarked" if watermark else "clean"})
     except Exception as error:
         outputs.extend(getattr(error, "outputs", []))

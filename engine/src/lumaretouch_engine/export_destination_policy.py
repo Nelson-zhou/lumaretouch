@@ -136,6 +136,8 @@ def freeze(sources, policy, settings, intent_revision, *, protected_sources=()):
     Caller supplies all project originals (not just selected items) as protected_sources.
     Source records come from the engine's frozen document list, never client paths alone.
     """
+    from .export_format_plan import validate_settings
+    validate_settings(settings)
     if not isinstance(intent_revision, int) or isinstance(intent_revision, bool) or intent_revision < 0:
         raise DestinationError("invalid_intent_revision")
     if policy.mode not in ("chosen_root", "source_folder") or policy.source_subfolder not in ("none", "project", "import_root") or policy.conflict not in ("rename", "skip", "ask"):
@@ -210,6 +212,7 @@ def freeze(sources, policy, settings, intent_revision, *, protected_sources=()):
                 disposition = "skip" if policy.conflict == "skip" else "needs_confirmation"
         reserved.add(str(target).casefold())
         entries.append(Entry(source.item_id, str(src), (stamp.st_dev, stamp.st_ino, stamp.st_size, stamp.st_mtime_ns), source.frame_receipt, str(target), disposition, original, missing, source.origin_kind))
+    validate_settings(settings, entries)
     body = dict(schema_version=SCHEMA, intent_revision=intent_revision,
                 settings_json=canonical(settings), policy_json=canonical(asdict(policy)),
                 entries=tuple(entries))
@@ -225,6 +228,8 @@ def restore(payload):
     body = plan.payload(); body.pop("plan_id")
     if digest(body) != plan.plan_id:
         raise DestinationError("destination_plan_integrity")
+    from .export_format_plan import validate_settings
+    validate_settings(json.loads(plan.settings_json), entries)
     for entry in entries:
         absolute(entry.source_path); absolute(entry.target)
         if entry.disposition not in ("write", "skip", "needs_confirmation"):

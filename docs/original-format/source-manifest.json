@@ -1,0 +1,252 @@
+{
+  "schema": "lrt.original-format-source-manifest.v1",
+  "status": "AUTHORED_UNRUN",
+  "baseline_commit": "86b6f5f3d0161ceb4dd604b2c2448037ed68ae11",
+  "baseline_tree": "e2d3b1769aad1f177050a26d0ea1a2008b3576fc",
+  "remote_baseline_supplied": "aa813dcc6ddd542d4b64bb0075d404df79593916",
+  "validation": {
+    "python_ast_parsed": [
+      "engine/src/lumaretouch_engine/decode.py",
+      "engine/src/lumaretouch_engine/export.py",
+      "engine/src/lumaretouch_engine/export_destination_policy.py",
+      "engine/src/lumaretouch_engine/export_destination_runtime.py",
+      "engine/src/lumaretouch_engine/export_format_native.py",
+      "engine/src/lumaretouch_engine/export_format_plan.py",
+      "engine/src/lumaretouch_engine/export_format_profile.py",
+      "engine/src/lumaretouch_engine/export_format_receipts.py",
+      "engine/src/lumaretouch_engine/export_source_facts.py",
+      "engine/src/lumaretouch_engine/png16_export.py",
+      "engine/src/lumaretouch_engine/raw.py",
+      "engine/src/lumaretouch_engine/server.py",
+      "engine/src/lumaretouch_engine/virtual_copy_export.py",
+      "engine/src/lumaretouch_engine/watermark_delivery.py",
+      "engine/tests/test_export_format_native_unrun.py",
+      "engine/tests/test_export_original_native16_unrun.py",
+      "engine/tests/test_export_original_plan_unrun.py",
+      "engine/tests/test_export_source_facts_unrun.py"
+    ],
+    "json_parsed": [],
+    "runtime_tests": "UNRUN",
+    "rust_build": "UNRUN",
+    "typescript_typecheck": "UNRUN",
+    "app_and_codec_execution": "UNRUN"
+  },
+  "manifest_self_excluded": true,
+  "files": [
+    {
+      "path": "NOTICE",
+      "bytes": 13267,
+      "sha256": "fdb0697447ab5e1a3fcb0445812da41d1ed7f08cbb28f6b23d72941e666ae4e3"
+    },
+    {
+      "path": "core/export_format/Cargo.toml",
+      "bytes": 172,
+      "sha256": "d131014b9eccf9241c40c6d90c3fac006e8553b3e9c59d5ec832b5bdc15db13e"
+    },
+    {
+      "path": "core/export_format/README.md",
+      "bytes": 5775,
+      "sha256": "a07dfc5f28672158521a3ae5c78f4f45cadc6503e8b58f851a3710b9425a3450"
+    },
+    {
+      "path": "core/export_format/export_format.h",
+      "bytes": 1293,
+      "sha256": "5ef87b046e1128eb5cf5a8f2ebf321a681b231cda70feae8ba8f75c1760bd246"
+    },
+    {
+      "path": "core/export_format/lib.rs",
+      "bytes": 3494,
+      "sha256": "db39026a0a371cebe780000f9bbc1373f1aa7ed95f58034903b979c56ecf162d"
+    },
+    {
+      "path": "core/export_format/tests.rs",
+      "bytes": 3282,
+      "sha256": "1b05aab92d072594992f27ab8571c50cc6617a8b348c054e564a3d279f2f915d"
+    },
+    {
+      "path": "docs/original-format/README.md",
+      "bytes": 12390,
+      "sha256": "c7f7396f347e3c4b2f4c6ca02e64eb2380fd2effb7006a063cad28816f263089"
+    },
+    {
+      "path": "docs/original-format/native-policy.md",
+      "bytes": 4041,
+      "sha256": "6a734cc18a5e9b723ff01a3d266b6bcd1e21952bafc674adf96cc55502a32815"
+    },
+    {
+      "path": "docs/original-format/source-facts.md",
+      "bytes": 8130,
+      "sha256": "9814cc8572b9e1be419f83556a792586aff6235f71069ab988d77c24fb093f42"
+    },
+    {
+      "path": "docs/original-format/ui.md",
+      "bytes": 6553,
+      "sha256": "a3e5765fd74503b554cfed6e626e4ae3f8f4a4f330e191adb17462f578697929"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/decode.py",
+      "bytes": 47712,
+      "sha256": "6b79620e66bd9be5db0b58dfb48c1d49e7eacab0a2d6287f44f3c9619deaf44b"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/export.py",
+      "bytes": 138622,
+      "sha256": "a2efd4c5b254a5734234fae7f355c5d26974659b74e0b6e446fd6a4aa67c0006"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/export_destination_policy.py",
+      "bytes": 10836,
+      "sha256": "c234c4bd687b69d75b35141a642073f275f482655f154395b6e67b2b5a75a3eb"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/export_destination_runtime.py",
+      "bytes": 9746,
+      "sha256": "889585f7f06fcd98a439c2a030a8f20a96644bd05730302974babfd8b7caeefd"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/export_format_native.py",
+      "bytes": 5828,
+      "sha256": "7bafc41dca1abe90cc17a9d73cc7036d78b965433b616ee4623f5774f5fa0031"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/export_format_plan.py",
+      "bytes": 13446,
+      "sha256": "df11ffb1a7f2a836a22bc5af113b504e4d1e1f80ce8270a4378e34322ad162a2"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/export_format_profile.py",
+      "bytes": 2153,
+      "sha256": "b3d1a49f2f0a2197ae0ba92db2833c678ec090cba2f98e91e1867aff5dcd7e43"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/export_format_receipts.py",
+      "bytes": 3033,
+      "sha256": "cd216ae1448f9ad67c050b1ea6c737dce7357898f423284ed9d7a0176cb76647"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/export_source_facts.py",
+      "bytes": 25177,
+      "sha256": "13c2f40f2a5227a5c3df3a680151075f980e30145ba93ae66d61cb12028cf749"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/png16_export.py",
+      "bytes": 10752,
+      "sha256": "f9cce9bc55c73ce15a11755f9517cf80281618748e5b1f88cf3a79bea004e6f4"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/raw.py",
+      "bytes": 66517,
+      "sha256": "d35bbc3ad7f652406fecd04515e4a8a56fc9e5d3972420bdf349736b4308a81f"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/server.py",
+      "bytes": 495490,
+      "sha256": "a0a0ba67ae6885ec536d16ae9a65942cf401f40a8d3f405295a48f398584da47"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/virtual_copy_export.py",
+      "bytes": 5717,
+      "sha256": "dbaed23186ea680087263c51416d6251f86448227f98e386c443b3de19c13085"
+    },
+    {
+      "path": "engine/src/lumaretouch_engine/watermark_delivery.py",
+      "bytes": 3887,
+      "sha256": "46d43f6c5becf8ebfbab5c37e6b2b7a3283583383ac92a1a64689b09a6c8ca8e"
+    },
+    {
+      "path": "engine/tests/test_export_format_native_unrun.py",
+      "bytes": 5229,
+      "sha256": "c583c471d36fa84c2121394976e0cc56b58769de45038afcb891d69cfb3b70ed"
+    },
+    {
+      "path": "engine/tests/test_export_original_native16_unrun.py",
+      "bytes": 5610,
+      "sha256": "9eb2485abbb0e47dad14c033e19a2a2a5a9ec3007beda2d946fde9dd17b4eede"
+    },
+    {
+      "path": "engine/tests/test_export_original_plan_unrun.py",
+      "bytes": 12225,
+      "sha256": "6265f68d7e38a50790f81845f9c39f33f11c7e241f4611c889041569ea112886"
+    },
+    {
+      "path": "engine/tests/test_export_source_facts_unrun.py",
+      "bytes": 14678,
+      "sha256": "0847fd7c694eaed260c1c42ac68c484379b1467b5737e88ec6c41377d11a9f79"
+    },
+    {
+      "path": "packaging/build-export-format.sh",
+      "bytes": 370,
+      "sha256": "f04334dd1d910790094881a2213a53f4dfae3e80e3791d1b3f919fcc65f74c50"
+    },
+    {
+      "path": "packaging/stage-engine.sh",
+      "bytes": 36356,
+      "sha256": "83f1a2557998713bf9a276ab64083823add3062e21e443457a5f4c2e1fb0f48a"
+    },
+    {
+      "path": "ui/src-tauri/src/export_destination_port.rs",
+      "bytes": 6213,
+      "sha256": "6006468e0c75c119d3088caf4f9cd638524e1ed2ea0996203a138d8b39777d1c"
+    },
+    {
+      "path": "ui/src-tauri/src/main.rs",
+      "bytes": 103421,
+      "sha256": "5721e10b8f75fd8a34e234e2b65ae6d10cf1ea1dedfcd342c8853ccc8876cac5"
+    },
+    {
+      "path": "ui/src/App.tsx",
+      "bytes": 177506,
+      "sha256": "a3d15cb31f5c3384edd698d3a2689ecb809e2850d64f981be1d8cd1e497b210b"
+    },
+    {
+      "path": "ui/src/components/ExportMetadataOptions.tsx",
+      "bytes": 1208,
+      "sha256": "f89c820eeead3bdef91ca2440643f5cfc4b755790c6d0138e889d04155704adc"
+    },
+    {
+      "path": "ui/src/components/ExportQueuePanel.tsx",
+      "bytes": 4819,
+      "sha256": "c36e30bc52abdfa9b391b319009aefb96a1c6369f9e26c6da4089733a1ad85ec"
+    },
+    {
+      "path": "ui/src/exportDestination/ExportDestinationPanel.tsx",
+      "bytes": 4480,
+      "sha256": "649ba28acb4133d068a346c57b8cbc579551c29dd180a7caa61a7373f29d1f40"
+    },
+    {
+      "path": "ui/src/exportDestination/model.ts",
+      "bytes": 5150,
+      "sha256": "03db861d698c37eff783713e3add1f294f81431e9b52e65ee331c0d5306d943a"
+    },
+    {
+      "path": "ui/src/exportDestination/nativePort.ts",
+      "bytes": 2069,
+      "sha256": "2073fe8f70865b2551c6fc17f454020b748a956b11f746ff9e68377552ce8cff"
+    },
+    {
+      "path": "ui/src/exportModel.test.ts",
+      "bytes": 16154,
+      "sha256": "65b085ed3b0eb8a45417d71919cd4f4915bcfc5a27277680874c327a840cb30c"
+    },
+    {
+      "path": "ui/src/exportModel.ts",
+      "bytes": 1957,
+      "sha256": "d0c89e9adce0ee943402d1e130b3022deba3052bed5add9500715ce8831af6c8"
+    },
+    {
+      "path": "ui/src/exportTargetSize/TargetSizeControls.tsx",
+      "bytes": 3272,
+      "sha256": "00a5c8ebefa3e362a46c07e5dcdf5c9de1b6e6ae15735911ae40d375df94a877"
+    },
+    {
+      "path": "ui/src/exportTargetSize/model.ts",
+      "bytes": 3684,
+      "sha256": "6a88c31aa590082b4f0f37821bcd7600455f3c3a9d05a93dfdcac6ea916c3c07"
+    },
+    {
+      "path": "ui/src/native.ts",
+      "bytes": 123571,
+      "sha256": "3c08b2d8510f1d60d3a9e58ca20945e867582919494357bda1d5b38cefa745e4"
+    }
+  ]
+}

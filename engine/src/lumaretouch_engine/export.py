@@ -1558,6 +1558,10 @@ def _profile_bytes(name: str, source: bytes | None = None) -> bytes | None:
     # 但用户递进来的真实 .icc **路径**必须按原样处理——Linux 文件系统区分大小写，
     # 对路径调 .lower() 会让 "MyProfile.icc" 找不存在的 "myprofile.icc"，
     # 于是把一份真实存在的档当成未知内置名而拒（P2-1）。
+    from .export_destination_runtime import frozen_profile
+    retained = frozen_profile(name)
+    if retained is not None:
+        return retained
     key = (name or "srgb").lower()
     if key in (None, "", "none"):
         return None
@@ -1827,9 +1831,11 @@ def write_file(rgb: np.ndarray, path: str, *, quality: int = 95,
                 "conflict_policy": conflict_policy, "bytes": 0, "write_ms": 0.0,
                 "quality": int(quality), "renamed_from": None,
                 "compress_level": None, **verifiable}
+    from hashlib import sha256
+    encoded_sha256 = sha256(buf.getvalue()).hexdigest()
     _atomic_write(target, buf.getvalue())
     ms = (time.perf_counter() - t0) * 1000.0
-    return {"path": target, "format": ext, "bytes": os.path.getsize(target),
+    return {"path": target, "format": ext, "bytes": len(buf.getvalue()), "encoded_sha256": encoded_sha256,
             "write_ms": round(ms, 1), "quality": int(quality),
             "skipped": False,
             # 可验字段：嵌了什么 ICC、GPS 到底在不在输出里、方向标有没有拆掉、
@@ -1937,9 +1943,11 @@ def write_tiff16(rgb: np.ndarray, path: str, *, output_profile: str = "srgb",
                 "encoder_quality": None,        # 直通不进编码器：这一格给 None 而不是 0
                 **_icc_facts(icc)}
     t0 = time.perf_counter()
+    from hashlib import sha256
+    encoded_sha256 = sha256(blob).hexdigest()
     _atomic_write(target, blob)
     return {"path": target, "format": "tif", "bits": 16, "w": w, "h": h,
-            "bytes": os.path.getsize(target),
+            "bytes": len(blob), "encoded_sha256":encoded_sha256,
             "write_ms": round((time.perf_counter() - t0) * 1000.0, 1),
             "skipped": False,
             **_icc_facts(icc),
@@ -2074,7 +2082,10 @@ def _rgb16_readback_facts(reference: np.ndarray, actual: np.ndarray, *,
 
 def _write_verified_rgb16(arr, out_path, *, target_icc, conflict_policy,
                           metadata_include_gps, tiff_compression):
-    if os.path.splitext(out_path)[1].lower() == '.png':
+    extension = os.path.splitext(out_path)[1].lower()
+    if extension not in ('.png', '.tif', '.tiff'):
+        raise ExportError('RGB16 writer requires an explicit .png/.tif/.tiff target; never encode TIFF under another extension')
+    if extension == '.png':
         from .png16_export import write_verified_png16
         return write_verified_png16(arr, out_path, target_icc=target_icc,
             conflict_policy=conflict_policy, metadata_include_gps=metadata_include_gps)
@@ -2087,16 +2098,19 @@ def _write_verified_rgb16(arr, out_path, *, target_icc, conflict_policy,
                 "low8_nonzero_px": None, "readback_ms": 0.0, "verification_ms": 0.0,
                 "icc_readback_bytes": None, "icc_readback_matches": None}
     t_wr = time.perf_counter()
-    back = read_tiff16(info["path"])
-    t_rd = time.perf_counter()
-    facts = _rgb16_readback_facts(arr, back)
-    icc_back = read_tiff16_icc(info["path"]) or b""
-    icc_want = target_icc or b""
-    t_verified = time.perf_counter()
-    if facts["readback_max_diff"] != 0 or icc_back != icc_want:
-        raise ExportError(
-            f"16-bit 导出读回验证失败：像素最大差={facts['readback_max_diff']}，"
-            f"ICC一致={icc_back == icc_want}。文件保留供检查，不作为成功出片：{info['path']}")
+    try:
+        back = read_tiff16(info["path"])
+        t_rd = time.perf_counter()
+        facts = _rgb16_readback_facts(arr, back)
+        icc_back = read_tiff16_icc(info["path"]) or b""
+        icc_want = target_icc or b""
+        t_verified = time.perf_counter()
+        if facts["readback_max_diff"] != 0 or icc_back != icc_want:
+            raise ValueError(f"像素最大差={facts['readback_max_diff']}，ICC一致={icc_back == icc_want}")
+    except Exception as error:
+        failure = ExportError(f"16-bit TIFF 导出读回验证失败：{error}。文件保留供检查，不作为成功出片：{info['path']}")
+        failure.outputs = [{**info, 'committed':True, 'verification_failed':True, 'error':str(error)}]
+        raise failure from error
     return {**info, **facts, "icc_readback_bytes": len(icc_back),
             "icc_readback_matches": (icc_back == icc_want) if icc_want else None,
             "readback_ms": round((t_rd - t_wr) * 1000, 2),
@@ -2107,7 +2121,7 @@ def export_master_16bit(path: str, out_path: str, *, device: str | None = None,
                         output_profile: str = "srgb",
                         conflict_policy: str = "skip_and_report",
                         metadata_include_gps: bool = False,
-                        tiff_compression: str = "none", verify_source=None) -> dict:
+                        tiff_compression: str = "none", verify_source=None, verify_decoded=None) -> dict:
     """16-bit 母档直通：满幅真解码 → RGB16 TIFF/PNG → 真实样本与 ICC 读回核验。
 
     三个自证读数缺一个都不算“保真”：
@@ -2121,6 +2135,7 @@ def export_master_16bit(path: str, out_path: str, *, device: str | None = None,
     t0 = time.perf_counter()
     d = D.load_full(path, device=device, want_bits=16)
     if verify_source is not None: verify_source()  # Fence before any output publication.
+    if verify_decoded is not None: verify_decoded(d)
     t_dec = time.perf_counter()
     arr = d.rgb
     src = (d.raw or {}).get("source")

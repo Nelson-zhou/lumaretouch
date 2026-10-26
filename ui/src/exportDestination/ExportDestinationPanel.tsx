@@ -1,9 +1,12 @@
-import type {DestinationPolicy, DestinationPreview} from './model';
+import {decisionForEntry, originalFormatPlan, type DestinationPolicy, type DestinationPreview, type OriginalFormatPlan} from './model';
 type Props = {policy: DestinationPolicy; preview: DestinationPreview | null; busy: boolean;
   available: boolean; onChange: (policy: DestinationPolicy) => void; onPreview: () => void; error?: string};
 /** Mount inside the existing export dialog; no separate agent confirmation flow. */
 export function ExportDestinationPanel({policy, preview, busy, available, onChange, onPreview, error}: Props) {
   const change = (patch: Partial<DestinationPolicy>) => onChange({...policy, ...patch});
+  let formatPlan: OriginalFormatPlan | null = null;
+  let formatError = '';
+  try { if (preview) formatPlan = originalFormatPlan(preview); } catch (error) { formatError = String(error); }
   return <fieldset disabled={busy || !available} aria-label="导出存储位置">
     <legend>导出存储位置</legend>
     {!available && <p role="status">目录规划尚未接入，暂不可用</p>}
@@ -28,11 +31,17 @@ export function ExportDestinationPanel({policy, preview, busy, available, onChan
     <p>不覆盖任何原片或已有文件。目标、色彩及隐私设置会随本批次冻结。</p>
     <button type="button" onClick={onPreview}>预览导出位置</button>
     {error && <p role="alert">{error}</p>}
-    {preview && <ul>{preview.entries.map(e => <li key={e.item_id}>
+    {formatError && <p role="alert">{formatError}</p>}
+    {formatPlan && <p>Original 已逐图解析：以下为本批冻结的实际容器与位深。排版页仍使用独立 PNG / PDF 8-bit 交付，不继承 Original。</p>}
+    {preview && !formatError && <ul>{preview.entries.map(e => {
+      const decision = decisionForEntry(formatPlan, e.item_id);
+      return <li key={e.item_id}>
       {e.target} · {e.disposition === 'write' ? '待导出' : e.disposition === 'skip' ? '跳过' : '请确认改名或跳过'}
+      {decision && <span> · {decision.codec.toUpperCase()} {decision.bits}-bit（.{decision.extension}）<small title={`决策 ${decision.decision_id} · 源事实 ${decision.fact_id}`}> · 冻结决策 {decision.decision_id.slice(0, 12)}</small></span>}
+      {formatPlan && e.item_id.startsWith('layout::') && <span> · 排版独立交付（PNG / PDF 8-bit；清单为 JSON）</span>}
       {e.origin_kind === "legacy_parent" && <span> · 旧项目未记录导入根目录，本次按源文件父目录规划，请核对</span>}
       {e.renamed_from && <span>（原目标：{e.renamed_from}）</span>}
       {e.missing_directories.length > 0 && <span> · 将创建目录</span>}
-    </li>)}</ul>}
+    </li>;})}</ul>}
   </fieldset>;
 }

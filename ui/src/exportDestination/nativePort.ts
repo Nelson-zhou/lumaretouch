@@ -1,4 +1,4 @@
-import type {DestinationPolicy, DestinationPreview} from './model';
+import {originalFormatPlan, type DestinationPolicy, type DestinationPreview} from './model';
 /** Inject the app's real invoke. Preview waits for the correlated engine result,
  * never mistakes requested:true for a completed plan. Registration is gated. */
 export type Invoke = <T>(command: string, payload: Record<string, unknown>) => Promise<T>;
@@ -21,10 +21,15 @@ export const destinationPort = (invoke: Invoke) => {
     }
   }
   return {
-    preview: (policy: DestinationPolicy, documentIds: string[], intentRevision: number,
-              exportOptions: Record<string, unknown>) => request<DestinationPreview>({
-      action: 'preview', policy, documentIds, intentRevision, exportOptions,
-    }),
+    preview: async (policy: DestinationPolicy, documentIds: string[], intentRevision: number,
+              exportOptions: Record<string, unknown>) => {
+      const original = exportOptions.format === 'original';
+      if (original && (Object.hasOwn(exportOptions, 'bit_depth') || !documentIds.length
+          || new Set(documentIds).size !== documentIds.length)) throw new Error('Original 需要明确文档身份，且不能手动指定 bit_depth');
+      const result = await request<DestinationPreview>({action: 'preview', policy, documentIds, intentRevision, exportOptions});
+      originalFormatPlan(result, original);
+      return result;
+    },
     cancel: () => request<{cancelled: boolean}>({action: 'cancel'}),
   };
 };

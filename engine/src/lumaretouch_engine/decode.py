@@ -88,6 +88,8 @@ class Decoded:
     # 所以 RAW 那两支下面会写进 notes。不放进 meta()：那是过 JSON 通道的，字节过不了。
     source_icc: bytes | None = None
     source_exif: bytes | None = None
+    # Full-decoder evidence for frozen Original-format header agreement.
+    source_orientation: int = 1
 
     @property
     def w(self) -> int:
@@ -219,12 +221,27 @@ def is_raw(path: str) -> bool:
     """
     from . import raw as raw_mod
     if raw_ext(path) in RAW_EXTS:
-        # A renamed PNG remains PNG for source admission/analysis as well as
-        # decoding. Do not send its dimensions to LibRaw because of a suffix.
+        # These signatures select existing bitmap decoders, not a new decoder
+        # or a successful payload claim. A JPEG/WebP/PNG named .dng/.nef must
+        # not be sent to LibRaw after content-authenticated Original admission.
+        with open(path, 'rb') as stream:
+            head = stream.read(12)
+        if head.startswith(b"\xff\xd8") or (head[:4] == b"RIFF" and head[8:12] == b"WEBP"):
+            return False
         from .png16_source import source_header
         if source_header(path) is not None:
             return False
-    return raw_ext(path) in RAW_EXTS or raw_mod.has_raw_ifd(path)
+    if raw_mod.vendor_raw_family(path) is not None:
+        # ORF/RW2 use TIFF byte-order markers with vendor magic, not TIFF42/43.
+        # Preserve their established genuine LibRaw route without claiming a
+        # bitmap or making strict Original-format metadata admission eligible.
+        return True
+    inspected = raw_mod.inspect_tiff(path)
+    if inspected['source_kind'] == 'unknown' and inspected['reason'] != 'not_tiff':
+        raise raw_mod.UnsupportedRaw('TIFF 类型不明确，不能按扩展名猜测 RAW 或位图: ' + inspected['reason'])
+    if inspected['is_tiff']:
+        return inspected['source_kind'] == 'raw'
+    return raw_ext(path) in RAW_EXTS
 
 
 def load_preview(path: str, budget: int = PROXY_PIXELS) -> "Decoded | None":
@@ -478,7 +495,8 @@ def _load_16bit_png_full(path: str, max_px: int) -> Decoded:
                 t_open_ms=source.open_ms, t_decode_ms=source.decode_ms,
                 t_orient_ms=source.orient_ms, t_scale_ms=0.0,
                 t_total_ms=source.total_ms, src_bits=16,
-                source_icc=source.source_icc, source_exif=source.source_exif)
+                source_icc=source.source_icc, source_exif=source.source_exif,
+                source_orientation=source.orientation)
     d.raw = {"source": "png16", "bits": 16, "used_preview": False, "half_size": False}
     d.notes.append(f"16-bit PNG 真解码：{w}×{h} uint16（已有 imagecodecs/libpng），低位未降位")
     if source.source_icc:
@@ -593,6 +611,7 @@ def _load_16bit_tiff_full(path: str, max_px: int) -> Decoded:
     # source 报 "tiff16"：与 RAW 那三支（self_dng/libraw/libraw_preview）并列，让“这一帧谁解的”答得完整
     d.raw = {"source": "tiff16", "bits": 16, "used_preview": False, "half_size": False}
     d.source_icc = source_icc
+    d.source_orientation = orientation
     if orientation != 1:
         d.notes.append(f"16-bit 像素按 TIFF orientation={orientation} 无损摆正")
     d.notes.append(f"16-bit TIFF 直通：读到 {w}×{h} 真实 uint16 像素（tifffile），未降位")
@@ -681,7 +700,7 @@ def _load_rgb_pillow(path: str, budget: int) -> Decoded:
                 draft_used=bool(draft_size and draft_size != (raw_w, raw_h)),
                 draft_size=draft_size,
                 src_bits=src_bits,
-                source_icc=icc, source_exif=exif)
+                source_icc=icc, source_exif=exif, source_orientation=orient)
     d.notes.append("输入嵌入 ICC 已转换至 sRGB 工作空间" if icc
                    else "源图没有 ICC：按 sRGB 输入假设处理")
     if d.draft_used:
@@ -746,9 +765,14 @@ def load_full(path: str, max_px: int = MAX_EXPORT_PIXELS, device: str | None = N
         return _decoded_from_libraw(path, arr, info, None, why=why, full=True)
     if want == 16:
         ext = os.path.splitext(path)[1].lower()
-        if ext in (".tif", ".tiff"):
-            # P0：16bpc RGB TIFF 走真 16-bit 解码（不降位、不左移补零）；
-            # 读不出真 16-bit 的变体在 _load_16bit_tiff_full 里明确拒，而不是退回 8-bit。
+        inspected = raw_mod.inspect_tiff(path)
+        if inspected['is_tiff']:
+            # Container content, not a suffix, selects native TIFF16. A JPEG
+            # named .tif is not TIFF; a real TIFF named .jpg retains its samples.
+            if (inspected['source_kind'] != 'bitmap' or not inspected.get('single_frame')
+                    or inspected.get('precision') != 16 or inspected.get('photometric') != 2
+                    or inspected.get('samples') != 3 or inspected.get('planar') not in (1, 2)):
+                raise ValueError('16-bit TIFF 元数据不是受支持的单幅真实 RGB16 位图；不降位或猜测 RAW')
             return _load_16bit_tiff_full(path, max_px)
         raise ValueError(f"16-bit 直通只对相机 RAW、16bpc RGB TIFF 或真实 PNG16 成立"
                          f"（这张是 {ext or '无后缀'}）：普通 JPEG/8-bit PNG 里没有 16-bit 母档可直通，"
@@ -802,7 +826,7 @@ def _load_full_pillow(path: str, max_px: int = MAX_EXPORT_PIXELS) -> Decoded:
                 t_open_ms=ms(t0, t_d), t_decode_ms=ms(t_d, t_o), t_orient_ms=ms(t_o, t_s),
                 t_scale_ms=0.0, t_total_ms=ms(t0, t1), draft_used=False, draft_size=None,
                 src_bits=src_bits,
-                source_icc=icc, source_exif=exif)
+                source_icc=icc, source_exif=exif, source_orientation=orient)
     d.notes.append("输入嵌入 ICC 已转换至 sRGB 工作空间" if icc
                    else "源图没有 ICC：按 sRGB 输入假设处理")
     d.notes.append("满幅解码（导出通路，不缩放）")

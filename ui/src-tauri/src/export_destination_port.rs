@@ -3,6 +3,28 @@ use serde_json::{json, Value};
 use std::{collections::HashMap, sync::{Arc, Mutex, OnceLock}};
 use tauri::State;
 use crate::AppState;
+/// Structural admission only: facts, codec and precision remain engine-owned.
+pub(crate) fn validate_original_intent(command: &Value, preview: bool, ready: &Value) -> Result<(), String> {
+    let original = command["format"].as_str().map(|v| v.trim_start_matches('.').eq_ignore_ascii_case("original")).unwrap_or(false);
+    if !original { return Ok(()); }
+    if ready["export_original_format_protocol"] != 1 || ready["export_original_format_available"] != true {
+        return Err(ready["export_original_format_reason"].as_str()
+            .unwrap_or("Original 格式策略核心不可用；不会回退 JPEG 或 8-bit").into());
+    }
+    if command.get("bit_depth").is_some() { return Err("Original 不能显式指定 bit_depth".into()); }
+    let ids = command["document_ids"].as_array().ok_or("Original 需要明确文档身份")?;
+    let mut seen = std::collections::HashSet::new();
+    if ids.is_empty() || ids.iter().any(|id| id.as_str().map(|s| s.is_empty() || !seen.insert(s)).unwrap_or(true)) {
+        return Err("Original 需要非空且不重复的文档身份".into());
+    }
+    if !command["destination_policy"].is_object() || command["intent_revision"].as_u64().is_none() {
+        return Err("Original 需要明确目录策略与预览修订".into());
+    }
+    if !preview && command["destination_plan_id"].as_str().filter(|s| !s.is_empty()).is_none() {
+        return Err("Original 需要当前冻结导出位置预览".into());
+    }
+    Ok(())
+}
 struct Receipt { epoch: [u8;16], result: Value }
 fn store() -> &'static Mutex<HashMap<String,Receipt>> {
     static STORE: OnceLock<Mutex<HashMap<String,Receipt>>> = OnceLock::new();
@@ -36,6 +58,13 @@ pub(crate) fn export_destination(state:State<'_,Arc<AppState>>,action:String,req
         cmd["document_ids"]=json!(document_ids.ok_or("缺少文档身份")?);
         cmd["intent_revision"]=json!(intent_revision.ok_or("缺少预览修订")?);
         cmd["export_options"]=export_options.ok_or("缺少导出选项")?;
+        if !cmd["export_options"].is_object() {return Err("导出选项必须是对象".into());}
+        let mut intent=cmd["export_options"].clone();
+        intent["document_ids"]=cmd["document_ids"].clone();
+        intent["destination_policy"]=cmd["policy"].clone();
+        intent["intent_revision"]=cmd["intent_revision"].clone();
+        let ready=state.ready_caps.lock().map_err(|_|"能力锁不可用")?.clone();
+        validate_original_intent(&intent,true,&ready)?;
     }
     if cmd.to_string().len()>1024*1024 {return Err("目录请求过大".into());}
     {

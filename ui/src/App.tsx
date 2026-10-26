@@ -33,7 +33,7 @@ import {CreativeWorkspace} from './creativeLayers/CreativeWorkspace';
 import {useSelectionBinding} from './creativeLayers/useSelectionBinding';
 import {useCreativeWorkspace} from './creativeLayers/useCreativeWorkspace';
 import {ExportDestinationPanel} from './exportDestination/ExportDestinationPanel';
-import {initialDestination, type DestinationPreview} from './exportDestination/model';
+import {initialDestination, originalFormatPlan, type DestinationPreview} from './exportDestination/model';
 import {exportDestinationApi, INSPECTION_EDIT_INTENT} from './native';
 import {settleCurveEdit} from './curveEditBarrier';
 import {VirtualCopyControls} from './virtualCopies/VirtualCopyControls';
@@ -135,7 +135,7 @@ import RetouchPanel from "./components/RetouchPanel";
 import CropModal from "./components/CropModal";
 import { REGISTRY, keyOf, sectionTitleOf, type SectionId } from "./p0";
 import { clickRle } from "./brush";
-import { exportGpsForDepth, is16BitExportFormat, reconcileExportCombo, reconcileExportFormat } from "./exportModel";
+import { exportBitDepthForIntent, exportGpsForIntent, isOriginalExportFormat, is16BitExportFormat, reconcileExportCombo, reconcileExportFormat } from "./exportModel";
 import { notifyInspectionEditIntent } from "./native";
 import type { InspectionUiState } from "./inspectionController";
 import { t, type MsgKey } from "./i18n";
@@ -358,6 +358,8 @@ export default function App() {
   // GPS默认关，冲突默认skip_and_report，色彩档默认sRGB；两种位深均支持无损TIFF压缩。
   const [exportProfile, setExportProfile] = useState("srgb");
   const [exportTiffComp, setExportTiffComp] = useState("deflate");
+  // Original omits untouched TIFF preferences, preserving per-entry 8/16 defaults.
+  const [exportTiffCompChosen, setExportTiffCompChosen] = useState(false);
   const [exportGps, setExportGps] = useState(false);
   const [exportConflict, setExportConflict] = useState("skip_and_report");
   // 底片条多选集（LNX-P0-BATCH / 图库批量化）：按 path 记，不按 index 记——
@@ -1320,15 +1322,15 @@ export default function App() {
   /** 导出一张：tile 空串就是“不给”（让引擎用自己的 DEFAULT_TILE），而不是前端猜一个。
    *  倍率/锐量为 1/0 时也不给：那两个值就是“这一层没开”，递上去与递默认值是两回事。 */
   function destinationOptions() {
-    const combo = reconcileExportCombo(exportBits16, exportFormat, exportTiffComp);
-    const target = targetSizePolicy(exportTargetSize, combo.format, exportBits16 ? 16 : 8);
+    const combo = reconcileExportCombo(exportBits16, exportFormat, exportTiffComp, exportTiffCompChosen);
+    const target = targetSizePolicy(exportTargetSize, combo.format, exportBitDepthForIntent(exportBits16, combo.format));
     return {out_dir:exportDir, format:combo.format, ...(target ? {target_size:target} : {quality:exportQuality}),
       ...(exportTile.trim() ? {tile:Number(exportTile)} : {}),
       ...(exportScale !== 1 ? {scale:exportScale} : {}),
       ...(exportSharpen > 0 ? {sharpen:exportSharpen} : {}),
-      ...(exportBits16 ? {bit_depth:16} : {}), output_profile:exportProfile,
+      ...(exportBitDepthForIntent(exportBits16, combo.format) === 16 ? {bit_depth:16} : {}), output_profile:exportProfile,
       ...(combo.tiffCompression ? {tiff_compression:combo.tiffCompression} : {}),
-      metadata_include_gps:exportGpsForDepth(exportBits16, exportGps), conflict_policy:exportConflict, watermark, layout:layoutModel.layout};
+      metadata_include_gps:exportGpsForIntent(exportBits16, exportFormat, exportGps), conflict_policy:exportConflict, watermark, layout:layoutModel.layout};
   }
   async function onPreviewDestination() {
     if(groupExportMode&&(!groupDelivery.available||groupDelivery.blocked||groupDelivery.exportClaimed)){setExportErr('此组交付不可重新预览；请先核对原请求或任务。');return;}
@@ -1337,13 +1339,17 @@ export default function App() {
     setExportErr(''); setDestinationBusy(true); setDestinationPreview(null);
     try {
       await settleCurveEdit();
+      if (originalRequested && !originalAvailable) throw new Error(originalUnavailableReason);
       const revision = ++destinationGeneration.current;
       const input = destinationInput.current;
       const result = groupExportMode
         ? await groupDelivery.preview({...destinationPolicy, chosen_root:exportDir},destinationOptions(),revision)
         : await exportDestinationApi.preview({...destinationPolicy, chosen_root:exportDir},
           [...exportTargets], revision, destinationOptions());
-      if (revision === destinationGeneration.current && input === destinationInput.current) setDestinationPreview(result);
+      if (revision === destinationGeneration.current && input === destinationInput.current) {
+        originalFormatPlan(result, originalRequested);
+        setDestinationPreview(result);
+      }
     } catch (error) { setExportErr(String(error)); }
     finally { destinationPreviewRunning.current = false; setDestinationBusy(false); }
   }
@@ -1357,17 +1363,19 @@ export default function App() {
     try {
       await settleCurveEdit();
       if (plan.intent_revision !== destinationGeneration.current) throw new Error('编辑已变化，请重新预览导出位置');
+      if (originalRequested && !originalAvailable) throw new Error(originalUnavailableReason);
+      originalFormatPlan(plan, originalRequested);
       if(groupExportMode){await groupDelivery.start(plan);await refreshStatus();return;}
       const before = (await engineStatus())?.last_error ?? null;
-      const combo = reconcileExportCombo(exportBits16, exportFormat, exportTiffComp);
+      const combo = reconcileExportCombo(exportBits16, exportFormat, exportTiffComp, exportTiffCompChosen);
       await runExport(exportDir, {
-        format:combo.format, ...targetSizeArguments(targetSizePolicy(exportTargetSize, combo.format, exportBits16 ? 16 : 8), exportQuality),
+        format:combo.format, ...targetSizeArguments(targetSizePolicy(exportTargetSize, combo.format, exportBitDepthForIntent(exportBits16, combo.format)), exportQuality),
         tile:exportTile.trim() ? Number(exportTile) : undefined,
         scale:exportScale !== 1 ? exportScale : undefined,
         sharpen:exportSharpen > 0 ? exportSharpen : undefined,
-        bitDepth:exportBits16 ? 16 : undefined, documentIds:[...exportTargets],
+        ...(exportBitDepthForIntent(exportBits16, combo.format) === 16 ? {bitDepth:16} : {}), documentIds:[...exportTargets],
         outputProfile:exportProfile, tiffCompression:combo.tiffCompression,
-        metadataIncludeGps:exportGpsForDepth(exportBits16, exportGps), conflictPolicy:exportConflict,
+        metadataIncludeGps:exportGpsForIntent(exportBits16, exportFormat, exportGps), conflictPolicy:exportConflict,
         watermark, layout:layoutModel.layout,
         destinationPolicy:{...destinationPolicy, chosen_root:exportDir},
         destinationPlanId:plan.plan_id, intentRevision:plan.intent_revision,
@@ -1551,17 +1559,23 @@ export default function App() {
   const groupDelivery = useGroupDelivery(JSON.stringify([pid,status?.project?.project_id,status?.project?.open]));
   const groupExportMode = groupDelivery.state.exportMode;
   const exportTargets = groupExportMode ? (groupDelivery.state.group?.delivery_targets.map(t=>t.document_id)??[]) : sel.size ? selPaths : (hasImage ? (strip?.docs.filter(d=>d.loaded).map(d=>d.document_id)??[]) : []);
+  const originalRequested = isOriginalExportFormat(exportFormat);
+  const explicitBits16 = exportBits16 && !originalRequested;
+  const originalAvailable = status?.engine_alive === true && status.ready_caps?.export_original_format_protocol === 1
+    && status.ready_caps.export_original_format_available === true;
+  const originalUnavailableReason = status?.ready_caps?.export_original_format_reason
+    || '当前引擎未提供可用的 Original 格式策略核心；请安装配套版本，不会回退 JPEG 或 8-bit。';
   const destinationSignature = JSON.stringify([destinationPolicy, exportDir, exportFormat, exportQuality, exportTargetSize,
-    exportScale, exportSharpen, exportBits16, exportTiffComp, exportGps, exportConflict,
-    exportProfile, exportTile, watermark, layoutModel.layout, exportTargets, status?.doc_rev, status?.engine_alive, workspace]);
+    exportScale, exportSharpen, exportBits16, exportTiffComp, exportTiffCompChosen, exportGps, exportConflict,
+    exportProfile, exportTile, watermark, layoutModel.layout, exportTargets, status?.doc_rev, status?.engine_alive, originalAvailable, workspace]);
   destinationInput.current = destinationSignature;
   useEffect(() => { invalidateDestination(); }, [destinationSignature, invalidateDestination]);
   const {ok: faceOk, why: faceWhy} = portraitAccess(status, doc, deformGeomWarn);
   const liveTask = tasks.length ? tasks[tasks.length - 1] : null;
   // 注册表上的格式名（jpeg/tiff）与引擎落盘用的后缀名（jpg/tif）不是一回事：
   // 映射只在这一处，两个名单都不在面板里重复刻
-  const fmtOut: Record<string, string> = { jpeg: "jpg", tiff: "tif", png: "png", webp: "webp" };
-  const fmtIn: Record<string, string> = { jpg: "jpeg", jpeg: "jpeg", tif: "tiff", tiff: "tiff", png: "png", webp: "webp" };
+  const fmtOut: Record<string, string> = { original: "original", jpeg: "jpg", tiff: "tif", png: "png", webp: "webp" };
+  const fmtIn: Record<string, string> = { original: "original", jpg: "jpeg", jpeg: "jpeg", tif: "tiff", tiff: "tiff", png: "png", webp: "webp" };
 
   function p0value(key: string): number | boolean | string | number[] | null | undefined {
     switch (key) {
@@ -1577,9 +1591,9 @@ export default function App() {
       case "lnx.crop.v1.rotation_degrees": return doc?.crop.rotation_degrees;
       case "lnx.export.v1.format": return fmtIn[exportFormat] ?? exportFormat;
       case "lnx.export.v1.jpeg_quality": return exportQuality;
-      case "lnx.export.v1.tiff_compression": return exportTiffComp;
+      case "lnx.export.v1.tiff_compression": return originalRequested && !exportTiffCompChosen ? "per-source" : exportTiffComp;
       case "lnx.export.v1.output_profile": return exportProfile;
-      case "lnx.export.v1.metadata_include_gps": return exportGpsForDepth(exportBits16, exportGps);
+      case "lnx.export.v1.metadata_include_gps": return exportGpsForIntent(exportBits16, exportFormat, exportGps);
       case "lnx.batch.v1.conflict_policy": return batchPolicy;
       // 预设下拉读的两个都来自引擎：`last_applied` 是“套完而没被手改”那一个（参数比过
       // 才算），而不是前端记的“上次点了哪个按钮”。
@@ -1606,11 +1620,11 @@ export default function App() {
         return syncScopes.map((s) => s.label);
       case "lnx.export.v1.format":
         // 引擎报的落盘后缀翻回注册表的格式名：名单出处仍是 ready.export_formats
-        return (caps?.export_formats ?? ["jpg", "tif", "png"]).filter(x=>!exportBits16||is16BitExportFormat(x)).map((x) => fmtIn[x] ?? x);
+        return [...(originalAvailable ? ["original"] : []), ...(caps?.export_formats ?? ["jpg", "tif", "png"]).filter(x=>!exportBits16||is16BitExportFormat(x)).map((x) => fmtIn[x] ?? x)];
       case "lnx.export.v1.output_profile":
         // 内置只有两条真能落的：其它两个枚举值需要用户递一个真实 .icc（面板上说明了原因）
         return ["srgb", "source"];
-      case "lnx.export.v1.tiff_compression": return ["none", "deflate", "lzw"];
+      case "lnx.export.v1.tiff_compression": return [...(originalRequested ? ["per-source"] : []), "none", "deflate", "lzw"];
       case "lnx.batch.v1.conflict_policy": return ["skip_and_report", "recheck"];
       default: return null;
     }
@@ -1618,9 +1632,9 @@ export default function App() {
 
   /** 这一刻为什么不能点。理由必须可复查（说的是引擎报出来的事实），不许写“暂不可用”。 */
   function p0enabled(key: string): string | null {
-    if (key === "lnx.export.v1.jpeg_quality" && exportBits16) return "16-bit PNG / TIFF 使用无损编码，不使用品质值。";
-    if (key === "lnx.export.v1.metadata_include_gps" && exportBits16) return "16-bit PNG / TIFF 暂不支持 GPS；保留 8-bit 时的选择。";
-    if (key === "lnx.export.v1.tiff_compression" && !["tif", "tiff"].includes(exportFormat)) return "TIFF 压缩只用于 TIFF；PNG 使用独立的无损编码。";
+    if (key === "lnx.export.v1.jpeg_quality" && explicitBits16) return "16-bit PNG / TIFF 使用无损编码，不使用品质值。";
+    if (key === "lnx.export.v1.metadata_include_gps" && explicitBits16) return "16-bit PNG / TIFF 暂不支持 GPS；保留 8-bit 时的选择。";
+    if (key === "lnx.export.v1.tiff_compression" && !["tif", "tiff", "original"].includes(exportFormat)) return "TIFF 压缩只用于 TIFF；PNG 使用独立的无损编码。";
     if (key.startsWith("lnx.task.v1.")) {
       if (!tasks.length) return "队列里还没有批次：先点「开始批量导出」。";
       const st = liveTask?.state ?? "?";
@@ -1671,7 +1685,7 @@ export default function App() {
 
   function p0toggle(key: string, v: boolean) {
     if (key === "lnx.blemish.v1.enabled") {if(v)startReviewedHeal();else healBrush.workflow.cancel();return;}
-    if (key === "lnx.export.v1.metadata_include_gps") { if (!exportBits16) setExportGps(v); return; }
+    if (key === "lnx.export.v1.metadata_include_gps") { if (!explicitBits16) setExportGps(v); return; }
     if (key === "lnx.skin.v1.enabled") { onStrength(v ? (strength <= 0 ? 0.5 : strength) : 0); return; }
     if (key === "lnx.mask.v1.analysis_enabled") {
       // 分析只能跑，不能“关”：掩膜是会话级常驻，关掉就是让面部微调当场失效。
@@ -1682,8 +1696,8 @@ export default function App() {
   }
 
   function p0enum(key: string, v: string) {
-    if (key === "lnx.export.v1.format") { setExportFormat(reconcileExportFormat(exportBits16, fmtOut[v] ?? v)); return; }
-    if (key === "lnx.export.v1.tiff_compression") { setExportTiffComp(v); return; }
+    if (key === "lnx.export.v1.format") { if (v === "original" && !originalAvailable) { setExportErr(originalUnavailableReason); return; } setExportFormat(reconcileExportFormat(exportBits16, fmtOut[v] ?? v)); return; }
+    if (key === "lnx.export.v1.tiff_compression") { if (originalRequested && v === "per-source") setExportTiffCompChosen(false); else { setExportTiffComp(v); setExportTiffCompChosen(true); } return; }
     if (key === "lnx.export.v1.output_profile") { setExportProfile(v); return; }
     if (key === "lnx.batch.v1.conflict_policy") { setBatchPolicy(v); return; }
     if (key === "lnx.preset.v1.apply") { void onPresetApplyByName(v); return; }
@@ -2187,27 +2201,29 @@ export default function App() {
               <div className="exGrid">
                 <label>格式
                   <select value={exportFormat} onChange={(e) => setExportFormat(reconcileExportFormat(exportBits16, e.target.value))}
-                          title={exportBits16 ? "16-bit 可选 PNG 或 TIFF；JPEG / WebP 需要先关闭 16-bit" : undefined}>
+                          title={originalRequested ? "Original 按每张已认证源文件解析格式与位深" : exportBits16 ? "16-bit 可选 PNG 或 TIFF；JPEG / WebP 需要先关闭 16-bit" : undefined}>
+                    <option value="original" disabled={!originalAvailable}>Original 原格式（逐图保留容器与位深）</option>
                     <option value="jpg" disabled={exportBits16}>JPEG</option>
                     <option value="png">PNG</option>
                     <option value="tif">TIFF</option>
                     <option value="webp" disabled={exportBits16}>WebP</option>
                   </select>
                 </label>
-                {["tif", "tiff"].includes(exportFormat) && <label>TIFF 无损压缩
-                  <select value={exportTiffComp}
-                          onChange={(e) => setExportTiffComp(e.target.value)}>
+                {["tif", "tiff", "original"].includes(exportFormat) && <label>TIFF 无损压缩{originalRequested && "（仅用于解析为 TIFF 的条目）"}
+                  <select value={originalRequested && !exportTiffCompChosen ? "per-source" : exportTiffComp}
+                          onChange={(e) => { if (e.target.value === "per-source") setExportTiffCompChosen(false); else { setExportTiffComp(e.target.value); setExportTiffCompChosen(true); } }}>
+                    {originalRequested && <option value="per-source">按位深默认（8-bit Deflate / 16-bit 无压缩）</option>}
                     <option value="none">无压缩</option>
                     <option value="deflate">Deflate（无损）</option>
                     <option value="lzw">LZW（无损）</option>
                   </select>
                 </label>}
-                <label>{exportFormat === "png" ? "PNG 压缩力度（无损）" : "质量"}
-                  <input type="range" min={60} max={100} value={exportQuality} disabled={exportBits16 || exportTargetSize.enabled || exporting || destinationBusy}
+                <label>{originalRequested ? "编码品质 / PNG8 压缩力度（仅适用条目）" : exportFormat === "png" ? "PNG 压缩力度（无损）" : "质量"}
+                  <input type="range" min={60} max={100} value={exportQuality} disabled={explicitBits16 || exportTargetSize.enabled || exporting || destinationBusy}
                          onChange={(e) => setExportQuality(+e.target.value)} />
-                  <em>{exportBits16 ? "16-bit 无损编码，不使用品质值" : exportQuality}</em>
+                  <em>{explicitBits16 ? "16-bit 无损编码，不使用品质值" : exportQuality}</em>
                 </label>
-                <TargetSizeControls value={exportTargetSize} onChange={setExportTargetSize} format={exportFormat} bitDepth={exportBits16 ? 16 : 8} busy={exporting || destinationBusy}/>
+                <TargetSizeControls value={exportTargetSize} onChange={setExportTargetSize} format={exportFormat} bitDepth={exportBitDepthForIntent(exportBits16, exportFormat)} busy={exporting || destinationBusy}/>
                 <label>尺寸
                   <select value={exportScale} onChange={(e) => setExportScale(+e.target.value)}>
                     <option value={1}>1× 原尺寸</option>
@@ -2219,11 +2235,13 @@ export default function App() {
                 <ExportColorSpace value={exportProfile} onChange={setExportProfile}/>
                 <ExportMetadataOptions bits16={exportBits16} format={exportFormat} gps={exportGps} onBits16={setExportBits16} onGps={setExportGps} onFormat={setExportFormat}/>
               </div>
+              {originalRequested && <p>Original 保留每张已认证源文件的容器家族及支持的编码位深，扩展名统一为 .jpg / .png / .tif / .webp；不是复制原文件，不保证原压缩方式、字节或元数据。RAW、未知或不支持的源会明确拒绝，不会改写 RAW 或回退 JPEG / 8-bit。</p>}
+              {originalRequested && !originalAvailable && <p role="alert">{originalUnavailableReason}</p>}
               <LayoutControls model={layoutModel} disabled={exporting} selected={exportTargets.length || (hasImage ? 1 : 0)} receipt={status?.export?.layout_result}/>
               <WatermarkControls value={watermark} onChange={setWatermark} disabled={exporting} storageError={watermarkStorageError}/>
               <ExportDestinationPanel policy={{...destinationPolicy, chosen_root:exportDir}}
                 preview={destinationPreview} busy={destinationBusy||exporting||(groupExportMode&&(groupDelivery.blocked||groupDelivery.exportClaimed||!groupDelivery.available))}
-                available={status?.ready_caps?.export_destination_protocol===1}
+                available={status?.ready_caps?.export_destination_protocol===1 && (!originalRequested || originalAvailable)}
                 onChange={policy=>{invalidateDestination();setDestinationPolicy(policy);setExportDir(policy.chosen_root??'');setExportConflict(policy.conflict==='rename'?'recheck':'skip_and_report');}}
                 onPreview={()=>void onPreviewDestination()} error={exportErr}/>
               <div className="exFoot">
@@ -2231,7 +2249,7 @@ export default function App() {
                   ? `本批 ${exportTargets.length} 张 · 按底片条记账`
                   : "单张导出 · 原片只读"}</span>
                 <button className="tb primary" onClick={onExport}
-                        disabled={!exportTargets.length || exporting || destinationBusy || (groupExportMode&&(!groupDelivery.available||groupDelivery.blocked||groupDelivery.exportClaimed)) || !destinationPreview || destinationPreview.entries.some(e=>e.disposition==='needs_confirmation')}>
+                        disabled={!exportTargets.length || exporting || destinationBusy || (originalRequested && !originalAvailable) || (groupExportMode&&(!groupDelivery.available||groupDelivery.blocked||groupDelivery.exportClaimed)) || !destinationPreview || destinationPreview.entries.some(e=>e.disposition==='needs_confirmation')}>
                   {exporting ? "导出中…" : "开始导出"}
                 </button>
               </div>

@@ -3,6 +3,8 @@ from copy import deepcopy
 import os
 import hashlib
 
+ORIGINAL_SNAPSHOT_BYTES = 512 * 1024 * 1024
+ORIGINAL_BATCH_SNAPSHOT_BYTES = 1024 * 1024 * 1024
 
 def select(engine, command):
     ids = command.get('document_ids')
@@ -60,8 +62,9 @@ def source_collisions(engine, chosen, directory, fmt):
             if os.path.realpath(os.path.join(directory,stem+'.'+ext)) in sources]
 
 
-def freeze(engine, chosen, snap):
+def freeze(engine, chosen, snap, *, original_format=False):
     snapshots, entries, sources = {}, {}, {}
+    snapshot_bytes = 0
     names = output_names(chosen)
     for index,row in enumerate(chosen):
         key = 'document:'+hashlib.sha256(row['document_id'].encode('utf-8')).hexdigest() if row.get('document_id') else 'external:'+str(index)
@@ -77,7 +80,17 @@ def freeze(engine, chosen, snap):
             options['people_document_id'] = engine._document_versions().version(row).document_id
             local = engine._state_to_export_snap(state,**options)
         else: local = snap
-        snapshots[key] = (deepcopy(local),is_document)
+        if original_format:
+            # Reuse the asynchronous render-input owner: reject unknown record
+            # fields/subclasses and bound bytes BEFORE copying, not a second
+            # permissive recipe serializer or an unbounded batch deepcopy.
+            from .render_snapshot import own_render_inputs
+            owned = own_render_inputs(local, max_asset_bytes=min(
+                ORIGINAL_SNAPSHOT_BYTES, ORIGINAL_BATCH_SNAPSHOT_BYTES - snapshot_bytes))
+            snapshot_bytes += owned.asset_bytes
+            snapshots[key] = (owned.value, is_document)
+        else:
+            snapshots[key] = (deepcopy(local),is_document)
         stem = names[index]
         expected = None
         if is_document:
@@ -88,4 +101,9 @@ def freeze(engine, chosen, snap):
             expected = sources[source_key]
         entries[key] = {'fingerprint':expected, 'path':path,'document_id':row.get('document_id'),'source_asset_id':row.get('source_asset_id'),
                         'recipe_version_id':row.get('recipe_version_id'),'copy_number':row.get('copy_number',0),'stem':stem}
+        if original_format:
+            if not is_document:
+                raise ValueError('Original requires an authenticated document, not an external path')
+            from .export_source_facts import freeze as freeze_source_facts
+            entries[key]['source_facts'] = freeze_source_facts(row, entries[key], snapshots[key][0])
     return list(entries),snapshots,entries

@@ -1098,6 +1098,9 @@ export interface EngineStatus {
     background_material_library_protocol?: number;
     canvas_guides_protocol?: number;
     export_destination_protocol?: number;
+    export_original_format_protocol?: number;
+    export_original_format_available?: boolean;
+    export_original_format_reason?: string | null;
     colour_grading_protocol?: number;
     primary_calibration_protocol?: number;
     selective_colour_protocol?: number;
@@ -1293,7 +1296,8 @@ export interface ExportedImage {
   path: string;
   target_size?: import("./exportTargetSize/model").TargetSizeReceipt | null;
   directory_fsync?: boolean;
-  outputs?: {path: string | null; variant: string; skipped?: boolean; target_size?: import("./exportTargetSize/model").TargetSizeReceipt; reason?: string | null; directory_fsync?: boolean}[];
+  decision_id?: string; fact_id?: string; requested_format?: string;
+  outputs?: {path: string | null; variant: string; format?: string; bits?: number; decision_id?: string; fact_id?: string; skipped?: boolean; target_size?: import("./exportTargetSize/model").TargetSizeReceipt; reason?: string | null; directory_fsync?: boolean}[];
   watermark?: {enabled: boolean; orientation?: string; asset_sha256?: string};
   /** 16-bit 母档读回差值必须为0；档位/低8位是诊断而非纯色图拒绝条件。
    *  冲突跳过时没有读回，三个诊断值为null。 */
@@ -1355,8 +1359,9 @@ export interface ExportDone {
   scale?: number;
   upscale_backend?: string | null;
   sharpen?: number;
-  /** 这一批的位深（引擎报，不是前端自己记得）：16 意味着走的是直通那条不进图层的链 */
-  bit_depth?: number;
+  /** Original may resolve mixed precision: null means inspect each image receipt. */
+  requested_format?: string;
+  bit_depth?: number | null;
   total_ms: number;
   images: ExportedImage[];
 }
@@ -1735,8 +1740,15 @@ export const runExport = (
            scale?: number; sharpen?: number; upscaleBackend?: string;
            bitDepth?: number; outputProfile?: string; tiffCompression?: string;
            metadataIncludeGps?: boolean; conflictPolicy?: string; watermark?: WatermarkSettings; layout?: import("./layout/model").LayoutSpec },
-) =>
-  invoke<{ requested: boolean }>("export", {
+) => {
+  if (opts?.format === 'original') {
+    if (opts.bitDepth !== undefined) throw new Error('Original 不能显式指定 bitDepth');
+    if (!opts.documentIds?.length || new Set(opts.documentIds).size !== opts.documentIds.length
+        || !opts.destinationPolicy || !opts.destinationPlanId || !Number.isSafeInteger(opts.intentRevision)) {
+      throw new Error('Original 需要明确文档身份及当前冻结导出位置预览');
+    }
+  }
+  return invoke<{ requested: boolean }>("export", {
     outDir,
     targetSize: opts?.targetSize,
     destinationPolicy: opts?.destinationPolicy,
@@ -1750,7 +1762,7 @@ export const runExport = (
     scale: opts?.scale,
     sharpen: opts?.sharpen,
     upscaleBackend: opts?.upscaleBackend,
-    bitDepth: opts?.bitDepth,
+    ...(opts?.bitDepth === undefined ? {} : {bitDepth: opts.bitDepth}),
     // 导出侧 P0 的四格：中性位由引擎定（ADR-0003），这里只在用户显式改过才传。
     // 键同样必须是 camelCase：写成 snake_case 就是“勾了 16-bit TIFF / 关了 GPS /
     // 选了不覆盖，而引擎全按默认跑”——落盘的文件看起来完全正常。
@@ -1761,6 +1773,7 @@ export const runExport = (
     watermark: opts?.watermark,
     layout: opts?.layout,
   });
+};
 
 export {parseFrameHead,type ParsedFrame} from './previewFrame';
 

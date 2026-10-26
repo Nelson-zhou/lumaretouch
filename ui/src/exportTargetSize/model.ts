@@ -21,10 +21,11 @@ function integer(raw: string, label: string, min: number, max: number): number {
   if (!Number.isSafeInteger(n) || n < min || n > max) throw new Error(`${label}须在 ${min}–${max} 之间`);
   return n;
 }
-export function targetSizePolicy(draft: TargetSizeDraft, format: string, bitDepth: number): TargetSizePolicy | undefined {
+export function targetSizePolicy(draft: TargetSizeDraft, format: string, bitDepth: number | undefined): TargetSizePolicy | undefined {
   if (!draft.enabled) return undefined;
-  if (!['jpg', 'jpeg'].includes(format.toLowerCase()) || bitDepth !== 8)
-    throw new Error('近似目标大小仅支持 8-bit JPEG；请显式选择格式，不会自动转换');
+  // Original stays unresolved here; the engine requires ALL entries to be JPEG8.
+  if (format !== 'original' && (!['jpg', 'jpeg'].includes(format.toLowerCase()) || bitDepth !== 8))
+    throw new Error('近似目标大小仅支持 8-bit JPEG；Original 须逐图预览且整批均为 JPEG8，不会自动转换');
   if (!/^\d+(\.\d+)?$/.test(draft.amount)) throw new Error('请输入目标大小');
   const target = Number(draft.amount) * unitBytes[draft.unit];
   if (!Number.isSafeInteger(target) || target < 1 || target > 2147483647)

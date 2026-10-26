@@ -168,6 +168,8 @@ def write_verified_png16(arr: np.ndarray, out_path: str, *, target_icc: bytes | 
     except Exception as exc:
         raise E.ExportError(f'PNG16 原生编码失败，未提交输出：{exc}') from exc
     encoded_at = time.perf_counter()
+    from hashlib import sha256
+    encoded_sha256 = sha256(blob).hexdigest()
     E._atomic_write(target, blob)
     written_at = time.perf_counter()
     # Release compressed buffers before the full-file readback admission.
@@ -184,9 +186,12 @@ def write_verified_png16(arr: np.ndarray, out_path: str, *, target_icc: bytes | 
             raise ValueError(f"像素最大差={facts['readback_max_diff']}，"
                              f'ICC一致={icc_back == icc_want}，无源EXIF/方向标签={metadata_matches}')
     except Exception as exc:
-        raise E.ExportError(f'16-bit PNG 导出读回验证失败：{exc}。'
-                            f'文件保留供检查，不作为成功出片：{target}') from exc
-    return {**common, **facts, 'path': target, 'bytes': size, 'skipped': False,
+        failure = E.ExportError(f'16-bit PNG 导出读回验证失败：{exc}。'
+                                f'文件保留供检查，不作为成功出片：{target}')
+        failure.outputs = [{**common, 'path':target, 'bytes':size, 'encoded_sha256':encoded_sha256, 'committed':True,
+                            'verification_failed':True, 'error':str(exc), 'skipped':False}]
+        raise failure from exc
+    return {**common, **facts, 'path': target, 'bytes': size, 'encoded_sha256':encoded_sha256, 'skipped': False,
             'renamed_from': None if target == path else path,
             'encode_ms': round((encoded_at - started) * 1000, 2),
             'write_ms': round((written_at - encoded_at) * 1000, 2),

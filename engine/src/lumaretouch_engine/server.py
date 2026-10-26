@@ -495,6 +495,7 @@ class Engine(HVC.HairVolumeHostMixin, PortraitCropEngineMixin, HUC.HairUnificati
         from .eye_makeup_enhance_state import capability as eye_makeup_enhance_capability
         from .eye_bag_preserve_state import capability as eye_bag_preserve_capability
         from .white_balance_auto_native import available as auto_wb_available
+        from .export_format_native import readiness as original_format_readiness
         emit({"event": "ready", "protocol": PROTOCOL_VERSION, "command_ack": 1, "inspection_protocol": 1, "color_capture_protocol": 1, "color_scopes_protocol": 1, "batch_preflight_protocol": 1, "portrait_preset_group_protocol": 1, "portrait_preset_preparation_protocol": 1, "portrait_preset_delivery_protocol": 1, "preset_result_protocol": 1, "xmp_import_protocol": 1, "preset_organisation_protocol": 1, "source_relocation_protocol": 1, "managed_import_protocol": 1, "project_recovery_protocol": 1, "white_balance_auto_protocol": int(auto_wb_available()), "white_balance_result_protocol": 1, "color_picker_capture_protocol": 1, "color_picker_result_protocol": 1, "white_balance_capture_protocol": 1, "source_patch_capture_protocol": 1, "source_patch_result_protocol": 1, "clone_stamp_protocol": 1, "heal_vector_protocol": 1, "local_masks_result_protocol": 1, "effect_recovery_protocol": 1, "manual_liquify_protocol": 1, "manual_liquify_preview_protocol": 2, "optics_protocol": 1, "sky_replacement_protocol": 1, "sky_semantic_protocol": 1,"lip_makeup_protocol":1,"brow_shape_protocol":2,"nose_shape_protocol":2,"eye_shape_protocol":2,"mouth_shape_protocol":2,"people_protocol":1,"hair_colour_protocol":1,"eyeliner_protocol":int((Path(__file__).resolve().parent/"bin/liblrt_eyeliner.so").is_file()),"iris_makeup_protocol":int((Path(__file__).resolve().parent/"bin/liblrt_iris_makeup.so").is_file()),"eyelash_protocol":int((Path(__file__).resolve().parent/"bin/liblrt_eyelash.so").is_file()),"brow_makeup_protocol":int((Path(__file__).resolve().parent/"bin/liblrt_brow_makeup.so").is_file()),"lipstick_protocol":int((Path(__file__).resolve().parent/"bin/liblrt_lipstick.so").is_file()),"blush_makeup_protocol":int((Path(__file__).resolve().parent/"bin/liblrt_blush_makeup.so").is_file()),"eye_light_protocol":int((Path(__file__).resolve().parent/"bin/liblrt_eye_light.so").is_file()),"ingest_session_protocol":1,"workflow_owner_protocol":1,"reference_color_protocol":1,"sample_library_protocol":1,"semantic_colour_protocol":1,"primary_calibration_protocol":int(self._primary_calibration_service().available()),"colour_editor_protocol":int((Path(__file__).parent/"bin/liblrt_colour_editor.so").is_file()),"selective_colour_protocol":int((Path(__file__).parent/"bin/liblrt_selective_colour.so").is_file()),"photo_grain_protocol":int(PGR.available()),"colour_grading_protocol":int((Path(__file__).parent/"bin/liblrt_colour_grading.so").is_file()),"photo_detail_protocol":int(PDH.available()),"fringe_repair_protocol":int(FRN.available()),"extended_tone_protocol":int((Path(__file__).parent/"bin/liblrt_extended_tone.so").is_file()),"semantic_colour_workflow_protocol":1,"shoulder_shape_protocol":1,"leg_shape_protocol":1,"arm_shape_protocol":1,"waist_shape_protocol":1,"neck_shape_protocol":int((Path(__file__).resolve().parent/"bin/liblrt_neck_shape.so").is_file()),"body_slim_protocol":1,"body_slim_available":body_slim_ready,"body_slim_unavailable_reason":None if body_slim_ready else "整体瘦身 Rust 核心未安装或 ABI 不匹配；不会用局部瘦腰或缩放预览替代","head_size_protocol":1,"head_size_available":head_size_ready,"head_size_unavailable_reason":None if head_size_ready else "头部大小 Rust 核心未安装或 ABI 不匹配；仍可查询、归零或停用，不会以脸框代替完整头发区域","waist_length_protocol":1,"waist_length_available":waist_length_ready,"waist_length_unavailable_reason":None if waist_length_ready else "腰部长度 Rust 核心未安装或 ABI 不匹配；仍可查询、归零或停用，不会替代算法","torso_length_protocol":1,"torso_length_available":torso_length_ready,"torso_length_unavailable_reason":None if torso_length_ready else "上身长度 Rust 核心未安装或 ABI 不匹配；仍可查询、归零或停用，不会替代算法","leg_length_protocol":int((Path(__file__).resolve().parent/"bin/liblrt_leg_length.so").is_file()), "studio_background_protocol": 1, "common_background_protocol": 1, "common_background_readback_protocol": 1, "id_background_protocol": 1, "local_grade_live_protocol": 1, "prompted_masks_protocol": 1, "curve_recipe_versions": [1, 2, 3], "pid": os.getpid(),
               # 版本自证（M5-c）：.deb 的 Version 取自 tauri.conf.json，这一份取自
               # packaging/VERSION 同步下来的 __version__。发布校验把两者对起来——分叉时
@@ -573,7 +574,7 @@ class Engine(HVC.HairVolumeHostMixin, PortraitCropEngineMixin, HUC.HairUnificati
               # 前端抄一份 action 名单，两边分叉时“不支持”与“拼错了”长得一模一样
               "project_actions": list(self.PROJECT_ACTIONS),
               "project_suffix": PJ.SUFFIX,
-              "export_destination_protocol": 1, "task_actions": list(self.TASK_ACTIONS),
+              "export_destination_protocol": 1, **original_format_readiness(), "task_actions": list(self.TASK_ACTIONS),
               # 挑图（LNX-PICK-001）：action 名单、四组档位的可选值、阈值本体与判据指纹
               # 全部由引擎说。前端刻一份「weak/standard/strong」或抄一个阈值数字，就是
               # 下一轮改判据时漏改的那一处——而它的表现是徽章悄悄改了含义。
@@ -6023,7 +6024,13 @@ class Engine(HVC.HairVolumeHostMixin, PortraitCropEngineMixin, HUC.HairUnificati
         # 目录创建挪到全部参数校验之后（见下方“建目录”那条）：校验没过就先把用户的
         # 目录建出来，失败的路径会在盘上留下一个空文件夹，而报错说的是“参数不合法”
         fmt = str(p.get("format", "jpg")).lower().lstrip(".")
-        if fmt not in FORMATS:
+        original_format = fmt == "original"
+        if original_format:
+            from .export_format_plan import require_intent
+            try: require_intent(p, preview=preview)
+            except ValueError as error:
+                respond({"event":"error", "error":str(error)}); return
+        if not original_format and fmt not in FORMATS:
             respond({"event": "error", "error": f"不支持的导出格式：{fmt}（可用 {sorted(set(FORMATS))}）"})
             return
         # 原片只读（CORE-004）：落点不许指向**任何一张输入**。
@@ -6085,11 +6092,11 @@ class Engine(HVC.HairVolumeHostMixin, PortraitCropEngineMixin, HUC.HairUnificati
         # Native16 source enters neutral passthrough or genuine floating edits;
         # output containers must retain RGB16, never silently become RGB8.
         try:
-            bit_depth = int(p.get("bit_depth", 8))
+            bit_depth = None if original_format else int(p.get("bit_depth", 8))
         except (TypeError, ValueError):
             respond({"event": "error", "error": f"bit_depth={p.get('bit_depth')!r} 不是整数（只认 8 或 16）"})
             return
-        if bit_depth not in (8, 16):
+        if not original_format and bit_depth not in (8, 16):
             respond({"event": "error", "error": f"bit_depth={bit_depth} 不支持（只认 8 或 16）"})
             return
         if bit_depth == 16:
@@ -6100,7 +6107,10 @@ class Engine(HVC.HairVolumeHostMixin, PortraitCropEngineMixin, HUC.HairUnificati
                 return
         from .export_target_size_adapter import request_policy
         try:
-            target_size = request_policy(p, format=fmt, bit_depth=bit_depth)
+            # Original parses only the option schema here. Every native-resolved
+            # decision must permit JPEG8 target size before destination planning.
+            target_size = request_policy(p, format="jpg" if original_format else fmt,
+                                         bit_depth=8 if original_format else bit_depth)
         except ValueError as error:
             respond({"event":"error", "error":str(error)})
             return
@@ -6121,17 +6131,18 @@ class Engine(HVC.HairVolumeHostMixin, PortraitCropEngineMixin, HUC.HairUnificati
         conflict_policy = str(p.get("conflict_policy", "skip_and_report"))
         # Preserve the previous protocol default while accepting explicit lossless
         # compression in both bit depths. Predictor 2 preserves decoded samples.
-        tiff_comp = str(p.get("tiff_compression", "none" if bit_depth == 16 and fmt in ("tif", "tiff") else "deflate"))
+        tiff_comp = (None if original_format and "tiff_compression" not in p else
+                     str(p.get("tiff_compression", "none" if bit_depth == 16 and fmt in ("tif", "tiff") else "deflate")))
         try:
             _check_policy(conflict_policy)
-            comp_key, _ = _tiff_compression(tiff_comp)
+            comp_key, _ = _tiff_compression(tiff_comp if tiff_comp is not None else "deflate")
             if output_profile not in ("none", "srgb", "source") and not os.path.isfile(output_profile):
                 raise _ExportError(f"output_profile={output_profile!r} 本层不带该档"
                                    "（可用：srgb / source / none，或一个真实的 .icc 文件路径）")
         except _ExportError as e:
             respond({"event": "error", "error": str(e)})
             return
-        if fmt not in ("tif", "tiff") and (comp_key != "deflate" or (bit_depth == 16 and "tiff_compression" in p)):
+        if not original_format and fmt not in ("tif", "tiff") and (comp_key != "deflate" or (bit_depth == 16 and "tiff_compression" in p)):
             # 不夹也不忽略：只有 TIFF 读这个值，给 JPEG 设 deflate 是一次无效的输入
             respond({"event": "error",
                   "error": f"tiff_compression={tiff_comp!r} 只对 TIFF 有意义（当前 format={fmt}）："
@@ -6144,7 +6155,7 @@ class Engine(HVC.HairVolumeHostMixin, PortraitCropEngineMixin, HUC.HairUnificati
         # Validate every frozen per-image recipe, not the active image's live
         # fields. Otherwise a neutral active image silently bypasses edits on
         # another image in a 16-bit passthrough batch.
-        try: entry_ids, snap_by_path, export_entries = VCX.freeze(self, selected_documents, snap)
+        try: entry_ids, snap_by_path, export_entries = VCX.freeze(self, selected_documents, snap, original_format=original_format)
         except (ValueError,RuntimeError,OSError) as error:
             respond({"event":"error","error":str(error)}); return
         from . import watermark as WM
@@ -6166,13 +6177,23 @@ class Engine(HVC.HairVolumeHostMixin, PortraitCropEngineMixin, HUC.HairUnificati
         opts = {"target_size": target_size, "output_profile": output_profile, "tiff_compression": tiff_comp,
                 "metadata_include_gps": bool(include_gps), "conflict_policy": conflict_policy,
                 "watermark": WM.public_settings(snap.get("export_watermark")), "layout": snap.get("export_layout"), "document_entries": export_entries}
+        if original_format:
+            from .export_format_plan import freeze as freeze_format_plan
+            try:
+                opts["format_plan"] = freeze_format_plan(entry_ids, export_entries, snap_by_path,
+                    quality=quality, tiff_compression=tiff_comp, metadata_include_gps=include_gps,
+                    target_size=target_size, output_profile=output_profile)
+            except (ValueError, TypeError, RuntimeError, OSError, KeyError) as error:
+                respond({"event":"error", "error":str(error)}); return
         if trusted_destination_roots is not None:
             from .owned_export_destination import normalize as owned_roots
             opts["_trusted_destination_roots"] = owned_roots(trusted_destination_roots)
         destination_plan = None
         if p.get("destination_policy") is not None:
             from . import export_destination_runtime as EDR
-            settings = {"format":fmt, "quality":None if target_size else quality, "tile":tile, "bit_depth":bit_depth,
+            settings = {"format":fmt, "quality":None if target_size or original_format else quality, "tile":tile,
+                        **({"requested_quality":None if target_size else quality} if original_format else {}),
+                        **({} if original_format else {"bit_depth":bit_depth}),
                         "scale":scale, "sharpen":sharpen, "upscale_backend":backend,
                         **{k:v for k,v in opts.items() if k != "document_entries"}}
             try:
@@ -6205,8 +6226,9 @@ class Engine(HVC.HairVolumeHostMixin, PortraitCropEngineMixin, HUC.HairUnificati
         self._task_seq += 1
         task = T.new_task("export",
                           {"images": list(images), "out_dir": out_dir, "format": fmt,
-                           "quality": None if target_size else quality, "tile": tile, "bit_depth": bit_depth,
-                           "doc": doc, **opts},
+                           "quality": None if target_size or original_format else quality, "tile": tile, "bit_depth": bit_depth,
+                           **({"requested_quality":None if target_size else quality} if original_format else {}),
+                           "requested_format": fmt, "doc": doc, **opts},
                           entry_ids + ([LAYOUT_ITEM] if snap.get("export_layout") else []), task_id=f"exp{self._task_seq}-{os.getpid()}")
         # `recipe_persisted` 说的是“这份配方快照现在还在不在会话里”，不是“有没有写过
         # 工程文件”：当场建账的批次必然还在（_task_args 刚收过），只有从盘上读回来的
@@ -6277,15 +6299,33 @@ class Engine(HVC.HairVolumeHostMixin, PortraitCropEngineMixin, HUC.HairUnificati
         """逐条目结局。skipped 不是成功也不是失败（它得单独数得出来）。"""
         if task is None:
             return
+        previous = next((item for item in task['items'] if item['path'] == path), {})
+        # A retry never erases an already committed clean/watermarked receipt.
+        # The frozen target may now be occupied: retain the previous output and
+        # report the new failure, rather than inventing a replacement pathname.
+        retained_outputs = list(previous.get('outputs') or [])
+        for output in rec.get('outputs') or []:
+            same_commit = next((index for index, old in enumerate(retained_outputs)
+                if output.get('output_identity') and old.get('output_identity') == output['output_identity']
+                and old.get('decision_id') == output.get('decision_id') and not old.get('error') and not output.get('error')), None)
+            if same_commit is not None:
+                retained_outputs[same_commit] = output
+                continue
+            if output not in retained_outputs:
+                retained_outputs.append(output)
+        if retained_outputs:
+            rec['outputs'] = retained_outputs
+        receipt = {k:rec[k] for k in ('format', 'requested_format', 'resolved_format', 'bits',
+            'decision_id', 'fact_id', 'effective_asset') if k in rec}
         if "error" in rec:
             T.item_result(task, path, "failed", reason=rec["error"],
-                          detail={"target_size":rec.get("target_size"), "encoder_quality":rec.get("encoder_quality"), "directory_fsync":rec.get("directory_fsync"), "stage": rec.get("stage"), "outputs":rec.get("outputs",[]), "destination_plan_id":rec.get("destination_plan_id"), "planned_target":rec.get("planned_target")})
+                          detail={**receipt, "target_size":rec.get("target_size"), "encoder_quality":rec.get("encoder_quality"), "directory_fsync":rec.get("directory_fsync"), "stage": rec.get("stage"), "outputs":rec.get("outputs",[]), "destination_plan_id":rec.get("destination_plan_id"), "planned_target":rec.get("planned_target")})
         elif rec.get("out_skipped"):
             T.item_result(task, path, "skipped", reason=rec.get("skip_reason"),
-                          out=rec.get("out"), detail={"target_size":rec.get("target_size"), "encoder_quality":rec.get("encoder_quality"), "directory_fsync":rec.get("directory_fsync"), "outputs":rec.get("outputs",[]),"destination_plan_id":rec.get("destination_plan_id")})
+                          out=rec.get("out"), detail={**receipt, "target_size":rec.get("target_size"), "encoder_quality":rec.get("encoder_quality"), "directory_fsync":rec.get("directory_fsync"), "outputs":rec.get("outputs",[]),"destination_plan_id":rec.get("destination_plan_id")})
         else:
             T.item_result(task, path, "succeeded", out=rec.get("out"),
-                          detail={"target_size":rec.get("target_size"), "encoder_quality":rec.get("encoder_quality"), "directory_fsync":rec.get("directory_fsync"), "bytes": rec.get("bytes"), "outputs":rec.get("outputs",[]), "renamed_from":rec.get("renamed_from"), "destination_plan_id":rec.get("destination_plan_id"), "layout_usable": not any(o.get("skipped") for o in rec.get("outputs", []) or [] if o.get("path") == rec.get("out"))})
+                          detail={**receipt, "target_size":rec.get("target_size"), "encoder_quality":rec.get("encoder_quality"), "directory_fsync":rec.get("directory_fsync"), "bytes": rec.get("bytes"), "outputs":rec.get("outputs",[]), "renamed_from":rec.get("renamed_from"), "destination_plan_id":rec.get("destination_plan_id"), "layout_usable": not any(o.get("skipped") for o in rec.get("outputs", []) or [] if o.get("path") == rec.get("out"))})
         self._emit_task(task, f"第 {T.counts(task)['succeeded'] + T.counts(task)['failed']} "
                               f"条已定")
 
@@ -6430,10 +6470,17 @@ class Engine(HVC.HairVolumeHostMixin, PortraitCropEngineMixin, HUC.HairUnificati
                 if retained.plan_id != persisted.plan_id: raise DestinationError("冻结导出目标不一致")
             except (ValueError,KeyError,TypeError) as error:
                 raise T.TaskError(f"目录计划损坏，拒绝重试：{error}") from error
-        _task, pend = T.begin_retry(t)
         if args is None:
             t["recipe_persisted"] = False
             raise T.TaskError("这条批次没有配方快照（重启过的旧台账）：请打开那张图重新导出")
+        if args[2] == "original":
+            from .export_format_plan import worker_decision
+            try:
+                for key in args[0]:
+                    worker_decision(args[8], key, args[8]["document_entries"][key], args[9][key][0])
+            except (ValueError, KeyError, TypeError) as error:
+                raise T.TaskError(f"Original 冻结来源/配方/格式计划不一致，拒绝重试：{error}") from error
+        _task, pend = T.begin_retry(t)
         images, out_dir, fmt, quality, tile, doc, snap, bit_depth, opts, snap_by_path = args
         # 只跑没成功的，输入一律取自这条批次自己的快照，不是 live 字段也不是“最后那批”
         self._export_args = ([p for p in images if p in set(pend)], out_dir, fmt, quality,
@@ -6475,6 +6522,8 @@ class Engine(HVC.HairVolumeHostMixin, PortraitCropEngineMixin, HUC.HairUnificati
         for idx, entry_id in enumerate(images):
             entry = opts.get("document_entries", {}).get(entry_id, {"path":entry_id})
             path = entry["path"]
+            previous_outputs = next((item.get("outputs") or [] for item in (task or {}).get("items", [])
+                                     if item["path"] == entry_id), [])
             # 安全点只在条目之间：这一句返“停”时，上一张已经原子提交完了
             if task is not None and self._task_boundary(task) == "stop":
                 stopped = True
@@ -6484,41 +6533,64 @@ class Engine(HVC.HairVolumeHostMixin, PortraitCropEngineMixin, HUC.HairUnificati
                 image_started = monotonic_ns()
                 immutable_stamp = verify_entry(entry, verified_sources)
                 snap_i, for_doc_i = snap_by_path.get(entry_id, (snap, path == doc))
+                decision = None
+                image_fmt, image_bits, image_opts = fmt, bit_depth, opts
+                if fmt == "original":
+                    from .export_format_plan import worker_decision
+                    decision = worker_decision(opts, entry_id, entry, snap_i, source_stamp=immutable_stamp)
+                    image_fmt, image_bits = decision["codec"], decision["bits"]
+                    image_opts = {**opts, **decision["options"]}
+                    # Analysis/decode guards may enrich a snapshot. Never mutate
+                    # the retained Original recipe used for same-session retry.
+                    from .render_snapshot import own_render_inputs
+                    from .virtual_copy_export import ORIGINAL_SNAPSHOT_BYTES
+                    snap_i = own_render_inputs(snap_i, max_asset_bytes=ORIGINAL_SNAPSHOT_BYTES).value
+                def verify_format_decode(decoded):
+                    if decision is not None:
+                        from .export_source_facts import verify_decoded
+                        verify_decoded(decision["source_facts"], decoded, snap_i)
                 from . import body_pose_render as body_render
                 mask_source_stamp = LM.file_stamp(path) if (snap_i.get("_bg") or {}).get("key_recipe") is not None or snap_i.get('body_pose') is not None or snap_i.get('hand_shape') is not None or snap_i.get("grade_scope") == "objects" or LGS.has_groups(snap_i) or bool(ERS.check(snap_i.get("effect_recovery"))["targets"]) or bool(MLS.check(snap_i.get("manual_liquify"))["strokes"]) or SBS.check(snap_i.get("studio_background"))["source"] is not None or IDS.check(snap_i.get("id_background"))["source"] is not None or OPS.source_bound(OPS.check(snap_i.get("optics"))) or SKS.check(snap_i.get("sky_replacement"))["enabled"] or snap_i.get("creative_sky_context") is not None or snap_i.get("creative_id_background_context") is not None else None
                 stage = "semantic_analysis"
                 snap_i, for_doc_i = self._prepare_export_snapshot(path, snap_i, for_doc_i)
                 analysis_ms = round((monotonic_ns() - image_started) / 1e6, 2)
-                if bit_depth == 16:
+                if image_bits == 16:
                     from .export import export_master_16bit, export_edited_16bit
-                    out_path = EDR.primary_target(destination_plan, entry_id) if destination_plan else os.path.join(out_dir, entry.get("stem", os.path.splitext(os.path.basename(path))[0]) + (".png" if fmt == "png" else ".tif"))
+                    out_path = EDR.primary_target(destination_plan, entry_id) if destination_plan else os.path.join(out_dir, entry.get("stem", os.path.splitext(os.path.basename(path))[0]) + (".png" if image_fmt == "png" else ".tif"))
                     skipped = []
-                    common = dict(output_profile=opts["output_profile"],
+                    common = dict(output_profile=image_opts["output_profile"],
                                   conflict_policy=opts["conflict_policy"],
-                                  metadata_include_gps=opts["metadata_include_gps"],
-                                  tiff_compression=opts["tiff_compression"])
-                    if watermark or self._master16_snapshot_blockers(snap_i):
+                                  metadata_include_gps=image_opts["metadata_include_gps"],
+                                  tiff_compression=image_opts.get("tiff_compression") or "deflate")
+                    # Original is the frozen document's complete recipe, not a
+                    # source-carrier copy. The legacy master shortcut classifier
+                    # is not exhaustive for newer edits, so Original always uses
+                    # the canonical RGB16 recipe/render path, including neutral
+                    # documents. Keep the explicit-format shortcut unchanged.
+                    if decision is not None or watermark or self._master16_snapshot_blockers(snap_i):
                         stage = "decode16"
                         decode_started = monotonic_ns()
-                        d = load_full(path, device=snap_i["device"], want_bits=8 if snap_i.get("creative_base") is not None else 16)
+                        d = load_full(path, device=snap_i["device"], want_bits=16 if decision is not None else (8 if snap_i.get("creative_base") is not None else 16))
                         verify_decode(path, immutable_stamp)
+                        verify_format_decode(d)
                         LM.check_export_decode(snap_i, path, mask_source_stamp, (d.h, d.w)); LGS.check_export_decode(snap_i, path, mask_source_stamp, (d.h, d.w)); ERR.check_export_decode(snap_i, path, mask_source_stamp, (d.h, d.w)); MLR.check_export_decode(snap_i, path, mask_source_stamp, (d.h, d.w)); SBR.check_export_decode(snap_i, path, mask_source_stamp, (d.h, d.w)); IDR.check_export_decode(snap_i,path,mask_source_stamp,(d.h,d.w)); OPR.check_export_decode(snap_i,path,mask_source_stamp,(d.h,d.w)); SKR.check_export_decode(snap_i,path,mask_source_stamp,(d.h,d.w)); RCR.verify_export(snap_i,path,(d.h,d.w)); body_render.check_export_decode(snap_i,path,mask_source_stamp,(d.h,d.w)); HSR.check_export_decode(snap_i,path,mask_source_stamp,(d.h,d.w)); FRR.check_export_decode(snap_i,path,mask_source_stamp,(d.h,d.w))
                         decode_ms = (monotonic_ns() - decode_started) / 1e6
                         spec, skipped = self._export_snapshot(snap_i, d.h, d.w, for_document=for_doc_i)
                         stage = "edit16"
                         render16 = export_delivery16 if watermark else export_edited_16bit
                         wm_args = {"watermark": watermark} if watermark else {}
-                        r = EDR.run(destination_plan, entry_id, render16, d, spec, out_path, trusted_roots=opts.get("_trusted_destination_roots"), device=snap_i["device"], tile=tile,
+                        r = EDR.run(destination_plan, entry_id, render16, d, spec, out_path, trusted_roots=opts.get("_trusted_destination_roots"), previous_outputs=previous_outputs, device=snap_i["device"], tile=tile,
                                                crop_rect=tuple(snap_i.get("crop_rect") or (0, 0, 1, 1)),
                                                rotation_degrees=float(snap_i.get("crop_rotation") or 0),
                                                decode_ms=decode_ms, **wm_args, **common)
                     else:
                         stage = "master16"
-                        r = EDR.run(destination_plan, entry_id, export_master_16bit, path, out_path, trusted_roots=opts.get("_trusted_destination_roots"), device=snap_i["device"],
-                                               verify_source=lambda: verify_decode(path, immutable_stamp), **common)
+                        r = EDR.run(destination_plan, entry_id, export_master_16bit, path, out_path, trusted_roots=opts.get("_trusted_destination_roots"), previous_outputs=previous_outputs, device=snap_i["device"],
+                                               verify_source=lambda: verify_decode(path, immutable_stamp),
+                                               verify_decoded=verify_format_decode, **common)
                     results.append({"path": path, "out": r["path"], "format": r["format"],
                                     "bits": 16, "source": r["source"],
-                                    "w": r["w"], "h": r["h"], "bytes": r["bytes"],
+                                    "w": r["w"], "h": r["h"], "bytes": r["bytes"], "encoded_sha256":r.get("encoded_sha256"),
                                     "write_ms": r["write_ms"], "decode_ms": r["decode_ms"],
                                     "readback_ms": r["readback_ms"],
                                     "verification_ms": r["verification_ms"],
@@ -6568,6 +6640,7 @@ class Engine(HVC.HairVolumeHostMixin, PortraitCropEngineMixin, HUC.HairUnificati
                     continue
                 d = decode_for_delivery8(path, device=snap_i["device"], creative_base=snap_i.get("creative_base"))
                 verify_decode(path, immutable_stamp)
+                verify_format_decode(d)
                 LM.check_export_decode(snap_i, path, mask_source_stamp, (d.h, d.w)); LGS.check_export_decode(snap_i, path, mask_source_stamp, (d.h, d.w)); ERR.check_export_decode(snap_i, path, mask_source_stamp, (d.h, d.w)); MLR.check_export_decode(snap_i, path, mask_source_stamp, (d.h, d.w)); SBR.check_export_decode(snap_i, path, mask_source_stamp, (d.h, d.w)); IDR.check_export_decode(snap_i,path,mask_source_stamp,(d.h,d.w)); OPR.check_export_decode(snap_i,path,mask_source_stamp,(d.h,d.w)); SKR.check_export_decode(snap_i,path,mask_source_stamp,(d.h,d.w)); RCR.verify_export(snap_i,path,(d.h,d.w)); body_render.check_export_decode(snap_i,path,mask_source_stamp,(d.h,d.w)); HSR.check_export_decode(snap_i,path,mask_source_stamp,(d.h,d.w)); FRR.check_export_decode(snap_i,path,mask_source_stamp,(d.h,d.w))
                 stage = "render"
                 # P1-1：这一张用它自己那份配方（当前档=现拍 snap；其它档=它存的 state；
@@ -6575,21 +6648,22 @@ class Engine(HVC.HairVolumeHostMixin, PortraitCropEngineMixin, HUC.HairUnificati
                 spec, skipped = self._export_snapshot(snap_i, d.h, d.w,
                                                       for_document=for_doc_i)
                 stage = "write"
-                out_path = EDR.primary_target(destination_plan, entry_id) if destination_plan else os.path.join(out_dir, entry.get("stem", os.path.splitext(os.path.basename(path))[0]) + "." + fmt)
+                out_path = EDR.primary_target(destination_plan, entry_id) if destination_plan else os.path.join(out_dir, entry.get("stem", os.path.splitext(os.path.basename(path))[0]) + "." + image_fmt)
                 frame, st = render_delivery8(d, spec, device=snap_i["device"], tile=tile,
                     crop_rect=tuple(snap_i.get("crop_rect") or (0., 0., 1., 1.)),
                     rotation_degrees=float(snap_i.get("crop_rotation") or 0.))
-                check_source_profile(d, opts["output_profile"])
-                info = EDR.run(destination_plan, entry_id, write_delivery8, frame, out_path, trusted_roots=opts.get("_trusted_destination_roots"), quality=quality, watermark=watermark,
-                                  target_size=opts.get("target_size"),
+                check_source_profile(d, image_opts["output_profile"])
+                info = EDR.run(destination_plan, entry_id, write_delivery8, frame, out_path, trusted_roots=opts.get("_trusted_destination_roots"), previous_outputs=previous_outputs,
+                                  quality=image_opts.get("quality") or quality, watermark=watermark,
+                                  target_size=image_opts.get("target_size"),
                                   cancelled=lambda: bool(target_ctl and target_ctl.cancel.is_set()),
-                                  output_profile=opts["output_profile"],
+                                  output_profile=image_opts["output_profile"],
                                   source_icc=d.source_icc, source_exif=d.source_exif,
-                                  metadata_include_gps=opts["metadata_include_gps"],
+                                  metadata_include_gps=image_opts["metadata_include_gps"],
                                   conflict_policy=opts["conflict_policy"],
-                                  tiff_compression=opts["tiff_compression"])
+                                  tiff_compression=image_opts.get("tiff_compression") or "deflate")
                 results.append({"path": path, "out": info["path"], "format": info["format"],
-                                "bytes": info["bytes"], "write_ms": info["write_ms"],
+                                "bits": 8, "bytes": info["bytes"], "encoded_sha256":info.get("encoded_sha256") or info.get("sha256"), "write_ms": info["write_ms"],
                                 "target_size": info.get("target_size"), "directory_fsync": info.get("directory_fsync"),
                                 # PNG 实际压缩档位（非 PNG 为 None）：这里是从 info 里
                                 # 摘键组装的，不补这一笔就会在协议边界上静默丢掉——
@@ -6652,7 +6726,8 @@ class Engine(HVC.HairVolumeHostMixin, PortraitCropEngineMixin, HUC.HairUnificati
               "task_id": (task or {}).get("task_id"),
               "task_state": (task or {}).get("state"),
               "cancelled": _cancelled_final,
-              "out_dir": out_dir, "format": fmt, "quality": None if opts.get("target_size") else quality, "tile": tile,
+              "out_dir": out_dir, "format": fmt, "requested_format": fmt, "quality": None if opts.get("target_size") or fmt == "original" else quality, "tile": tile,
+              **({"requested_quality":None if opts.get("target_size") else quality} if fmt == "original" else {}),
               "bit_depth": bit_depth, "layout_result": layout_result, **opts,
               "scale": int(snap["scale"]), "sharpen": float(snap["sharpen"]),
               # 后端名字只在真做了放大时才报：批级别写"lanczos3"而每张图的账单写 None，

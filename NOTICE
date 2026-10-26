@@ -197,3 +197,9 @@ Visible-hair directional smoothing: core/hair_smoothing is an original
 GPL-3.0-or-later implementation. Corresponding Rust modules, ABI header,
 manifest, license and authored/unrun acceptance notes are staged under
 third_party/hair_smoothing. It is not a new model or a neck/skin operator.
+
+Original-format export policy: core/export_format is an original dependency-free
+GPL-3.0-or-later Rust policy resolver. It selects existing encoded-format writers
+from authenticated per-document facts; it is not a codec, RAW writer, original
+byte copier or compression/metadata preservation guarantee. Source, ABI header,
+authored UNRUN fixtures and project licence ship in third_party/export_format.

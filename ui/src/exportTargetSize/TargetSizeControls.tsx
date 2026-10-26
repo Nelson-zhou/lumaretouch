@@ -3,7 +3,7 @@ import {targetSizePolicy, sizeSummary, type TargetSizeDraft, type SizeUnit, type
 /** Mount beside the existing quality control; caller disables its quality slider while enabled. */
 export function TargetSizeControls({value, onChange, format, bitDepth, busy = false}: {
   value: TargetSizeDraft; onChange: (value: TargetSizeDraft) => void;
-  format: string; bitDepth: number; busy?: boolean;
+  format: string; bitDepth: number | undefined; busy?: boolean;
 }) {
   const patch = (part: Partial<TargetSizeDraft>) => onChange({...value, ...part});
   let error = '';
@@ -12,6 +12,7 @@ export function TargetSizeControls({value, onChange, format, bitDepth, busy = fa
     <label><input type="checkbox" checked={value.enabled} onChange={e => patch({enabled: e.target.checked})}/>
       使用近似目标大小（代替品质设置）</label>
     {value.enabled && <>
+      {format === 'original' && <p>Original 只有在预览确认整批都是 JPEG 8-bit 时才可使用；含 PNG、TIFF、WebP 或 16-bit 将整批拒绝，不会忽略目标大小或转换格式。</p>}
       <p>不保证精确字节数。保留当前尺寸、8-bit JPEG、4:4:4 和元数据策略；不会缩图或转为其他格式。容差可允许超过目标；水印/无水印副本分别计算，排版 PNG/PDF 不受此目标约束。</p>
       <label>目标大小<input inputMode="decimal" value={value.amount} onChange={e => patch({amount: e.target.value})}/></label>
       <label>单位<select value={value.unit} onChange={e => patch({unit: e.target.value as SizeUnit})}>

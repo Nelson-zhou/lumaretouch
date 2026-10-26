@@ -15,6 +15,12 @@ mkdir -p "$stage"
 mkdir -p "$stage/lumaretouch_engine/third_party/sky_semantic"
 cp "$here/../docs/development/sky-semantic-proposals.md" "$stage/lumaretouch_engine/third_party/sky_semantic/README.md"
 
+# Original is a per-document policy, not an added codec. Ship its real native
+# helper plus corresponding source, ABI, authored fixtures and project licence.
+bash "$here/build-export-format.sh" "$stage/lumaretouch_engine/bin/liblrt_export_format.so"
+mkdir -p "$stage/lumaretouch_engine/third_party/export_format"
+cp "$here/../core/export_format/"*.rs "$here/../core/export_format/export_format.h" "$here/../core/export_format/Cargo.toml" "$here/../core/export_format/README.md" "$here/../LICENSE" "$here/../docs/original-format/native-policy.md" "$stage/lumaretouch_engine/third_party/export_format/"
+
 # Optional detected-group closed-eye hint predicate. Source-only / UNRUN.
 bash "$here/build-pick-group-eye.sh" "$stage/lumaretouch_engine/bin/liblrt_pick_group_eye.so"
 mkdir -p "$stage/lumaretouch_engine/third_party/pick_group_eye"

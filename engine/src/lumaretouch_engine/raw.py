@@ -28,6 +28,7 @@ from __future__ import annotations
 import struct
 import zlib
 from dataclasses import dataclass, field
+from contextlib import contextmanager
 from fractions import Fraction
 
 import numpy as np
@@ -255,111 +256,234 @@ def all_ifds(buf: bytes) -> list[Ifd]:
     return out
 
 
-def _ifd_skeleton(f, off: int, bo: str):
-    """只跳读一个 IFD 的骨架：每项 (tag, typ, count, 4字节值域) + 尾部下一 IFD 偏移。
+# Shared strict metadata inspector. This is not another TIFF pixel decoder.
+# Both Original-format admission and ordinary RAW routing use these limits.
+TIFF_INSPECT_VERSION = 1
+MAX_INSPECT_IFDS = 64
+MAX_INSPECT_ENTRIES = 16384
+MAX_INSPECT_IFD_ENTRIES = 4096
+MAX_INSPECT_BYTES = 2 * 1024 * 1024
+MAX_INSPECT_VALUE_BYTES = 16 * 1024 * 1024
+_INSPECT_TYPES = {1: 1, 2: 1, 3: 2, 4: 4, 5: 8, 6: 1, 7: 1,
+                  8: 2, 9: 4, 10: 8, 11: 4, 12: 8, 13: 4,
+                  16: 8, 17: 8, 18: 8}
+_INSPECT_FIELDS = {TAG_IMAGE_WIDTH, TAG_IMAGE_LENGTH, TAG_BITS_PER_SAMPLE,
+                   TAG_COMPRESSION, TAG_PHOTOMETRIC, TAG_ORIENTATION,
+                   TAG_SAMPLES_PER_PIXEL, TAG_PLANAR_CONFIG, TAG_SAMPLE_FORMAT,
+                   TAG_SUB_IFDS, TAG_NEW_SUBFILE_TYPE, TAG_DNG_VERSION}
 
-    不解析溢出值区——嗅探只需要 PhotometricInterpretation（一个内联 SHORT），
-    所以在大文件里也只吃几 KB，而不是为了判类型先读下 60 MB。
+
+class _InspectError(ValueError):
+    pass
+
+
+class _TiffInspector:
+    def __init__(self, stream, size):
+        self.stream, self.size = stream, size
+        self.read_bytes = self.entries = 0
+
+    def read(self, offset, length):
+        # Subtraction bounds avoid native-width overflow when this contract is
+        # ported. Python's arbitrary-precision arithmetic never wraps either.
+        if (type(offset) is not int or type(length) is not int or offset < 0
+                or length < 0 or offset > self.size or length > self.size - offset
+                or offset > (1 << 64) - 1 or length > (1 << 64) - 1 - offset):
+            raise _InspectError('tiff_inspection_bounds')
+        self.read_bytes += length
+        if self.read_bytes > MAX_INSPECT_BYTES:
+            raise _InspectError('tiff_inspection_work_limit')
+        self.stream.seek(offset)
+        data = self.stream.read(length)
+        if len(data) != length:
+            raise _InspectError('tiff_inspection_truncated')
+        return data
+
+    def values(self, typ, count, data, bo):
+        codes = {1: 'B', 3: 'H', 4: 'I', 13: 'I', 16: 'Q', 18: 'Q'}
+        if typ not in codes or not 0 < count <= MAX_INSPECT_IFDS:
+            raise _InspectError('tiff_inspection_metadata_type')
+        return tuple(struct.unpack(bo + codes[typ] * count, data))
+
+    def ifd(self, offset, bo, big):
+        count_size, entry_size, slot = (8, 20, 8) if big else (2, 12, 4)
+        count_code, offset_code = ('Q', 'Q') if big else ('H', 'I')
+        if offset < (16 if big else 8):
+            raise _InspectError('tiff_inspection_ifd_offset')
+        count = struct.unpack(bo + count_code, self.read(offset, count_size))[0]
+        self.entries += count
+        if count > MAX_INSPECT_IFD_ENTRIES or self.entries > MAX_INSPECT_ENTRIES:
+            raise _InspectError('tiff_inspection_entry_limit')
+        table = self.read(offset + count_size, entry_size * count + slot)
+        fields, seen_tags = {}, set()
+        for index in range(count):
+            record = table[index * entry_size:(index + 1) * entry_size]
+            tag, typ, number = struct.unpack(bo + ('HHQ' if big else 'HHI'), record[:-slot])
+            if tag in seen_tags or typ not in _INSPECT_TYPES or number == 0:
+                raise _InspectError('tiff_inspection_invalid_tag')
+            seen_tags.add(tag)
+            length = number * _INSPECT_TYPES[typ]
+            if length > MAX_INSPECT_VALUE_BYTES:
+                raise _InspectError('tiff_inspection_value_limit')
+            field = record[-slot:]
+            pointer = struct.unpack(bo + offset_code, field)[0] if length > slot else None
+            if pointer is not None and (pointer > self.size or length > self.size - pointer):
+                raise _InspectError('tiff_inspection_value_bounds')
+            if tag not in _INSPECT_FIELDS:
+                continue  # Pixel offsets and compressed bytes are never read.
+            if tag == TAG_DNG_VERSION:
+                fields[tag] = (1,)  # Presence alone identifies a RAW-derived carrier.
+                continue
+            if number > MAX_INSPECT_IFDS:
+                raise _InspectError('tiff_inspection_metadata_count')
+            raw = self.read(pointer, length) if pointer is not None else field[:length]
+            fields[tag] = self.values(typ, number, raw, bo)
+        following = struct.unpack(bo + offset_code, table[-slot:])[0]
+        return fields, following
+
+
+@contextmanager
+def _inspection_source(path, expected_stamp):
+    """Bind every TIFF metadata descriptor, not only the pathname at return."""
+    import os
+    import stat
+    stamp = lambda info: (info.st_dev, info.st_ino, info.st_size, info.st_mtime_ns, info.st_ctime_ns)
+    if expected_stamp is not None and (not isinstance(expected_stamp, (list, tuple))
+            or len(expected_stamp) != 5 or any(type(value) is not int for value in expected_stamp)):
+        raise _InspectError('tiff_inspection_expected_stamp')
+    expected = tuple(expected_stamp) if expected_stamp is not None else None
+    with open(path, 'rb') as stream:
+        before = os.fstat(stream.fileno())
+        if not stat.S_ISREG(before.st_mode):
+            raise _InspectError('tiff_inspection_not_regular')
+        initial = stamp(before)
+        if expected is not None and initial != expected:
+            raise _InspectError('tiff_inspection_source_identity')
+        try:
+            yield stream, before
+        finally:
+            after = stamp(os.fstat(stream.fileno()))
+            if after != initial or (expected is not None and after != expected) or stamp(os.stat(path)) != initial:
+                raise _InspectError('tiff_inspection_source_changed')
+
+
+def inspect_tiff(path: str, *, expected_stamp=None) -> dict:
+    """Bounded tri-state TIFF metadata: bitmap / raw / unknown.
+
+    Classic TIFF and BigTIFF share one structural walker. Truncation, cycles,
+    duplicate tags, unbounded counts and any ambiguous image IFD are UNKNOWN,
+    never a negative RAW assertion. A non-TIFF file is explicitly is_tiff=False.
+    No image payload is read or decoded. Header facts do not prove payload
+    validity; the actual decoder still validates samples before publication.
+    Original admission supplies expected_stamp to bind this descriptor to the
+    already authenticated byte identity. Legacy callers may omit it.
     """
-    f.seek(off)
-    hdr = f.read(2)
-    if len(hdr) < 2:
-        return None
-    n = struct.unpack(bo + "H", hdr)[0]
-    body = f.read(12 * n + 4)
-    if len(body) < 12 * n + 4:
-        return None
-    entries = []
-    for i in range(n):
-        e = body[12 * i:12 * i + 12]
-        tag, typ, count = struct.unpack(bo + "HHI", e[:8])
-        entries.append((tag, typ, count, e[8:12]))
-    nxt = struct.unpack(bo + "I", body[12 * n:12 * n + 4])[0]
-    return entries, nxt
+    result = {'version': TIFF_INSPECT_VERSION, 'is_tiff': False,
+              'source_kind': 'unknown', 'reason': 'not_tiff'}
+    try:
+        with _inspection_source(path, expected_stamp) as (stream, before):
+            reader = _TiffInspector(stream, before.st_size)
+            head = reader.read(0, min(16, before.st_size))
+            if head[:2] not in (b'II', b'MM'):
+                return result
+            result['is_tiff'] = True
+            if len(head) < 8:
+                raise _InspectError('tiff_inspection_header')
+            bo = '<' if head[:2] == b'II' else '>'
+            magic = struct.unpack(bo + 'H', head[2:4])[0]
+            big = magic == 43
+            if big:
+                if len(head) != 16 or struct.unpack(bo + 'HH', head[4:8]) != (8, 0):
+                    raise _InspectError('tiff_inspection_bigtiff_header')
+                first = struct.unpack(bo + 'Q', head[8:16])[0]
+            elif magic == 42:
+                first = struct.unpack(bo + 'I', head[4:8])[0]
+            else:
+                raise _InspectError('tiff_inspection_magic')
+            if not first:
+                raise _InspectError('tiff_inspection_no_ifd')
+            frontier, seen, pages = [(first, True)], set(), []
+            root_pages, subifds, raw_found = 0, False, False
+            while frontier:
+                offset, root = frontier.pop()
+                if offset in seen:
+                    raise _InspectError('tiff_inspection_cycle_or_alias')
+                if len(seen) >= MAX_INSPECT_IFDS:
+                    raise _InspectError('tiff_inspection_ifd_limit')
+                seen.add(offset)
+                fields, following = reader.ifd(offset, bo, big)
+                photo = fields.get(TAG_PHOTOMETRIC, ())
+                if len(photo) != 1:
+                    raise _InspectError('tiff_inspection_missing_photometric')
+                raw_found |= photo[0] in (PHOTOMETRIC_CFA, PHOTOMETRIC_LINEAR_RAW) or TAG_DNG_VERSION in fields
+                pages.append(fields)
+                root_pages += int(root)
+                children = fields.get(TAG_SUB_IFDS, ())
+                subifds |= bool(children)
+                if len(frontier) + len(children) + bool(following) + len(seen) > MAX_INSPECT_IFDS:
+                    raise _InspectError('tiff_inspection_ifd_limit')
+                if any(not child for child in children):
+                    raise _InspectError('tiff_inspection_null_subifd')
+                frontier.extend((child, False) for child in children)
+                if following:
+                    frontier.append((following, root))
+            primary = pages[0]
+            def scalar(tag, default=0):
+                values = primary.get(tag, (default,))
+                if len(values) != 1:
+                    raise _InspectError('tiff_inspection_scalar_count')
+                return values[0]
+            bits = primary.get(TAG_BITS_PER_SAMPLE, ())
+            samples = scalar(TAG_SAMPLES_PER_PIXEL, 1)
+            sample_format = primary.get(TAG_SAMPLE_FORMAT, (1,))
+            precision = bits[0] if bits and len(set(bits)) == 1 and len(bits) in (1, samples) else 0
+            if any(value != 1 for value in sample_format):
+                precision = 0
+            width, height = scalar(TAG_IMAGE_WIDTH), scalar(TAG_IMAGE_LENGTH)
+            orientation = scalar(TAG_ORIENTATION, 1)
+            if width < 1 or height < 1 or orientation not in range(1, 9):
+                raise _InspectError('tiff_inspection_dimensions_orientation')
+            return {**result, 'source_kind': 'raw' if raw_found else 'bitmap', 'reason': None,
+                    'big': big, 'width': width, 'height': height, 'precision': precision,
+                    'orientation': orientation, 'samples': samples, 'photometric': scalar(TAG_PHOTOMETRIC),
+                    'sample_format': list(sample_format), 'compression': scalar(TAG_COMPRESSION, 1),
+                    'planar': scalar(TAG_PLANAR_CONFIG, 1), 'ifd_count': len(pages),
+                    'frame_count': root_pages, 'has_subifds': subifds,
+                    'single_frame': len(pages) == 1 and not subifds}
+    except (OSError, ValueError, struct.error, OverflowError) as error:
+        return {**result, 'source_kind': 'unknown',
+                'reason': str(error) if isinstance(error, _InspectError) else 'tiff_inspection_failed'}
 
 
-def _inline_short(bo, typ, count, field):
-    # PhotometricInterpretation 规范上是 SHORT(3)，但部分写入器把它存成 LONG(4)；
-    # 嗅探要跟读侧 as_int 一样宽容，不然真值在、类型写错的 DNG 会被当坏图（#9）。
-    if count == 1 and typ == 3:
-        return struct.unpack(bo + "H", field[:2])[0]
-    if count == 1 and typ in (4, 9):        # LONG / SLONG
-        return struct.unpack(bo + "I", field[:4])[0]
+def vendor_raw_family(path: str) -> str | None:
+    """Recognize only established TIFF-like vendor headers for LibRaw routing.
+
+    These are not classic/BigTIFF image-IFD proofs. inspect_tiff intentionally
+    remains UNKNOWN for them, so Original-format admission still refuses them.
+    A signature only selects the existing RAW decoder; LibRaw must validate the
+    complete source. Unknown TIFF headers never become bitmap evidence here.
+    """
+    with open(path, 'rb') as stream:
+        head = stream.read(8)
+    if len(head) < 8 or head[:2] not in (b'II', b'MM'):
+        return None
+    magic = struct.unpack(('<' if head[:2] == b'II' else '>') + 'H', head[2:4])[0]
+    if magic in (0x4F52, 0x5352):
+        return 'orf'
+    if magic == 0x0055:
+        return 'rw2'
     return None
 
 
-def _subifd_offsets(f, bo, typ, count, field):
-    if typ != 4 or count <= 0:                    # SUB_IFDS 是 LONG 数组
-        return []
-    if count == 1:                                 # ≤4 字节：内联
-        return [struct.unpack(bo + "I", field[:4])[0]]
-    p = struct.unpack(bo + "I", field)[0]           # 溢出：值域里是指针
-    f.seek(p)
-    raw = f.read(4 * count)
-    return list(struct.unpack(bo + "I" * count, raw)) if len(raw) >= 4 * count else []
-
-
 def has_raw_ifd(path: str) -> bool:
-    """这是一张含 raw IFD 的 TIFF/EP 吗？只跳读 IFD 骨架，不为判类型吃下整幅。
-
-    为什么不能只读头部：DNG 常把像素放前面、IFD 放文件尾，一张 24 MP 的 DNG 前
-    256 KB 里根本没有 IFD——早期嗅探只读头部，就会把大 DNG 当坏图甩给 Pillow。
-    """
-    import os
-    try:
-        if not os.path.isfile(path):
-            return False
-        with open(path, "rb") as f:
-            head = f.read(8)
-            if len(head) < 8 or head[:2] not in (b"II", b"MM"):
-                return False                        # JPEG/PNG/WebP/BMP 在这步就廉价地返 False
-            bo = "<" if head[:2] == b"II" else ">"
-            magic = struct.unpack(bo + "H", head[2:4])[0]
-            if magic == 43:
-                # BigTIFF is a container, not evidence of sensor RAW. Inspect
-                # page metadata (including SubIFDs) without decoding pixels.
-                import tifffile
-                with tifffile.TiffFile(path) as tf:
-                    pending = [iter(tf.pages)]
-                    inspected = 0
-                    while pending:
-                        page = next(pending[-1], None)
-                        if page is None:
-                            pending.pop()
-                            continue
-                        inspected += 1
-                        if inspected > 512:
-                            raise ValueError("TIFF IFD inspection limit exceeded")
-                        if int(page.photometric) in (PHOTOMETRIC_CFA, PHOTOMETRIC_LINEAR_RAW):
-                            return True
-                        if page.subifds:
-                            pending.append(iter(page.pages))
-                return False
-            if magic != 42:
-                return False
-            frontier = [struct.unpack(bo + "I", head[4:8])[0]]
-            seen = set()
-            while frontier:
-                off = frontier.pop(0)
-                if not off or off in seen:
-                    continue
-                seen.add(off)
-                sk = _ifd_skeleton(f, off, bo)
-                if sk is None:
-                    continue
-                entries, nxt = sk
-                for tag, typ, count, field in entries:
-                    if tag == TAG_PHOTOMETRIC:
-                        v = _inline_short(bo, typ, count, field)
-                        if v in (PHOTOMETRIC_CFA, PHOTOMETRIC_LINEAR_RAW):
-                            return True
-                    elif tag == TAG_SUB_IFDS:
-                        frontier.extend(_subifd_offsets(f, bo, typ, count, field))
-                if nxt:
-                    frontier.append(nxt)
+    """Self-DNG IFD probe: strict TIFF, or known vendor RAW requiring LibRaw."""
+    if vendor_raw_family(path) is not None:
+        # No supported TIFF/DNG IFD proof: bypass the self-DNG parser, not RAW
+        # validation. is_raw independently routes this signature to LibRaw.
         return False
-    except Exception:
-        return False
+    inspected = inspect_tiff(path)
+    if inspected['source_kind'] == 'unknown' and inspected['reason'] != 'not_tiff':
+        raise UnsupportedRaw('TIFF 类型检查无法证实安全位图或 RAW: ' + inspected['reason'])
+    return inspected['source_kind'] == 'raw'
 
 
 def pick_raw_ifd(ifds: list[Ifd]) -> Ifd | None:

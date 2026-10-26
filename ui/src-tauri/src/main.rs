@@ -1427,6 +1427,8 @@ fn export(
         }
     }
     export_target_size_port::attach_target_size(&mut cmd, target_size)?;
+    let ready = state.ready_caps.lock().map_err(|_| "能力锁不可用")?.clone();
+    export_destination_port::validate_original_intent(&cmd, false, &ready)?;
     state.send_to_engine(cmd)?;
     Ok(json!({"requested": true}))
 }
