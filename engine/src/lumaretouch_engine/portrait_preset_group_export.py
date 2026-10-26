@@ -204,6 +204,8 @@ class GroupExport:
             return result
         # Existing lifecycle owns the safe item boundary; no file cleanup or
         # rollback. Never address "all" or a presumed most-recent export.
-        record['cancel_requested'] = True
-        self.engine.cmd_task({'cmd': 'task', 'action': 'cancel', 'task': record['task_id']})
+        task = self.engine._tasks.get(record['task_id'])
+        if task is None:
+            raise ValueError('Original task was removed; no cancellation was sent')
+        record['cancel_requested'] = self.engine._cancel_owned_export_task(task)
         return self._observe(token)

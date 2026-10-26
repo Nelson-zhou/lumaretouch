@@ -377,6 +377,7 @@ pub struct AppState {
     /// 状态**，而转移表在引擎里——宿主只搬运，不自己判“能不能暂停”。
     tasks: Mutex<Vec<Value>>,
     task_rev: Mutex<usize>,
+    task_control_results: Mutex<Vec<Value>>,
     /// ready 的**整份**能力清单（M9-f）。以前每加一个名单（presets / grade_limits /
     /// export_caps / project_actions / task_actions）就要改一次 Rust：那正是双出处。
     /// 整份搬过去让 UI 直接按引擎报的名单画控件；没报就是 Null，UI 那一排不画。
@@ -482,6 +483,7 @@ impl AppState {
             project_rev: Mutex::new(0),
             tasks: Mutex::new(Vec::new()),
             task_rev: Mutex::new(0),
+            task_control_results: Mutex::new(Vec::new()),
             ready_caps: Mutex::new(Value::Null),
             engine_version: Mutex::new(None),
             engine_runtime: Mutex::new(Value::Null),
@@ -650,6 +652,13 @@ impl AppState {
                     }
                 }
                 "task_deleted" => {
+                    // Retain causal receipt after its task row disappears; UI validates all scope fields.
+                    if let Some(result)=v.get("control_result").filter(|r|r.is_object()) {
+                        let mut receipts=self.task_control_results.lock().unwrap();
+                        receipts.push(result.clone());
+                        let excess=receipts.len().saturating_sub(128);
+                        if excess>0 { receipts.drain(..excess); }
+                    }
                     if let Some(id) = v.get("task_id").and_then(|x| x.as_str()) {
                         t.retain(|x| x.get("task_id").and_then(|i| i.as_str()) != Some(id));
                     }
@@ -722,6 +731,7 @@ impl AppState {
     }
 
     pub fn on_ready(&self, v: &Value) {
+        self.task_control_results.lock().unwrap().clear();
         // 整份能力清单先存下（新名单不用改宿主）：只取 JSON 里真是对象的那一份
         if v.is_object() {
             *self.ready_caps.lock().unwrap() = v.clone();
@@ -1738,6 +1748,7 @@ fn engine_status(state: State<'_, Arc<AppState>>) -> Value {
            "project_rev": *state.project_rev.lock().unwrap(),
            "tasks": state.tasks.lock().unwrap().clone(),
            "task_rev": *state.task_rev.lock().unwrap(),
+           "task_control_results": state.task_control_results.lock().unwrap().clone(),
            "ready_caps": state.ready_caps.lock().unwrap().clone(),
            "hair_smoothing_recovery": crate::people_api::recovery_status(),
            "history_edit_cmds": state.history_edit_cmds.lock().unwrap().clone(),

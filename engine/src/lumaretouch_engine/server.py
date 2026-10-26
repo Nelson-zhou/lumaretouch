@@ -429,6 +429,7 @@ class Engine(HVC.HairVolumeHostMixin, PortraitCropEngineMixin, HUC.HairUnificati
         self._project_saved_ns: int | None = None
         self._project_disk_sha256: str | None = None
         # 批量任务台账（LNX-P0-TASK）：状态与审计轨迹在 tasks 层，这里是运行时的三个位。
+        self._task_lock = threading.RLock()
         self._tasks: dict = {}            # task_id → 记录（插入序就是队列序）
         self._task_args: dict = {}        # task_id → 当时那份导出参数（含 numpy 图层，只活在会话）
         self._task_seq = 0
@@ -2672,6 +2673,8 @@ class Engine(HVC.HairVolumeHostMixin, PortraitCropEngineMixin, HUC.HairUnificati
             except T.TaskError as e:
                 notes.append({"reason": f"旧任务记录读不进来：{e}"})
                 continue
+            from .export_task_controls import bind
+            bind(self, t)
             t["recipe_persisted"] = False
             gone = [p for p in t["inputs"].get("images") or [] if p not in paths
                     or not os.path.isfile(p)]
@@ -6238,6 +6241,8 @@ class Engine(HVC.HairVolumeHostMixin, PortraitCropEngineMixin, HUC.HairUnificati
         for item in task["items"]:
             entry = export_entries.get(item["path"], {})
             item.update({key:entry[key] for key in ("document_id","source_asset_id","recipe_version_id","copy_number") if key in entry})
+        from .export_task_controls import bind
+        bind(self, task)
         task["recipe_persisted"] = True
         self._tasks[task["task_id"]] = task
         # 参数快照按 task_id 收：只拿 `self._export_args` （会话里最后那一批）当快照，
@@ -6255,7 +6260,8 @@ class Engine(HVC.HairVolumeHostMixin, PortraitCropEngineMixin, HUC.HairUnificati
 
     def _task_event(self, task: dict, *, note: str = "", **extra) -> dict:
         """task_state 只有一个组装点：队列里每一格读的必须是同一份。"""
-        return {"event": "task_state", "task_id": task["task_id"], "kind": task["kind"],
+        from .export_task_controls import metadata
+        return {"control": metadata(self, task), "event": "task_state", "task_id": task["task_id"], "kind": task["kind"],
                 "state": task["state"], "attempt": int(task["attempt"]),
                 "counts": T.counts(task), "batch": T.batch_state(list(self._tasks.values())),
                 "persisted": bool(task.get("persisted")),
@@ -6278,24 +6284,26 @@ class Engine(HVC.HairVolumeHostMixin, PortraitCropEngineMixin, HUC.HairUnificati
         if ctl is None:
             return "continue"
         while True:
-            if ctl.cancel.is_set():
-                return "stop"
-            if task["state"] == T.PAUSE_REQUESTED:
-                T.transit(task, T.PAUSED, "已到条目边界")
-                self._emit_task(task, "边界上暂停")
-            if task["state"] == T.PAUSED:
-                # 睡着等 resume（不空转吃 CPU），但带超时：取消与“没带控制位就退出”
-                # 都得能在这里醒过来，一个死等的 worker 会把整个批次拖成不可取消
-                ctl.resume.wait(0.25)
-                if not ctl.pause.is_set():
-                    ctl.resume.clear()
-                continue
-            if task["state"] == T.RESUMING:
-                T.transit(task, T.RUNNING, "自边界继续")
-                self._emit_task(task, "已继续")
-            return "continue"
+            with self._task_lock:
+                if ctl.cancel.is_set() or task["state"] == T.CANCELLING:
+                    return "stop"
+                if task["state"] == T.PAUSE_REQUESTED:
+                    T.transit(task, T.PAUSED, "已到条目边界")
+                    self._emit_task(task, "边界上暂停")
+                waiting = task["state"] == T.PAUSED
+                if task["state"] == T.RESUMING:
+                    T.transit(task, T.RUNNING, "自边界继续")
+                    self._emit_task(task, "已继续")
+                if not waiting:
+                    return "continue"
+            ctl.resume.wait(0.25)
+
 
     def _task_item(self, task: dict | None, path: str, rec: dict) -> None:
+        with self._task_lock:
+            self._task_item_locked(task, path, rec)
+
+    def _task_item_locked(self, task: dict | None, path: str, rec: dict) -> None:
         """逐条目结局。skipped 不是成功也不是失败（它得单独数得出来）。"""
         if task is None:
             return
@@ -6353,7 +6361,31 @@ class Engine(HVC.HairVolumeHostMixin, PortraitCropEngineMixin, HUC.HairUnificati
         return (t is self._export_task and self._export is not None
                 and self._export.is_alive())
 
+    def _cancel_owned_export_task(self, task: dict) -> bool:
+        """Internal owner handoff, NOT a cmd_ method or user-selectable bypass."""
+        from .export_task_controls import require_owner, metadata, PREFIX
+        import uuid
+        with self._task_lock:
+            if self._tasks.get(task.get("task_id")) is not task:
+                raise T.TaskError("原任务对象已更换，不能取消")
+            require_owner(self, task)
+            if task['state'] in (T.SUCCEEDED, T.FAILED, T.CANCELLED):
+                return False
+            if task['state'] == T.CANCELLING:
+                return True
+            control = metadata(self, task)
+            request_id = 'owned-cancel-' + uuid.uuid4().hex
+            reference = {key: control[key] for key in ('token', 'project_id', 'workspace_generation', 'session_id', 'revision')}
+            reference.update(task_id=task['task_id'], request_id=request_id)
+            self._cmd_task_locked({'action': 'cancel', 'task': PREFIX + json.dumps(reference)})
+            result = task.get('_control_result') or {}
+            return result.get('request_id') == request_id and result.get('success') is True
+
     def cmd_task(self, p: dict):
+        with self._task_lock:
+            return self._cmd_task_locked(p)
+
+    def _cmd_task_locked(self, p: dict):
         """批量队列：暂停 / 继续 / 取消 / 重试 / 列清单 / 删记录。
 
         铁律沿用 cmd_project：参数先全量校验、事件只有一个组装点、被拒不留半截状态。
@@ -6373,9 +6405,18 @@ class Engine(HVC.HairVolumeHostMixin, PortraitCropEngineMixin, HUC.HairUnificati
             emit({"event": "task_list", "tasks": [self._task_event(t) for t in self._tasks.values()],
                   "batch": T.batch_state(list(self._tasks.values()))})
             return
+        from .export_task_controls import resolve, preflight, receipt
+        qualified = None
         try:
-            targets = self._task_find(p)
+            qualified = resolve(self, p.get("task"))
+            targets = [qualified[0]]
+            if qualified and qualified[2] != str(qualified[0]["updated_ns"]):
+                raise T.TaskError("任务版本已变化；请刷新精确任务后再选择动作")
+            preflight(self, targets, action)
         except T.TaskError as e:
+            if qualified:
+                qualified[0]["_control_result"] = receipt(qualified[0], qualified[1], action, False, error=str(e))
+                self._emit_task(qualified[0], "控制被拒绝")
             emit({"event": "error", "error": str(e)})
             return
         ctl = self._task_ctl
@@ -6412,7 +6453,8 @@ class Engine(HVC.HairVolumeHostMixin, PortraitCropEngineMixin, HUC.HairUnificati
                         T.transit(t, T.CANCELLED, "文件原样保留")
                         self._emit_task(t, "取消（记账：文件原样保留）")
                         continue
-                    T.request_cancel(t)
+                    if t["state"] != T.CANCELLING:
+                        T.request_cancel(t)
                     self._emit_task(t, f"用户 {action}")
                     if ctl is not None and t is self._export_task:
                         # 睡着等的 worker 得能醒过来看到取消；不推一把就是一场死等
@@ -6424,17 +6466,23 @@ class Engine(HVC.HairVolumeHostMixin, PortraitCropEngineMixin, HUC.HairUnificati
                 elif action == "delete":
                     # TASK-009 的下半句：删队列记录不删原图也不删已导出的文件
                     self._tasks.pop(t["task_id"], None)
+                    self._task_args.pop(t["task_id"], None)
                 changed.append(t)
         except T.TaskError as e:
+            if qualified:
+                qualified[0]["_control_result"] = receipt(qualified[0], qualified[1], action, False, error=str(e))
+                self._emit_task(qualified[0], "控制被拒绝")
             # 批次里一条没校过就不改其它条：partial 的队列状态比“整批没动”难查得多
             emit({"event": "error", "error": f"task {action} 被整条拒绝（已改的都在同一批里，"
                   f"而这一批没人确认过）：{e}"})
             return
+        if qualified and action != "delete":
+            qualified[0]["_control_result"] = receipt(qualified[0], qualified[1], action, True)
+            self._emit_task(qualified[0], "控制请求已确认（非完成回执）")
         if action == "delete":
-            emit({"event": "task_deleted", "task_id": targets[0]["task_id"],
-                  "sources_touched": False, "outputs_touched": False,
-                  "files_kept": T.counts(targets[0]),
-                  "batch": T.batch_state(list(self._tasks.values()))})
+            for target in targets:
+                emit({"event": "task_deleted", "task_id": target["task_id"], "sources_touched": False, "outputs_touched": False,
+                      "control_result": receipt(target, qualified[1], action, True)})
             return
         for t in changed:
             # retry 与 delete 各自有自己的事件（task_deleted / 重试已排队），不在这里
@@ -6508,9 +6556,9 @@ class Engine(HVC.HairVolumeHostMixin, PortraitCropEngineMixin, HUC.HairUnificati
         target_ctl = self._task_ctl  # Capture this batch control; never use a newer retry control.
         task = self._export_task
         n = len(images)
-        if task is not None and task["state"] != T.RUNNING:
-            T.transit(task, T.RUNNING, "worker 开工")
-            self._emit_task(task, "开工")
+        if task is not None:
+            from .export_task_controls import start
+            start(self, task)
         t0 = monotonic_ns()
         results: list = []
         failed = 0
@@ -6540,11 +6588,15 @@ class Engine(HVC.HairVolumeHostMixin, PortraitCropEngineMixin, HUC.HairUnificati
                     decision = worker_decision(opts, entry_id, entry, snap_i, source_stamp=immutable_stamp)
                     image_fmt, image_bits = decision["codec"], decision["bits"]
                     image_opts = {**opts, **decision["options"]}
-                    # Analysis/decode guards may enrich a snapshot. Never mutate
-                    # the retained Original recipe used for same-session retry.
+                # Analysis/decode guards may enrich a snapshot. Never mutate the
+                # retained recipe used by a same-session retry, in ANY format.
+                if fmt == "original":
                     from .render_snapshot import own_render_inputs
                     from .virtual_copy_export import ORIGINAL_SNAPSHOT_BYTES
                     snap_i = own_render_inputs(snap_i, max_asset_bytes=ORIGINAL_SNAPSHOT_BYTES).value
+                else:
+                    # Preserve the ordinary freeze() accepted-type contract.
+                    snap_i = copy.deepcopy(snap_i)
                 def verify_format_decode(decoded):
                     if decision is not None:
                         from .export_source_facts import verify_decoded
@@ -6698,26 +6750,8 @@ class Engine(HVC.HairVolumeHostMixin, PortraitCropEngineMixin, HUC.HairUnificati
             from .layout_delivery import finish_layout
             layout_result = finish_layout(self, task, snap["export_layout"], out_dir)
         if task is not None:
-            # 收尾状态由条目账算出来，不由“循环跑完了”宣布：部分失败报成 succeeded
-            # 就是 TASK-003 拒绝的那种“把失败折成完成”
-            c = T.counts(task)
-            # P1-7 卡住现场：取消落在最后一张正在写文件的时候，worker 不会再
-            # 回到 `_task_boundary`（那个检查只在每次迭代开头看一次），`stopped`
-            # 就停在 False。但命令面已经把状态推到 CANCELLING。这里必须以状态
-            # 为准，不能因 stopped=False 就宣布 SUCCEEDED——LEGAL[CANCELLING]
-            # = (CANCELLED, FAILED)，transit(SUCCEEDED) 会抛 TaskError，批次
-            # 卡在 CANCELLING，连 export_done 都发不出去。
-            if stopped or task["state"] == T.CANCELLING:
-                if task["state"] != T.CANCELLING:
-                    T.transit(task, T.CANCELLING, "边界上确认取消")
-                T.transit(task, T.CANCELLED, f"{c['pending']} 条未跑，"
-                                            f"{c['succeeded']} 条已落盘的文件原样保留")
-            elif c["failed"]:
-                T.transit(task, T.FAILED, f"{c['failed']} 条失败（逐条见 items）")
-            else:
-                T.transit(task, T.SUCCEEDED, f"{c['succeeded']} 张已落盘，"
-                                            f"{c['skipped']} 张按策略跳过")
-            self._emit_task(task, "收尾")
+            from .export_task_controls import finish
+            finish(self, task, stopped)
         # cancelled 以台账终态为准（CANCELLING 抢在最后一张写完后才落到
         # CANCELLED，此时 `stopped` 仍是 False）；旧的 bool(stopped) 会把
         # “取消成功”的批次报成 cancelled=false，与 task_state=cancelled 自相矛盾。

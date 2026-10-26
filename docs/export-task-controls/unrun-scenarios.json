@@ -1,0 +1,82 @@
+{
+  "status": "UNRUN",
+  "scope": "ordinary export control bounded L1 slice",
+  "scenarios": [
+    {
+      "id": "queue-pause-before-worker",
+      "expect": "queued -> pause_requested -> paused, no item starts before resume"
+    },
+    {
+      "id": "queue-cancel-before-worker",
+      "expect": "cancelling -> cancelled, no illegal running transition"
+    },
+    {
+      "id": "pause-during-last-commit",
+      "expect": "committed successful item retained; pause_requested -> succeeded; export_done emitted"
+    },
+    {
+      "id": "cancel-during-last-commit",
+      "expect": "committed item/output retained; task cancelled without deleting files"
+    },
+    {
+      "id": "batch-invalid-later-member",
+      "expect": "zero earlier member state/control mutations"
+    },
+    {
+      "id": "batch-retry",
+      "expect": "multi-target retry refused before starting any worker"
+    },
+    {
+      "id": "active-delete",
+      "expect": "refused; ledger, inputs and files unchanged"
+    },
+    {
+      "id": "terminal-delete",
+      "expect": "only exact record/in-memory task arguments removed, no filesystem calls"
+    },
+    {
+      "id": "same-session-retry",
+      "expect": "same task ID, attempt increments once, frozen recipes remain unchanged; succeeded items not rerun"
+    },
+    {
+      "id": "restored-retry-resume",
+      "expect": "refused, no live-slider substitution or automatic worker"
+    },
+    {
+      "id": "double-click-dismiss-remount",
+      "expect": "one mutation, retained unknown state, only read-only reconciliation"
+    },
+    {
+      "id": "stale-token-project-revision",
+      "expect": "no mutation of another session/project/attempt; revision rejection correlated"
+    },
+    {
+      "id": "native-ack-only-or-lost-response",
+      "expect": "not treated as success, no automatic resend"
+    },
+    {
+      "id": "fallback-image-binding",
+      "expect": "actual pipe fallback belongs to current image load, explicit CPU choice not mislabeled"
+    },
+    {
+      "id": "public-raw-default-all-rejection",
+      "expect": "pause/resume/cancel/retry/delete reject missing, raw task ID and all references before any mutation"
+    },
+    {
+      "id": "project-create-retained-task",
+      "expect": "old task owner token remains original project/workspace/session; new project cannot retry/cancel/delete old row after list"
+    },
+    {
+      "id": "same-project-reopen-generation",
+      "expect": "restored task receives fresh session-local token and current workspace ownership; old references rejected"
+    },
+    {
+      "id": "delete-exact-receipt-remount",
+      "expect": "bounded native receipt matches all owner and request fields; pending deletion settles without inferring success from row absence"
+    },
+    {
+      "id": "internal-group-cancel-owner",
+      "expect": "validated original task object, frozen owner and canonical qualified cancellation; no JSON trusted flag or cmd_ dispatcher route"
+    }
+  ]
+}

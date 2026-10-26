@@ -22,6 +22,16 @@ set -euo pipefail
 here=$(cd "$(dirname "$0")" && pwd)
 repo=$(cd "$here/.." && pwd)
 
+# Offline admission happens before GPU detection, uv/pip or any online setup.
+# Helpers live under existing runtime resource mapping in installed packages.
+if [[ " ${*} " == *" --offline-bundle "* ]]; then
+  helper="$here/install-offline-runtime.sh"
+  [[ -f "$helper" ]] || helper="$here/runtime/offline-delivery/install-offline-runtime.sh"
+  exec bash "$helper" "$@"
+fi
+online=0
+if [[ ${1:-} == --online ]]; then online=1; shift; fi
+
 # 两种布局都要能跑：仓库里（本脚本在 packaging/，清单在 engine/）与装机后
 # （本脚本在 /usr/lib/LumaRetouch/engine/，清单在旁边的 runtime/）。只认仓库布局的
 # 引导脚本，恰好在它要解决的问题上自身不可用——那台机器上没有仓库。
@@ -47,7 +57,9 @@ index=${LRT_WHEEL_INDEX:-}
 
 usage() {
   cat <<'TXT'
-用法：packaging/setup-runtime.sh [选项]
+用法：packaging/setup-runtime.sh --online [选项]
+离线：packaging/setup-runtime.sh --offline-bundle DIR --manifest-sha256 TRUSTED_SHA256 [--prefix DIR]
+离线路径只接受已准备、独立认证的完整运行时目录；不联网、不回落在线。
 
   --variant auto|rocm|cuda|cpu  引擎变体（默认 auto：按 PCI 厂商探测装 GPU；cpu 是无 GPU 的显式降级
                               路径，帧率受限，能力/性能边界见 docs/adr/0022，非静默回落）
@@ -76,6 +88,11 @@ while [ $# -gt 0 ]; do
     *) echo "× 未知选项：$1"; usage; exit 2 ;;
   esac
 done
+
+if [[ $online != 1 && $recheck != 1 && $dry != 1 ]]; then
+  echo '× 安装需要明确 --online，或 --offline-bundle DIR --manifest-sha256 TRUSTED_SHA256；不会自动联网。' >&2
+  exit 2
+fi
 
 # ---------------------------------------------------------------- 显卡探测
 # 读 sysfs 而不是 lspci：lspci 属 pciutils，是 deb 的 Depends 里没有的可选工具，

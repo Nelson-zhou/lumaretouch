@@ -217,6 +217,11 @@ cp "$here/setup-optics.py" "$stage/setup-optics.py"
 cp "$here/optics-sources.lock.json" "$stage/runtime/optics-sources.lock.json"
 cp "$here/../docs/optics/INSTALL.md" "$stage/runtime/OPTICS-INSTALL.md"
 bash "$here/stage-optics-runtime.sh" "$stage"
+# Source-only offline installer rides the existing runtime resource mapping.
+# This does NOT stage or claim a prepared CPython/dependency bundle.
+mkdir -p "$stage/runtime/offline-delivery"
+cp "$here/offline-runtime.py" "$here/install-offline-runtime.sh" "$stage/runtime/offline-delivery/"
+cp "$here/../docs/development/offline-runtime-delivery.md" "$stage/runtime/offline-delivery/README.md"
 cp "$here/../packaging/setup-runtime.sh" "$stage/setup-runtime.sh"
 chmod +x "$stage/setup-runtime.sh"
 cp "$here/../engine/requirements-rocm.txt" "$here/../engine/requirements-cuda.txt" "$rt/"

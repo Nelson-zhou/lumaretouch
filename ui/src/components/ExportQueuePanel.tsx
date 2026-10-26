@@ -1,3 +1,4 @@
+import {ExportTaskControls} from '../exportTaskControls/TaskControls';
 import {TargetSizeResult} from '../exportTargetSize/TargetSizeControls';
 import type {EngineStatus,SessionState} from '../native';
 import {WatermarkReceipt} from '../watermark/WatermarkControls';
@@ -18,6 +19,7 @@ export function ExportQueuePanel({exportTargets,exporting,status,strip,exportBit
                   ((status?.export_progress?.index ?? 0) + 1)
                   / Math.max(1, status?.export_progress?.total ?? 1) * 100)}%` }} /></div>
               )}
+              <ExportTaskControls status={status}/>
               <div className="qList">
                 {exportTargets.length ? exportTargets.map((p) => {
                   const d = strip?.docs.find((x) => x.document_id === p);

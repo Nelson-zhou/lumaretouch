@@ -31,6 +31,7 @@
 from __future__ import annotations
 
 import time
+import copy
 
 SCHEMA = "lrt.task.v1"
 
@@ -50,13 +51,13 @@ STATES = (QUEUED, RUNNING, PAUSE_REQUESTED, PAUSED, RESUMING, CANCELLING,
 
 # 转移表：唯一一份。不在表里 = 拒，不静默“差不多就当过了”。
 LEGAL: dict[str, tuple[str, ...]] = {
-    QUEUED: (RUNNING, CANCELLING, FAILED),
+    QUEUED: (RUNNING, PAUSE_REQUESTED, CANCELLING, FAILED),
     RUNNING: (PAUSE_REQUESTED, CANCELLING, SUCCEEDED, FAILED),
-    PAUSE_REQUESTED: (PAUSED, CANCELLING, RUNNING, FAILED),      # 到边界才 paused
+    PAUSE_REQUESTED: (PAUSED, CANCELLING, RUNNING, SUCCEEDED, FAILED),      # 到边界才 paused
     PAUSED: (RESUMING, CANCELLING, FAILED, PAUSED),              # PAUSED→PAUSED 是幂等重放
     RESUMING: (RUNNING, CANCELLING, FAILED),
     CANCELLING: (CANCELLED, FAILED),
-    RETRYING: (RUNNING, CANCELLING, FAILED),
+    RETRYING: (RUNNING, PAUSE_REQUESTED, CANCELLING, FAILED),
     SUCCEEDED: (RETRYING,),          # 重跑成功项也是合法操作（换格式重导）
     FAILED: (RETRYING,),
     CANCELLED: (RETRYING,),
@@ -87,7 +88,7 @@ def new_task(kind: str, inputs: dict, items: list, *, task_id: str) -> dict:
         raise TaskError("任务必须带着输入快照：TASK-002 的“重试固定输入”全靠它，"
                         "没有快照的重试就是拿当前设置重跑，那是另一件事")
     return {"schema_version": SCHEMA, "task_id": task_id, "kind": kind,
-            "state": QUEUED, "attempt": 0, "inputs": dict(inputs),
+            "state": QUEUED, "attempt": 0, "inputs": copy.deepcopy(inputs),
             "items": [{"path": p, "state": QUEUED, "out": None,
                        "failed_reason": None} for p in items],
             "history": [[QUEUED, now_ns(), "新建"]],
@@ -182,7 +183,7 @@ def request_pause(task: dict) -> dict:
 
     已经在 paused 上是幂等的（重复按暂停不该报错，也不该多记一步轨迹）。
     """
-    if task["state"] == PAUSED:
+    if task["state"] in (PAUSED, PAUSE_REQUESTED):
         return task
     return transit(task, PAUSE_REQUESTED, "用户请求暂停（等待安全点）")
 
@@ -225,7 +226,7 @@ def begin_retry(task: dict) -> tuple[dict, list]:
 
 def for_json(task: dict) -> dict:
     """进工程文件的那一份（纯 JSON，无活对象）。"""
-    t = {k: v for k, v in task.items() if k not in ("control",)}
+    t = {k: v for k, v in task.items() if k not in ("control", "_control_token", "_control_result", "_control_owner")}
     t["counts"] = counts(task)
     return t
 
@@ -245,6 +246,9 @@ def from_json(obj: dict) -> dict:
     if obj["state"] not in STATES:
         raise TaskError(f"任务 {obj['task_id']} 的状态不认识：{obj['state']!r}")
     t = {**obj, "persisted": True}
+    t.pop("_control_owner", None)
+    t.pop("_control_token", None)
+    t.pop("_control_result", None)
     t.setdefault("history", [[t["state"], t.get("updated_ns", 0), "从工程文件读回"]])
     t.setdefault("attempt", 0)
     t.setdefault("blocked_reason", None)

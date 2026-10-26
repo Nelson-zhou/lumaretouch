@@ -1234,6 +1234,8 @@ export interface EngineStatus {
    *  转移表在引擎里，前端不自己判"这条能不能暂停"。 */
   tasks?: TaskState[];
   task_rev?: number;
+  /** Retained delete outcomes survive task-row removal; consumers must match every causal field. */
+  task_control_results?: {task_id:string;token:string;project_id:string|null;workspace_generation:string;session_id:string;request_id:string;action:string;success:boolean}[];
 }
 
 /** 工程面（LNX-P0-PROJECT）：名字、脏标记、格数与"这一版没存进去的东西"。 */
