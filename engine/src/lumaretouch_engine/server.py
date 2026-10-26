@@ -1623,7 +1623,7 @@ class Engine(HVC.HairVolumeHostMixin, PortraitCropEngineMixin, HUC.HairUnificati
             row.update({"w": d.w, "h": d.h, "src_w": d.src_w, "src_h": d.src_h,
                         "opened": True, "state": self._capture_state()})
         self._load_id = str(t0)
-        emit({"event": "image_ready", **d.meta(), "load_id": self._load_id, "device": str(pipe.device), **SKR.proxy_flags(self), **self._people_open_flags(),
+        emit({"event": "image_ready", **d.meta(), "load_id": self._load_id, "device": str(pipe.device), "device_fallback": pipe.fallback if isinstance(pipe.fallback, str) and pipe.fallback else None, **SKR.proxy_flags(self), **self._people_open_flags(),
               "strength": self._strength,
               # 底片条得知道现在这一格是哪一张、是不是切回来的（而不是新导入）：
               # UI 拿它把高亮位置对好，不靠“我自己记得点过第几格”。

@@ -1,3 +1,5 @@
+import {CoreStatusNotices} from './coreStatusNotices/CoreStatusNotices';
+import {currentImageFacts, type CoreStatusView} from './coreStatusNotices/model';
 import {HistoryPanel} from './historyNavigation/HistoryPanel';
 import {historyNavigationLocked,useHistoryNavigation} from './historyNavigation/owner';
 import {PickGroupEyeReview} from './pickGroupEye/PickGroupEyeReview';
@@ -223,6 +225,7 @@ export default function App() {
   const [mode, setMode] = useState<BenchOptions["mode"]>("copy");
   const [stats, setStats] = useState<Stats | null>(null);
   const [status, setStatus] = useState<EngineStatus | null>(null);
+  const [coreStatusFacts, setCoreStatusFacts] = useState<CoreStatusView | null>(null);
   const [hud, setHudState] = useState<Hud>({ seq: 0, w: 0, h: 0, fps: 0, lastError: "" });
   const hudRef = useRef<Hud>(hud);
   const setHud = useCallback((v: Hud) => {
@@ -468,6 +471,7 @@ export default function App() {
       const st = await engineStatus();
       if (!statusFence.current.accept(ticket, st.doc_rev)) return;
       setStatus(st);
+      setCoreStatusFacts(currentImageFacts(st));
       // 消除笔的结果与日志同源：inpaint_done 只发一次，轮询不能错过
       if (st.inpaint) setLastInpaint(st.inpaint);
       if (st.light) setLastLight(st.light);
@@ -2042,6 +2046,7 @@ export default function App() {
         selectedDocumentIds={selPaths} disabled={busy||exporting||!status?.engine_alive}
         onChanged={()=>{void refreshFromEngine().catch(e=>setDragNote(String(e)));}}/>}
       <main className="stage">
+        <CoreStatusNotices facts={coreStatusFacts}/>
         <RetouchToolActivity onLocate={locateTool} items={[
           {name:"AI瘦手臂与瘦手臂",featureId:"PC-32473",path:"AI瘦手臂&瘦手臂",active:false,pending:arms.busy,phase:arms.uncertain||arms.state.phase==='uncertain'?'uncertain':arms.state.phase,message:arms.message||arms.state.message,check:arms.check},
           {name:"瘦腰",featureId:"PC-32473",path:"瘦腰",active:false,pending:waist.busy,phase:waist.uncertain||waist.state.phase==='uncertain'?'uncertain':waist.state.phase,message:waist.message||waist.state.message,check:waist.check},
